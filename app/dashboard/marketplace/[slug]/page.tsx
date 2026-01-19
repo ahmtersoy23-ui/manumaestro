@@ -47,7 +47,9 @@ export default function MarketplacePage({ params }: { params: { slug: string } }
           };
 
           const code = slugToCode[params.slug];
+          console.log('DEBUG - Slug:', params.slug, 'Code:', code, 'Data:', data.data.map((m: Marketplace) => m.code));
           const found = data.data.find((m: Marketplace) => m.code === code);
+          console.log('DEBUG - Found:', found);
           setMarketplace(found || null);
         }
       } catch (error) {
