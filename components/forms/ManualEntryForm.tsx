@@ -11,6 +11,7 @@ import { Search, Plus, Check } from 'lucide-react';
 interface ManualEntryFormProps {
   marketplaceId: string;
   marketplaceName: string;
+  onSuccess?: () => void;
 }
 
 interface Product {
@@ -19,7 +20,7 @@ interface Product {
   category: string | null;
 }
 
-export function ManualEntryForm({ marketplaceId, marketplaceName }: ManualEntryFormProps) {
+export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: ManualEntryFormProps) {
   const [iwasku, setIwasku] = useState('');
   const [quantity, setQuantity] = useState('');
   const [productName, setProductName] = useState('');
@@ -108,8 +109,10 @@ export function ManualEntryForm({ marketplaceId, marketplaceName }: ManualEntryF
         // Hide success message after 3 seconds
         setTimeout(() => setSuccess(false), 3000);
 
-        // Trigger page refresh to show new request
-        window.location.reload();
+        // Trigger callback to refresh the table
+        if (onSuccess) {
+          onSuccess();
+        }
       } else {
         alert(data.error || 'Failed to create request');
       }

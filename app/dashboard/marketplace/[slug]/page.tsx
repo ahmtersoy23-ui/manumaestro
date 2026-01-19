@@ -23,6 +23,7 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
   const [activeTab, setActiveTab] = useState<'manual' | 'excel'>('manual');
   const [loading, setLoading] = useState(true);
   const [slug, setSlug] = useState<string>('');
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
     // Unwrap params Promise
@@ -139,7 +140,11 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
         {/* Tab Content */}
         <div className="p-6">
           {activeTab === 'manual' ? (
-            <ManualEntryForm marketplaceId={marketplace.id} marketplaceName={marketplace.name} />
+            <ManualEntryForm
+              marketplaceId={marketplace.id}
+              marketplaceName={marketplace.name}
+              onSuccess={() => setRefreshTrigger(prev => prev + 1)}
+            />
           ) : (
             <ExcelUpload marketplaceId={marketplace.id} marketplaceName={marketplace.name} />
           )}
@@ -157,7 +162,7 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
             Export
           </button>
         </div>
-        <RequestsTable marketplaceId={marketplace.id} />
+        <RequestsTable marketplaceId={marketplace.id} refreshTrigger={refreshTrigger} />
       </div>
     </div>
   );

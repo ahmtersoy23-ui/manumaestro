@@ -5,10 +5,26 @@
 
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Calendar, Package } from 'lucide-react';
 
 interface RequestsTableProps {
   marketplaceId: string;
+  refreshTrigger?: number;
+}
+
+interface Request {
+  id: string;
+  iwasku: string;
+  productName: string;
+  productCategory: string;
+  quantity: number;
+  status: string;
+  requestDate: string;
+  notes: string | null;
+  enteredBy: {
+    name: string;
+  };
 }
 
 const statusColors = {
@@ -25,11 +41,41 @@ const statusLabels = {
   CANCELLED: 'Cancelled',
 };
 
-export function RequestsTable({ marketplaceId }: RequestsTableProps) {
-  // Mock data - will be replaced with API call
-  const mockRequests: any[] = [];
+export function RequestsTable({ marketplaceId, refreshTrigger }: RequestsTableProps) {
+  const [requests, setRequests] = useState<Request[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  if (mockRequests.length === 0) {
+  useEffect(() => {
+    async function fetchRequests() {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/requests?marketplaceId=${marketplaceId}&limit=20`);
+        const data = await res.json();
+
+        if (data.success) {
+          setRequests(data.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch requests:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchRequests();
+  }, [marketplaceId, refreshTrigger]);
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 p-12">
+        <div className="flex items-center justify-center">
+          <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (requests.length === 0) {
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-12">
         <div className="flex flex-col items-center justify-center text-center">
@@ -74,12 +120,12 @@ export function RequestsTable({ marketplaceId }: RequestsTableProps) {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
-            {mockRequests.map((request) => (
+            {requests.map((request) => (
               <tr key={request.id} className="hover:bg-gray-50 transition-colors">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center gap-2 text-sm text-gray-900">
                     <Calendar className="w-4 h-4 text-gray-400" />
-                    {new Date(request.date).toLocaleDateString('en-US', {
+                    {new Date(request.requestDate).toLocaleDateString('en-US', {
                       month: 'short',
                       day: 'numeric',
                       year: 'numeric',
@@ -98,7 +144,7 @@ export function RequestsTable({ marketplaceId }: RequestsTableProps) {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className="text-sm text-gray-600">
-                    {request.category}
+                    {request.productCategory}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">

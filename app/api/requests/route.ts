@@ -22,7 +22,17 @@ export async function POST(request: NextRequest) {
     }
 
     // TODO: Get actual user ID from session/SSO
-    const tempUserId = 'temp-user-id';
+    // For now, get the admin user
+    const adminUser = await prisma.user.findFirst({
+      where: { role: 'ADMIN' },
+    });
+
+    if (!adminUser) {
+      return NextResponse.json(
+        { error: 'No admin user found. Please run database seed.' },
+        { status: 500 }
+      );
+    }
 
     // Create production request
     const productionRequest = await prisma.productionRequest.create({
@@ -35,7 +45,7 @@ export async function POST(request: NextRequest) {
         notes,
         entryType: EntryType.MANUAL,
         status: RequestStatus.REQUESTED,
-        enteredById: tempUserId,
+        enteredById: adminUser.id,
       },
       include: {
         marketplace: true,
