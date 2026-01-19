@@ -37,27 +37,27 @@ const navSections = [
     items: [
       {
         label: 'Amazon US',
-        href: '/dashboard/marketplace/amazon-us',
+        href: '/dashboard/marketplace/amzn-us',
         color: 'bg-orange-100 text-orange-700',
       },
       {
         label: 'Amazon EU',
-        href: '/dashboard/marketplace/amazon-eu',
+        href: '/dashboard/marketplace/amzn-eu',
         color: 'bg-orange-100 text-orange-700',
       },
       {
         label: 'Amazon UK',
-        href: '/dashboard/marketplace/amazon-uk',
+        href: '/dashboard/marketplace/amzn-uk',
         color: 'bg-orange-100 text-orange-700',
       },
       {
         label: 'Amazon CA',
-        href: '/dashboard/marketplace/amazon-ca',
+        href: '/dashboard/marketplace/amzn-ca',
         color: 'bg-orange-100 text-orange-700',
       },
       {
         label: 'Amazon AU',
-        href: '/dashboard/marketplace/amazon-au',
+        href: '/dashboard/marketplace/amzn-au',
         color: 'bg-orange-100 text-orange-700',
       },
       {
@@ -72,29 +72,13 @@ const navSections = [
       },
       {
         label: 'Takealot',
-        href: '/dashboard/marketplace/takealot',
+        href: '/dashboard/marketplace/takealot-za',
         color: 'bg-blue-100 text-blue-700',
       },
       {
         label: 'Bol',
-        href: '/dashboard/marketplace/bol',
+        href: '/dashboard/marketplace/bol-nl',
         color: 'bg-cyan-100 text-cyan-700',
-      },
-    ],
-  },
-  {
-    title: 'Settings',
-    items: [
-      {
-        label: 'Add Marketplace',
-        href: '/dashboard/settings/marketplaces/new',
-        icon: Plus,
-        color: 'text-green-600',
-      },
-      {
-        label: 'Settings',
-        href: '/dashboard/settings',
-        icon: Settings,
       },
     ],
   },
