@@ -1,0 +1,146 @@
+/**
+ * Requests Table Component
+ * Displays recent production requests for a marketplace
+ */
+
+'use client';
+
+import { Calendar, Package } from 'lucide-react';
+
+interface RequestsTableProps {
+  marketplaceSlug: string;
+}
+
+// Mock data - will be replaced with API call
+const mockRequests = [
+  {
+    id: '1',
+    date: '2026-01-19',
+    iwasku: 'IW-SAMPLE-001',
+    productName: 'Sample Product Alpha',
+    category: 'Furniture',
+    quantity: 50,
+    status: 'REQUESTED',
+  },
+  {
+    id: '2',
+    date: '2026-01-18',
+    iwasku: 'IW-SAMPLE-002',
+    productName: 'Sample Product Beta',
+    category: 'Lighting',
+    quantity: 30,
+    status: 'IN_PRODUCTION',
+  },
+];
+
+const statusColors = {
+  REQUESTED: 'bg-blue-100 text-blue-700',
+  IN_PRODUCTION: 'bg-orange-100 text-orange-700',
+  COMPLETED: 'bg-green-100 text-green-700',
+  CANCELLED: 'bg-gray-100 text-gray-700',
+};
+
+const statusLabels = {
+  REQUESTED: 'Requested',
+  IN_PRODUCTION: 'In Production',
+  COMPLETED: 'Completed',
+  CANCELLED: 'Cancelled',
+};
+
+export function RequestsTable({ marketplaceSlug }: RequestsTableProps) {
+  // TODO: Fetch requests from API based on marketplaceSlug
+
+  if (mockRequests.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 p-12">
+        <div className="flex flex-col items-center justify-center text-center">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+            <Package className="w-8 h-8 text-gray-400" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            No requests yet
+          </h3>
+          <p className="text-sm text-gray-600">
+            Start by adding your first production request above
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                Date
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                IWASKU
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                Product Name
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                Category
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                Quantity
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                Status
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {mockRequests.map((request) => (
+              <tr key={request.id} className="hover:bg-gray-50 transition-colors">
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center gap-2 text-sm text-gray-900">
+                    <Calendar className="w-4 h-4 text-gray-400" />
+                    {new Date(request.date).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className="text-sm font-mono text-gray-900">
+                    {request.iwasku}
+                  </span>
+                </td>
+                <td className="px-6 py-4">
+                  <span className="text-sm text-gray-900">
+                    {request.productName}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className="text-sm text-gray-600">
+                    {request.category}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className="text-sm font-semibold text-gray-900">
+                    {request.quantity}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      statusColors[request.status as keyof typeof statusColors]
+                    }`}
+                  >
+                    {statusLabels[request.status as keyof typeof statusLabels]}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,142 @@
+// ManuMaestro - Production Request Management System
+// Prisma Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================
+// USER MANAGEMENT
+// ============================================
+
+model User {
+  id                String                    @id @default(uuid())
+  email             String                    @unique
+  name              String
+  passwordHash      String
+  role              UserRole                  @default(OPERATOR)
+  isActive          Boolean                   @default(true)
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  // Relations
+  permissions       UserMarketplacePermission[]
+  requests          ProductionRequest[]
+  createdMarketplaces Marketplace[]           @relation("CreatedBy")
+
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  OPERATOR
+  VIEWER
+}
+
+// ============================================
+// MARKETPLACE MANAGEMENT
+// ============================================
+
+model Marketplace {
+  id                String              @id @default(uuid())
+  name              String              // "Amazon US", "Wayfair UK", "Custom Market"
+  code              String              @unique // "AMZN_US", "WAYFAIR_UK", "CUSTOM_01"
+  marketplaceType   MarketplaceType
+  region            String              // "US", "EU", "UK", "CA", "AU", "ZA", "NL", "TR", "Custom"
+  isCustom          Boolean             @default(false)
+  isActive          Boolean             @default(true)
+  colorTag          String?             // Hex color for UI
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  createdById       String?
+
+  // Relations
+  createdBy         User?               @relation("CreatedBy", fields: [createdById], references: [id])
+  permissions       UserMarketplacePermission[]
+  requests          ProductionRequest[]
+
+  @@map("marketplaces")
+}
+
+enum MarketplaceType {
+  AMAZON
+  WAYFAIR
+  TAKEALOT
+  BOL
+  TRENDYOL
+  ETSY
+  CUSTOM
+  OTHER
+}
+
+// ============================================
+// USER PERMISSIONS
+// ============================================
+
+model UserMarketplacePermission {
+  id              String       @id @default(uuid())
+  userId          String
+  marketplaceId   String
+  canView         Boolean      @default(true)
+  canEdit         Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+
+  // Relations
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  marketplace     Marketplace  @relation(fields: [marketplaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, marketplaceId])
+  @@map("user_marketplace_permissions")
+}
+
+// ============================================
+// PRODUCT REFERENCE (From existing DB)
+// ============================================
+// Note: This connects to existing products table in another database
+// We'll use views or direct queries for this
+
+// ============================================
+// PRODUCTION REQUESTS
+// ============================================
+
+model ProductionRequest {
+  id                String       @id @default(uuid())
+  iwasku            String       // Reference to products.iwasku
+  productName       String       // Cached from products
+  productCategory   String       // Cached from products
+  marketplaceId     String
+  quantity          Int
+  requestDate       DateTime     @default(now())
+  status            RequestStatus @default(REQUESTED)
+  entryType         EntryType
+  notes             String?
+  enteredById       String
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  // Relations
+  marketplace       Marketplace  @relation(fields: [marketplaceId], references: [id])
+  enteredBy         User         @relation(fields: [enteredById], references: [id])
+
+  @@index([iwasku])
+  @@index([marketplaceId])
+  @@index([requestDate])
+  @@index([status])
+  @@map("production_requests")
+}
+
+enum RequestStatus {
+  REQUESTED
+  IN_PRODUCTION
+  COMPLETED
+  CANCELLED
+}
+
+enum EntryType {
+  MANUAL
+  EXCEL
+}

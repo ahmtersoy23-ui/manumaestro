@@ -1,0 +1,113 @@
+/**
+ * Production Requests API
+ * POST: Create new request
+ * GET: List requests with filters
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db/prisma';
+import { EntryType, RequestStatus } from '@prisma/client';
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { iwasku, productName, productCategory, marketplaceId, quantity, notes } = body;
+
+    // Validation
+    if (!iwasku || !productName || !productCategory || !marketplaceId || !quantity) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    // TODO: Get actual user ID from session/SSO
+    const tempUserId = 'temp-user-id';
+
+    // Create production request
+    const productionRequest = await prisma.productionRequest.create({
+      data: {
+        iwasku,
+        productName,
+        productCategory,
+        marketplaceId,
+        quantity: parseInt(quantity),
+        notes,
+        entryType: EntryType.MANUAL,
+        status: RequestStatus.REQUESTED,
+        enteredById: tempUserId,
+      },
+      include: {
+        marketplace: true,
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: productionRequest,
+    });
+  } catch (error) {
+    console.error('Create request error:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Failed to create request',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const searchParams = request.nextUrl.searchParams;
+    const marketplaceId = searchParams.get('marketplaceId');
+    const status = searchParams.get('status');
+    const limit = parseInt(searchParams.get('limit') || '50');
+
+    const where: any = {};
+
+    if (marketplaceId) {
+      where.marketplaceId = marketplaceId;
+    }
+
+    if (status) {
+      where.status = status as RequestStatus;
+    }
+
+    const requests = await prisma.productionRequest.findMany({
+      where,
+      include: {
+        marketplace: true,
+        enteredBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: limit,
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: requests,
+      count: requests.length,
+    });
+  } catch (error) {
+    console.error('Fetch requests error:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Failed to fetch requests',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    );
+  }
+}

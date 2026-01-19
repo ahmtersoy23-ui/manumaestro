@@ -1,36 +1,237 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🎼 ManuMaestro
 
-## Getting Started
+**Production Request Management System**
+*Orchestrating Production Excellence*
 
-First, run the development server:
+ManuMaestro is a comprehensive platform for managing production requests across multiple marketplaces. It consolidates orders from Amazon, Wayfair, Takealot, Bol, and other custom marketplaces into a unified manufacturing dashboard.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+---
+
+## 🎯 Features
+
+### Multi-Marketplace Support
+- **Amazon**: US, EU, UK, CA, AU
+- **Wayfair**: US, UK
+- **Takealot**: South Africa
+- **Bol**: Netherlands
+- **Custom Marketplaces**: Add any marketplace dynamically
+
+### Data Entry Options
+- ✅ **Manual Entry**: Select products via dropdown/autocomplete
+- ✅ **Excel Bulk Import**: Upload spreadsheets with multiple requests
+- ✅ Auto-populated product details (name, category) from existing product database
+
+### Intelligent Aggregation
+- **Input/Requested View**: All marketplace requests in one place
+- **Manufacturer Dashboard**: Consolidated production requirements by product
+- **Multi-column Breakdown**: See exactly which marketplace needs what quantity
+- **Category-based Filtering**: Organize production by product categories
+
+### User Management
+- Role-based access control (Admin, Operator, Viewer)
+- Marketplace-level permissions
+- Audit trail for all entries
+
+---
+
+## 🏗️ Technology Stack
+
+- **Frontend**: Next.js 15, React 19, TypeScript
+- **Backend**: Next.js API Routes
+- **Database**: PostgreSQL
+- **ORM**: Prisma
+- **Styling**: Tailwind CSS
+- **Authentication**: JWT + bcrypt
+
+---
+
+## 📦 Project Structure
+
+```
+manumaestro/
+├── app/
+│   ├── api/              # API routes
+│   │   ├── auth/         # Authentication endpoints
+│   │   ├── marketplaces/ # Marketplace CRUD
+│   │   ├── requests/     # Production requests
+│   │   └── products/     # Product lookup
+│   ├── dashboard/        # Main dashboard
+│   ├── auth/             # Login/signup pages
+│   └── layout.tsx        # Root layout
+├── components/
+│   ├── ui/               # Reusable UI components
+│   ├── forms/            # Form components
+│   └── tables/           # Table components
+├── lib/
+│   ├── db/               # Database utilities
+│   ├── auth/             # Auth helpers
+│   └── utils/            # General utilities
+├── prisma/
+│   └── schema.prisma     # Database schema
+├── types/                # TypeScript types
+└── public/               # Static assets
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🚀 Getting Started
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Prerequisites
+- Node.js 18+
+- PostgreSQL database
+- Access to existing products database
 
-## Learn More
+### Installation
 
-To learn more about Next.js, take a look at the following resources:
+1. **Clone and Install**
+```bash
+cd ~/Desktop/manumaestro
+npm install
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+2. **Configure Environment**
+```bash
+# Copy example env file
+cp .env.example .env
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+# Edit .env with your database credentials
+# Required: DATABASE_URL, PRODUCT_DB_URL, JWT_SECRET
+```
 
-## Deploy on Vercel
+3. **Setup Database**
+```bash
+# Generate Prisma Client
+npx prisma generate
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+# Run migrations
+npx prisma migrate dev --name init
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+# (Optional) Seed initial data
+npx prisma db seed
+```
+
+4. **Run Development Server**
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000)
+
+---
+
+## 📊 Database Schema
+
+### Key Tables
+
+**users** - User accounts and roles
+**marketplaces** - Marketplace definitions (Amazon US, Wayfair UK, etc.)
+**user_marketplace_permissions** - Who can access which marketplace
+**production_requests** - All production requests from all marketplaces
+
+### External Reference
+**products** (external DB) - Referenced by `iwasku` for product details
+
+---
+
+## 🔐 Environment Variables
+
+```env
+# Database
+DATABASE_URL="postgresql://user:pass@host:5432/manumaestro_db"
+PRODUCT_DB_URL="postgresql://user:pass@host:5432/products_db"
+
+# Security
+JWT_SECRET="your-secret-key"
+JWT_EXPIRES_IN="7d"
+
+# App Config
+NODE_ENV="development"
+PORT=3000
+NEXT_PUBLIC_APP_NAME="ManuMaestro"
+```
+
+---
+
+## 📝 Usage
+
+### Adding a New Marketplace
+1. Navigate to Admin > Marketplaces
+2. Click "Add Marketplace"
+3. Fill in name, code, type, and region
+4. Assign permissions to users
+
+### Entering Production Requests
+
+**Manual Entry:**
+1. Select marketplace from dashboard
+2. Choose product (IWASKU) from dropdown
+3. Enter quantity
+4. Submit
+
+**Excel Import:**
+1. Download template from marketplace page
+2. Fill in: iwasku, quantity
+3. Upload Excel file
+4. Review and confirm
+
+### Viewing Manufacturing Dashboard
+1. Go to Manufacturer section
+2. See total quantities needed per product
+3. Expand to see breakdown by marketplace
+4. Filter by category as needed
+
+---
+
+## 🛠️ Development
+
+### Key Commands
+```bash
+npm run dev          # Start dev server
+npm run build        # Production build
+npm run start        # Start production server
+npm run lint         # Run ESLint
+npx prisma studio    # Open database GUI
+npx prisma migrate   # Run migrations
+```
+
+### Adding New Features
+1. Update Prisma schema if needed (`prisma/schema.prisma`)
+2. Run `npx prisma migrate dev`
+3. Create API routes in `app/api/`
+4. Build UI components in `components/`
+5. Add pages in `app/`
+
+---
+
+## 📈 Roadmap
+
+- [ ] Real-time production status tracking
+- [ ] Email notifications for new requests
+- [ ] Advanced analytics and reporting
+- [ ] Mobile app
+- [ ] API integrations with marketplaces
+- [ ] Automated request imports
+
+---
+
+## 🤝 Contributing
+
+This is an internal project. For access or contributions, contact the development team.
+
+---
+
+## 📄 License
+
+Proprietary - Internal Use Only
+
+---
+
+## 📞 Support
+
+For technical support or questions:
+- Internal Slack: #manumaestro-support
+- Email: dev-team@yourcompany.com
+
+---
+
+**ManuMaestro** - *Orchestrating Production Excellence* 🎼
