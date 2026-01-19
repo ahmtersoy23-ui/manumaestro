@@ -63,7 +63,7 @@ export default function MarketplacePage({ params }: { params: { slug: string } }
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading marketplace...</p>
+          <p className="text-gray-600">Loading...</p>
         </div>
       </div>
     );
@@ -75,6 +75,7 @@ export default function MarketplacePage({ params }: { params: { slug: string } }
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Marketplace Not Found</h1>
           <p className="text-gray-600">The requested marketplace could not be found.</p>
+          <p className="text-xs text-gray-400 mt-4">Slug: {params.slug}</p>
         </div>
       </div>
     );
