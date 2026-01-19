@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
       SELECT
         product_sku as iwasku,
         name,
-        parent as category
+        category
       FROM products
       WHERE
         product_sku ILIKE $1

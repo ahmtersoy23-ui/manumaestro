@@ -202,24 +202,25 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
 
       {/* Auto-populated fields */}
       {productName && (
-        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-purple-900 mb-3">
+        <div className="bg-purple-50 border-2 border-purple-300 rounded-lg p-5">
+          <h4 className="text-base font-bold text-purple-900 mb-4 flex items-center gap-2">
+            <Check className="w-5 h-5" />
             Product Details (Auto-populated)
           </h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-purple-700 mb-1">
+              <label className="block text-xs font-semibold text-purple-800 mb-1.5 uppercase tracking-wide">
                 Product Name
               </label>
-              <p className="text-sm text-purple-900 font-medium">
+              <p className="text-base text-purple-950 font-semibold leading-snug">
                 {productName}
               </p>
             </div>
             <div>
-              <label className="block text-xs font-medium text-purple-700 mb-1">
+              <label className="block text-xs font-semibold text-purple-800 mb-1.5 uppercase tracking-wide">
                 Category
               </label>
-              <p className="text-sm text-purple-900 font-medium">
+              <p className="text-base text-purple-950 font-semibold">
                 {productCategory || 'Uncategorized'}
               </p>
             </div>
