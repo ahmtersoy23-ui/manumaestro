@@ -149,7 +149,11 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
               onChange={(e) => setIwasku(e.target.value)}
               onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
               placeholder="Type to search products..."
-              className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              className={`w-full px-4 py-2 pl-10 border-2 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all ${
+                productName
+                  ? 'border-purple-400 bg-purple-50 font-bold text-gray-900'
+                  : 'border-gray-300 focus:border-purple-400'
+              }`}
               required
               autoComplete="off"
             />
@@ -163,18 +167,18 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
 
           {/* Dropdown */}
           {showDropdown && searchResults.length > 0 && (
-            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+            <div className="absolute z-10 w-full mt-1 bg-white border-2 border-purple-300 rounded-lg shadow-xl max-h-64 overflow-y-auto">
               {searchResults.map((product) => (
                 <button
                   key={product.iwasku}
                   type="button"
                   onClick={() => selectProduct(product)}
-                  className="w-full px-4 py-3 text-left hover:bg-purple-50 transition-colors border-b border-gray-100 last:border-b-0"
+                  className="w-full px-4 py-3 text-left hover:bg-purple-100 transition-colors border-b border-gray-200 last:border-b-0"
                 >
-                  <p className="text-sm font-mono text-gray-900">{product.iwasku}</p>
-                  <p className="text-xs text-gray-600 mt-1">{product.name}</p>
+                  <p className="text-sm font-mono font-bold text-gray-900">{product.iwasku}</p>
+                  <p className="text-sm text-gray-800 font-semibold mt-1 leading-snug">{product.name}</p>
                   {product.category && (
-                    <p className="text-xs text-purple-600 mt-0.5">{product.category}</p>
+                    <p className="text-xs text-purple-700 font-semibold mt-1 bg-purple-50 inline-block px-2 py-0.5 rounded">{product.category}</p>
                   )}
                 </button>
               ))}
