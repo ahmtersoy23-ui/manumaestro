@@ -99,6 +99,7 @@ export function Navigation() {
               {section.items.map((item) => {
                 const isActive = pathname === item.href;
                 const Icon = 'icon' in item ? item.icon : null;
+                const color = 'color' in item ? item.color : undefined;
 
                 return (
                   <li key={item.href}>
@@ -109,7 +110,7 @@ export function Navigation() {
                         isActive
                           ? 'bg-purple-50 text-purple-700'
                           : 'text-gray-700 hover:bg-gray-50',
-                        item.color
+                        color
                       )}
                     >
                       {Icon && <Icon className="w-4 h-4" />}
@@ -117,7 +118,7 @@ export function Navigation() {
                         <div
                           className={cn(
                             'w-2 h-2 rounded-full',
-                            item.color || 'bg-gray-300'
+                            color || 'bg-gray-300'
                           )}
                         />
                       )}
