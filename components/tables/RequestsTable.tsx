@@ -8,30 +8,8 @@
 import { Calendar, Package } from 'lucide-react';
 
 interface RequestsTableProps {
-  marketplaceSlug: string;
+  marketplaceId: string;
 }
-
-// Mock data - will be replaced with API call
-const mockRequests = [
-  {
-    id: '1',
-    date: '2026-01-19',
-    iwasku: 'IW-SAMPLE-001',
-    productName: 'Sample Product Alpha',
-    category: 'Furniture',
-    quantity: 50,
-    status: 'REQUESTED',
-  },
-  {
-    id: '2',
-    date: '2026-01-18',
-    iwasku: 'IW-SAMPLE-002',
-    productName: 'Sample Product Beta',
-    category: 'Lighting',
-    quantity: 30,
-    status: 'IN_PRODUCTION',
-  },
-];
 
 const statusColors = {
   REQUESTED: 'bg-blue-100 text-blue-700',
@@ -47,8 +25,9 @@ const statusLabels = {
   CANCELLED: 'Cancelled',
 };
 
-export function RequestsTable({ marketplaceSlug }: RequestsTableProps) {
-  // TODO: Fetch requests from API based on marketplaceSlug
+export function RequestsTable({ marketplaceId }: RequestsTableProps) {
+  // Mock data - will be replaced with API call
+  const mockRequests: any[] = [];
 
   if (mockRequests.length === 0) {
     return (
