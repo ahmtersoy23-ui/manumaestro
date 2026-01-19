@@ -33,15 +33,15 @@ export default function MarketplacePage({ params }: { params: { slug: string } }
         if (data.success) {
           // Find marketplace by converting slug to code format
           const slugToCode: Record<string, string> = {
-            'amazon-us': 'AMZN_US',
-            'amazon-eu': 'AMZN_EU',
-            'amazon-uk': 'AMZN_UK',
-            'amazon-ca': 'AMZN_CA',
-            'amazon-au': 'AMZN_AU',
+            'amzn-us': 'AMZN_US',
+            'amzn-eu': 'AMZN_EU',
+            'amzn-uk': 'AMZN_UK',
+            'amzn-ca': 'AMZN_CA',
+            'amzn-au': 'AMZN_AU',
             'wayfair-us': 'WAYFAIR_US',
             'wayfair-uk': 'WAYFAIR_UK',
-            'takealot': 'TAKEALOT_ZA',
-            'bol': 'BOL_NL',
+            'takealot-za': 'TAKEALOT_ZA',
+            'bol-nl': 'BOL_NL',
           };
 
           const code = slugToCode[params.slug];
