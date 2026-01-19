@@ -5,11 +5,27 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronDown, ChevronRight, Package } from 'lucide-react';
 
+interface ManufacturerTableProps {
+  selectedCategory: string | null;
+}
+
+interface ProductData {
+  iwasku: string;
+  productName: string;
+  category: string;
+  totalQuantity: number;
+  breakdown: {
+    marketplace: string;
+    code: string;
+    quantity: number;
+  }[];
+}
+
 // Mock data - will be replaced with API call
-const mockData = [
+const mockData: ProductData[] = [
   {
     iwasku: 'IW-SAMPLE-001',
     productName: 'Premium Wooden Chair',
@@ -38,8 +54,19 @@ const mockData = [
   },
 ];
 
-export function ManufacturerTable() {
+export function ManufacturerTable({ selectedCategory }: ManufacturerTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [data, setData] = useState<ProductData[]>([]);
+
+  useEffect(() => {
+    // TODO: Fetch from API
+    // For now, use mock data with filtering
+    let filteredData = mockData;
+    if (selectedCategory) {
+      filteredData = mockData.filter((item) => item.category === selectedCategory);
+    }
+    setData(filteredData);
+  }, [selectedCategory]);
 
   const toggleRow = (iwasku: string) => {
     const newExpanded = new Set(expandedRows);
@@ -51,7 +78,7 @@ export function ManufacturerTable() {
     setExpandedRows(newExpanded);
   };
 
-  if (mockData.length === 0) {
+  if (data.length === 0) {
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-12">
         <div className="flex flex-col items-center justify-center text-center">
@@ -59,10 +86,10 @@ export function ManufacturerTable() {
             <Package className="w-8 h-8 text-gray-400" />
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            No production requests
+            {selectedCategory ? `No products in ${selectedCategory}` : 'No production requests'}
           </h3>
           <p className="text-sm text-gray-600">
-            Production requests will appear here once you start adding them
+            {selectedCategory ? 'Try selecting a different category' : 'Production requests will appear here once you start adding them'}
           </p>
         </div>
       </div>
@@ -93,7 +120,7 @@ export function ManufacturerTable() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
-            {mockData.map((item) => {
+            {data.map((item) => {
               const isExpanded = expandedRows.has(item.iwasku);
 
               return (
