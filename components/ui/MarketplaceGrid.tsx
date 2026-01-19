@@ -3,6 +3,8 @@
  * Displays marketplace cards in a grid layout
  */
 
+'use client';
+
 import Link from 'next/link';
 import { ArrowRight, Plus } from 'lucide-react';
 
