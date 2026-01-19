@@ -147,9 +147,9 @@ export function MarketplaceGrid() {
       ))}
 
       {/* Add New Marketplace Card */}
-      <Link
-        href="/dashboard/settings/marketplaces/new"
-        className="group"
+      <button
+        onClick={() => alert('Add marketplace feature coming soon!')}
+        className="group w-full"
       >
         <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border-2 border-dashed border-gray-300 p-6 hover:border-purple-400 hover:from-purple-50 hover:to-purple-100 transition-all h-full flex flex-col items-center justify-center min-h-[240px]">
           <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 group-hover:bg-purple-100 transition-colors">
@@ -162,7 +162,7 @@ export function MarketplaceGrid() {
             Create a custom marketplace
           </p>
         </div>
-      </Link>
+      </button>
     </div>
   );
 }
