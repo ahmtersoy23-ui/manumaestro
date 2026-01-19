@@ -6,11 +6,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Calendar, Package } from 'lucide-react';
+import { Calendar, Package, Trash2 } from 'lucide-react';
 
 interface RequestsTableProps {
   marketplaceId: string;
   refreshTrigger?: number;
+  onDelete?: () => void;
 }
 
 interface Request {
@@ -41,9 +42,10 @@ const statusLabels = {
   CANCELLED: 'Cancelled',
 };
 
-export function RequestsTable({ marketplaceId, refreshTrigger }: RequestsTableProps) {
+export function RequestsTable({ marketplaceId, refreshTrigger, onDelete }: RequestsTableProps) {
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchRequests() {
@@ -64,6 +66,38 @@ export function RequestsTable({ marketplaceId, refreshTrigger }: RequestsTablePr
 
     fetchRequests();
   }, [marketplaceId, refreshTrigger]);
+
+  const handleDelete = async (requestId: string) => {
+    if (!confirm('Are you sure you want to delete this request?')) {
+      return;
+    }
+
+    setDeleting(requestId);
+    try {
+      const res = await fetch(`/api/requests/${requestId}`, {
+        method: 'DELETE',
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        // Remove from local state
+        setRequests(requests.filter(r => r.id !== requestId));
+
+        // Trigger parent callback
+        if (onDelete) {
+          onDelete();
+        }
+      } else {
+        alert(data.error || 'Failed to delete request');
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert('Failed to delete request');
+    } finally {
+      setDeleting(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -117,6 +151,9 @@ export function RequestsTable({ marketplaceId, refreshTrigger }: RequestsTablePr
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                 Status
               </th>
+              <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
@@ -160,6 +197,26 @@ export function RequestsTable({ marketplaceId, refreshTrigger }: RequestsTablePr
                   >
                     {statusLabels[request.status as keyof typeof statusLabels]}
                   </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-right">
+                  <button
+                    onClick={() => handleDelete(request.id)}
+                    disabled={deleting === request.id}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    title="Delete request"
+                  >
+                    {deleting === request.id ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-red-700 border-t-transparent rounded-full animate-spin" />
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Delete
+                      </>
+                    )}
+                  </button>
                 </td>
               </tr>
             ))}

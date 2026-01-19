@@ -162,7 +162,11 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
             Export
           </button>
         </div>
-        <RequestsTable marketplaceId={marketplace.id} refreshTrigger={refreshTrigger} />
+        <RequestsTable
+          marketplaceId={marketplace.id}
+          refreshTrigger={refreshTrigger}
+          onDelete={() => setRefreshTrigger(prev => prev + 1)}
+        />
       </div>
     </div>
   );
