@@ -198,7 +198,11 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
             onChange={(e) => setQuantity(e.target.value)}
             placeholder="Enter quantity"
             min="1"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className={`w-full px-4 py-2 border-2 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all ${
+              quantity
+                ? 'border-purple-400 bg-purple-50 font-bold text-gray-900'
+                : 'border-gray-300 focus:border-purple-400'
+            }`}
             required
           />
         </div>
