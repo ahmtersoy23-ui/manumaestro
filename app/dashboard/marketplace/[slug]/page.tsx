@@ -4,33 +4,81 @@
  * Supports manual entry and Excel bulk upload
  */
 
+'use client';
+
+import { useState, useEffect } from 'react';
 import { ManualEntryForm } from '@/components/forms/ManualEntryForm';
 import { ExcelUpload } from '@/components/forms/ExcelUpload';
 import { RequestsTable } from '@/components/tables/RequestsTable';
 import { Download, Upload, PlusCircle } from 'lucide-react';
 
-interface MarketplacePageProps {
-  params: Promise<{
-    slug: string;
-  }>;
+interface Marketplace {
+  id: string;
+  name: string;
+  code: string;
 }
 
-// Map slugs to marketplace names
-const marketplaceNames: Record<string, string> = {
-  'amzn-us': 'Amazon US',
-  'amzn-eu': 'Amazon EU',
-  'amzn-uk': 'Amazon UK',
-  'amzn-ca': 'Amazon CA',
-  'amzn-au': 'Amazon AU',
-  'wayfair-us': 'Wayfair US',
-  'wayfair-uk': 'Wayfair UK',
-  'takealot': 'Takealot',
-  'bol': 'Bol',
-};
+export default function MarketplacePage({ params }: { params: { slug: string } }) {
+  const [marketplace, setMarketplace] = useState<Marketplace | null>(null);
+  const [activeTab, setActiveTab] = useState<'manual' | 'excel'>('manual');
+  const [loading, setLoading] = useState(true);
 
-export default async function MarketplacePage({ params }: MarketplacePageProps) {
-  const { slug } = await params;
-  const marketplaceName = marketplaceNames[slug] || 'Unknown Marketplace';
+  useEffect(() => {
+    // Fetch marketplace data based on slug
+    async function fetchMarketplace() {
+      try {
+        const res = await fetch('/api/marketplaces');
+        const data = await res.json();
+
+        if (data.success) {
+          // Find marketplace by converting slug to code format
+          const slugToCode: Record<string, string> = {
+            'amazon-us': 'AMZN_US',
+            'amazon-eu': 'AMZN_EU',
+            'amazon-uk': 'AMZN_UK',
+            'amazon-ca': 'AMZN_CA',
+            'amazon-au': 'AMZN_AU',
+            'wayfair-us': 'WAYFAIR_US',
+            'wayfair-uk': 'WAYFAIR_UK',
+            'takealot': 'TAKEALOT_ZA',
+            'bol': 'BOL_NL',
+          };
+
+          const code = slugToCode[params.slug];
+          const found = data.data.find((m: Marketplace) => m.code === code);
+          setMarketplace(found || null);
+        }
+      } catch (error) {
+        console.error('Failed to fetch marketplace:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchMarketplace();
+  }, [params.slug]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading marketplace...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!marketplace) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Marketplace Not Found</h1>
+          <p className="text-gray-600">The requested marketplace could not be found.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -38,7 +86,7 @@ export default async function MarketplacePage({ params }: MarketplacePageProps) 
       <div>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">{marketplaceName}</h1>
+            <h1 className="text-3xl font-bold text-gray-900">{marketplace.name}</h1>
             <p className="text-gray-600 mt-1">
               Enter production requests manually or upload via Excel
             </p>
@@ -50,20 +98,38 @@ export default async function MarketplacePage({ params }: MarketplacePageProps) 
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="border-b border-gray-200">
           <nav className="flex gap-4 px-6" aria-label="Entry methods">
-            <button className="py-4 px-2 border-b-2 border-purple-600 text-purple-600 font-medium text-sm flex items-center gap-2">
+            <button
+              onClick={() => setActiveTab('manual')}
+              className={`py-4 px-2 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors ${
+                activeTab === 'manual'
+                  ? 'border-purple-600 text-purple-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
               <PlusCircle className="w-4 h-4" />
               Manual Entry
             </button>
-            <button className="py-4 px-2 border-b-2 border-transparent text-gray-600 hover:text-gray-900 font-medium text-sm flex items-center gap-2">
+            <button
+              onClick={() => setActiveTab('excel')}
+              className={`py-4 px-2 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors ${
+                activeTab === 'excel'
+                  ? 'border-purple-600 text-purple-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
               <Upload className="w-4 h-4" />
               Excel Upload
             </button>
           </nav>
         </div>
 
-        {/* Manual Entry Form */}
+        {/* Tab Content */}
         <div className="p-6">
-          <ManualEntryForm marketplaceSlug={slug} />
+          {activeTab === 'manual' ? (
+            <ManualEntryForm marketplaceId={marketplace.id} marketplaceName={marketplace.name} />
+          ) : (
+            <ExcelUpload marketplaceId={marketplace.id} marketplaceName={marketplace.name} />
+          )}
         </div>
       </div>
 
@@ -78,7 +144,7 @@ export default async function MarketplacePage({ params }: MarketplacePageProps) 
             Export
           </button>
         </div>
-        <RequestsTable marketplaceSlug={slug} />
+        <RequestsTable marketplaceId={marketplace.id} />
       </div>
     </div>
   );
