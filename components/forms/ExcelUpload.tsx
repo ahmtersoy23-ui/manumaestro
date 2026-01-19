@@ -9,10 +9,11 @@ import { useState } from 'react';
 import { Upload, Download, FileSpreadsheet, X } from 'lucide-react';
 
 interface ExcelUploadProps {
-  marketplaceSlug: string;
+  marketplaceId: string;
+  marketplaceName: string;
 }
 
-export function ExcelUpload({ marketplaceSlug }: ExcelUploadProps) {
+export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps) {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -40,7 +41,7 @@ export function ExcelUpload({ marketplaceSlug }: ExcelUploadProps) {
 
   const downloadTemplate = () => {
     // TODO: Generate and download Excel template
-    console.log('Downloading template for:', marketplaceSlug);
+    console.log('Downloading template for:', marketplaceName);
   };
 
   return (
