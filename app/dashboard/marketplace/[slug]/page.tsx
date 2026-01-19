@@ -18,12 +18,20 @@ interface Marketplace {
   code: string;
 }
 
-export default function MarketplacePage({ params }: { params: { slug: string } }) {
+export default function MarketplacePage({ params }: { params: Promise<{ slug: string }> }) {
   const [marketplace, setMarketplace] = useState<Marketplace | null>(null);
   const [activeTab, setActiveTab] = useState<'manual' | 'excel'>('manual');
   const [loading, setLoading] = useState(true);
+  const [slug, setSlug] = useState<string>('');
 
   useEffect(() => {
+    // Unwrap params Promise
+    params.then((p) => setSlug(p.slug));
+  }, [params]);
+
+  useEffect(() => {
+    if (!slug) return;
+
     // Fetch marketplace data based on slug
     async function fetchMarketplace() {
       try {
@@ -46,8 +54,8 @@ export default function MarketplacePage({ params }: { params: { slug: string } }
             'bol-nl': 'BOL_NL',
           };
 
-          const code = slugToCode[params.slug];
-          console.log('DEBUG - Slug:', params.slug, 'Code:', code, 'Data:', data.data.map((m: Marketplace) => m.code));
+          const code = slugToCode[slug];
+          console.log('DEBUG - Slug:', slug, 'Code:', code, 'Data:', data.data.map((m: Marketplace) => m.code));
           const found = data.data.find((m: Marketplace) => m.code === code);
           console.log('DEBUG - Found:', found);
           setMarketplace(found || null);
@@ -60,7 +68,7 @@ export default function MarketplacePage({ params }: { params: { slug: string } }
     }
 
     fetchMarketplace();
-  }, [params.slug]);
+  }, [slug]);
 
   if (loading) {
     return (
