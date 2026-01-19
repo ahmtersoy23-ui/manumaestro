@@ -27,7 +27,9 @@ export default function MarketplacePage({ params }: { params: { slug: string } }
     // Fetch marketplace data based on slug
     async function fetchMarketplace() {
       try {
-        const res = await fetch('/api/marketplaces');
+        const res = await fetch('/api/marketplaces', {
+          cache: 'no-store',
+        });
         const data = await res.json();
 
         if (data.success) {
