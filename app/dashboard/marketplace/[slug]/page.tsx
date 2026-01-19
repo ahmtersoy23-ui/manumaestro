@@ -87,7 +87,7 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Marketplace Not Found</h1>
           <p className="text-gray-600">The requested marketplace could not be found.</p>
-          <p className="text-xs text-gray-400 mt-4">Slug: {params.slug}</p>
+          <p className="text-xs text-gray-400 mt-4">Slug: {slug}</p>
         </div>
       </div>
     );
