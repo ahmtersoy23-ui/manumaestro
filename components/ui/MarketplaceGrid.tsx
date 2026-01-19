@@ -107,7 +107,7 @@ export function MarketplaceGrid() {
       {marketplaces.map((marketplace) => (
         <Link
           key={marketplace.id}
-          href={`/dashboard/marketplace/${marketplace.code.toLowerCase().replace('_', '-')}`}
+          href={`/dashboard/marketplace/${marketplace.code.toLowerCase().replaceAll('_', '-')}`}
           className="group"
         >
           <div className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg hover:border-gray-300 transition-all">
