@@ -7,6 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import { Calendar, Package, Trash2 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface RequestsTableProps {
   marketplaceId: string;
@@ -43,6 +44,7 @@ const statusLabels = {
 };
 
 export function RequestsTable({ marketplaceId, refreshTrigger, onDelete }: RequestsTableProps) {
+  const { role, hasRole } = useAuth();
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -151,9 +153,11 @@ export function RequestsTable({ marketplaceId, refreshTrigger, onDelete }: Reque
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                 Status
               </th>
-              <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                Actions
-              </th>
+              {hasRole(['admin']) && (
+                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Actions
+                </th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
@@ -199,24 +203,27 @@ export function RequestsTable({ marketplaceId, refreshTrigger, onDelete }: Reque
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right">
-                  <button
-                    onClick={() => handleDelete(request.id)}
-                    disabled={deleting === request.id}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    title="Delete request"
-                  >
-                    {deleting === request.id ? (
-                      <>
-                        <div className="w-3.5 h-3.5 border-2 border-red-700 border-t-transparent rounded-full animate-spin" />
-                        Deleting...
-                      </>
-                    ) : (
-                      <>
-                        <Trash2 className="w-3.5 h-3.5" />
-                        Delete
-                      </>
-                    )}
-                  </button>
+                  {/* Only admins can delete */}
+                  {hasRole(['admin']) && (
+                    <button
+                      onClick={() => handleDelete(request.id)}
+                      disabled={deleting === request.id}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      title="Delete request"
+                    >
+                      {deleting === request.id ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-red-700 border-t-transparent rounded-full animate-spin" />
+                          Deleting...
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Delete
+                        </>
+                      )}
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
