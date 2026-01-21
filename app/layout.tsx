@@ -15,6 +15,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "ManuMaestro - Production Request Management",
   description: "Orchestrating Production Excellence",
+  icons: {
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', sizes: 'any' }
+    ],
+    apple: '/logo.svg',
+  },
 };
 
 export default function RootLayout({

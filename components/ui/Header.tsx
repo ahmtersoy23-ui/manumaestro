@@ -3,7 +3,8 @@
  * Top navigation bar with branding and user menu
  */
 
-import { Music2, Bell, User } from 'lucide-react';
+import Image from 'next/image';
+import { Bell, User } from 'lucide-react';
 
 export function Header() {
   return (
@@ -12,8 +13,14 @@ export function Header() {
         <div className="flex items-center justify-between">
           {/* Logo and Brand */}
           <div className="flex items-center gap-3">
-            <div className="bg-gradient-to-br from-purple-600 to-blue-600 p-2 rounded-lg">
-              <Music2 className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 relative">
+              <Image
+                src="/icon.svg"
+                alt="ManuMaestro Logo"
+                width={40}
+                height={40}
+                className="w-10 h-10"
+              />
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-900">ManuMaestro</h1>
