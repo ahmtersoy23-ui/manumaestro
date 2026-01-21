@@ -6,23 +6,24 @@
     </linearGradient>
   </defs>
 
-  <!-- Background -->
-  <rect width="32" height="32" rx="6" fill="url(#grad)"/>
+  <!-- Background with rounded corners -->
+  <rect width="32" height="32" rx="7" fill="url(#grad)"/>
 
-  <!-- Simplified Factory -->
-  <g transform="translate(6, 8)">
-    <!-- Building -->
-    <rect x="2" y="6" width="16" height="10" fill="white" opacity="0.95" rx="1"/>
-    <!-- Roof -->
-    <path d="M 1 6 L 10 2 L 19 6 Z" fill="white" opacity="0.95"/>
-    <!-- Window -->
-    <rect x="7" y="9" width="6" height="4" fill="#7C3AED" rx="0.5"/>
-    <!-- Chimney -->
-    <rect x="14" y="3" width="3" height="4" fill="white" opacity="0.95" rx="0.5"/>
-    <!-- Smoke -->
-    <circle cx="15.5" cy="1.5" r="1" fill="white" opacity="0.6"/>
+  <!-- Simplified M letter -->
+  <g transform="translate(16, 16)">
+    <!-- Left bar -->
+    <rect x="-8" y="-9" width="3" height="18" fill="white" rx="1"/>
+    <!-- Right bar -->
+    <rect x="5" y="-9" width="3" height="18" fill="white" rx="1"/>
+    <!-- Left diagonal -->
+    <rect x="-5" y="-9" width="3" height="11" fill="white" rx="1"
+          transform="rotate(30 -3.5 -9)"/>
+    <!-- Right diagonal -->
+    <rect x="2" y="-9" width="3" height="11" fill="white" rx="1"
+          transform="rotate(-30 3.5 -9)"/>
   </g>
 
   <!-- Baton accent -->
-  <line x1="20" y1="20" x2="27" y2="27" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.9"/>
+  <line x1="22" y1="22" x2="28" y2="28" stroke="white" stroke-width="2.5" stroke-linecap="round" opacity="0.9"/>
+  <circle cx="28" cy="28" r="1.5" fill="white" opacity="0.9"/>
 </svg>
