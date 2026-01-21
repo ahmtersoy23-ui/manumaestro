@@ -1,12 +1,12 @@
 /**
  * Root Page
  * Redirects to dashboard
+ * SSO authentication is handled by middleware.ts
  */
 
 import { redirect } from 'next/navigation';
 
 export default function Home() {
-  // For now, redirect directly to dashboard
-  // Later, this will check authentication and redirect to login if needed
+  // User is authenticated if they reach here (middleware validates)
   redirect('/dashboard');
 }
