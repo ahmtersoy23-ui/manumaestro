@@ -2,9 +2,14 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export async function middleware(request: NextRequest) {
+  console.log('[SSO Middleware] Request:', request.nextUrl.pathname);
+
   // Get token from cookie or URL parameter
   const tokenFromCookie = request.cookies.get('sso_access_token')?.value;
   const tokenFromUrl = request.nextUrl.searchParams.get('token');
+
+  console.log('[SSO Middleware] Token from cookie:', tokenFromCookie ? 'exists' : 'none');
+  console.log('[SSO Middleware] Token from URL:', tokenFromUrl ? 'exists' : 'none');
 
   // If token in URL, save to cookie and redirect to clean URL
   if (tokenFromUrl) {
