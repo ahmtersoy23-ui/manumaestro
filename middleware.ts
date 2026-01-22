@@ -31,6 +31,7 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
+    console.log('[SSO Middleware] Verifying token with SSO backend...');
     // Verify token with SSO
     const response = await fetch('https://apps.iwa.web.tr/api/auth/verify', {
       method: 'POST',
@@ -41,14 +42,19 @@ export async function middleware(request: NextRequest) {
       })
     });
 
+    console.log('[SSO Middleware] SSO response status:', response.status);
     const data = await response.json();
+    console.log('[SSO Middleware] SSO response:', JSON.stringify(data));
 
     if (!data.success) {
+      console.log('[SSO Middleware] Token invalid, redirecting to SSO');
       // Invalid token - clear cookie and redirect to SSO
       const redirectResponse = NextResponse.redirect(new URL('https://apps.iwa.web.tr', request.url));
       redirectResponse.cookies.delete('sso_access_token');
       return redirectResponse;
     }
+
+    console.log('[SSO Middleware] Token valid, allowing access');
 
     // Token valid - add user info to headers
     const requestHeaders = new Headers(request.headers);
