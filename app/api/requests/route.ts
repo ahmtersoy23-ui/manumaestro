@@ -11,7 +11,7 @@ import { EntryType, RequestStatus } from '@prisma/client';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { iwasku, productName, productCategory, marketplaceId, quantity, notes } = body;
+    const { iwasku, productName, productCategory, marketplaceId, quantity, productionMonth, notes } = body;
 
     // Validation
     if (!iwasku || !productName || !productCategory || !marketplaceId || !quantity) {
@@ -19,6 +19,13 @@ export async function POST(request: NextRequest) {
         { error: 'Missing required fields' },
         { status: 400 }
       );
+    }
+
+    // Parse production month to set request date
+    let requestDate = new Date();
+    if (productionMonth) {
+      const [year, month] = productionMonth.split('-').map(Number);
+      requestDate = new Date(year, month - 1, 1); // First day of the month
     }
 
     // TODO: Get actual user ID from session/SSO
@@ -42,6 +49,7 @@ export async function POST(request: NextRequest) {
         productCategory,
         marketplaceId,
         quantity: parseInt(quantity),
+        requestDate,
         notes,
         entryType: EntryType.MANUAL,
         status: RequestStatus.REQUESTED,
