@@ -239,9 +239,9 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
             onChange={(e) => setQuantity(e.target.value)}
             placeholder="Enter quantity"
             min="1"
-            className={`w-full px-4 py-2 border-2 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all ${
+            className={`w-full px-4 py-2 border-2 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all text-gray-900 ${
               quantity
-                ? 'border-purple-400 bg-purple-50 font-bold text-gray-900'
+                ? 'border-purple-400 bg-purple-50 font-bold'
                 : 'border-gray-300 focus:border-purple-400'
             }`}
             required
@@ -263,9 +263,9 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
               onChange={(e) => setIwasku(e.target.value)}
               onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
               placeholder="Type to search products..."
-              className={`w-full px-4 py-2 pl-10 border-2 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all ${
+              className={`w-full px-4 py-2 pl-10 border-2 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all text-gray-900 ${
                 productName
-                  ? 'border-purple-400 bg-purple-50 font-bold text-gray-900'
+                  ? 'border-purple-400 bg-purple-50 font-bold'
                   : 'border-gray-300 focus:border-purple-400'
               }`}
               required
@@ -340,7 +340,7 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Add any additional notes or comments"
           rows={3}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900"
         />
       </div>
 
