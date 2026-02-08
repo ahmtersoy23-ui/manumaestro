@@ -32,18 +32,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // If we reach here, middleware has already authenticated the user
-    // User info is available in request headers (set by middleware)
-    // For now, we'll create a minimal user object
-    // In a real app, you'd fetch this from an API endpoint that reads the headers
+    // Fetch user info from API endpoint that reads middleware headers
+    const fetchUserInfo = async () => {
+      try {
+        const response = await fetch('/api/auth/me');
+        if (response.ok) {
+          const data = await response.json();
+          setUser(data.user);
+          setRole(data.role);
+        } else {
+          // If API fails, redirect to SSO
+          window.location.href = 'https://apps.iwa.web.tr';
+        }
+      } catch (error) {
+        console.error('Failed to fetch user info:', error);
+        window.location.href = 'https://apps.iwa.web.tr';
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    setUser({
-      id: 'authenticated-user',
-      email: 'user@example.com',
-      name: 'Authenticated User'
-    });
-    setRole('admin');
-    setLoading(false);
+    fetchUserInfo();
   }, []);
 
   const hasRoleCheck = (requiredRoles: string[]): boolean => {
