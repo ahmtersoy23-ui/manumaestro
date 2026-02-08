@@ -26,12 +26,6 @@ const navSections = [
         icon: LayoutDashboard,
         description: 'Month-based production view',
       },
-      {
-        label: 'Production Overview',
-        href: '/dashboard/manufacturer',
-        icon: Factory,
-        description: 'All production requests',
-      },
     ],
   },
 ];

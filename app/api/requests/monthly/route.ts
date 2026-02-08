@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
       },
       _sum: {
         quantity: true,
+        producedQuantity: true,
       },
     });
 
@@ -76,6 +77,7 @@ export async function GET(request: NextRequest) {
 
       if (existing) {
         existing.totalQuantity += request.quantity;
+        existing.totalProduced += request.producedQuantity || 0;
         existing.requestCount += 1;
       } else {
         acc.push({
@@ -83,6 +85,7 @@ export async function GET(request: NextRequest) {
           marketplaceId: request.marketplaceId,
           marketplaceName: request.marketplace.name,
           totalQuantity: request.quantity,
+          totalProduced: request.producedQuantity || 0,
           requestCount: 1,
         });
       }
@@ -95,6 +98,7 @@ export async function GET(request: NextRequest) {
       data: {
         totalRequests: stats._count.id || 0,
         totalQuantity: stats._sum.quantity || 0,
+        totalProduced: stats._sum.producedQuantity || 0,
         summary,
       },
     });

@@ -23,9 +23,14 @@ export async function PATCH(
       );
     }
 
-    // TODO: Add producedQuantity and manufacturerNotes to Prisma schema
-    // For now, only update status
+    // Prepare update data
     const updateData: any = {};
+    if (producedQuantity !== undefined) {
+      updateData.producedQuantity = producedQuantity;
+    }
+    if (manufacturerNotes !== undefined) {
+      updateData.manufacturerNotes = manufacturerNotes;
+    }
     if (status !== undefined) {
       updateData.status = status;
     }

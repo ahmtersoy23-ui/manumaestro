@@ -110,10 +110,12 @@ model ProductionRequest {
   productCategory   String       // Cached from products
   marketplaceId     String
   quantity          Int
+  producedQuantity  Int?         // Quantity actually produced by manufacturer
   requestDate       DateTime     @default(now())
   status            RequestStatus @default(REQUESTED)
   entryType         EntryType
-  notes             String?
+  notes             String?      // Operator notes
+  manufacturerNotes String?      // Manufacturer production notes
   enteredById       String
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt

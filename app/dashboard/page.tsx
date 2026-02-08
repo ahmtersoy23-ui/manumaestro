@@ -14,6 +14,7 @@ interface MonthStats {
   month: string;
   totalRequests: number;
   totalQuantity: number;
+  totalProduced: number;
 }
 
 export default function DashboardPage() {
@@ -37,6 +38,7 @@ export default function DashboardPage() {
             month: month.value,
             totalRequests: data.data?.totalRequests || 0,
             totalQuantity: data.data?.totalQuantity || 0,
+            totalProduced: data.data?.totalProduced || 0,
           };
         });
 
@@ -57,8 +59,27 @@ export default function DashboardPage() {
       month: monthValue,
       totalRequests: 0,
       totalQuantity: 0,
+      totalProduced: 0,
     };
   };
+
+  // Calculate overall production summary for active months
+  const activeMonthsStats = monthStats.filter(stat =>
+    availableMonths.some(m => m.value === stat.month)
+  );
+
+  const overallSummary = activeMonthsStats.reduce(
+    (acc, stat) => ({
+      totalRequests: acc.totalRequests + stat.totalRequests,
+      totalQuantity: acc.totalQuantity + stat.totalQuantity,
+      totalProduced: acc.totalProduced + stat.totalProduced,
+    }),
+    { totalRequests: 0, totalQuantity: 0, totalProduced: 0 }
+  );
+
+  const completionRate = overallSummary.totalQuantity > 0
+    ? Math.round((overallSummary.totalProduced / overallSummary.totalQuantity) * 100)
+    : 0;
 
   if (loading) {
     return (
@@ -80,6 +101,39 @@ export default function DashboardPage() {
           Select a month to manage production requests and track manufacturing
         </p>
       </div>
+
+      {/* Overall Production Summary */}
+      {overallSummary.totalRequests > 0 && (
+        <div className="bg-gradient-to-r from-purple-600 to-purple-700 rounded-xl p-6 text-white">
+          <h2 className="text-xl font-semibold mb-4">Overall Production Summary</h2>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-white/10 rounded-lg p-4">
+              <p className="text-purple-100 text-sm mb-1">Total Requests</p>
+              <p className="text-3xl font-bold">{overallSummary.totalRequests}</p>
+            </div>
+            <div className="bg-white/10 rounded-lg p-4">
+              <p className="text-purple-100 text-sm mb-1">Requested Quantity</p>
+              <p className="text-3xl font-bold">{overallSummary.totalQuantity}</p>
+              <p className="text-xs text-purple-200 mt-1">units</p>
+            </div>
+            <div className="bg-white/10 rounded-lg p-4">
+              <p className="text-purple-100 text-sm mb-1">Produced Quantity</p>
+              <p className="text-3xl font-bold">{overallSummary.totalProduced}</p>
+              <p className="text-xs text-purple-200 mt-1">units</p>
+            </div>
+            <div className="bg-white/10 rounded-lg p-4">
+              <p className="text-purple-100 text-sm mb-1">Completion Rate</p>
+              <p className="text-3xl font-bold">{completionRate}%</p>
+              <div className="w-full bg-white/20 rounded-full h-2 mt-2">
+                <div
+                  className="bg-white h-2 rounded-full transition-all"
+                  style={{ width: `${Math.min(completionRate, 100)}%` }}
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Active Months */}
       <div>

@@ -14,6 +14,7 @@ import { parseMonthValue, isMonthLocked } from '@/lib/monthUtils';
 interface CategorySummary {
   productCategory: string;
   totalQuantity: number;
+  totalProduced: number;
   requestCount: number;
 }
 
@@ -87,11 +88,13 @@ export default function MonthDetailPage() {
             const existing = categoryMap.get(item.productCategory);
             if (existing) {
               existing.totalQuantity += item.totalQuantity;
+              existing.totalProduced += item.totalProduced || 0;
               existing.requestCount += item.requestCount;
             } else {
               categoryMap.set(item.productCategory, {
                 productCategory: item.productCategory,
                 totalQuantity: item.totalQuantity,
+                totalProduced: item.totalProduced || 0,
                 requestCount: item.requestCount,
               });
             }
@@ -211,14 +214,45 @@ export default function MonthDetailPage() {
                   </h3>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-100">
-                  <div>
-                    <p className="text-xs text-gray-600 mb-1">Items</p>
-                    <p className="text-xl font-bold text-gray-900">{category.requestCount}</p>
+                <div className="space-y-3 mt-4 pt-4 border-t border-gray-100">
+                  {/* Items count */}
+                  <div className="flex justify-between items-center">
+                    <p className="text-xs text-gray-600">Items</p>
+                    <p className="text-sm font-bold text-gray-900">{category.requestCount}</p>
                   </div>
+
+                  {/* Requested quantity */}
+                  <div className="flex justify-between items-center">
+                    <p className="text-xs text-gray-600">Requested</p>
+                    <p className="text-sm font-bold text-orange-600">{category.totalQuantity} units</p>
+                  </div>
+
+                  {/* Produced quantity */}
+                  <div className="flex justify-between items-center">
+                    <p className="text-xs text-gray-600">Produced</p>
+                    <p className="text-sm font-bold text-green-600">{category.totalProduced} units</p>
+                  </div>
+
+                  {/* Progress bar */}
                   <div>
-                    <p className="text-xs text-gray-600 mb-1">Quantity</p>
-                    <p className="text-xl font-bold text-orange-600">{category.totalQuantity}</p>
+                    <div className="flex justify-between items-center mb-1">
+                      <p className="text-xs text-gray-600">Progress</p>
+                      <p className="text-xs font-semibold text-gray-900">
+                        {category.totalQuantity > 0
+                          ? Math.round((category.totalProduced / category.totalQuantity) * 100)
+                          : 0}%
+                      </p>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-gradient-to-r from-orange-500 to-green-500 h-2 rounded-full transition-all"
+                        style={{
+                          width: `${category.totalQuantity > 0
+                            ? Math.min((category.totalProduced / category.totalQuantity) * 100, 100)
+                            : 0}%`
+                        }}
+                      ></div>
+                    </div>
                   </div>
                 </div>
               </Link>
