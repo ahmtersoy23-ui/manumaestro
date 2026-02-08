@@ -59,6 +59,7 @@ export default function MonthDetailPage() {
   const [allMarketplaces, setAllMarketplaces] = useState<Marketplace[]>([]);
   const [monthStats, setMonthStats] = useState({ totalRequests: 0, totalQuantity: 0, totalDesi: 0, itemsWithoutSize: 0 });
   const [viewMode, setViewMode] = useState<'quantity' | 'desi'>('quantity');
+  const [showMissingItems, setShowMissingItems] = useState(false);
 
   const monthDate = parseMonthValue(month);
   const monthLabel = monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -205,8 +206,26 @@ export default function MonthDetailPage() {
         </div>
 
         {monthStats.itemsWithoutSize > 0 && (
-          <div className="bg-yellow-500/20 px-4 py-2 rounded-lg text-sm mb-4">
-            ⚠️ {monthStats.itemsWithoutSize} items missing desi data
+          <div className="mb-4">
+            <button
+              onClick={() => setShowMissingItems(!showMissingItems)}
+              className="w-full bg-yellow-500/20 px-4 py-2 rounded-lg text-sm hover:bg-yellow-500/30 transition-colors flex items-center justify-between"
+            >
+              <span>⚠️ {monthStats.itemsWithoutSize} items missing desi data</span>
+              <span>{showMissingItems ? '▼' : '▶'}</span>
+            </button>
+            {showMissingItems && (
+              <div className="mt-2 bg-yellow-500/10 px-4 py-3 rounded-lg text-sm space-y-1">
+                {categories
+                  .filter(cat => cat.itemsWithoutSize > 0)
+                  .map(cat => (
+                    <div key={cat.productCategory} className="flex justify-between items-center py-1">
+                      <span className="font-medium">{cat.productCategory}</span>
+                      <span className="text-yellow-700">{cat.itemsWithoutSize} items</span>
+                    </div>
+                  ))}
+              </div>
+            )}
           </div>
         )}
 
