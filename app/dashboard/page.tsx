@@ -15,6 +15,9 @@ interface MonthStats {
   totalRequests: number;
   totalQuantity: number;
   totalProduced: number;
+  totalDesi: number;
+  totalProducedDesi: number;
+  itemsWithoutSize: number;
 }
 
 export default function DashboardPage() {
@@ -39,6 +42,9 @@ export default function DashboardPage() {
             totalRequests: data.data?.totalRequests || 0,
             totalQuantity: data.data?.totalQuantity || 0,
             totalProduced: data.data?.totalProduced || 0,
+            totalDesi: data.data?.totalDesi || 0,
+            totalProducedDesi: data.data?.totalProducedDesi || 0,
+            itemsWithoutSize: data.data?.itemsWithoutSize || 0,
           };
         });
 
@@ -60,6 +66,9 @@ export default function DashboardPage() {
       totalRequests: 0,
       totalQuantity: 0,
       totalProduced: 0,
+      totalDesi: 0,
+      totalProducedDesi: 0,
+      itemsWithoutSize: 0,
     };
   };
 
@@ -73,12 +82,19 @@ export default function DashboardPage() {
       totalRequests: acc.totalRequests + stat.totalRequests,
       totalQuantity: acc.totalQuantity + stat.totalQuantity,
       totalProduced: acc.totalProduced + stat.totalProduced,
+      totalDesi: acc.totalDesi + stat.totalDesi,
+      totalProducedDesi: acc.totalProducedDesi + stat.totalProducedDesi,
+      itemsWithoutSize: acc.itemsWithoutSize + stat.itemsWithoutSize,
     }),
-    { totalRequests: 0, totalQuantity: 0, totalProduced: 0 }
+    { totalRequests: 0, totalQuantity: 0, totalProduced: 0, totalDesi: 0, totalProducedDesi: 0, itemsWithoutSize: 0 }
   );
 
   const completionRate = overallSummary.totalQuantity > 0
     ? Math.round((overallSummary.totalProduced / overallSummary.totalQuantity) * 100)
+    : 0;
+
+  const desiCompletionRate = overallSummary.totalDesi > 0
+    ? Math.round((overallSummary.totalProducedDesi / overallSummary.totalDesi) * 100)
     : 0;
 
   if (loading) {
@@ -105,25 +121,33 @@ export default function DashboardPage() {
       {/* Overall Production Summary */}
       {overallSummary.totalRequests > 0 && (
         <div className="bg-gradient-to-r from-purple-600 to-purple-700 rounded-xl p-6 text-white">
-          <h2 className="text-xl font-semibold mb-4">Overall Production Summary</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">Overall Production Summary</h2>
+            {overallSummary.itemsWithoutSize > 0 && (
+              <div className="bg-yellow-500/20 px-3 py-1 rounded-full text-sm">
+                ⚠️ {overallSummary.itemsWithoutSize} items missing desi data
+              </div>
+            )}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white/10 rounded-lg p-4">
               <p className="text-purple-100 text-sm mb-1">Total Requests</p>
               <p className="text-3xl font-bold">{overallSummary.totalRequests}</p>
             </div>
             <div className="bg-white/10 rounded-lg p-4">
-              <p className="text-purple-100 text-sm mb-1">Requested Quantity</p>
-              <p className="text-3xl font-bold">{overallSummary.totalQuantity}</p>
-              <p className="text-xs text-purple-200 mt-1">units</p>
+              <p className="text-purple-100 text-sm mb-1">Requested</p>
+              <p className="text-2xl font-bold">{overallSummary.totalQuantity} adet</p>
+              <p className="text-2xl font-bold mt-1">{Math.round(overallSummary.totalDesi)} desi</p>
             </div>
             <div className="bg-white/10 rounded-lg p-4">
-              <p className="text-purple-100 text-sm mb-1">Produced Quantity</p>
-              <p className="text-3xl font-bold">{overallSummary.totalProduced}</p>
-              <p className="text-xs text-purple-200 mt-1">units</p>
+              <p className="text-purple-100 text-sm mb-1">Produced</p>
+              <p className="text-2xl font-bold">{overallSummary.totalProduced} adet</p>
+              <p className="text-2xl font-bold mt-1">{Math.round(overallSummary.totalProducedDesi)} desi</p>
             </div>
             <div className="bg-white/10 rounded-lg p-4">
               <p className="text-purple-100 text-sm mb-1">Completion Rate</p>
-              <p className="text-3xl font-bold">{completionRate}%</p>
+              <p className="text-2xl font-bold">{completionRate}% (adet)</p>
+              <p className="text-2xl font-bold mt-1">{desiCompletionRate}% (desi)</p>
               <div className="w-full bg-white/20 rounded-full h-2 mt-2">
                 <div
                   className="bg-white h-2 rounded-full transition-all"

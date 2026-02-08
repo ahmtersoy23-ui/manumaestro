@@ -75,10 +75,17 @@ export async function GET(request: NextRequest) {
           item.marketplaceId === request.marketplaceId
       );
 
+      const desiPerUnit = request.productSize || 0;
+      const requestTotalDesi = desiPerUnit * request.quantity;
+      const producedTotalDesi = desiPerUnit * (request.producedQuantity || 0);
+
       if (existing) {
         existing.totalQuantity += request.quantity;
         existing.totalProduced += request.producedQuantity || 0;
+        existing.totalDesi += requestTotalDesi;
+        existing.producedDesi += producedTotalDesi;
         existing.requestCount += 1;
+        existing.itemsWithoutSize += request.productSize ? 0 : 1;
       } else {
         acc.push({
           productCategory: request.productCategory,
@@ -86,12 +93,20 @@ export async function GET(request: NextRequest) {
           marketplaceName: request.marketplace.name,
           totalQuantity: request.quantity,
           totalProduced: request.producedQuantity || 0,
+          totalDesi: requestTotalDesi,
+          producedDesi: producedTotalDesi,
           requestCount: 1,
+          itemsWithoutSize: request.productSize ? 0 : 1,
         });
       }
 
       return acc;
     }, []);
+
+    // Calculate total desi
+    const totalDesi = requests.reduce((sum, r) => sum + ((r.productSize || 0) * r.quantity), 0);
+    const totalProducedDesi = requests.reduce((sum, r) => sum + ((r.productSize || 0) * (r.producedQuantity || 0)), 0);
+    const itemsWithoutSize = requests.filter(r => !r.productSize).length;
 
     return NextResponse.json({
       success: true,
@@ -99,6 +114,9 @@ export async function GET(request: NextRequest) {
         totalRequests: stats._count.id || 0,
         totalQuantity: stats._sum.quantity || 0,
         totalProduced: stats._sum.producedQuantity || 0,
+        totalDesi,
+        totalProducedDesi,
+        itemsWithoutSize,
         summary,
       },
     });

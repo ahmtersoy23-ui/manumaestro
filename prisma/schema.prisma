@@ -108,6 +108,7 @@ model ProductionRequest {
   iwasku            String       // Reference to products.iwasku
   productName       String       // Cached from products
   productCategory   String       // Cached from products
+  productSize       Float?       // Cached from products - desi (volumetric size)
   marketplaceId     String
   quantity          Int
   producedQuantity  Int?         // Quantity actually produced by manufacturer

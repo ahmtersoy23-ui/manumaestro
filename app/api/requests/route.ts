@@ -11,7 +11,7 @@ import { EntryType, RequestStatus } from '@prisma/client';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { iwasku, productName, productCategory, marketplaceId, quantity, productionMonth, notes } = body;
+    const { iwasku, productName, productCategory, productSize, marketplaceId, quantity, productionMonth, notes } = body;
 
     // Validation
     if (!iwasku || !productName || !productCategory || !marketplaceId || !quantity) {
@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
         iwasku,
         productName,
         productCategory,
+        productSize: productSize ? parseFloat(productSize) : null,
         marketplaceId,
         quantity: parseInt(quantity),
         requestDate,
@@ -63,6 +64,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: productionRequest,
+      warning: !productSize ? `Product ${iwasku} is missing desi (size) data. Please update in PriceLab.` : undefined,
     });
   } catch (error) {
     console.error('Create request error:', error);

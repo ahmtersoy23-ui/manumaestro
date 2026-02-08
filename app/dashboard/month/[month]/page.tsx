@@ -15,7 +15,10 @@ interface CategorySummary {
   productCategory: string;
   totalQuantity: number;
   totalProduced: number;
+  totalDesi: number;
+  producedDesi: number;
   requestCount: number;
+  itemsWithoutSize: number;
 }
 
 interface MarketplaceSummary {
@@ -54,7 +57,8 @@ export default function MonthDetailPage() {
   const [categories, setCategories] = useState<CategorySummary[]>([]);
   const [marketplaces, setMarketplaces] = useState<MarketplaceSummary[]>([]);
   const [allMarketplaces, setAllMarketplaces] = useState<Marketplace[]>([]);
-  const [monthStats, setMonthStats] = useState({ totalRequests: 0, totalQuantity: 0 });
+  const [monthStats, setMonthStats] = useState({ totalRequests: 0, totalQuantity: 0, totalDesi: 0, itemsWithoutSize: 0 });
+  const [viewMode, setViewMode] = useState<'quantity' | 'desi'>('quantity');
 
   const monthDate = parseMonthValue(month);
   const monthLabel = monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -80,6 +84,8 @@ export default function MonthDetailPage() {
           setMonthStats({
             totalRequests: data.data.totalRequests || 0,
             totalQuantity: data.data.totalQuantity || 0,
+            totalDesi: data.data.totalDesi || 0,
+            itemsWithoutSize: data.data.itemsWithoutSize || 0,
           });
 
           // Group by category
@@ -89,13 +95,19 @@ export default function MonthDetailPage() {
             if (existing) {
               existing.totalQuantity += item.totalQuantity;
               existing.totalProduced += item.totalProduced || 0;
+              existing.totalDesi += item.totalDesi || 0;
+              existing.producedDesi += item.producedDesi || 0;
               existing.requestCount += item.requestCount;
+              existing.itemsWithoutSize += item.itemsWithoutSize || 0;
             } else {
               categoryMap.set(item.productCategory, {
                 productCategory: item.productCategory,
                 totalQuantity: item.totalQuantity,
                 totalProduced: item.totalProduced || 0,
+                totalDesi: item.totalDesi || 0,
+                producedDesi: item.producedDesi || 0,
                 requestCount: item.requestCount,
+                itemsWithoutSize: item.itemsWithoutSize || 0,
               });
             }
           });
@@ -158,15 +170,45 @@ export default function MonthDetailPage() {
 
       {/* Month Header */}
       <div className="bg-gradient-to-r from-purple-600 to-purple-700 rounded-xl p-8 text-white">
-        <div className="flex items-center gap-3 mb-4">
-          <Calendar className="w-8 h-8" />
-          <h1 className="text-3xl font-bold">{monthLabel}</h1>
-          {isLocked && (
-            <span className="px-3 py-1 bg-white/20 rounded-full text-sm">
-              View Only
-            </span>
-          )}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <Calendar className="w-8 h-8" />
+            <h1 className="text-3xl font-bold">{monthLabel}</h1>
+            {isLocked && (
+              <span className="px-3 py-1 bg-white/20 rounded-full text-sm">
+                View Only
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setViewMode('quantity')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                viewMode === 'quantity'
+                  ? 'bg-white text-purple-700'
+                  : 'bg-white/20 text-white hover:bg-white/30'
+              }`}
+            >
+              Adet
+            </button>
+            <button
+              onClick={() => setViewMode('desi')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                viewMode === 'desi'
+                  ? 'bg-white text-purple-700'
+                  : 'bg-white/20 text-white hover:bg-white/30'
+              }`}
+            >
+              Desi
+            </button>
+          </div>
         </div>
+
+        {monthStats.itemsWithoutSize > 0 && (
+          <div className="bg-yellow-500/20 px-4 py-2 rounded-lg text-sm mb-4">
+            ⚠️ {monthStats.itemsWithoutSize} items missing desi data
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
           <div className="bg-white/10 rounded-lg p-4">
@@ -174,8 +216,14 @@ export default function MonthDetailPage() {
             <p className="text-4xl font-bold">{monthStats.totalRequests}</p>
           </div>
           <div className="bg-white/10 rounded-lg p-4">
-            <p className="text-purple-100 text-sm mb-1">Total Quantity</p>
-            <p className="text-4xl font-bold">{monthStats.totalQuantity}</p>
+            <p className="text-purple-100 text-sm mb-1">
+              Total {viewMode === 'quantity' ? 'Quantity' : 'Desi'}
+            </p>
+            <p className="text-4xl font-bold">
+              {viewMode === 'quantity'
+                ? monthStats.totalQuantity
+                : Math.round(monthStats.totalDesi)}
+            </p>
           </div>
         </div>
       </div>
@@ -221,16 +269,31 @@ export default function MonthDetailPage() {
                     <p className="text-sm font-bold text-gray-900">{category.requestCount}</p>
                   </div>
 
-                  {/* Requested quantity */}
+                  {/* Warning for missing desi */}
+                  {viewMode === 'desi' && category.itemsWithoutSize > 0 && (
+                    <div className="text-xs text-yellow-600 bg-yellow-50 px-2 py-1 rounded">
+                      ⚠️ {category.itemsWithoutSize} items without desi
+                    </div>
+                  )}
+
+                  {/* Requested */}
                   <div className="flex justify-between items-center">
                     <p className="text-xs text-gray-600">Requested</p>
-                    <p className="text-sm font-bold text-orange-600">{category.totalQuantity} units</p>
+                    <p className="text-sm font-bold text-orange-600">
+                      {viewMode === 'quantity'
+                        ? `${category.totalQuantity} adet`
+                        : `${Math.round(category.totalDesi)} desi`}
+                    </p>
                   </div>
 
-                  {/* Produced quantity */}
+                  {/* Produced */}
                   <div className="flex justify-between items-center">
                     <p className="text-xs text-gray-600">Produced</p>
-                    <p className="text-sm font-bold text-green-600">{category.totalProduced} units</p>
+                    <p className="text-sm font-bold text-green-600">
+                      {viewMode === 'quantity'
+                        ? `${category.totalProduced} adet`
+                        : `${Math.round(category.producedDesi)} desi`}
+                    </p>
                   </div>
 
                   {/* Progress bar */}
@@ -238,18 +301,26 @@ export default function MonthDetailPage() {
                     <div className="flex justify-between items-center mb-1">
                       <p className="text-xs text-gray-600">Progress</p>
                       <p className="text-xs font-semibold text-gray-900">
-                        {category.totalQuantity > 0
-                          ? Math.round((category.totalProduced / category.totalQuantity) * 100)
-                          : 0}%
+                        {viewMode === 'quantity'
+                          ? (category.totalQuantity > 0
+                              ? Math.round((category.totalProduced / category.totalQuantity) * 100)
+                              : 0)
+                          : (category.totalDesi > 0
+                              ? Math.round((category.producedDesi / category.totalDesi) * 100)
+                              : 0)}%
                       </p>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
                         className="bg-gradient-to-r from-orange-500 to-green-500 h-2 rounded-full transition-all"
                         style={{
-                          width: `${category.totalQuantity > 0
-                            ? Math.min((category.totalProduced / category.totalQuantity) * 100, 100)
-                            : 0}%`
+                          width: `${viewMode === 'quantity'
+                            ? (category.totalQuantity > 0
+                                ? Math.min((category.totalProduced / category.totalQuantity) * 100, 100)
+                                : 0)
+                            : (category.totalDesi > 0
+                                ? Math.min((category.producedDesi / category.totalDesi) * 100, 100)
+                                : 0)}%`
                         }}
                       ></div>
                     </div>

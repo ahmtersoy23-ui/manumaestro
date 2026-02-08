@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
     // Fetch product details from external products API
     const createdRequests: any[] = [];
     const errors: string[] = [];
+    const warnings: string[] = [];
 
     for (const item of requests) {
       try {
@@ -63,11 +64,17 @@ export async function POST(request: NextRequest) {
 
         const product = productData.data;
 
+        // Warn if product has no size (desi) data
+        if (!product.size) {
+          warnings.push(`${item.iwasku}: Missing desi data`);
+        }
+
         const productionRequest = await prisma.productionRequest.create({
           data: {
             iwasku: item.iwasku,
             productName: product.name,
             productCategory: product.category || 'Uncategorized',
+            productSize: product.size ? parseFloat(product.size) : null,
             marketplaceId,
             quantity: item.quantity,
             requestDate,
@@ -90,6 +97,7 @@ export async function POST(request: NextRequest) {
       data: {
         created: createdRequests.length,
         errors: errors.length > 0 ? errors : undefined,
+        warnings: warnings.length > 0 ? warnings : undefined,
       },
     });
   } catch (error) {
