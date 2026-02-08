@@ -206,7 +206,7 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
               setProductionMonth(e.target.value);
               setMonthError('');
             }}
-            className="w-full px-4 py-2 pl-10 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-400 transition-all appearance-none bg-white cursor-pointer"
+            className="w-full px-4 py-2 pl-10 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-400 transition-all appearance-none bg-white cursor-pointer text-gray-900"
             required
           >
             {availableMonths.map((month) => (
