@@ -82,6 +82,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const marketplaceId = searchParams.get('marketplaceId');
     const status = searchParams.get('status');
+    const archiveMode = searchParams.get('archiveMode') === 'true';
     const limit = parseInt(searchParams.get('limit') || '50');
 
     const where: any = {};
@@ -92,6 +93,24 @@ export async function GET(request: NextRequest) {
 
     if (status) {
       where.status = status as RequestStatus;
+    }
+
+    // Date filtering for active/archive
+    // Active: Last 2 months (current month + previous month)
+    // Archive: Older than 2 months
+    const today = new Date();
+    const cutoffDate = new Date(today.getFullYear(), today.getMonth() - 1, 1); // First day of month 1 month ago
+
+    if (archiveMode) {
+      // Archive: older than cutoff (e.g., Dec 2025 and earlier)
+      where.requestDate = {
+        lt: cutoffDate,
+      };
+    } else {
+      // Active: recent 2 months (e.g., Jan 2026 and later)
+      where.requestDate = {
+        gte: cutoffDate,
+      };
     }
 
     const requests = await prisma.productionRequest.findMany({

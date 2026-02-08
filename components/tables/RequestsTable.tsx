@@ -14,6 +14,7 @@ interface RequestsTableProps {
   marketplaceId: string;
   refreshTrigger?: number;
   onDelete?: () => void;
+  archiveMode?: boolean;
 }
 
 interface Request {
@@ -44,7 +45,7 @@ const statusLabels = {
   CANCELLED: 'Cancelled',
 };
 
-export function RequestsTable({ marketplaceId, refreshTrigger, onDelete }: RequestsTableProps) {
+export function RequestsTable({ marketplaceId, refreshTrigger, onDelete, archiveMode = false }: RequestsTableProps) {
   const { role, hasRole } = useAuth();
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,7 +57,8 @@ export function RequestsTable({ marketplaceId, refreshTrigger, onDelete }: Reque
     async function fetchRequests() {
       setLoading(true);
       try {
-        const res = await fetch(`/api/requests?marketplaceId=${marketplaceId}&limit=100`);
+        const archiveParam = archiveMode ? '&archiveMode=true' : '';
+        const res = await fetch(`/api/requests?marketplaceId=${marketplaceId}&limit=100${archiveParam}`);
         const data = await res.json();
 
         if (data.success) {
@@ -71,7 +73,7 @@ export function RequestsTable({ marketplaceId, refreshTrigger, onDelete }: Reque
 
     fetchRequests();
     setSelectedIds(new Set()); // Clear selection on refresh
-  }, [marketplaceId, refreshTrigger]);
+  }, [marketplaceId, refreshTrigger, archiveMode]);
 
   const handleToggleSelect = (id: string) => {
     const newSelected = new Set(selectedIds);

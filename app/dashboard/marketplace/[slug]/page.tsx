@@ -10,7 +10,7 @@ import { useState, useEffect } from 'react';
 import { ManualEntryForm } from '@/components/forms/ManualEntryForm';
 import { ExcelUpload } from '@/components/forms/ExcelUpload';
 import { RequestsTable } from '@/components/tables/RequestsTable';
-import { Download, Upload, PlusCircle } from 'lucide-react';
+import { Download, Upload, PlusCircle, Clock, Archive } from 'lucide-react';
 
 interface Marketplace {
   id: string;
@@ -21,6 +21,7 @@ interface Marketplace {
 export default function MarketplacePage({ params }: { params: Promise<{ slug: string }> }) {
   const [marketplace, setMarketplace] = useState<Marketplace | null>(null);
   const [activeTab, setActiveTab] = useState<'manual' | 'excel'>('manual');
+  const [requestsTab, setRequestsTab] = useState<'active' | 'archive'>('active');
   const [loading, setLoading] = useState(true);
   const [slug, setSlug] = useState<string>('');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -151,12 +152,33 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
         </div>
       </div>
 
-      {/* Recent Requests */}
+      {/* Requests - Active/Archive Tabs */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-gray-900">
-            Recent Requests
-          </h2>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setRequestsTab('active')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                requestsTab === 'active'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <Clock className="w-4 h-4" />
+              Active
+            </button>
+            <button
+              onClick={() => setRequestsTab('archive')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                requestsTab === 'archive'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <Archive className="w-4 h-4" />
+              Archive
+            </button>
+          </div>
           <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
             <Download className="w-4 h-4" />
             Export
@@ -166,6 +188,7 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
           marketplaceId={marketplace.id}
           refreshTrigger={refreshTrigger}
           onDelete={() => setRefreshTrigger(prev => prev + 1)}
+          archiveMode={requestsTab === 'archive'}
         />
       </div>
     </div>
