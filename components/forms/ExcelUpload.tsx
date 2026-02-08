@@ -5,17 +5,47 @@
 
 'use client';
 
-import { useState } from 'react';
-import { Upload, Download, FileSpreadsheet, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Upload, Download, FileSpreadsheet, X, Calendar, AlertCircle, Check } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { getAvailableMonths, formatMonthDisplay, getCurrentMonth } from '@/lib/monthUtils';
 
 interface ExcelUploadProps {
   marketplaceId: string;
   marketplaceName: string;
 }
 
+interface ParsedRow {
+  iwasku: string;
+  quantity: number;
+  notes?: string;
+}
+
 export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps) {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [productionMonth, setProductionMonth] = useState('');
+  const [monthError, setMonthError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  const availableMonths = getAvailableMonths();
+  const today = new Date();
+  const dayOfMonth = today.getDate();
+  const currentMonth = getCurrentMonth();
+
+  // Auto-select appropriate month on mount
+  useEffect(() => {
+    if (!productionMonth && availableMonths.length > 0) {
+      if (dayOfMonth > 5) {
+        // After 5th, default to next month
+        const nextMonth = availableMonths.find(m => m.value > currentMonth);
+        setProductionMonth(nextMonth?.value || availableMonths[1]?.value || availableMonths[0].value);
+      } else {
+        // Before or on 5th, default to current month
+        setProductionMonth(currentMonth);
+      }
+    }
+  }, [availableMonths]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -24,28 +54,181 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
     }
   };
 
+  const parseExcel = async (file: File): Promise<ParsedRow[]> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        try {
+          const data = e.target?.result;
+          const workbook = XLSX.read(data, { type: 'binary' });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+
+          // Skip header row, parse data
+          const rows: ParsedRow[] = [];
+          for (let i = 1; i < jsonData.length && i <= 1000; i++) {
+            const row = jsonData[i];
+            if (row && row[0] && row[1]) {
+              rows.push({
+                iwasku: String(row[0]).trim(),
+                quantity: parseInt(String(row[1])),
+                notes: row[2] ? String(row[2]).trim() : undefined,
+              });
+            }
+          }
+
+          resolve(rows);
+        } catch (error) {
+          reject(error);
+        }
+      };
+
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsBinaryString(file);
+    });
+  };
+
   const handleUpload = async () => {
     if (!file) return;
 
+    // Validate: Cannot enter for current month after 5th
+    if (dayOfMonth > 5 && productionMonth === currentMonth) {
+      setMonthError('Cannot enter requests for current month after the 5th. Please select next month.');
+      return;
+    }
+
+    setMonthError('');
     setUploading(true);
+    setSuccess(false);
 
-    // TODO: Parse Excel and send to API
-    console.log('Uploading file:', file.name);
+    try {
+      // Parse Excel file
+      const rows = await parseExcel(file);
 
-    setTimeout(() => {
+      if (rows.length === 0) {
+        alert('No valid data found in Excel file');
+        setUploading(false);
+        return;
+      }
+
+      // Send to bulk upload API
+      const res = await fetch('/api/requests/bulk', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          marketplaceId,
+          productionMonth,
+          requests: rows,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setSuccess(true);
+        setFile(null);
+
+        // Hide success message after 3 seconds
+        setTimeout(() => setSuccess(false), 3000);
+      } else {
+        alert(data.error || 'Failed to upload requests');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Failed to process Excel file');
+    } finally {
       setUploading(false);
-      setFile(null);
-      alert('Upload successful!');
-    }, 2000);
+    }
   };
 
   const downloadTemplate = () => {
-    // TODO: Generate and download Excel template
-    console.log('Downloading template for:', marketplaceName);
+    // Create template workbook
+    const wb = XLSX.utils.book_new();
+    const wsData = [
+      ['IWASKU', 'Quantity', 'Notes'],
+      ['IM154@0QXFF0', '100', 'Optional note'],
+      ['CA120@0R53ZY', '50', ''],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    XLSX.utils.book_append_sheet(wb, ws, 'Template');
+    XLSX.writeFile(wb, `${marketplaceName}_template.xlsx`);
   };
 
   return (
     <div className="space-y-6">
+      {success && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+          <Check className="w-5 h-5 text-green-600" />
+          <p className="text-sm font-medium text-green-900">
+            Requests successfully uploaded!
+          </p>
+        </div>
+      )}
+
+      {/* Production Month Warning */}
+      {dayOfMonth > 5 && (
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-orange-900 mb-1">
+              Current Month Entry Closed
+            </p>
+            <p className="text-sm text-orange-800">
+              Today is the {dayOfMonth}th. Requests for {formatMonthDisplay(currentMonth)} are now closed.
+              Please select next month.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Month Selection Error */}
+      {monthError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-red-600" />
+          <p className="text-sm font-medium text-red-900">{monthError}</p>
+        </div>
+      )}
+
+      {/* Production Month Selector */}
+      <div>
+        <label htmlFor="productionMonth" className="block text-sm font-medium text-gray-700 mb-2">
+          Production Month *
+        </label>
+        <div className="relative">
+          <select
+            id="productionMonth"
+            value={productionMonth}
+            onChange={(e) => {
+              setProductionMonth(e.target.value);
+              setMonthError('');
+            }}
+            className="w-full px-4 py-2 pl-10 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-400 transition-all appearance-none bg-white cursor-pointer"
+            required
+          >
+            {availableMonths.map((month) => (
+              <option
+                key={month.value}
+                value={month.value}
+                disabled={dayOfMonth > 5 && month.value === currentMonth}
+              >
+                {month.label}
+                {dayOfMonth > 5 && month.value === currentMonth && ' (Closed)'}
+              </option>
+            ))}
+          </select>
+          <Calendar className="absolute left-3 top-2.5 w-5 h-5 text-gray-400 pointer-events-none" />
+          <div className="absolute right-3 top-2.5 pointer-events-none">
+            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </div>
+      </div>
+
       {/* Download Template */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start gap-3">
@@ -114,7 +297,7 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
               </div>
               <button
                 onClick={handleUpload}
-                disabled={uploading}
+                disabled={uploading || !productionMonth}
                 className="flex items-center gap-2 px-6 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-green-700 rounded-lg hover:from-green-700 hover:to-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {uploading ? (
