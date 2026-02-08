@@ -24,6 +24,14 @@ interface Request {
   requestDate: string;
 }
 
+interface GroupedRequest {
+  iwasku: string;
+  productName: string;
+  totalQuantity: number;
+  requestIds: string[];
+  requests: Request[];
+}
+
 interface EditValues {
   [key: string]: {
     producedQuantity: number;
@@ -46,6 +54,7 @@ export default function ManufacturerCategoryPage() {
   const month = searchParams.get('month') || formatMonthValue(new Date());
 
   const [requests, setRequests] = useState<Request[]>([]);
+  const [groupedRequests, setGroupedRequests] = useState<GroupedRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [editValues, setEditValues] = useState<EditValues>({});
   const [saving, setSaving] = useState<string | null>(null);
@@ -63,13 +72,36 @@ export default function ManufacturerCategoryPage() {
         if (data.success) {
           setRequests(data.data);
 
-          // Initialize edit values
+          // Group by IWASKU
+          const grouped = data.data.reduce((acc: GroupedRequest[], request: Request) => {
+            const existing = acc.find(g => g.iwasku === request.iwasku);
+            if (existing) {
+              existing.totalQuantity += request.quantity;
+              existing.requestIds.push(request.id);
+              existing.requests.push(request);
+            } else {
+              acc.push({
+                iwasku: request.iwasku,
+                productName: request.productName,
+                totalQuantity: request.quantity,
+                requestIds: [request.id],
+                requests: [request],
+              });
+            }
+            return acc;
+          }, []);
+
+          setGroupedRequests(grouped);
+
+          // Initialize edit values using first request of each group
           const initialValues: EditValues = {};
-          data.data.forEach((request: Request) => {
-            initialValues[request.id] = {
-              producedQuantity: request.producedQuantity || 0,
-              manufacturerNotes: request.manufacturerNotes || '',
-              status: request.status,
+          grouped.forEach((group: GroupedRequest) => {
+            const firstRequest = group.requests[0];
+            // Use the group's IWASKU as the key for editing
+            initialValues[group.iwasku] = {
+              producedQuantity: firstRequest.producedQuantity || 0,
+              manufacturerNotes: firstRequest.manufacturerNotes || '',
+              status: firstRequest.status,
             };
           });
           setEditValues(initialValues);
@@ -85,36 +117,44 @@ export default function ManufacturerCategoryPage() {
   }, [category, month]);
 
   const updateEditValue = (
-    requestId: string,
+    iwasku: string,
     field: 'producedQuantity' | 'manufacturerNotes' | 'status',
     value: any
   ) => {
     setEditValues((prev) => ({
       ...prev,
-      [requestId]: {
-        ...prev[requestId],
+      [iwasku]: {
+        ...prev[iwasku],
         [field]: value,
       },
     }));
   };
 
-  const handleSave = async (requestId: string) => {
-    setSaving(requestId);
+  const handleSave = async (iwasku: string) => {
+    setSaving(iwasku);
     try {
-      const values = editValues[requestId];
-      const response = await fetch(`/api/manufacturer/requests/${requestId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values),
-      });
+      const group = groupedRequests.find(g => g.iwasku === iwasku);
+      if (!group) return;
 
-      const data = await response.json();
+      const values = editValues[iwasku];
 
-      if (data.success) {
-        // Update local state
+      // Update all requests in this group
+      const updatePromises = group.requestIds.map(requestId =>
+        fetch(`/api/manufacturer/requests/${requestId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(values),
+        })
+      );
+
+      const responses = await Promise.all(updatePromises);
+      const allSuccess = responses.every(r => r.ok);
+
+      if (allSuccess) {
+        // Update local state for all requests in the group
         setRequests((prev) =>
           prev.map((r) =>
-            r.id === requestId
+            group.requestIds.includes(r.id)
               ? {
                   ...r,
                   producedQuantity: values.producedQuantity,
@@ -125,7 +165,7 @@ export default function ManufacturerCategoryPage() {
           )
         );
       } else {
-        alert(data.error || 'Failed to save changes');
+        alert('Failed to save some changes');
       }
     } catch (error) {
       console.error('Save error:', error);
@@ -173,7 +213,7 @@ export default function ManufacturerCategoryPage() {
       </div>
 
       {/* Requests Table */}
-      {requests.length === 0 ? (
+      {groupedRequests.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
           <Package className="w-12 h-12 text-gray-400 mx-auto mb-3" />
           <p className="text-gray-600">No production requests for this category in {monthLabel}</p>
@@ -189,9 +229,6 @@ export default function ManufacturerCategoryPage() {
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Product Name
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Marketplace
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Requested
@@ -211,47 +248,42 @@ export default function ManufacturerCategoryPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {requests.map((request) => (
-                  <tr key={request.id} className="hover:bg-gray-50">
+                {groupedRequests.map((group) => (
+                  <tr key={group.iwasku} className="hover:bg-gray-50">
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className="text-sm font-mono text-gray-900">
-                        {request.iwasku}
+                        {group.iwasku}
                       </span>
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-sm text-gray-900">
-                        {request.productName}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className="text-sm text-gray-600">
-                        {request.marketplaceName}
+                        {group.productName}
                       </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className="text-sm font-semibold text-gray-900">
-                        {request.quantity}
+                        {group.totalQuantity}
                       </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <input
                         type="number"
                         min="0"
-                        value={editValues[request.id]?.producedQuantity || 0}
+                        value={editValues[group.iwasku]?.producedQuantity || 0}
                         onChange={(e) =>
-                          updateEditValue(request.id, 'producedQuantity', parseInt(e.target.value) || 0)
+                          updateEditValue(group.iwasku, 'producedQuantity', parseInt(e.target.value) || 0)
                         }
-                        className="w-24 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        className="w-24 px-2 py-1 text-sm text-gray-900 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                       />
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <select
-                        value={editValues[request.id]?.status || request.status}
-                        onChange={(e) => updateEditValue(request.id, 'status', e.target.value)}
-                        className="text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        value={editValues[group.iwasku]?.status || group.requests[0].status}
+                        onChange={(e) => updateEditValue(group.iwasku, 'status', e.target.value)}
+                        className="text-sm text-gray-900 border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                       >
                         {statusOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
+                          <option key={option.value} value={option.value} className="text-gray-900">
                             {option.label}
                           </option>
                         ))}
@@ -259,22 +291,22 @@ export default function ManufacturerCategoryPage() {
                     </td>
                     <td className="px-4 py-3">
                       <textarea
-                        value={editValues[request.id]?.manufacturerNotes || ''}
+                        value={editValues[group.iwasku]?.manufacturerNotes || ''}
                         onChange={(e) =>
-                          updateEditValue(request.id, 'manufacturerNotes', e.target.value)
+                          updateEditValue(group.iwasku, 'manufacturerNotes', e.target.value)
                         }
                         placeholder="Production notes..."
                         rows={1}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
+                        className="w-full px-2 py-1 text-sm text-gray-900 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
                       />
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-right">
                       <button
-                        onClick={() => handleSave(request.id)}
-                        disabled={saving === request.id}
+                        onClick={() => handleSave(group.iwasku)}
+                        disabled={saving === group.iwasku}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
-                        {saving === request.id ? (
+                        {saving === group.iwasku ? (
                           <>
                             <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                             Saving...
