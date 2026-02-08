@@ -48,11 +48,54 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    // Query detailed summary grouped by category and marketplace
+    const requests = await prisma.productionRequest.findMany({
+      where: {
+        requestDate: {
+          gte: startDate,
+          lt: endDate,
+        },
+      },
+      include: {
+        marketplace: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    // Group by category and marketplace
+    const summary = requests.reduce((acc: any[], request) => {
+      const existing = acc.find(
+        item =>
+          item.productCategory === request.productCategory &&
+          item.marketplaceId === request.marketplaceId
+      );
+
+      if (existing) {
+        existing.totalQuantity += request.quantity;
+        existing.requestCount += 1;
+      } else {
+        acc.push({
+          productCategory: request.productCategory,
+          marketplaceId: request.marketplaceId,
+          marketplaceName: request.marketplace.name,
+          totalQuantity: request.quantity,
+          requestCount: 1,
+        });
+      }
+
+      return acc;
+    }, []);
+
     return NextResponse.json({
       success: true,
       data: {
         totalRequests: stats._count.id || 0,
         totalQuantity: stats._sum.quantity || 0,
+        summary,
       },
     });
   } catch (error) {
