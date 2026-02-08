@@ -211,6 +211,7 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
                   key={month.value}
                   value={month.value}
                   disabled={dayOfMonth > 5 && month.value === currentMonth}
+                  className="text-gray-900"
                 >
                   {month.label}
                   {dayOfMonth > 5 && month.value === currentMonth && ' (Closed)'}

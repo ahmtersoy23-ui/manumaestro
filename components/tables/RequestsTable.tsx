@@ -25,6 +25,7 @@ interface Request {
   quantity: number;
   status: string;
   requestDate: string;
+  createdAt: string;
   notes: string | null;
   enteredBy: {
     name: string;
@@ -301,7 +302,7 @@ export function RequestsTable({ marketplaceId, refreshTrigger, onDelete, archive
                   <td className="px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-2 text-sm text-gray-900">
                       <Calendar className="w-4 h-4 text-gray-400" />
-                      {new Date(request.requestDate).toLocaleDateString('en-US', {
+                      {new Date(request.createdAt).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
                         year: 'numeric',

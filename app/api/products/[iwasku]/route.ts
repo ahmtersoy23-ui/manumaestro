@@ -25,7 +25,7 @@ export async function GET(
       SELECT
         product_sku as iwasku,
         name,
-        parent as category
+        category
       FROM products
       WHERE product_sku = $1
       LIMIT 1
