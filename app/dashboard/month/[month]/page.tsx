@@ -28,6 +28,9 @@ interface Marketplace {
   id: string;
   name: string;
   code: string;
+  region: string;
+  marketplaceType: string;
+  colorTag: string | null;
 }
 
 const marketplaceSlugMap: Record<string, string> = {
@@ -49,6 +52,7 @@ export default function MonthDetailPage() {
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<CategorySummary[]>([]);
   const [marketplaces, setMarketplaces] = useState<MarketplaceSummary[]>([]);
+  const [allMarketplaces, setAllMarketplaces] = useState<Marketplace[]>([]);
   const [monthStats, setMonthStats] = useState({ totalRequests: 0, totalQuantity: 0 });
 
   const monthDate = parseMonthValue(month);
@@ -59,6 +63,14 @@ export default function MonthDetailPage() {
     async function fetchData() {
       setLoading(true);
       try {
+        // Fetch ALL marketplaces
+        const mpRes = await fetch('/api/marketplaces');
+        const mpData = await mpRes.json();
+
+        if (mpData.success) {
+          setAllMarketplaces(mpData.data);
+        }
+
         // Fetch monthly summary
         const res = await fetch(`/api/requests/monthly?month=${month}`);
         const data = await res.json();
@@ -89,15 +101,25 @@ export default function MonthDetailPage() {
             b.totalQuantity - a.totalQuantity
           ));
 
-          // Marketplace summary
-          const marketplaceData = data.data.summary?.map((item: any) => ({
-            marketplaceId: item.marketplaceId,
-            marketplaceName: item.marketplaceName,
-            totalQuantity: item.totalQuantity,
-            requestCount: item.requestCount,
-          })) || [];
+          // Marketplace summary - create a map for quick lookup
+          const marketplaceDataMap = new Map<string, MarketplaceSummary>();
+          data.data.summary?.forEach((item: any) => {
+            const key = item.marketplaceId || item.marketplaceName;
+            const existing = marketplaceDataMap.get(key);
+            if (existing) {
+              existing.totalQuantity += item.totalQuantity;
+              existing.requestCount += item.requestCount;
+            } else {
+              marketplaceDataMap.set(key, {
+                marketplaceId: item.marketplaceId,
+                marketplaceName: item.marketplaceName,
+                totalQuantity: item.totalQuantity,
+                requestCount: item.requestCount,
+              });
+            }
+          });
 
-          setMarketplaces(marketplaceData);
+          setMarketplaces(Array.from(marketplaceDataMap.values()));
         }
       } catch (error) {
         console.error('Failed to fetch month data:', error);
@@ -217,49 +239,54 @@ export default function MonthDetailPage() {
           Enter new production requests for each marketplace
         </p>
 
-        {marketplaces.length === 0 ? (
-          <div className="bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 p-12 text-center">
-            <ShoppingCart className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-            <p className="text-gray-600">No marketplace requests for this month</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {marketplaces.map((mp) => {
-              // Find marketplace code and slug
-              const slug = Object.entries(marketplaceSlugMap).find(
-                ([code, _]) => mp.marketplaceName.includes(code.replace('_', ' '))
-              )?.[1] || 'unknown';
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {allMarketplaces.map((mp) => {
+            // Find if this marketplace has requests for this month
+            const summary = marketplaces.find(m => m.marketplaceId === mp.id);
+            const requestCount = summary?.requestCount || 0;
+            const totalQuantity = summary?.totalQuantity || 0;
 
-              return (
-                <Link
-                  key={mp.marketplaceId}
-                  href={`/dashboard/marketplace/${slug}?month=${month}`}
-                  className="block p-6 bg-white rounded-xl border-2 border-gray-200 hover:border-purple-500 hover:shadow-lg transition-all group"
-                >
-                  <div className="flex items-center gap-3 mb-4">
+            // Get slug from code
+            const slug = marketplaceSlugMap[mp.code] || mp.code.toLowerCase().replace('_', '-');
+
+            return (
+              <Link
+                key={mp.id}
+                href={`/dashboard/marketplace/${slug}`}
+                className="block p-6 bg-white rounded-xl border-2 border-gray-200 hover:border-purple-500 hover:shadow-lg transition-all group"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
                     <div className="p-2 bg-purple-100 rounded-lg group-hover:bg-purple-200 transition-colors">
                       <ShoppingCart className="w-6 h-6 text-purple-600" />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      {mp.marketplaceName}
-                    </h3>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        {mp.name}
+                      </h3>
+                      <p className="text-xs text-gray-500">{mp.region}</p>
+                    </div>
                   </div>
+                </div>
 
-                  <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-100">
-                    <div>
-                      <p className="text-xs text-gray-600 mb-1">Requests</p>
-                      <p className="text-xl font-bold text-gray-900">{mp.requestCount}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-600 mb-1">Quantity</p>
-                      <p className="text-xl font-bold text-purple-600">{mp.totalQuantity}</p>
-                    </div>
+                <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-100">
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1">Requests</p>
+                    <p className={`text-xl font-bold ${requestCount > 0 ? 'text-gray-900' : 'text-gray-400'}`}>
+                      {requestCount}
+                    </p>
                   </div>
-                </Link>
-              );
-            })}
-          </div>
-        )}
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1">Quantity</p>
+                    <p className={`text-xl font-bold ${totalQuantity > 0 ? 'text-purple-600' : 'text-gray-400'}`}>
+                      {totalQuantity}
+                    </p>
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
