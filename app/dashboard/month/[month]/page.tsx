@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Calendar, Package, ShoppingCart, Factory, ArrowLeft } from 'lucide-react';
+import { Calendar, Package, ShoppingCart, Factory, ArrowLeft, Plus } from 'lucide-react';
 import { parseMonthValue, isMonthLocked } from '@/lib/monthUtils';
 
 interface CategorySummary {
@@ -229,8 +229,8 @@ export default function MonthDetailPage() {
               <div className="mt-2 bg-yellow-500/10 px-4 py-3 rounded-lg text-sm space-y-2">
                 {missingDesiItems.map((item, index) => (
                   <div key={index} className="py-1 border-b border-yellow-500/20 last:border-0">
-                    <div className="font-medium text-gray-900">{item.productName}</div>
-                    <div className="text-xs text-gray-600 mt-0.5">{item.productCategory}</div>
+                    <div className="font-medium text-white">{item.productName}</div>
+                    <div className="text-xs text-white/80 mt-0.5">{item.productCategory}</div>
                   </div>
                 ))}
               </div>
@@ -421,6 +421,24 @@ export default function MonthDetailPage() {
               </Link>
             );
           })}
+
+          {/* Add New Marketplace Card */}
+          <button
+            onClick={() => alert('Add custom marketplace feature - Coming soon!')}
+            className="block p-6 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border-2 border-dashed border-gray-300 hover:border-purple-400 hover:from-purple-50 hover:to-purple-100 transition-all group"
+          >
+            <div className="flex flex-col items-center justify-center h-full min-h-[140px]">
+              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mb-3 group-hover:bg-purple-100 transition-colors">
+                <Plus className="w-6 h-6 text-gray-400 group-hover:text-purple-600 transition-colors" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-700 group-hover:text-purple-700 transition-colors">
+                Add Marketplace
+              </h3>
+              <p className="text-xs text-gray-500 mt-1">
+                Create custom marketplace
+              </p>
+            </div>
+          </button>
         </div>
       </div>
     </div>
