@@ -25,6 +25,7 @@ interface MarketplaceSummary {
   marketplaceId: string;
   marketplaceName: string;
   totalQuantity: number;
+  totalDesi: number;
   requestCount: number;
 }
 
@@ -35,6 +36,11 @@ interface Marketplace {
   region: string;
   marketplaceType: string;
   colorTag: string | null;
+}
+
+interface MissingDesiItem {
+  productName: string;
+  productCategory: string;
 }
 
 const marketplaceSlugMap: Record<string, string> = {
@@ -60,6 +66,7 @@ export default function MonthDetailPage() {
   const [monthStats, setMonthStats] = useState({ totalRequests: 0, totalQuantity: 0, totalDesi: 0, itemsWithoutSize: 0 });
   const [viewMode, setViewMode] = useState<'quantity' | 'desi'>('quantity');
   const [showMissingItems, setShowMissingItems] = useState(false);
+  const [missingDesiItems, setMissingDesiItems] = useState<MissingDesiItem[]>([]);
 
   const monthDate = parseMonthValue(month);
   const monthLabel = monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -88,6 +95,8 @@ export default function MonthDetailPage() {
             totalDesi: data.data.totalDesi || 0,
             itemsWithoutSize: data.data.itemsWithoutSize || 0,
           });
+
+          setMissingDesiItems(data.data.missingDesiItems || []);
 
           // Group by category
           const categoryMap = new Map<string, CategorySummary>();
@@ -124,12 +133,14 @@ export default function MonthDetailPage() {
             const existing = marketplaceDataMap.get(key);
             if (existing) {
               existing.totalQuantity += item.totalQuantity;
+              existing.totalDesi += item.totalDesi || 0;
               existing.requestCount += item.requestCount;
             } else {
               marketplaceDataMap.set(key, {
                 marketplaceId: item.marketplaceId,
                 marketplaceName: item.marketplaceName,
                 totalQuantity: item.totalQuantity,
+                totalDesi: item.totalDesi || 0,
                 requestCount: item.requestCount,
               });
             }
@@ -215,15 +226,13 @@ export default function MonthDetailPage() {
               <span>{showMissingItems ? '▼' : '▶'}</span>
             </button>
             {showMissingItems && (
-              <div className="mt-2 bg-yellow-500/10 px-4 py-3 rounded-lg text-sm space-y-1">
-                {categories
-                  .filter(cat => cat.itemsWithoutSize > 0)
-                  .map(cat => (
-                    <div key={cat.productCategory} className="flex justify-between items-center py-1">
-                      <span className="font-medium">{cat.productCategory}</span>
-                      <span className="text-yellow-700">{cat.itemsWithoutSize} items</span>
-                    </div>
-                  ))}
+              <div className="mt-2 bg-yellow-500/10 px-4 py-3 rounded-lg text-sm space-y-2">
+                {missingDesiItems.map((item, index) => (
+                  <div key={index} className="py-1 border-b border-yellow-500/20 last:border-0">
+                    <div className="font-medium text-gray-900">{item.productName}</div>
+                    <div className="text-xs text-gray-600 mt-0.5">{item.productCategory}</div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -369,6 +378,8 @@ export default function MonthDetailPage() {
             const summary = marketplaces.find(m => m.marketplaceId === mp.id);
             const requestCount = summary?.requestCount || 0;
             const totalQuantity = summary?.totalQuantity || 0;
+            const totalDesi = summary?.totalDesi || 0;
+            const displayValue = viewMode === 'quantity' ? totalQuantity : Math.round(totalDesi);
 
             // Get slug from code
             const slug = marketplaceSlugMap[mp.code] || mp.code.toLowerCase().replace('_', '-');
@@ -401,9 +412,9 @@ export default function MonthDetailPage() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-600 mb-1">Quantity</p>
-                    <p className={`text-xl font-bold ${totalQuantity > 0 ? 'text-purple-600' : 'text-gray-400'}`}>
-                      {totalQuantity}
+                    <p className="text-xs text-gray-600 mb-1">{viewMode === 'quantity' ? 'Adet' : 'Desi'}</p>
+                    <p className={`text-xl font-bold ${displayValue > 0 ? 'text-purple-600' : 'text-gray-400'}`}>
+                      {displayValue}
                     </p>
                   </div>
                 </div>

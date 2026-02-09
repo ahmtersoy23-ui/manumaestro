@@ -108,6 +108,14 @@ export async function GET(request: NextRequest) {
     const totalProducedDesi = requests.reduce((sum, r) => sum + ((r.productSize || 0) * (r.producedQuantity || 0)), 0);
     const itemsWithoutSize = requests.filter(r => !r.productSize).length;
 
+    // Get details of items without size
+    const missingDesiItems = requests
+      .filter(r => !r.productSize)
+      .map(r => ({
+        productName: r.productName,
+        productCategory: r.productCategory,
+      }));
+
     return NextResponse.json({
       success: true,
       data: {
@@ -117,6 +125,7 @@ export async function GET(request: NextRequest) {
         totalDesi,
         totalProducedDesi,
         itemsWithoutSize,
+        missingDesiItems,
         summary,
       },
     });
