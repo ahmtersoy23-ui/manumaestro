@@ -358,6 +358,7 @@ export default function MonthDetailPage() {
                       ></div>
                     </div>
                   </div>
+                  </div>
 
                   {/* Action Buttons */}
                   <div className={`flex gap-2 mt-4 pt-4 border-t border-gray-100 ${isFurniture ? '' : ''}`}>
