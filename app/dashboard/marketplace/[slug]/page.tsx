@@ -7,10 +7,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { ManualEntryForm } from '@/components/forms/ManualEntryForm';
 import { ExcelUpload } from '@/components/forms/ExcelUpload';
 import { RequestsTable } from '@/components/tables/RequestsTable';
-import { Download, Upload, PlusCircle, Clock, Archive } from 'lucide-react';
+import { Download, Upload, PlusCircle, Clock, Archive, ArrowLeft } from 'lucide-react';
+import { parseMonthValue } from '@/lib/monthUtils';
 
 interface Marketplace {
   id: string;
@@ -19,12 +22,18 @@ interface Marketplace {
 }
 
 export default function MarketplacePage({ params }: { params: Promise<{ slug: string }> }) {
+  const searchParams = useSearchParams();
+  const month = searchParams.get('month');
+
   const [marketplace, setMarketplace] = useState<Marketplace | null>(null);
   const [activeTab, setActiveTab] = useState<'manual' | 'excel'>('manual');
   const [requestsTab, setRequestsTab] = useState<'active' | 'archive'>('active');
   const [loading, setLoading] = useState(true);
   const [slug, setSlug] = useState<string>('');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // Parse month label if month is provided
+  const monthLabel = month ? parseMonthValue(month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : null;
 
   useEffect(() => {
     // Unwrap params Promise
@@ -97,6 +106,17 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
 
   return (
     <div className="space-y-8">
+      {/* Back Button */}
+      {month && (
+        <Link
+          href={`/dashboard/month/${month}`}
+          className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to {monthLabel}
+        </Link>
+      )}
+
       {/* Page Header */}
       <div>
         <div className="flex items-center justify-between">

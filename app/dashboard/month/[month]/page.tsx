@@ -387,7 +387,7 @@ export default function MonthDetailPage() {
             return (
               <Link
                 key={mp.id}
-                href={`/dashboard/marketplace/${slug}`}
+                href={`/dashboard/marketplace/${slug}?month=${month}`}
                 className="block p-6 bg-white rounded-xl border-2 border-gray-200 hover:border-purple-500 hover:shadow-lg transition-all group"
               >
                 <div className="flex items-center justify-between mb-4">
