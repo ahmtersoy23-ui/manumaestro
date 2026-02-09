@@ -68,6 +68,7 @@ export async function GET(
       quantity: r.quantity,
       producedQuantity: 0, // TODO: Add to schema
       manufacturerNotes: null, // TODO: Add to schema
+      workflowStage: r.workflowStage,
       status: r.status,
       requestDate: r.requestDate.toISOString(),
     }));
