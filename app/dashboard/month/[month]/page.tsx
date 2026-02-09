@@ -295,7 +295,7 @@ export default function MonthDetailPage() {
                     </h3>
                   </div>
 
-                <div className="space-y-3 mt-4 pt-4 border-t border-gray-100">
+                  <div className="space-y-3 mt-4 pt-4 border-t border-gray-100">
                   {/* Items count */}
                   <div className="flex justify-between items-center">
                     <p className="text-xs text-gray-600">Items</p>
