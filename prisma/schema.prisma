@@ -115,6 +115,7 @@ model ProductionRequest {
   producedQuantity  Int?         // Quantity actually produced by manufacturer
   requestDate       DateTime     @default(now())
   status            RequestStatus @default(REQUESTED)
+  workflowStage     WorkflowStage? // For furniture category workflow tracking
   entryType         EntryType
   notes             String?      // Operator notes
   manufacturerNotes String?      // Manufacturer production notes
@@ -130,6 +131,8 @@ model ProductionRequest {
   @@index([marketplaceId])
   @@index([requestDate])
   @@index([status])
+  @@index([workflowStage])
+  @@index([productCategory, workflowStage])
   @@map("production_requests")
 }
 
@@ -143,6 +146,15 @@ enum RequestStatus {
 enum EntryType {
   MANUAL
   EXCEL
+}
+
+enum WorkflowStage {
+  REQUESTED       // Initial request received
+  CUTTING         // Material cutting stage
+  ASSEMBLY        // Assembly/construction stage
+  QUALITY_CHECK   // Quality control
+  PACKAGING       // Packaging stage
+  READY_TO_SHIP   // Ready for shipment
 }
 
 // ============================================
