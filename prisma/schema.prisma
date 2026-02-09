@@ -27,6 +27,7 @@ model User {
   permissions       UserMarketplacePermission[]
   requests          ProductionRequest[]
   createdMarketplaces Marketplace[]           @relation("CreatedBy")
+  auditLogs         AuditLog[]
 
   @@map("users")
 }
@@ -142,4 +143,45 @@ enum RequestStatus {
 enum EntryType {
   MANUAL
   EXCEL
+}
+
+// ============================================
+// AUDIT LOG
+// ============================================
+
+model AuditLog {
+  id            String       @id @default(uuid())
+  userId        String
+  userName      String       // Cached for performance
+  userEmail     String       // Cached for performance
+  action        AuditAction
+  entityType    String?      // e.g., "ProductionRequest", "Marketplace"
+  entityId      String?      // ID of the affected entity
+  description   String       // Human-readable description
+  metadata      Json?        // Additional data (old/new values, etc.)
+  ipAddress     String?
+  createdAt     DateTime     @default(now())
+
+  // Relations
+  user          User         @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+enum AuditAction {
+  CREATE_REQUEST
+  UPDATE_REQUEST
+  DELETE_REQUEST
+  CREATE_MARKETPLACE
+  UPDATE_MARKETPLACE
+  DELETE_MARKETPLACE
+  UPDATE_PRODUCTION
+  LOGIN
+  LOGOUT
+  BULK_UPLOAD
+  EXPORT_DATA
 }
