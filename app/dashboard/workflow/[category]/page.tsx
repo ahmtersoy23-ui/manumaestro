@@ -93,8 +93,8 @@ export default function WorkflowKanbanPage() {
       console.log('📦 API Response data:', data);
 
       if (data.success) {
-        console.log('✅ Update successful, refreshing data...');
-        fetchData(); // Refresh data
+        console.log('✅ Update successful! Optimistic update will persist.');
+        // Don't refresh data - the optimistic update is correct
       } else {
         console.error('❌ Failed to update:', data.error);
         alert('Failed to update workflow stage: ' + (data.error || 'Unknown error'));
