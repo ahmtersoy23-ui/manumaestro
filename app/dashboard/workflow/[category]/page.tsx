@@ -1,6 +1,6 @@
 /**
  * Workflow Kanban Board
- * Category-specific workflow management with kanban view
+ * Category-specific workflow management with drag-and-drop kanban view
  */
 
 'use client';
@@ -8,8 +8,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Package, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Package } from 'lucide-react';
 import { formatMonthValue, parseMonthValue } from '@/lib/monthUtils';
+import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCenter } from '@dnd-kit/core';
 
 interface Request {
   id: string;
@@ -29,12 +30,12 @@ interface StageColumn {
 }
 
 const WORKFLOW_STAGES = [
-  { stage: 'REQUESTED', label: 'Talep Geldi', color: 'bg-gray-100 border-gray-300' },
-  { stage: 'CUTTING', label: 'Kesim', color: 'bg-blue-100 border-blue-300' },
-  { stage: 'ASSEMBLY', label: 'Montaj', color: 'bg-purple-100 border-purple-300' },
-  { stage: 'QUALITY_CHECK', label: 'Kalite Kontrol', color: 'bg-yellow-100 border-yellow-300' },
-  { stage: 'PACKAGING', label: 'Paketleme', color: 'bg-orange-100 border-orange-300' },
-  { stage: 'READY_TO_SHIP', label: 'Sevk Hazır', color: 'bg-green-100 border-green-300' },
+  { stage: 'REQUESTED', label: 'Talep Geldi', color: 'bg-gray-100 border-gray-300 text-gray-700' },
+  { stage: 'CUTTING', label: 'Kesim', color: 'bg-blue-100 border-blue-300 text-blue-700' },
+  { stage: 'ASSEMBLY', label: 'Montaj', color: 'bg-purple-100 border-purple-300 text-purple-700' },
+  { stage: 'QUALITY_CHECK', label: 'Kalite Kontrol', color: 'bg-yellow-100 border-yellow-300 text-yellow-700' },
+  { stage: 'PACKAGING', label: 'Paketleme', color: 'bg-orange-100 border-orange-300 text-orange-700' },
+  { stage: 'READY_TO_SHIP', label: 'Sevk Hazır', color: 'bg-green-100 border-green-300 text-green-700' },
 ];
 
 export default function WorkflowKanbanPage() {
@@ -45,8 +46,7 @@ export default function WorkflowKanbanPage() {
 
   const [columns, setColumns] = useState<StageColumn[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
-  const [showStageModal, setShowStageModal] = useState(false);
+  const [activeCard, setActiveCard] = useState<Request | null>(null);
 
   const monthDate = parseMonthValue(month);
   const monthLabel = monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -91,11 +91,69 @@ export default function WorkflowKanbanPage() {
 
       if (data.success) {
         fetchData(); // Refresh data
-        setShowStageModal(false);
-        setSelectedRequest(null);
+      } else {
+        console.error('Failed to update:', data.error);
+        alert('Failed to update workflow stage: ' + (data.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Failed to update stage:', error);
+      alert('Failed to update workflow stage');
+    }
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    const requestId = event.active.id as string;
+    // Find the request in columns
+    for (const column of columns) {
+      const request = column.requests.find(r => r.id === requestId);
+      if (request) {
+        setActiveCard(request);
+        break;
+      }
+    }
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    setActiveCard(null);
+
+    if (!over) return;
+
+    const requestId = active.id as string;
+    const newStage = over.id as string;
+
+    // Find current stage
+    let currentStage = '';
+    for (const column of columns) {
+      if (column.requests.some(r => r.id === requestId)) {
+        currentStage = column.stage;
+        break;
+      }
+    }
+
+    if (currentStage !== newStage) {
+      // Optimistically update UI
+      setColumns(prev => {
+        const newColumns = prev.map(col => ({ ...col, requests: [...col.requests] }));
+
+        // Remove from current stage
+        const fromColumn = newColumns.find(c => c.stage === currentStage);
+        const toColumn = newColumns.find(c => c.stage === newStage);
+
+        if (fromColumn && toColumn) {
+          const requestIndex = fromColumn.requests.findIndex(r => r.id === requestId);
+          if (requestIndex !== -1) {
+            const [request] = fromColumn.requests.splice(requestIndex, 1);
+            request.workflowStage = newStage;
+            toColumn.requests.push(request);
+          }
+        }
+
+        return newColumns;
+      });
+
+      // Update on server
+      updateWorkflowStage(requestId, newStage);
     }
   }
 
@@ -125,93 +183,109 @@ export default function WorkflowKanbanPage() {
       <div>
         <h1 className="text-3xl font-bold text-gray-900">{category} - Workflow</h1>
         <p className="text-gray-600 mt-1">
-          Track production progress through workflow stages
+          Drag and drop cards to move them through workflow stages
         </p>
       </div>
 
       {/* Kanban Board */}
-      <div className="flex gap-4 overflow-x-auto pb-4">
-        {columns.map((column) => (
-          <div
-            key={column.stage}
-            className="flex-shrink-0 w-80"
-          >
-            {/* Column Header */}
-            <div className={`rounded-t-lg border-2 ${column.color} p-4`}>
-              <h3 className="font-semibold text-gray-900">{column.label}</h3>
-              <p className="text-sm text-gray-600 mt-1">{column.requests.length} items</p>
-            </div>
+      <DndContext
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="flex gap-4 overflow-x-auto pb-4">
+          {columns.map((column) => (
+            <KanbanColumn
+              key={column.stage}
+              column={column}
+            />
+          ))}
+        </div>
 
-            {/* Cards */}
-            <div className="bg-gray-50 border-2 border-t-0 border-gray-200 rounded-b-lg p-2 min-h-[400px] space-y-2">
-              {column.requests.map((request) => (
-                <button
-                  key={request.id}
-                  onClick={() => {
-                    setSelectedRequest(request);
-                    setShowStageModal(true);
-                  }}
-                  className="w-full bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md hover:border-purple-300 transition-all text-left"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <Package className="w-4 h-4 text-gray-400" />
-                      <p className="text-sm font-semibold text-gray-900">{request.productName}</p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-gray-400" />
-                  </div>
-                  <p className="text-xs text-gray-500 mb-2">SKU: {request.iwasku}</p>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Quantity:</span>
-                    <span className="font-medium text-gray-900">{request.quantity}</span>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2">{request.marketplaceName}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
+        <DragOverlay>
+          {activeCard ? (
+            <RequestCard request={activeCard} isDragging />
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+    </div>
+  );
+}
+
+// Kanban Column Component
+function KanbanColumn({ column }: { column: StageColumn }) {
+  const { useDrop } = require('@dnd-kit/core');
+
+  const { setNodeRef } = useDrop({
+    id: column.stage,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className="flex-shrink-0 w-80"
+    >
+      {/* Column Header */}
+      <div className={`rounded-t-lg border-2 ${column.color} p-4`}>
+        <h3 className="font-semibold">{column.label}</h3>
+        <p className="text-sm mt-1 opacity-80">{column.requests.length} items</p>
       </div>
 
-      {/* Stage Change Modal */}
-      {showStageModal && selectedRequest && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900">Change Workflow Stage</h2>
-              <p className="text-sm text-gray-600 mt-1">{selectedRequest.productName}</p>
-            </div>
+      {/* Cards */}
+      <div className="bg-gray-50 border-2 border-t-0 border-gray-200 rounded-b-lg p-2 min-h-[400px] space-y-2">
+        {column.requests.map((request) => (
+          <DraggableCard key={request.id} request={request} />
+        ))}
+      </div>
+    </div>
+  );
+}
 
-            <div className="p-6 space-y-2">
-              {WORKFLOW_STAGES.map((stage) => (
-                <button
-                  key={stage.stage}
-                  onClick={() => updateWorkflowStage(selectedRequest.id, stage.stage)}
-                  className={`w-full text-left px-4 py-3 rounded-lg border-2 ${stage.color} hover:shadow-md transition-all ${
-                    (selectedRequest.workflowStage || 'REQUESTED') === stage.stage
-                      ? 'ring-2 ring-purple-500'
-                      : ''
-                  }`}
-                >
-                  <p className="font-medium text-gray-900">{stage.label}</p>
-                </button>
-              ))}
-            </div>
+// Draggable Card Component
+function DraggableCard({ request }: { request: Request }) {
+  const { useDrag } = require('@dnd-kit/core');
 
-            <div className="p-6 border-t border-gray-200">
-              <button
-                onClick={() => {
-                  setShowStageModal(false);
-                  setSelectedRequest(null);
-                }}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDrag({
+    id: request.id,
+  });
+
+  const style = transform ? {
+    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+    opacity: isDragging ? 0.5 : 1,
+  } : undefined;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...listeners}
+      {...attributes}
+    >
+      <RequestCard request={request} isDragging={isDragging} />
+    </div>
+  );
+}
+
+// Request Card Component
+function RequestCard({ request, isDragging }: { request: Request; isDragging?: boolean }) {
+  return (
+    <div
+      className={`bg-white rounded-lg border border-gray-200 p-4 cursor-move hover:shadow-md hover:border-purple-300 transition-all ${
+        isDragging ? 'shadow-xl' : ''
+      }`}
+    >
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <Package className="w-4 h-4 text-gray-400" />
+          <p className="text-sm font-semibold text-gray-900">{request.productName}</p>
         </div>
-      )}
+      </div>
+      <p className="text-xs text-gray-500 mb-2">SKU: {request.iwasku}</p>
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-gray-600">Quantity:</span>
+        <span className="font-medium text-gray-900">{request.quantity}</span>
+      </div>
+      <p className="text-xs text-gray-500 mt-2">{request.marketplaceName}</p>
     </div>
   );
 }
