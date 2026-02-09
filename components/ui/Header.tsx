@@ -6,7 +6,8 @@
 'use client';
 
 import Image from 'next/image';
-import { Bell, User, LogOut } from 'lucide-react';
+import Link from 'next/link';
+import { Bell, User, LogOut, FileText } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 export function Header() {
@@ -45,6 +46,18 @@ export function Header() {
             <button className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
               <Bell className="w-5 h-5" />
             </button>
+
+            {/* Admin Logs (Admin Only) */}
+            {role === 'admin' && (
+              <Link
+                href="/dashboard/logs"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Audit Logs"
+              >
+                <FileText className="w-4 h-4" />
+                <span className="hidden lg:inline">Logs</span>
+              </Link>
+            )}
 
             {/* User Menu */}
             <div className="flex items-center gap-3 pl-4 border-l border-gray-200">

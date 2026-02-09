@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
+import { logAction } from '@/lib/auditLog';
 
 export async function GET() {
   try {
@@ -82,6 +83,18 @@ export async function POST(request: NextRequest) {
         isActive: true,
         createdById: adminUser.id,
       },
+    });
+
+    // Log action
+    await logAction({
+      userId: adminUser.id,
+      userName: adminUser.name,
+      userEmail: adminUser.email,
+      action: 'CREATE_MARKETPLACE',
+      entityType: 'Marketplace',
+      entityId: marketplace.id,
+      description: `Created custom marketplace: ${name} (${region})`,
+      metadata: { code, region, marketplaceType },
     });
 
     return NextResponse.json({
