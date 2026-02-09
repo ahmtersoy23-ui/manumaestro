@@ -120,7 +120,20 @@ export default function WorkflowKanbanPage() {
     if (!over) return;
 
     const requestId = active.id as string;
-    const newStage = over.id as string;
+    let targetStage = over.id as string;
+
+    // Check if over.id is a valid stage, if not it might be a card ID
+    // In that case, find which column the card belongs to
+    const validStages = WORKFLOW_STAGES.map(s => s.stage);
+    if (!validStages.includes(targetStage)) {
+      // over.id is a card ID, find its column
+      for (const column of columns) {
+        if (column.requests.some(r => r.id === targetStage)) {
+          targetStage = column.stage;
+          break;
+        }
+      }
+    }
 
     // Find current stage
     let currentStage = '';
@@ -131,20 +144,20 @@ export default function WorkflowKanbanPage() {
       }
     }
 
-    if (currentStage !== newStage) {
+    if (currentStage !== targetStage) {
       // Optimistically update UI
       setColumns(prev => {
         const newColumns = prev.map(col => ({ ...col, requests: [...col.requests] }));
 
         // Remove from current stage
         const fromColumn = newColumns.find(c => c.stage === currentStage);
-        const toColumn = newColumns.find(c => c.stage === newStage);
+        const toColumn = newColumns.find(c => c.stage === targetStage);
 
         if (fromColumn && toColumn) {
           const requestIndex = fromColumn.requests.findIndex(r => r.id === requestId);
           if (requestIndex !== -1) {
             const [request] = fromColumn.requests.splice(requestIndex, 1);
-            request.workflowStage = newStage;
+            request.workflowStage = targetStage;
             toColumn.requests.push(request);
           }
         }
@@ -153,7 +166,7 @@ export default function WorkflowKanbanPage() {
       });
 
       // Update on server
-      updateWorkflowStage(requestId, newStage);
+      updateWorkflowStage(requestId, targetStage);
     }
   }
 
