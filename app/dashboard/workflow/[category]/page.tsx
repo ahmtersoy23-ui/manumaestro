@@ -10,7 +10,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Package } from 'lucide-react';
 import { formatMonthValue, parseMonthValue } from '@/lib/monthUtils';
-import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCenter } from '@dnd-kit/core';
+import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCenter, useDroppable, useDraggable } from '@dnd-kit/core';
 
 interface Request {
   id: string;
@@ -214,9 +214,7 @@ export default function WorkflowKanbanPage() {
 
 // Kanban Column Component
 function KanbanColumn({ column }: { column: StageColumn }) {
-  const { useDrop } = require('@dnd-kit/core');
-
-  const { setNodeRef } = useDrop({
+  const { setNodeRef } = useDroppable({
     id: column.stage,
   });
 
@@ -243,9 +241,7 @@ function KanbanColumn({ column }: { column: StageColumn }) {
 
 // Draggable Card Component
 function DraggableCard({ request }: { request: Request }) {
-  const { useDrag } = require('@dnd-kit/core');
-
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDrag({
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: request.id,
   });
 
