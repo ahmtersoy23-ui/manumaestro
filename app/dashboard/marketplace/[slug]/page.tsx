@@ -65,7 +65,8 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
             'bol-nl': 'BOL_NL',
           };
 
-          const code = slugToCode[slug];
+          // Convert slug to code (e.g., custom-01 -> CUSTOM_01)
+          const code = slugToCode[slug] || slug.toUpperCase().replace('-', '_');
           console.log('DEBUG - Slug:', slug, 'Code:', code, 'Data:', data.data.map((m: Marketplace) => m.code));
           const found = data.data.find((m: Marketplace) => m.code === code);
           console.log('DEBUG - Found:', found);

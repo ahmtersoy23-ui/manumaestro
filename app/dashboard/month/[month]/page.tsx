@@ -10,6 +10,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Calendar, Package, ShoppingCart, Factory, ArrowLeft, Plus } from 'lucide-react';
 import { parseMonthValue, isMonthLocked } from '@/lib/monthUtils';
+import { AddMarketplaceModal } from '@/components/modals/AddMarketplaceModal';
 
 interface CategorySummary {
   productCategory: string;
@@ -67,6 +68,8 @@ export default function MonthDetailPage() {
   const [viewMode, setViewMode] = useState<'quantity' | 'desi'>('quantity');
   const [showMissingItems, setShowMissingItems] = useState(false);
   const [missingDesiItems, setMissingDesiItems] = useState<MissingDesiItem[]>([]);
+  const [showAddMarketplaceModal, setShowAddMarketplaceModal] = useState(false);
+  const [refreshMarketplaces, setRefreshMarketplaces] = useState(0);
 
   const monthDate = parseMonthValue(month);
   const monthLabel = monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -156,7 +159,7 @@ export default function MonthDetailPage() {
     }
 
     fetchData();
-  }, [month]);
+  }, [month, refreshMarketplaces]);
 
   if (loading) {
     return (
@@ -424,7 +427,7 @@ export default function MonthDetailPage() {
 
           {/* Add New Marketplace Card */}
           <button
-            onClick={() => alert('Add custom marketplace feature - Coming soon!')}
+            onClick={() => setShowAddMarketplaceModal(true)}
             className="block p-6 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border-2 border-dashed border-gray-300 hover:border-purple-400 hover:from-purple-50 hover:to-purple-100 transition-all group"
           >
             <div className="flex flex-col items-center justify-center h-full min-h-[140px]">
@@ -441,6 +444,13 @@ export default function MonthDetailPage() {
           </button>
         </div>
       </div>
+
+      {/* Add Marketplace Modal */}
+      <AddMarketplaceModal
+        isOpen={showAddMarketplaceModal}
+        onClose={() => setShowAddMarketplaceModal(false)}
+        onSuccess={() => setRefreshMarketplaces(prev => prev + 1)}
+      />
     </div>
   );
 }
