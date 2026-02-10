@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { parseMonthValue } from '@/lib/monthUtils';
+import { formatMonthValue } from '@/lib/monthUtils';
 
 export async function GET(
   request: NextRequest,
@@ -24,7 +24,7 @@ export async function GET(
     }
 
     // Default to current month if not provided
-    const productionMonth = monthParam || parseMonthValue(new Date()).toISOString().slice(0, 7);
+    const productionMonth = monthParam || formatMonthValue(new Date());
 
     // Fetch requests for this category and production month
     const requests = await prisma.productionRequest.findMany({
