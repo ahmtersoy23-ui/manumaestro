@@ -62,10 +62,12 @@ export function isMonthLocked(monthValue: string): boolean {
 }
 
 /**
- * Get active months for display and new entries
+ * Get active months for display (Dashboard)
  * Rule:
- * - Before 5th of month: previous 2 months + current month + next 2 months = 5 months
- * - After 5th of month: previous 1 month + next 2 months = 3 months (current month excluded)
+ * - Before 5th of month: current + previous 2 + next 2 = 5 months
+ *   Example (Feb 4): Dec, Jan, Feb, Mar, Apr
+ * - After 5th of month: current + previous 1 + next 2 = 4 months
+ *   Example (Feb 11): Jan, Feb, Mar, Apr
  * @returns Array of month objects with value, label, and locked status
  */
 export function getActiveMonths(): Array<{ value: string; label: string; locked: boolean }> {
@@ -77,11 +79,11 @@ export function getActiveMonths(): Array<{ value: string; label: string; locked:
   let endOffset: number;
 
   if (dayOfMonth < 5) {
-    // Before 5th: previous 2 + current + next 2 = 5 months
+    // Before 5th: current + previous 2 + next 2 = 5 months
     startOffset = -2;
     endOffset = 2;
   } else {
-    // After 5th: previous 1 + next 2 = 3 months (skip current)
+    // After 5th: current + previous 1 + next 2 = 4 months
     startOffset = -1;
     endOffset = 2;
   }
@@ -89,11 +91,6 @@ export function getActiveMonths(): Array<{ value: string; label: string; locked:
   for (let i = startOffset; i <= endOffset; i++) {
     const date = new Date(today.getFullYear(), today.getMonth() + i, 1);
     const monthValue = formatMonthValue(date);
-
-    // Skip current month if we're past day 5
-    if (dayOfMonth >= 5 && i === 0) {
-      continue;
-    }
 
     months.push({
       value: monthValue,
