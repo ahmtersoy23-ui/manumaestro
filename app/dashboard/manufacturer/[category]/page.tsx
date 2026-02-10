@@ -139,7 +139,7 @@ export default function ManufacturerCategoryPage() {
       const values = editValues[iwasku];
 
       // Update all requests in this group
-      // IMPORTANT: Each request should get its own quantity when completed
+      // Send the total producedQuantity - backend will handle per-request distribution
       const updatePromises = group.requests.map(request =>
         fetch(`/api/manufacturer/requests/${request.id}`, {
           method: 'PATCH',
@@ -147,8 +147,7 @@ export default function ManufacturerCategoryPage() {
           body: JSON.stringify({
             status: values.status,
             manufacturerNotes: values.manufacturerNotes,
-            // Don't send producedQuantity - let backend auto-complete based on each request's quantity
-            // producedQuantity: values.producedQuantity,
+            producedQuantity: values.producedQuantity,
           }),
         })
       );
@@ -299,17 +298,18 @@ export default function ManufacturerCategoryPage() {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex flex-col gap-1">
-                        <span className="text-sm font-semibold text-gray-900">
-                          {editValues[group.iwasku]?.status === 'COMPLETED'
-                            ? group.totalQuantity
-                            : (editValues[group.iwasku]?.producedQuantity || 0)}
-                        </span>
+                        <input
+                          type="number"
+                          value={editValues[group.iwasku]?.producedQuantity || 0}
+                          onChange={(e) => updateEditValue(group.iwasku, 'producedQuantity', parseInt(e.target.value) || 0)}
+                          min="0"
+                          className="w-20 px-2 py-1 text-sm text-gray-900 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        />
                         {editValues[group.iwasku]?.status === 'COMPLETED' && (
                           <span className="text-xs text-green-600">Auto-completed</span>
                         )}
                       </div>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    </td>                    <td className="px-4 py-3 whitespace-nowrap">
                       <select
                         value={editValues[group.iwasku]?.status || group.requests[0].status}
                         onChange={(e) => updateEditValue(group.iwasku, 'status', e.target.value)}
