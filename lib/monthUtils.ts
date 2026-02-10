@@ -104,28 +104,19 @@ export function getActiveMonths(): Array<{ value: string; label: string; locked:
 
 /**
  * Get list of available months for creating new requests (dropdown)
- * Only unlocked future months
+ * Only unlocked months from active months
  * @returns Array of month objects with value and label
  */
 export function getAvailableMonthsForEntry(): Array<{ value: string; label: string }> {
-  const months: Array<{ value: string; label: string }> = [];
-  const today = new Date();
-  const dayOfMonth = today.getDate();
+  // Get active months and filter out locked ones
+  const activeMonths = getActiveMonths();
 
-  // Start from current month or next month depending on day
-  const startMonth = dayOfMonth >= 5 ? 1 : 0;
-
-  // Show next 6 months from start
-  for (let i = startMonth; i < startMonth + 6; i++) {
-    const date = new Date(today.getFullYear(), today.getMonth() + i, 1);
-    const monthValue = formatMonthValue(date);
-    months.push({
-      value: monthValue,
-      label: formatMonthDisplay(monthValue),
-    });
-  }
-
-  return months;
+  return activeMonths
+    .filter(month => !month.locked)
+    .map(month => ({
+      value: month.value,
+      label: month.label,
+    }));
 }
 
 /**
