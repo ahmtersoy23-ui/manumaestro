@@ -80,7 +80,6 @@ export default function WorkflowKanbanPage() {
   }
 
   async function updateWorkflowStage(requestId: string, newStage: string) {
-    console.log('🔄 Updating workflow:', { requestId, newStage });
     try {
       const res = await fetch('/api/workflow', {
         method: 'PATCH',
@@ -88,21 +87,18 @@ export default function WorkflowKanbanPage() {
         body: JSON.stringify({ requestId, workflowStage: newStage }),
       });
 
-      console.log('📡 API Response status:', res.status);
       const data = await res.json();
-      console.log('📦 API Response data:', data);
 
       if (data.success) {
-        console.log('✅ Update successful! Optimistic update will persist.');
         // Don't refresh data - the optimistic update is correct
       } else {
-        console.error('❌ Failed to update:', data.error);
+        console.error('Failed to update:', data.error);
         alert('Failed to update workflow stage: ' + (data.error || 'Unknown error'));
         // Revert optimistic update by fetching fresh data
         fetchData();
       }
     } catch (error) {
-      console.error('❌ Failed to update stage:', error);
+      console.error('Failed to update stage:', error);
       alert('Failed to update workflow stage');
       // Revert optimistic update by fetching fresh data
       fetchData();
@@ -125,12 +121,7 @@ export default function WorkflowKanbanPage() {
     const { active, over } = event;
     setActiveCard(null);
 
-    console.log('🎯 Drag ended:', { activeId: active.id, overId: over?.id });
-
-    if (!over) {
-      console.log('⚠️ No drop target');
-      return;
-    }
+    if (!over) return;
 
     const requestId = active.id as string;
     let targetStage = over.id as string;
@@ -138,16 +129,12 @@ export default function WorkflowKanbanPage() {
     // Check if over.id is a valid stage, if not it might be a card ID
     // In that case, find which column the card belongs to
     const validStages = WORKFLOW_STAGES.map(s => s.stage);
-    console.log('🔍 Valid stages:', validStages);
-    console.log('🔍 Initial target:', targetStage);
 
     if (!validStages.includes(targetStage)) {
-      console.log('⚠️ Target is not a valid stage, finding parent column...');
       // over.id is a card ID, find its column
       for (const column of columns) {
         if (column.requests.some(r => r.id === targetStage)) {
           targetStage = column.stage;
-          console.log('✅ Found parent column:', targetStage);
           break;
         }
       }
@@ -162,10 +149,7 @@ export default function WorkflowKanbanPage() {
       }
     }
 
-    console.log('📍 Moving from', currentStage, 'to', targetStage);
-
     if (currentStage !== targetStage) {
-      console.log('🔄 Updating UI optimistically...');
       // Optimistically update UI
       setColumns(prev => {
         const newColumns = prev.map(col => ({ ...col, requests: [...col.requests] }));
@@ -180,7 +164,6 @@ export default function WorkflowKanbanPage() {
             const [request] = fromColumn.requests.splice(requestIndex, 1);
             request.workflowStage = targetStage;
             toColumn.requests.push(request);
-            console.log('✅ Optimistic update complete');
           }
         }
 
@@ -189,8 +172,6 @@ export default function WorkflowKanbanPage() {
 
       // Update on server
       updateWorkflowStage(requestId, targetStage);
-    } else {
-      console.log('⏭️ Same stage, skipping update');
     }
   }
 

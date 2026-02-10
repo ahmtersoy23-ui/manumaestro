@@ -1,50 +1,95 @@
 # 🎼 ManuMaestro - Project Status
 
-**Last Updated**: 2026-01-19
+**Last Updated**: 2026-02-10
+
+## 🌐 Production Status
+
+**Live URL**: https://manumaestro.apps.iwa.web.tr
+
+- ✅ **Deployed**: /var/www/manumaestro on 78.47.117.36
+- ✅ **PM2 Process**: Online (uptime: stable)
+- ✅ **SSL Certificate**: Active (Let's Encrypt)
+- ✅ **Database**: 630+ production requests, 10 marketplaces
+- ✅ **SSO Authentication**: Integrated with apps-sso-backend
 
 ---
 
 ## ✅ Completed Features
 
 ### 1. Database Design
-- [x] Prisma schema with 4 main tables
+- [x] Prisma schema with 6 tables (users, marketplaces, user_marketplace_permissions, production_requests, audit_logs, _prisma_migrations)
 - [x] User roles and permissions system
-- [x] Marketplace management
-- [x] Production requests tracking
+- [x] Marketplace management (10 active marketplaces)
+- [x] Production requests tracking (630+ requests)
+- [x] Workflow stage enum (6 stages)
+- [x] Audit log system
 - [x] Seed script with default data
 
-### 2. Dashboard & UI
+### 2. Authentication & Security
+- [x] SSO Integration with apps-sso-backend
+- [x] JWT token authentication
+- [x] Protected routes via middleware
+- [x] Role-based access control (Admin, Operator, Viewer)
+- [x] User-specific marketplace permissions
+- [x] Session management
+
+### 3. Dashboard & UI
 - [x] Main layout with header and navigation
 - [x] Sidebar with marketplace links
 - [x] Dashboard homepage with stats cards
 - [x] Marketplace grid with cards
 - [x] Responsive design (mobile-friendly)
+- [x] Month-based navigation
+- [x] Category-based filtering
 
-### 3. Marketplace Entry System
+### 4. Workflow Management (Kanban Board)
+- [x] Drag-and-drop Kanban board (@dnd-kit)
+- [x] 6 workflow stages (REQUESTED → CUTTING → ASSEMBLY → QUALITY_CHECK → PACKAGING → READY_TO_SHIP)
+- [x] Category-specific workflow boards
+- [x] Real-time UI updates (optimistic updates)
+- [x] Workflow stage API endpoint (`/api/workflow PATCH`)
+- [x] Visual stage indicators with color coding
+
+### 5. Marketplace Entry System
 - [x] Dynamic marketplace pages
 - [x] Manual entry form with IWASKU search
-- [x] Auto-populated product details
-- [x] Excel upload interface
+- [x] Auto-populated product details from pricelab_db
+- [x] Excel upload interface (xlsx package)
 - [x] Recent requests table per marketplace
+- [x] Month selector for filtering
 
-### 4. API Endpoints
+### 6. API Endpoints
 - [x] Product search API (`/api/products/search`)
 - [x] Get product by IWASKU (`/api/products/[iwasku]`)
 - [x] Create production request (`/api/requests POST`)
 - [x] List production requests (`/api/requests GET`)
+- [x] Manufacturer category API (`/api/manufacturer/category/[category]`)
+- [x] Workflow stage update (`/api/workflow PATCH`)
+- [x] SSO authentication (`/api/auth/callback`)
 
-### 5. Manufacturer Dashboard
+### 7. Manufacturer Dashboard
 - [x] Consolidated view of all requests
 - [x] Grouped by product (IWASKU)
 - [x] Expandable marketplace breakdown
 - [x] Total quantity calculations
-- [x] Category tags
+- [x] Category tags and filtering
+- [x] Month-based views
 
-### 6. Documentation
-- [x] README.md - Project overview
+### 8. Production Deployment
+- [x] Server deployment on 78.47.117.36
+- [x] PM2 process management
+- [x] Nginx reverse proxy configuration
+- [x] SSL certificate (Let's Encrypt)
+- [x] Production database setup
+- [x] Live at https://manumaestro.apps.iwa.web.tr
+
+### 9. Documentation
+- [x] README.md - Comprehensive project overview
+- [x] PROJECT_STATUS.md - Current status tracking
 - [x] SETUP_INSTRUCTIONS.md - Setup guide
 - [x] Inline code comments
 - [x] TypeScript types
+- [x] Git repository on GitHub
 
 ---
 
@@ -52,49 +97,49 @@
 
 ### High Priority
 
-- [ ] **Database Migration** - Run on server
-  - Create `manumaestro_db` on PostgreSQL
-  - Update `.env` with actual password
-  - Run `npm run db:migrate`
-  - Run `npm run db:seed`
+- [ ] **Workflow Stage Migration**
+  - ⚠️ 629 out of 630 requests have NULL workflow stage
+  - Need to assign default "REQUESTED" stage to existing requests
+  - Create migration script or manual update
 
-- [ ] **Product Database Integration**
-  - Verify `products` table schema in pricelab_db
-  - Test product search API
-  - Adjust queries if needed
+- [ ] **Excel Processing Enhancement**
+  - xlsx package installed but bulk insert API needs implementation
+  - Parse uploaded Excel files
+  - Validate data format
+  - Bulk insert to database with error handling
 
-- [ ] **Authentication / SSO**
-  - SSO integration with existing auth system
-  - Session management
-  - Protected routes
-  - User permissions enforcement
+- [ ] **Production Monitoring**
+  - Investigate PM2 restart count (35 restarts)
+  - Add health check endpoint
+  - Implement error tracking (Sentry or similar)
+  - Add performance monitoring
 
 ### Medium Priority
 
-- [ ] **Excel Processing**
-  - Install `xlsx` package
-  - Parse uploaded Excel files
-  - Validate data format
-  - Bulk insert to database
-  - Error handling for invalid data
-
-- [ ] **Manufacturer API**
-  - Aggregation query for manufacturer dashboard
-  - Filter by category
-  - Date range filtering
-  - Export to Excel functionality
-
-- [ ] **Real-time Stats**
-  - Connect stats cards to database
-  - Total requests count
-  - Status-based counts
-  - Monthly trends
-
-- [ ] **Request Management**
+- [ ] **Request Management Enhancement**
   - Edit existing requests
-  - Delete requests
-  - Change status (requested → in_production → completed)
-  - Bulk status updates
+  - Delete requests with confirmation
+  - Bulk workflow stage updates
+  - Request history tracking
+
+- [ ] **Real-time Stats Dashboard**
+  - Connect stats cards to actual database queries
+  - Total requests count by status
+  - Monthly trends and charts
+  - Category distribution pie charts
+  - Marketplace comparison graphs
+
+- [ ] **Manufacturer Dashboard Export**
+  - Export aggregated data to Excel
+  - PDF report generation
+  - Custom date range filtering
+  - Category-specific exports
+
+- [ ] **Notifications System**
+  - In-app notifications
+  - Email notifications for new requests
+  - Workflow stage change alerts
+  - Daily/weekly summary emails
 
 ### Low Priority
 
@@ -171,95 +216,118 @@ manumaestro/
 
 ## 🔧 Environment Setup Status
 
-- [x] Next.js 15 + TypeScript installed
-- [x] Tailwind CSS configured
-- [x] Prisma ORM installed
+### Local Development
+- [x] Next.js 15 + React 19 + TypeScript installed
+- [x] Tailwind CSS 4 configured
+- [x] Prisma 7.2 ORM installed
 - [x] Lucide React icons installed
-- [ ] Database connection tested
-- [ ] Migrations run
-- [ ] Seed data loaded
+- [x] @dnd-kit drag-and-drop library
+- [x] xlsx Excel processing library
+- [x] Database connection tested
+- [x] Migrations run
+- [x] Seed data loaded
+
+### Production Server
+- [x] Server deployment (78.47.117.36)
+- [x] PM2 process manager configured
+- [x] Nginx reverse proxy setup
+- [x] SSL certificate (Let's Encrypt)
+- [x] PostgreSQL database (manumaestro_db + pricelab_db)
+- [x] SSO integration active
+- [x] Production build running
 
 ---
 
 ## 🎯 Next Steps (Recommended Order)
 
-1. **Setup Database** (Critical)
+1. **Fix Workflow Stage Migration** (Critical)
    ```bash
-   # On server:
-   ssh root@78.47.117.36
-   sudo -u postgres psql
-   CREATE DATABASE manumaestro_db;
-   GRANT ALL PRIVILEGES ON DATABASE manumaestro_db TO pricelab;
-   \q
+   # Update all NULL workflow stages to REQUESTED
+   ssh -p 2222 root@78.47.117.36
+   sudo -u postgres psql -d manumaestro_db
+   UPDATE production_requests SET "workflowStage" = 'REQUESTED' WHERE "workflowStage" IS NULL;
    ```
 
-2. **Update Environment**
+2. **Investigate PM2 Restarts**
    ```bash
-   # Update .env with actual password
-   nano .env
+   ssh -p 2222 root@78.47.117.36
+   pm2 logs manumaestro --lines 100
+   # Check for error patterns
+   # Optimize if memory/CPU issues
    ```
 
-3. **Run Migrations**
+3. **Implement Excel Bulk Insert API**
    ```bash
-   cd ~/Desktop/manumaestro
-   npm run db:generate
-   npm run db:migrate
-   npm run db:seed
+   # Create API endpoint for Excel processing
+   # POST /api/requests/bulk
+   # Parse xlsx, validate, insert multiple requests
    ```
 
-4. **Test Application**
+4. **Add Export Functionality**
    ```bash
-   npm run dev
-   # Open http://localhost:3000
+   # Manufacturer dashboard export to Excel
+   # Category-based exports
+   # Custom date range selection
    ```
 
-5. **Verify Product API**
-   - Check `products` table schema in pricelab_db
-   - Test `/api/products/search?q=IW`
-   - Adjust queries if column names differ
+5. **Implement Bulk Workflow Updates**
+   ```bash
+   # Allow selecting multiple cards
+   # Bulk move to different stages
+   # Confirmation dialog
+   ```
 
-6. **Implement Excel Upload**
-   - Install `xlsx` package
-   - Parse and validate Excel data
-   - Bulk insert functionality
+6. **Add Real-time Stats**
+   ```bash
+   # Dashboard stats from actual database
+   # Charts and graphs
+   # Trend analysis
+   ```
 
-7. **Add SSO Authentication**
-   - Integrate with existing auth system
-   - Protect routes
-   - Get real user ID for requests
-
-8. **Connect Real Data**
-   - Replace mock data with API calls
-   - Implement aggregation for manufacturer dashboard
-   - Add loading states
+7. **Production Monitoring**
+   ```bash
+   # Add Sentry or error tracking
+   # Performance monitoring
+   # Health check endpoint
+   # Automated alerts
+   ```
 
 ---
 
 ## 🐛 Known Issues
 
-None yet - fresh project!
+1. **Workflow Stage Missing**: 629 out of 630 production requests have NULL workflow stage
+   - **Impact**: Kanban board shows almost all items in REQUESTED stage by default
+   - **Fix**: Run migration to set default stage for existing requests
+
+2. **PM2 Restart Count**: Process has restarted 35 times
+   - **Impact**: Possible stability issues
+   - **Action**: Review logs to identify root cause
+
+3. **Excel Upload**: UI exists but backend processing not fully implemented
+   - **Impact**: Bulk import not working yet
+   - **Fix**: Implement API endpoint for bulk insert
 
 ---
 
 ## 📝 Notes
 
-- Login/Auth intentionally left for later (SSO planned)
-- All forms have UI but need API integration
-- Mock data used for development
-- Database connection not yet tested
-- Products table schema needs verification
+- ✅ SSO authentication fully integrated with apps-sso-backend
+- ✅ All API endpoints connected to real database
+- ✅ Production deployment active and accessible
+- ✅ Kanban workflow board functional with drag-and-drop
+- ⚠️ Need to migrate existing requests to have workflow stages
+- 📊 Current usage: 630+ active production requests across 10 marketplaces
 
 ---
 
-## 🚀 Deployment Plan
+## 🚀 Deployment Status
 
-1. Setup database on server
-2. Test locally with server database
-3. Build production bundle: `npm run build`
-4. Deploy to server (similar to other IWA apps)
-5. Setup PM2 process
-6. Configure Nginx
+- ✅ **Deployed**: https://manumaestro.apps.iwa.web.tr
+- ✅ **Server**: 78.47.117.36:2222
+- ✅ **PM2**: manumaestro process online
+- ✅ **Nginx**: Reverse proxy configured with SSL
+- ✅ **Database**: PostgreSQL with 630+ records
+- ✅ **SSO**: Integrated and working
 
----
-
-**Ready for database setup and testing!** 🎉
+**Production Ready!** 🎉

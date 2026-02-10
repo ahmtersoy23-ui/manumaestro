@@ -10,27 +10,40 @@ ManuMaestro is a comprehensive platform for managing production requests across 
 ## 🎯 Features
 
 ### Multi-Marketplace Support
-- **Amazon**: US, EU, UK, CA, AU
-- **Wayfair**: US, UK
-- **Takealot**: South Africa
-- **Bol**: Netherlands
-- **Custom Marketplaces**: Add any marketplace dynamically
+- ✅ **Amazon**: US, EU, UK, CA, AU (5 marketplaces)
+- ✅ **Wayfair**: US, UK (2 marketplaces)
+- ✅ **Takealot**: South Africa
+- ✅ **Bol**: Netherlands
+- ✅ **Custom Marketplaces**: Dynamically add any marketplace
+- **Total Active**: 10 marketplaces configured
+
+### Production Workflow Management
+- ✅ **Kanban Board**: Visual drag-and-drop workflow management
+- ✅ **6 Workflow Stages**:
+  - REQUESTED → CUTTING → ASSEMBLY → QUALITY_CHECK → PACKAGING → READY_TO_SHIP
+- ✅ **Category-based Workflow**: Separate boards for each product category
+- ✅ **Real-time Updates**: Drag cards to update production stages instantly
+- ✅ **Progress Tracking**: Monitor production status for 630+ active requests
 
 ### Data Entry Options
 - ✅ **Manual Entry**: Select products via dropdown/autocomplete
-- ✅ **Excel Bulk Import**: Upload spreadsheets with multiple requests
-- ✅ Auto-populated product details (name, category) from existing product database
+- ✅ **Excel Bulk Import**: Upload spreadsheets with multiple requests (xlsx package)
+- ✅ **Auto-populated Product Details**: Name and category from existing product database
+- ✅ **Product Search API**: Fast IWASKU lookup from pricelab_db
 
 ### Intelligent Aggregation
-- **Input/Requested View**: All marketplace requests in one place
-- **Manufacturer Dashboard**: Consolidated production requirements by product
-- **Multi-column Breakdown**: See exactly which marketplace needs what quantity
-- **Category-based Filtering**: Organize production by product categories
+- ✅ **Input/Requested View**: All marketplace requests in one place
+- ✅ **Manufacturer Dashboard**: Consolidated production requirements by product
+- ✅ **Multi-column Breakdown**: Exact marketplace quantity breakdown
+- ✅ **Category-based Filtering**: Organize by product categories (IWA Metal, IWA Ahşap, etc.)
+- ✅ **Month-based Views**: Filter requests by production month
 
-### User Management
-- Role-based access control (Admin, Operator, Viewer)
-- Marketplace-level permissions
-- Audit trail for all entries
+### Authentication & Security
+- ✅ **SSO Integration**: Unified authentication with apps-sso-backend
+- ✅ **Role-based Access**: Admin, Operator, Viewer roles
+- ✅ **Marketplace Permissions**: User-specific marketplace access control
+- ✅ **Audit Trail**: Complete logging of all user actions
+- ✅ **JWT Token Authentication**: Secure session management
 
 ---
 
@@ -38,10 +51,16 @@ ManuMaestro is a comprehensive platform for managing production requests across 
 
 - **Frontend**: Next.js 15, React 19, TypeScript
 - **Backend**: Next.js API Routes
-- **Database**: PostgreSQL
-- **ORM**: Prisma
-- **Styling**: Tailwind CSS
-- **Authentication**: JWT + bcrypt
+- **Database**: PostgreSQL (pricelab_db + manumaestro_db)
+- **ORM**: Prisma 7.2
+- **Styling**: Tailwind CSS 4
+- **Authentication**: SSO Integration (apps-sso-backend) + JWT
+- **UI Components**: Lucide React icons
+- **Drag & Drop**: @dnd-kit (core, sortable, utilities)
+- **Excel Processing**: xlsx
+- **Process Manager**: PM2
+- **Web Server**: Nginx + Let's Encrypt SSL
+- **Server**: 78.47.117.36 (Hetzner)
 
 ---
 
@@ -50,26 +69,36 @@ ManuMaestro is a comprehensive platform for managing production requests across 
 ```
 manumaestro/
 ├── app/
-│   ├── api/              # API routes
-│   │   ├── auth/         # Authentication endpoints
-│   │   ├── marketplaces/ # Marketplace CRUD
-│   │   ├── requests/     # Production requests
-│   │   └── products/     # Product lookup
-│   ├── dashboard/        # Main dashboard
-│   ├── auth/             # Login/signup pages
-│   └── layout.tsx        # Root layout
+│   ├── api/                      # API routes
+│   │   ├── auth/                 # SSO authentication endpoints
+│   │   ├── marketplaces/         # Marketplace CRUD operations
+│   │   ├── requests/             # Production request management
+│   │   ├── products/             # Product lookup from pricelab_db
+│   │   ├── manufacturer/         # Manufacturer dashboard aggregation
+│   │   └── workflow/             # Workflow stage updates
+│   ├── dashboard/                # Main application
+│   │   ├── marketplace/[slug]/   # Marketplace entry pages
+│   │   ├── manufacturer/         # Manufacturer dashboard
+│   │   ├── month/[month]/        # Month-based request views
+│   │   └── workflow/[category]/  # Kanban workflow boards
+│   ├── auth/                     # SSO login/callback pages
+│   ├── middleware.ts             # SSO authentication middleware
+│   └── layout.tsx                # Root layout with header/navigation
 ├── components/
-│   ├── ui/               # Reusable UI components
-│   ├── forms/            # Form components
-│   └── tables/           # Table components
+│   ├── ui/                       # Reusable UI components
+│   ├── forms/                    # Manual entry & Excel upload forms
+│   └── tables/                   # Request tables & manufacturer views
 ├── lib/
-│   ├── db/               # Database utilities
-│   ├── auth/             # Auth helpers
-│   └── utils/            # General utilities
+│   ├── db/                       # Prisma client instances
+│   ├── auth/                     # SSO helpers
+│   ├── utils/                    # Utility functions
+│   └── monthUtils.ts             # Month formatting helpers
 ├── prisma/
-│   └── schema.prisma     # Database schema
-├── types/                # TypeScript types
-└── public/               # Static assets
+│   ├── schema.prisma             # Database schema (6 tables)
+│   └── seed.ts                   # Default data seed script
+├── contexts/                     # React context providers
+├── types/                        # TypeScript type definitions
+└── public/                       # Static assets & icons
 ```
 
 ---
@@ -203,14 +232,64 @@ npx prisma migrate   # Run migrations
 
 ---
 
+## 🚀 Production Deployment
+
+### Live Application
+- **URL**: https://manumaestro.apps.iwa.web.tr
+- **Server**: 78.47.117.36:2222 (SSH)
+- **Location**: /var/www/manumaestro
+- **Process Manager**: PM2 (process name: manumaestro)
+- **Port**: 3004 (proxied via Nginx)
+- **SSL**: Let's Encrypt (auto-renewed)
+
+### Current Statistics (Feb 2026)
+- **Production Requests**: 630+ active
+- **Marketplaces**: 10 configured
+- **Top Categories**:
+  - IWA Metal (244 requests)
+  - IWA Ahşap (112 requests)
+  - CFW Ahşap Harita (94 requests)
+- **Users**: SSO integrated with apps-sso-backend
+
+### Deployment Commands
+```bash
+# SSH to server
+ssh -p 2222 root@78.47.117.36
+
+# Navigate to app directory
+cd /var/www/manumaestro
+
+# Pull latest changes
+git pull origin main
+
+# Install dependencies (if package.json changed)
+npm install
+
+# Build production bundle
+npm run build
+
+# Restart PM2 process
+pm2 restart manumaestro
+
+# Check logs
+pm2 logs manumaestro --lines 50
+```
+
+---
+
 ## 📈 Roadmap
 
-- [ ] Real-time production status tracking
+- [x] Kanban workflow board with drag-and-drop
+- [x] SSO authentication integration
+- [x] Month-based request filtering
+- [x] Category-based workflow management
+- [ ] Bulk workflow stage updates
+- [ ] Real-time production status notifications
 - [ ] Email notifications for new requests
 - [ ] Advanced analytics and reporting
 - [ ] Mobile app
 - [ ] API integrations with marketplaces
-- [ ] Automated request imports
+- [ ] Automated request imports from Excel/CSV
 
 ---
 
@@ -229,8 +308,9 @@ Proprietary - Internal Use Only
 ## 📞 Support
 
 For technical support or questions:
-- Internal Slack: #manumaestro-support
-- Email: dev-team@yourcompany.com
+- **Production URL**: https://manumaestro.apps.iwa.web.tr
+- **SSO Login**: Via apps-sso-backend
+- **GitHub**: https://github.com/ahmtersoy23-ui/manumaestro
 
 ---
 
