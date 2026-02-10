@@ -27,7 +27,10 @@ export default function DashboardPage() {
 
   const availableMonths = getActiveMonths();
   const allMonths = getAllMonthsForViewing(6);
-  const archivedMonths = allMonths.filter(m => m.locked);
+
+  // Archived months: all months that are NOT in active months
+  const activeMonthValues = availableMonths.map(m => m.value);
+  const archivedMonths = allMonths.filter(m => !activeMonthValues.includes(m.value));
 
   useEffect(() => {
     async function fetchStats() {
