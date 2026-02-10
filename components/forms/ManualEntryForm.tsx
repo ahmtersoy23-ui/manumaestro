@@ -7,7 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import { Search, Plus, Check, Calendar, AlertCircle } from 'lucide-react';
-import { getAvailableMonths, formatMonthDisplay, getCurrentMonth } from '@/lib/monthUtils';
+import { getAvailableMonthsForEntry, formatMonthDisplay, getCurrentMonth } from '@/lib/monthUtils';
 
 interface ManualEntryFormProps {
   marketplaceId: string;
@@ -35,22 +35,15 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
   const [showDropdown, setShowDropdown] = useState(false);
   const [monthError, setMonthError] = useState('');
 
-  const availableMonths = getAvailableMonths();
+  const availableMonths = getAvailableMonthsForEntry();
   const today = new Date();
   const dayOfMonth = today.getDate();
   const currentMonth = getCurrentMonth();
 
-  // Auto-select appropriate month on mount
+  // Auto-select first available month on mount
   useEffect(() => {
     if (!productionMonth && availableMonths.length > 0) {
-      if (dayOfMonth > 5) {
-        // After 5th, default to next month
-        const nextMonth = availableMonths.find(m => m.value > currentMonth);
-        setProductionMonth(nextMonth?.value || availableMonths[1]?.value || availableMonths[0].value);
-      } else {
-        // Before or on 5th, default to current month
-        setProductionMonth(currentMonth);
-      }
+      setProductionMonth(availableMonths[0].value);
     }
   }, [availableMonths]);
 
@@ -210,11 +203,9 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
                 <option
                   key={month.value}
                   value={month.value}
-                  disabled={dayOfMonth > 5 && month.value === currentMonth}
                   className="text-gray-900"
                 >
                   {month.label}
-                  {dayOfMonth > 5 && month.value === currentMonth && ' (Closed)'}
                 </option>
               ))}
             </select>

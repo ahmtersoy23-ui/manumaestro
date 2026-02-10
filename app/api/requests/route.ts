@@ -14,19 +14,15 @@ export async function POST(request: NextRequest) {
     const { iwasku, productName, productCategory, productSize, marketplaceId, quantity, productionMonth, notes } = body;
 
     // Validation
-    if (!iwasku || !productName || !productCategory || !marketplaceId || !quantity) {
+    if (!iwasku || !productName || !productCategory || !marketplaceId || !quantity || !productionMonth) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing required fields (iwasku, productName, productCategory, marketplaceId, quantity, productionMonth)' },
         { status: 400 }
       );
     }
 
-    // Parse production month to set request date
-    let requestDate = new Date();
-    if (productionMonth) {
-      const [year, month] = productionMonth.split('-').map(Number);
-      requestDate = new Date(year, month - 1, 1); // First day of the month
-    }
+    // requestDate is always today (entry date)
+    const requestDate = new Date();
 
     // TODO: Get actual user ID from session/SSO
     // For now, get the admin user
@@ -51,6 +47,7 @@ export async function POST(request: NextRequest) {
         marketplaceId,
         quantity: parseInt(quantity),
         requestDate,
+        productionMonth, // YYYY-MM format (e.g., "2026-03")
         notes,
         entryType: EntryType.MANUAL,
         status: RequestStatus.REQUESTED,
@@ -84,6 +81,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const marketplaceId = searchParams.get('marketplaceId');
     const status = searchParams.get('status');
+    const month = searchParams.get('month'); // YYYY-MM format
     const archiveMode = searchParams.get('archiveMode') === 'true';
     const limit = parseInt(searchParams.get('limit') || '50');
 
@@ -97,22 +95,27 @@ export async function GET(request: NextRequest) {
       where.status = status as RequestStatus;
     }
 
-    // Date filtering for active/archive
-    // Active: Last 2 months (current month + previous month)
-    // Archive: Older than 2 months
-    const today = new Date();
-    const cutoffDate = new Date(today.getFullYear(), today.getMonth() - 1, 1); // First day of month 1 month ago
+    // Filter by productionMonth (not requestDate)
+    if (month && !archiveMode) {
+      // Filter by specific production month (YYYY-MM)
+      where.productionMonth = month;
+    } else if (archiveMode) {
+      // Archive: All months before active months
+      // Get all months that are older than the active months
+      const today = new Date();
+      const dayOfMonth = today.getDate();
 
-    if (archiveMode) {
-      // Archive: older than cutoff (e.g., Dec 2025 and earlier)
-      where.requestDate = {
-        lt: cutoffDate,
+      // Calculate the oldest active month
+      const oldestActiveMonthOffset = dayOfMonth < 5 ? -2 : -1;
+      const oldestActiveDate = new Date(today.getFullYear(), today.getMonth() + oldestActiveMonthOffset, 1);
+      const oldestActiveMonth = `${oldestActiveDate.getFullYear()}-${String(oldestActiveDate.getMonth() + 1).padStart(2, '0')}`;
+
+      where.productionMonth = {
+        lt: oldestActiveMonth,
       };
     } else {
-      // Active: recent 2 months (e.g., Jan 2026 and later)
-      where.requestDate = {
-        gte: cutoffDate,
-      };
+      // No filter - show all (will be handled by frontend month tabs)
+      // This case shouldn't happen in normal usage
     }
 
     const requests = await prisma.productionRequest.findMany({

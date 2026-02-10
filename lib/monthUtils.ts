@@ -35,36 +35,96 @@ export function formatMonthDisplay(monthValue: string): string {
 }
 
 /**
- * Check if a month is locked (in the past)
- * Months in the past cannot be edited
+ * Check if a month is locked for NEW entries
+ * Rule: After the 5th day of a month, that month becomes locked
  * @param monthValue - Month string in format "YYYY-MM"
- * @returns true if the month is in the past
+ * @returns true if the month is locked for new entries
  */
 export function isMonthLocked(monthValue: string): boolean {
   const monthDate = parseMonthValue(monthValue);
   const today = new Date();
+  const dayOfMonth = today.getDate();
+
   const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-  return monthDate < currentMonth;
+  // If month is in the past, it's locked
+  if (monthDate < currentMonth) {
+    return true;
+  }
+
+  // If month is current month and we're past day 5, it's locked
+  if (monthDate.getTime() === currentMonth.getTime() && dayOfMonth >= 5) {
+    return true;
+  }
+
+  // Otherwise, not locked
+  return false;
 }
 
 /**
- * Get list of available months for creating new requests
- * Returns current month and future months (up to 6 months ahead)
+ * Get active months for display and new entries
+ * Rule:
+ * - Before 5th of month: previous 2 months + current month + next 2 months = 5 months
+ * - After 5th of month: previous 1 month + next 2 months = 3 months (current month excluded)
  * @returns Array of month objects with value, label, and locked status
  */
-export function getAvailableMonths(): Array<{ value: string; label: string; locked: boolean }> {
+export function getActiveMonths(): Array<{ value: string; label: string; locked: boolean }> {
   const months: Array<{ value: string; label: string; locked: boolean }> = [];
   const today = new Date();
+  const dayOfMonth = today.getDate();
 
-  // Current month + 6 months ahead
-  for (let i = 0; i < 7; i++) {
+  let startOffset: number;
+  let endOffset: number;
+
+  if (dayOfMonth < 5) {
+    // Before 5th: previous 2 + current + next 2 = 5 months
+    startOffset = -2;
+    endOffset = 2;
+  } else {
+    // After 5th: previous 1 + next 2 = 3 months (skip current)
+    startOffset = -1;
+    endOffset = 2;
+  }
+
+  for (let i = startOffset; i <= endOffset; i++) {
+    const date = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    const monthValue = formatMonthValue(date);
+
+    // Skip current month if we're past day 5
+    if (dayOfMonth >= 5 && i === 0) {
+      continue;
+    }
+
+    months.push({
+      value: monthValue,
+      label: formatMonthDisplay(monthValue),
+      locked: isMonthLocked(monthValue),
+    });
+  }
+
+  return months;
+}
+
+/**
+ * Get list of available months for creating new requests (dropdown)
+ * Only unlocked future months
+ * @returns Array of month objects with value and label
+ */
+export function getAvailableMonthsForEntry(): Array<{ value: string; label: string }> {
+  const months: Array<{ value: string; label: string }> = [];
+  const today = new Date();
+  const dayOfMonth = today.getDate();
+
+  // Start from current month or next month depending on day
+  const startMonth = dayOfMonth >= 5 ? 1 : 0;
+
+  // Show next 6 months from start
+  for (let i = startMonth; i < startMonth + 6; i++) {
     const date = new Date(today.getFullYear(), today.getMonth() + i, 1);
     const monthValue = formatMonthValue(date);
     months.push({
       value: monthValue,
       label: formatMonthDisplay(monthValue),
-      locked: isMonthLocked(monthValue),
     });
   }
 

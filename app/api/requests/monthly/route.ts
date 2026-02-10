@@ -18,27 +18,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Parse month (format: YYYY-MM)
-    const [year, monthNum] = month.split('-').map(Number);
-
-    if (!year || !monthNum || monthNum < 1 || monthNum > 12) {
+    // Validate month format (YYYY-MM)
+    const monthRegex = /^\d{4}-\d{2}$/;
+    if (!monthRegex.test(month)) {
       return NextResponse.json(
         { error: 'Invalid month format. Expected YYYY-MM' },
         { status: 400 }
       );
     }
 
-    // Create date range for the month
-    const startDate = new Date(year, monthNum - 1, 1); // First day of month
-    const endDate = new Date(year, monthNum, 1); // First day of next month
-
-    // Query stats for the month
+    // Query stats for the production month
     const stats = await prisma.productionRequest.aggregate({
       where: {
-        requestDate: {
-          gte: startDate,
-          lt: endDate,
-        },
+        productionMonth: month,
       },
       _count: {
         id: true,
@@ -52,10 +44,7 @@ export async function GET(request: NextRequest) {
     // Query detailed summary grouped by category and marketplace
     const requests = await prisma.productionRequest.findMany({
       where: {
-        requestDate: {
-          gte: startDate,
-          lt: endDate,
-        },
+        productionMonth: month,
       },
       include: {
         marketplace: {

@@ -113,7 +113,8 @@ model ProductionRequest {
   marketplaceId     String
   quantity          Int
   producedQuantity  Int?         // Quantity actually produced by manufacturer
-  requestDate       DateTime     @default(now())
+  requestDate       DateTime     @default(now()) // Entry date (today)
+  productionMonth   String       // Production month in YYYY-MM format (e.g., "2026-03")
   status            RequestStatus @default(REQUESTED)
   workflowStage     WorkflowStage? // For furniture category workflow tracking
   entryType         EntryType
@@ -130,9 +131,11 @@ model ProductionRequest {
   @@index([iwasku])
   @@index([marketplaceId])
   @@index([requestDate])
+  @@index([productionMonth])
   @@index([status])
   @@index([workflowStage])
   @@index([productCategory, workflowStage])
+  @@index([productCategory, productionMonth])
   @@map("production_requests")
 }
 

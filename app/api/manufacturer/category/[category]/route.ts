@@ -23,29 +23,14 @@ export async function GET(
       );
     }
 
-    // Parse month and get start/end dates
-    let startDate: Date;
-    let endDate: Date;
+    // Default to current month if not provided
+    const productionMonth = monthParam || parseMonthValue(new Date()).toISOString().slice(0, 7);
 
-    if (monthParam) {
-      const monthDate = parseMonthValue(monthParam);
-      startDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-      endDate = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0, 23, 59, 59);
-    } else {
-      // Default to current month
-      const now = new Date();
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-    }
-
-    // Fetch requests for this category and month
+    // Fetch requests for this category and production month
     const requests = await prisma.productionRequest.findMany({
       where: {
         productCategory: decodeURIComponent(category),
-        requestDate: {
-          gte: startDate,
-          lte: endDate,
-        },
+        productionMonth,
       },
       include: {
         marketplace: {
