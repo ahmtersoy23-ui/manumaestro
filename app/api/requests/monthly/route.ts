@@ -167,6 +167,12 @@ export async function GET(request: NextRequest) {
         missingDesiItems,
         summary,
       },
+      debug: {
+        aggregateSum: stats._sum.producedQuantity,
+        calculatedTotal: totalProduced,
+        uniqueProducts: productMap.size,
+        month,
+      },
     });
   } catch (error) {
     console.error('Monthly stats error:', error);
