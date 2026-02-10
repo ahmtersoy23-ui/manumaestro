@@ -139,6 +139,12 @@ export async function GET(request: NextRequest) {
       0
     );
 
+    // Debug logging
+    console.log(`[Monthly API] Month: ${month}`);
+    console.log(`[Monthly API] Aggregate sum: ${stats._sum.producedQuantity}`);
+    console.log(`[Monthly API] Calculated totalProduced: ${totalProduced}`);
+    console.log(`[Monthly API] Unique products: ${productMap.size}`);
+
     const itemsWithoutSize = requests.filter(r => !r.productSize).length;
 
     // Get details of items without size
