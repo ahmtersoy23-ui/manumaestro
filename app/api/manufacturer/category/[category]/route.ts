@@ -66,8 +66,8 @@ export async function GET(
       productCategory: r.productCategory,
       marketplaceName: r.marketplace.name,
       quantity: r.quantity,
-      producedQuantity: 0, // TODO: Add to schema
-      manufacturerNotes: null, // TODO: Add to schema
+      producedQuantity: r.producedQuantity,
+      manufacturerNotes: r.manufacturerNotes,
       workflowStage: r.workflowStage,
       status: r.status,
       requestDate: r.requestDate.toISOString(),

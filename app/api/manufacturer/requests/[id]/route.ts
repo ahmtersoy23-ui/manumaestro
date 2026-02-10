@@ -23,6 +23,19 @@ export async function PATCH(
       );
     }
 
+    // Fetch the request to get quantity
+    const existingRequest = await prisma.productionRequest.findUnique({
+      where: { id },
+      select: { quantity: true },
+    });
+
+    if (!existingRequest) {
+      return NextResponse.json(
+        { error: 'Request not found' },
+        { status: 404 }
+      );
+    }
+
     // Prepare update data
     const updateData: any = {};
     if (producedQuantity !== undefined) {
@@ -33,6 +46,11 @@ export async function PATCH(
     }
     if (status !== undefined) {
       updateData.status = status;
+
+      // Auto-set producedQuantity to quantity when status is COMPLETED
+      if (status === 'COMPLETED' && producedQuantity === undefined) {
+        updateData.producedQuantity = existingRequest.quantity;
+      }
     }
 
     // Update the request
