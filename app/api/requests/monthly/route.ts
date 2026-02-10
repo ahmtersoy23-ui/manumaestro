@@ -56,7 +56,30 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Group by category and marketplace
+    // First, group by IWASKU to track production per product (not per request)
+    const productMap = new Map<string, any>();
+    requests.forEach((request) => {
+      const existing = productMap.get(request.iwasku);
+
+      if (existing) {
+        // Sum requested quantities across all marketplace requests for this product
+        existing.totalRequestedQty += request.quantity;
+        existing.requests.push(request);
+      } else {
+        productMap.set(request.iwasku, {
+          iwasku: request.iwasku,
+          productCategory: request.productCategory,
+          productSize: request.productSize,
+          // Use the producedQuantity from the first request (they should all be the same for the same product)
+          producedQty: request.producedQuantity || 0,
+          totalRequestedQty: request.quantity,
+          requests: [request],
+        });
+      }
+    });
+
+    // Now group by category and marketplace for summary
+    // Production quantities are distributed proportionally based on each marketplace's request
     const summary = requests.reduce((acc: any[], request) => {
       const existing = acc.find(
         item =>
@@ -64,13 +87,22 @@ export async function GET(request: NextRequest) {
           item.marketplaceId === request.marketplaceId
       );
 
+      const productData = productMap.get(request.iwasku);
       const desiPerUnit = request.productSize || 0;
       const requestTotalDesi = desiPerUnit * request.quantity;
-      const producedTotalDesi = desiPerUnit * (request.producedQuantity || 0);
+
+      // Distribute produced quantity proportionally
+      // If this marketplace requested 50 out of 150 total for this product,
+      // and 120 were produced, this marketplace gets (50/150) * 120 = 40
+      const productionRatio = productData.totalRequestedQty > 0
+        ? request.quantity / productData.totalRequestedQty
+        : 0;
+      const producedForThisRequest = productData.producedQty * productionRatio;
+      const producedTotalDesi = desiPerUnit * producedForThisRequest;
 
       if (existing) {
         existing.totalQuantity += request.quantity;
-        existing.totalProduced += request.producedQuantity || 0;
+        existing.totalProduced += producedForThisRequest;
         existing.totalDesi += requestTotalDesi;
         existing.producedDesi += producedTotalDesi;
         existing.requestCount += 1;
@@ -81,7 +113,7 @@ export async function GET(request: NextRequest) {
           marketplaceId: request.marketplaceId,
           marketplaceName: request.marketplace.name,
           totalQuantity: request.quantity,
-          totalProduced: request.producedQuantity || 0,
+          totalProduced: producedForThisRequest,
           totalDesi: requestTotalDesi,
           producedDesi: producedTotalDesi,
           requestCount: 1,
@@ -92,9 +124,15 @@ export async function GET(request: NextRequest) {
       return acc;
     }, []);
 
-    // Calculate total desi
+    // Calculate total desi (sum across all requests)
     const totalDesi = requests.reduce((sum, r) => sum + ((r.productSize || 0) * r.quantity), 0);
-    const totalProducedDesi = requests.reduce((sum, r) => sum + ((r.productSize || 0) * (r.producedQuantity || 0)), 0);
+
+    // Calculate total produced desi (sum unique products only, not requests)
+    const totalProducedDesi = Array.from(productMap.values()).reduce(
+      (sum, product) => sum + ((product.productSize || 0) * product.producedQty),
+      0
+    );
+
     const itemsWithoutSize = requests.filter(r => !r.productSize).length;
 
     // Get details of items without size
