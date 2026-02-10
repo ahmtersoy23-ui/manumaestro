@@ -13,7 +13,7 @@ import { ManualEntryForm } from '@/components/forms/ManualEntryForm';
 import { ExcelUpload } from '@/components/forms/ExcelUpload';
 import { RequestsTable } from '@/components/tables/RequestsTable';
 import { Download, Upload, PlusCircle, Clock, Archive, ArrowLeft } from 'lucide-react';
-import { parseMonthValue } from '@/lib/monthUtils';
+import { parseMonthValue, getActiveMonths } from '@/lib/monthUtils';
 
 interface Marketplace {
   id: string;
@@ -27,13 +27,36 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
 
   const [marketplace, setMarketplace] = useState<Marketplace | null>(null);
   const [activeTab, setActiveTab] = useState<'manual' | 'excel'>('manual');
-  const [requestsTab, setRequestsTab] = useState<'active' | 'archive'>('active');
   const [loading, setLoading] = useState(true);
   const [slug, setSlug] = useState<string>('');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  // Parse month label if month is provided
-  const monthLabel = month ? parseMonthValue(month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : null;
+  // Month tabs - get active months
+  const [availableMonths, setAvailableMonths] = useState<Array<{ value: string; label: string; locked: boolean }>>([]);
+  const [selectedMonth, setSelectedMonth] = useState<string>('');
+
+  // Initialize selected month from URL or current month
+  useEffect(() => {
+    const activeMonths = getActiveMonths();
+    setAvailableMonths(activeMonths);
+
+    // Set selected month from URL or use current month
+    if (month) {
+      setSelectedMonth(month);
+    } else {
+      setSelectedMonth(activeMonths[0]?.value || '');
+    }
+  }, [month]);
+
+  // Parse month label
+  const getMonthLabel = (monthValue: string) => {
+    try {
+      const date = parseMonthValue(monthValue);
+      return date.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
+    } catch {
+      return monthValue;
+    }
+  };
 
   useEffect(() => {
     // Unwrap params Promise
@@ -114,7 +137,7 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
           className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to {monthLabel}
+          Back to {getMonthLabel(month)}
         </Link>
       )}
 
@@ -173,25 +196,27 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
         </div>
       </div>
 
-      {/* Requests - Active/Archive Tabs */}
+      {/* Requests - Month Tabs */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 overflow-x-auto pb-2">
+            {availableMonths.map((month) => (
+              <button
+                key={month.value}
+                onClick={() => setSelectedMonth(month.value)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                  selectedMonth === month.value
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                {month.label}
+              </button>
+            ))}
             <button
-              onClick={() => setRequestsTab('active')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                requestsTab === 'active'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-              }`}
-            >
-              <Clock className="w-4 h-4" />
-              Active
-            </button>
-            <button
-              onClick={() => setRequestsTab('archive')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                requestsTab === 'archive'
+              onClick={() => setSelectedMonth('archive')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                selectedMonth === 'archive'
                   ? 'bg-purple-600 text-white'
                   : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
               }`}
@@ -207,9 +232,10 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
         </div>
         <RequestsTable
           marketplaceId={marketplace.id}
+          month={selectedMonth !== 'archive' ? selectedMonth : undefined}
           refreshTrigger={refreshTrigger}
           onDelete={() => setRefreshTrigger(prev => prev + 1)}
-          archiveMode={requestsTab === 'archive'}
+          archiveMode={selectedMonth === 'archive'}
         />
       </div>
     </div>
