@@ -28,9 +28,11 @@ export default function DashboardPage() {
   const availableMonths = getActiveMonths();
   const allMonths = getAllMonthsForViewing(6);
 
-  // Archived months: all months that are NOT in active months
-  const activeMonthValues = availableMonths.map(m => m.value);
-  const archivedMonths = allMonths.filter(m => !activeMonthValues.includes(m.value));
+  // Archived months: only months BEFORE the oldest active month, maximum 6 months
+  const oldestActiveMonth = availableMonths[0].value;
+  const archivedMonths = allMonths
+    .filter(m => m.value < oldestActiveMonth)
+    .slice(0, 6);
 
   useEffect(() => {
     async function fetchStats() {
