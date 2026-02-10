@@ -151,19 +151,35 @@ export default function ManufacturerCategoryPage() {
       const allSuccess = responses.every(r => r.ok);
 
       if (allSuccess) {
-        // Update local state for all requests in the group
+        // Get the updated data from the first response (since all requests in group are identical)
+        const firstResponse = responses[0];
+        const updatedData = await firstResponse.json();
+        const updatedRequest = updatedData.data;
+
+        // Update local state for all requests in the group with actual backend response
         setRequests((prev) =>
           prev.map((r) =>
             group.requestIds.includes(r.id)
               ? {
                   ...r,
-                  producedQuantity: values.producedQuantity,
-                  manufacturerNotes: values.manufacturerNotes,
-                  status: values.status,
+                  producedQuantity: updatedRequest.producedQuantity,
+                  manufacturerNotes: updatedRequest.manufacturerNotes,
+                  status: updatedRequest.status,
                 }
               : r
           )
         );
+
+        // Update editValues to reflect the actual saved values
+        setEditValues(prevValues => ({
+          ...prevValues,
+          [iwasku]: {
+            ...prevValues[iwasku],
+            producedQuantity: updatedRequest.producedQuantity,
+            manufacturerNotes: updatedRequest.manufacturerNotes,
+            status: updatedRequest.status,
+          }
+        }));
       } else {
         alert('Failed to save some changes');
       }
