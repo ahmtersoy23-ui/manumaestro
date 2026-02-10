@@ -139,11 +139,17 @@ export default function ManufacturerCategoryPage() {
       const values = editValues[iwasku];
 
       // Update all requests in this group
-      const updatePromises = group.requestIds.map(requestId =>
-        fetch(`/api/manufacturer/requests/${requestId}`, {
+      // IMPORTANT: Each request should get its own quantity when completed
+      const updatePromises = group.requests.map(request =>
+        fetch(`/api/manufacturer/requests/${request.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(values),
+          body: JSON.stringify({
+            status: values.status,
+            manufacturerNotes: values.manufacturerNotes,
+            // Don't send producedQuantity - let backend auto-complete based on each request's quantity
+            // producedQuantity: values.producedQuantity,
+          }),
         })
       );
 
@@ -151,33 +157,43 @@ export default function ManufacturerCategoryPage() {
       const allSuccess = responses.every(r => r.ok);
 
       if (allSuccess) {
-        // Get the updated data from the first response (since all requests in group are identical)
-        const firstResponse = responses[0];
-        const updatedData = await firstResponse.json();
-        const updatedRequest = updatedData.data;
-
-        // Update local state for all requests in the group with actual backend response
-        setRequests((prev) =>
-          prev.map((r) =>
-            group.requestIds.includes(r.id)
-              ? {
-                  ...r,
-                  producedQuantity: updatedRequest.producedQuantity,
-                  manufacturerNotes: updatedRequest.manufacturerNotes,
-                  status: updatedRequest.status,
-                }
-              : r
-          )
+        // Parse all responses to get each request's updated data
+        const responsesData = await Promise.all(
+          responses.map(r => r.json())
         );
 
-        // Update editValues to reflect the actual saved values
+        // Create a map of requestId -> updated data
+        const updatedDataMap = new Map(
+          responsesData.map(data => [data.data.id, data.data])
+        );
+
+        // Update local state for all requests with their individual backend responses
+        setRequests((prev) =>
+          prev.map((r) => {
+            const updated = updatedDataMap.get(r.id);
+            return updated
+              ? {
+                  ...r,
+                  producedQuantity: updated.producedQuantity,
+                  manufacturerNotes: updated.manufacturerNotes,
+                  status: updated.status,
+                }
+              : r;
+          })
+        );
+
+        // Calculate total produced for this group (sum of all requests)
+        const totalProduced = Array.from(updatedDataMap.values())
+          .reduce((sum, data) => sum + (data.producedQuantity || 0), 0);
+
+        // Update editValues to reflect the aggregate values
         setEditValues(prevValues => ({
           ...prevValues,
           [iwasku]: {
             ...prevValues[iwasku],
-            producedQuantity: updatedRequest.producedQuantity,
-            manufacturerNotes: updatedRequest.manufacturerNotes,
-            status: updatedRequest.status,
+            producedQuantity: totalProduced,
+            manufacturerNotes: values.manufacturerNotes,
+            status: values.status,
           }
         }));
       } else {
@@ -282,15 +298,16 @@ export default function ManufacturerCategoryPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <input
-                        type="number"
-                        min="0"
-                        value={editValues[group.iwasku]?.producedQuantity || 0}
-                        onChange={(e) =>
-                          updateEditValue(group.iwasku, 'producedQuantity', parseInt(e.target.value) || 0)
-                        }
-                        className="w-24 px-2 py-1 text-sm text-gray-900 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                      />
+                      <div className="flex flex-col gap-1">
+                        <span className="text-sm font-semibold text-gray-900">
+                          {editValues[group.iwasku]?.status === 'COMPLETED'
+                            ? group.totalQuantity
+                            : (editValues[group.iwasku]?.producedQuantity || 0)}
+                        </span>
+                        {editValues[group.iwasku]?.status === 'COMPLETED' && (
+                          <span className="text-xs text-green-600">Auto-completed</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <select
