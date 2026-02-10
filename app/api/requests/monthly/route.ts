@@ -127,6 +127,12 @@ export async function GET(request: NextRequest) {
     // Calculate total desi (sum across all requests)
     const totalDesi = requests.reduce((sum, r) => sum + ((r.productSize || 0) * r.quantity), 0);
 
+    // Calculate total produced (sum unique products only, not requests)
+    const totalProduced = Array.from(productMap.values()).reduce(
+      (sum, product) => sum + product.producedQty,
+      0
+    );
+
     // Calculate total produced desi (sum unique products only, not requests)
     const totalProducedDesi = Array.from(productMap.values()).reduce(
       (sum, product) => sum + ((product.productSize || 0) * product.producedQty),
@@ -148,7 +154,7 @@ export async function GET(request: NextRequest) {
       data: {
         totalRequests: stats._count.id || 0,
         totalQuantity: stats._sum.quantity || 0,
-        totalProduced: stats._sum.producedQuantity || 0,
+        totalProduced, // Use calculated value from unique products
         totalDesi,
         totalProducedDesi,
         itemsWithoutSize,
