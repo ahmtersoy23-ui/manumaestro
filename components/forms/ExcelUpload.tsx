@@ -83,12 +83,6 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
   const handleUpload = async () => {
     if (!file) return;
 
-    // Validate: Cannot enter for current month after 5th
-    if (dayOfMonth > 5 && productionMonth === currentMonth) {
-      setMonthError('Cannot enter requests for current month after the 5th. Please select next month.');
-      return;
-    }
-
     setMonthError('');
     setUploading(true);
     setSuccess(false);
