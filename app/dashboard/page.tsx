@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react';
 import { Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import Link from 'next/link';
-import { getAvailableMonths, getAllMonthsForViewing, formatMonthValue } from '@/lib/monthUtils';
+import { getActiveMonths, getAllMonthsForViewing, formatMonthValue } from '@/lib/monthUtils';
 
 interface MonthStats {
   month: string;
@@ -25,7 +25,7 @@ export default function DashboardPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const availableMonths = getAvailableMonths();
+  const availableMonths = getActiveMonths();
   const allMonths = getAllMonthsForViewing(6);
   const archivedMonths = allMonths.filter(m => m.locked);
 

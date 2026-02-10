@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react';
 import { Upload, Download, FileSpreadsheet, X, Calendar, AlertCircle, Check } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { getAvailableMonths, formatMonthDisplay, getCurrentMonth } from '@/lib/monthUtils';
+import { getAvailableMonthsForEntry, formatMonthDisplay, getCurrentMonth } from '@/lib/monthUtils';
 
 interface ExcelUploadProps {
   marketplaceId: string;
@@ -28,22 +28,12 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
   const [monthError, setMonthError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  const availableMonths = getAvailableMonths();
-  const today = new Date();
-  const dayOfMonth = today.getDate();
-  const currentMonth = getCurrentMonth();
+  const availableMonths = getAvailableMonthsForEntry();
 
-  // Auto-select appropriate month on mount
+  // Auto-select first available month on mount
   useEffect(() => {
     if (!productionMonth && availableMonths.length > 0) {
-      if (dayOfMonth > 5) {
-        // After 5th, default to next month
-        const nextMonth = availableMonths.find(m => m.value > currentMonth);
-        setProductionMonth(nextMonth?.value || availableMonths[1]?.value || availableMonths[0].value);
-      } else {
-        // Before or on 5th, default to current month
-        setProductionMonth(currentMonth);
-      }
+      setProductionMonth(availableMonths[0].value);
     }
   }, [availableMonths]);
 
@@ -169,22 +159,6 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
         </div>
       )}
 
-      {/* Production Month Warning */}
-      {dayOfMonth > 5 && (
-        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-semibold text-orange-900 mb-1">
-              Current Month Entry Closed
-            </p>
-            <p className="text-sm text-orange-800">
-              Today is the {dayOfMonth}th. Requests for {formatMonthDisplay(currentMonth)} are now closed.
-              Please select next month.
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Month Selection Error */}
       {monthError && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
@@ -213,11 +187,9 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
               <option
                 key={month.value}
                 value={month.value}
-                disabled={dayOfMonth > 5 && month.value === currentMonth}
                 className="text-gray-900"
               >
                 {month.label}
-                {dayOfMonth > 5 && month.value === currentMonth && ' (Closed)'}
               </option>
             ))}
           </select>
