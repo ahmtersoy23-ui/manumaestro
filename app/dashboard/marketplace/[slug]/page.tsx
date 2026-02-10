@@ -160,8 +160,9 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
         csvRows.push(row.join(','));
       });
 
-      // Download CSV
-      const csvContent = csvRows.join('\n');
+      // Download CSV with UTF-8 BOM for proper Turkish character support
+      const BOM = '\uFEFF';
+      const csvContent = BOM + csvRows.join('\n');
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
