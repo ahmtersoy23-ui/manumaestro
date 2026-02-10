@@ -30,9 +30,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Parse production month to set request date
-    const [year, month] = productionMonth.split('-').map(Number);
-    const requestDate = new Date(year, month - 1, 1); // First day of the month
+    // requestDate is always today (entry date)
+    const requestDate = new Date();
 
     // Get admin user
     const adminUser = await prisma.user.findFirst({
@@ -78,6 +77,7 @@ export async function POST(request: NextRequest) {
             marketplaceId,
             quantity: item.quantity,
             requestDate,
+            productionMonth, // YYYY-MM format (e.g., "2026-03")
             notes: item.notes || null,
             entryType: EntryType.EXCEL,
             status: RequestStatus.REQUESTED,
