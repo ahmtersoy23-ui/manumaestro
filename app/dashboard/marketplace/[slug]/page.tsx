@@ -30,6 +30,7 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
   const [loading, setLoading] = useState(true);
   const [slug, setSlug] = useState<string>('');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [exporting, setExporting] = useState(false);
 
   // Month tabs - get active months
   const [availableMonths, setAvailableMonths] = useState<Array<{ value: string; label: string; locked: boolean }>>([]);
@@ -128,6 +129,58 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
     );
   }
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const archiveParam = selectedMonth === 'archive' ? '&archiveMode=true' : '';
+      const monthParam = selectedMonth !== 'archive' ? `&month=${selectedMonth}` : '';
+      const res = await fetch(`/api/requests?marketplaceId=${marketplace.id}&limit=1000${archiveParam}${monthParam}`);
+      const data = await res.json();
+
+      if (!data.success || !data.data.length) {
+        alert('No data to export');
+        return;
+      }
+
+      // Convert to CSV
+      const headers = ['Date', 'IWASKU', 'Product Name', 'Category', 'Quantity', 'Production Month', 'Status', 'Notes'];
+      const csvRows = [headers.join(',')];
+
+      data.data.forEach((request: any) => {
+        const row = [
+          new Date(request.requestDate).toLocaleDateString('tr-TR'),
+          request.iwasku,
+          `"${request.productName.replace(/"/g, '""')}"`,
+          request.productCategory,
+          request.quantity,
+          request.productionMonth,
+          request.status,
+          request.notes ? `"${request.notes.replace(/"/g, '""')}"` : '',
+        ];
+        csvRows.push(row.join(','));
+      });
+
+      // Download CSV
+      const csvContent = csvRows.join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      const filename = `${marketplace.name.replace(/\s+/g, '_')}_${selectedMonth === 'archive' ? 'archive' : selectedMonth}_${new Date().toISOString().split('T')[0]}.csv`;
+
+      link.setAttribute('href', url);
+      link.setAttribute('download', filename);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('Failed to export data');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
       {/* Back Button */}
@@ -225,9 +278,13 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
               Archive
             </button>
           </div>
-          <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <Download className="w-4 h-4" />
-            Export
+            {exporting ? 'Exporting...' : 'Export'}
           </button>
         </div>
         <RequestsTable
