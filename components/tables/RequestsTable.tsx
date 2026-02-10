@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 interface RequestsTableProps {
   marketplaceId: string;
+  month?: string; // Filter by specific month (YYYY-MM format)
   refreshTrigger?: number;
   onDelete?: () => void;
   archiveMode?: boolean;
@@ -46,7 +47,7 @@ const statusLabels = {
   CANCELLED: 'Cancelled',
 };
 
-export function RequestsTable({ marketplaceId, refreshTrigger, onDelete, archiveMode = false }: RequestsTableProps) {
+export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, archiveMode = false }: RequestsTableProps) {
   const { role, hasRole } = useAuth();
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,7 +60,8 @@ export function RequestsTable({ marketplaceId, refreshTrigger, onDelete, archive
       setLoading(true);
       try {
         const archiveParam = archiveMode ? '&archiveMode=true' : '';
-        const res = await fetch(`/api/requests?marketplaceId=${marketplaceId}&limit=100${archiveParam}`);
+        const monthParam = month && !archiveMode ? `&month=${month}` : '';
+        const res = await fetch(`/api/requests?marketplaceId=${marketplaceId}&limit=100${archiveParam}${monthParam}`);
         const data = await res.json();
 
         if (data.success) {
@@ -74,7 +76,7 @@ export function RequestsTable({ marketplaceId, refreshTrigger, onDelete, archive
 
     fetchRequests();
     setSelectedIds(new Set()); // Clear selection on refresh
-  }, [marketplaceId, refreshTrigger, archiveMode]);
+  }, [marketplaceId, month, refreshTrigger, archiveMode]);
 
   const handleToggleSelect = (id: string) => {
     const newSelected = new Set(selectedIds);
