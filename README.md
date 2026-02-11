@@ -181,6 +181,17 @@ NEXT_PUBLIC_APP_NAME="ManuMaestro"
 
 ---
 
+## 📚 Documentation
+
+- **[API Documentation](docs/API.md)** - Complete API reference with examples
+- **[Database Management](docs/DATABASE.md)** - Migration guide and best practices
+- **[Performance Monitoring](docs/MONITORING.md)** - Error tracking and observability guide
+- **[Audit Report](AUDIT_REPORT.md)** - Technical audit findings
+- **[Action Plan](ACTION_PLAN.md)** - Sprint-based improvement roadmap
+- **[Priority Summary](PRIORITY_SUMMARY.md)** - Quick reference for priorities
+
+---
+
 ## 📝 Usage
 
 ### Adding a New Marketplace
@@ -215,12 +226,21 @@ NEXT_PUBLIC_APP_NAME="ManuMaestro"
 
 ### Key Commands
 ```bash
-npm run dev          # Start dev server
-npm run build        # Production build
-npm run start        # Start production server
-npm run lint         # Run ESLint
-npx prisma studio    # Open database GUI
-npx prisma migrate   # Run migrations
+# Development
+npm run dev                  # Start dev server
+npm run build                # Production build
+npm run start                # Start production server
+npm run lint                 # Run ESLint
+
+# Testing
+npm test                     # Run tests
+npm run test:ui              # Run tests with UI
+npm run test:coverage        # Generate coverage report
+
+# Database
+npx prisma studio            # Open database GUI
+npx prisma migrate dev       # Run migrations
+npx prisma db seed           # Seed database
 ```
 
 ### Adding New Features
