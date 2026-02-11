@@ -5,6 +5,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('Manufacturer Category API');
 import { formatMonthValue } from '@/lib/monthUtils';
 
 export async function GET(
@@ -63,7 +66,7 @@ export async function GET(
       data: formattedRequests,
     });
   } catch (error) {
-    console.error('Category requests fetch error:', error);
+    logger.error('Category requests fetch error:', error);
     return NextResponse.json(
       {
         success: false,

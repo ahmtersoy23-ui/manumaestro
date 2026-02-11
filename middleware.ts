@@ -1,15 +1,20 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('SSO Middleware');
+const SSO_URL = process.env.SSO_URL || 'https://apps.iwa.web.tr';
+const SSO_APP_CODE = process.env.SSO_APP_CODE || 'manumaestro';
 
 export async function middleware(request: NextRequest) {
-  console.log('[SSO Middleware] Request:', request.nextUrl.pathname);
+  logger.debug('Request:', request.nextUrl.pathname);
 
   // Get token from cookie or URL parameter
   const tokenFromCookie = request.cookies.get('sso_access_token')?.value;
   const tokenFromUrl = request.nextUrl.searchParams.get('token');
 
-  console.log('[SSO Middleware] Token from cookie:', tokenFromCookie ? 'exists' : 'none');
-  console.log('[SSO Middleware] Token from URL:', tokenFromUrl ? 'exists' : 'none');
+  logger.debug('Token from cookie:', tokenFromCookie ? 'exists' : 'none');
+  logger.debug('Token from URL:', tokenFromUrl ? 'exists' : 'none');
 
   // If token in URL, save to cookie and redirect to clean URL
   if (tokenFromUrl) {
@@ -27,34 +32,34 @@ export async function middleware(request: NextRequest) {
 
   // No token - redirect to SSO
   if (!token) {
-    return NextResponse.redirect(new URL('https://apps.iwa.web.tr', request.url));
+    return NextResponse.redirect(new URL(SSO_URL, request.url));
   }
 
   try {
-    console.log('[SSO Middleware] Verifying token with SSO backend...');
+    logger.debug('Verifying token with SSO backend...');
     // Verify token with SSO
     const response = await fetch('https://apps.iwa.web.tr/api/auth/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         token,
-        app_code: 'manumaestro'
+        app_code: SSO_APP_CODE
       })
     });
 
-    console.log('[SSO Middleware] SSO response status:', response.status);
+    logger.debug('SSO response status:', response.status);
     const data = await response.json();
-    console.log('[SSO Middleware] SSO response:', JSON.stringify(data));
+    logger.debug('SSO response:', JSON.stringify(data));
 
     if (!data.success) {
-      console.log('[SSO Middleware] Token invalid, redirecting to SSO');
+      logger.debug('Token invalid, redirecting to SSO');
       // Invalid token - clear cookie and redirect to SSO
-      const redirectResponse = NextResponse.redirect(new URL('https://apps.iwa.web.tr', request.url));
+      const redirectResponse = NextResponse.redirect(new URL(SSO_URL, request.url));
       redirectResponse.cookies.delete('sso_access_token');
       return redirectResponse;
     }
 
-    console.log('[SSO Middleware] Token valid, allowing access');
+    logger.debug('Token valid, allowing access');
 
     // Token valid - add user info to headers
     const requestHeaders = new Headers(request.headers);
@@ -69,9 +74,9 @@ export async function middleware(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('SSO verification error:', error);
+    logger.error('SSO verification error:', error);
     // On error, redirect to SSO
-    const redirectResponse = NextResponse.redirect(new URL('https://apps.iwa.web.tr', request.url));
+    const redirectResponse = NextResponse.redirect(new URL(SSO_URL, request.url));
     redirectResponse.cookies.delete('sso_access_token');
     return redirectResponse;
   }

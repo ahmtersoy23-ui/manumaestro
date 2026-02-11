@@ -7,6 +7,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { logAction } from '@/lib/auditLog';
+import { createLogger } from '@/lib/logger';
+import { MarketplaceCreateSchema, formatValidationError } from '@/lib/validation/schemas';
+
+const logger = createLogger('Marketplaces API');
 
 export async function GET() {
   try {
@@ -24,7 +28,7 @@ export async function GET() {
       data: marketplaces,
     });
   } catch (error) {
-    console.error('Fetch marketplaces error:', error);
+    logger.error('Fetch marketplaces error:', error);
     return NextResponse.json(
       {
         success: false,
@@ -38,15 +42,21 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, region, marketplaceType } = body;
 
-    // Validation
-    if (!name || !region) {
+    // Validate with Zod
+    const validation = MarketplaceCreateSchema.safeParse(body);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'Name and region are required' },
+        {
+          success: false,
+          error: 'Validation failed',
+          details: formatValidationError(validation.error),
+        },
         { status: 400 }
       );
     }
+
+    const { name, region, marketplaceType } = validation.data;
 
     // Get admin user
     const adminUser = await prisma.user.findFirst({
@@ -102,7 +112,7 @@ export async function POST(request: NextRequest) {
       data: marketplace,
     });
   } catch (error) {
-    console.error('Create marketplace error:', error);
+    logger.error('Create marketplace error:', error);
     return NextResponse.json(
       {
         success: false,

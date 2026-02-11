@@ -7,6 +7,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { EntryType, RequestStatus } from '@prisma/client';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('Requests API');
 
 export async function POST(request: NextRequest) {
   try {
@@ -64,7 +67,7 @@ export async function POST(request: NextRequest) {
       warning: !productSize ? `Product ${iwasku} is missing desi (size) data. Please update in PriceLab.` : undefined,
     });
   } catch (error) {
-    console.error('Create request error:', error);
+    logger.error('Create request error:', error);
     return NextResponse.json(
       {
         success: false,
@@ -142,7 +145,7 @@ export async function GET(request: NextRequest) {
       count: requests.length,
     });
   } catch (error) {
-    console.error('Fetch requests error:', error);
+    logger.error('Fetch requests error:', error);
     return NextResponse.json(
       {
         success: false,

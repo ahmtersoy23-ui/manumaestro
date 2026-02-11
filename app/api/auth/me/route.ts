@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { createLogger } from '@/lib/logger';
+const logger = createLogger('Auth Me API');
+
 const SSO_VERIFY_URL = 'https://apps.iwa.web.tr/api/auth/verify';
 const APP_CODE = 'manumaestro';
 
@@ -52,7 +55,7 @@ export async function GET(request: NextRequest) {
       role: data.data.role || 'viewer',
     });
   } catch (error) {
-    console.error('Error in /api/auth/me:', error);
+    logger.error('Error in /api/auth/me:', error);
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }

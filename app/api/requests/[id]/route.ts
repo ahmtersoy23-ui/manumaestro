@@ -5,6 +5,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('Request API');
 
 export async function DELETE(
   request: NextRequest,
@@ -30,7 +33,7 @@ export async function DELETE(
       message: 'Request deleted successfully',
     });
   } catch (error) {
-    console.error('Delete request error:', error);
+    logger.error('Delete request error:', error);
 
     // Check if it's a "not found" error
     if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {

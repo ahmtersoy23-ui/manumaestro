@@ -5,6 +5,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('Audit Logs API');
 
 export async function GET(request: NextRequest) {
   try {
@@ -58,7 +61,7 @@ export async function GET(request: NextRequest) {
       data: logs,
     });
   } catch (error) {
-    console.error('Fetch audit logs error:', error);
+    logger.error('Fetch audit logs error:', error);
     return NextResponse.json(
       {
         success: false,

@@ -4,9 +4,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { createLogger } from '@/lib/logger';
 
-const SSO_URL = 'https://apps.iwa.web.tr';
-const APP_CODE = 'manumaestro';
+const logger = createLogger('SSO Auth Middleware');
+const SSO_URL = process.env.SSO_URL || 'https://apps.iwa.web.tr';
+const APP_CODE = process.env.SSO_APP_CODE || 'manumaestro';
 
 export interface AuthenticatedRequest extends NextRequest {
   user?: {
@@ -36,7 +38,7 @@ async function verifySSOToken(token: string) {
     const data = await response.json();
     return data.success ? data.data : null;
   } catch (error) {
-    console.error('SSO verification error:', error);
+    logger.error('SSO verification error:', error);
     return null;
   }
 }

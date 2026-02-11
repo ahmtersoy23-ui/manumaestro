@@ -5,6 +5,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { queryProductDb } from '@/lib/db/prisma';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('Products API');
 
 export async function GET(
   request: NextRequest,
@@ -44,7 +47,7 @@ export async function GET(
       data: products[0],
     });
   } catch (error) {
-    console.error('Product fetch error:', error);
+    logger.error('Product fetch error:', error);
     return NextResponse.json(
       {
         success: false,

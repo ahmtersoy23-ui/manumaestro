@@ -5,6 +5,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { queryProductDb } from '@/lib/db/prisma';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('Products Search API');
 
 export async function GET(request: NextRequest) {
   try {
@@ -38,7 +41,7 @@ export async function GET(request: NextRequest) {
       data: products,
     });
   } catch (error) {
-    console.error('Product search error:', error);
+    logger.error('Product search error:', error);
     return NextResponse.json(
       {
         success: false,

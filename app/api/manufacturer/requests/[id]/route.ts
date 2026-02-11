@@ -5,6 +5,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
+import { createLogger } from '@/lib/logger';
+import { ManufacturerUpdateSchema, UUIDParamSchema, formatValidationError } from '@/lib/validation/schemas';
+
+const logger = createLogger('Manufacturer Requests API');
 
 export async function PATCH(
   request: NextRequest,
@@ -12,16 +16,35 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const body = await request.json();
 
-    const { producedQuantity, manufacturerNotes, status } = body;
-
-    if (!id) {
+    // Validate ID format
+    const idValidation = UUIDParamSchema.safeParse(id);
+    if (!idValidation.success) {
       return NextResponse.json(
-        { error: 'Request ID is required' },
+        {
+          success: false,
+          error: 'Invalid request ID format',
+        },
         { status: 400 }
       );
     }
+
+    const body = await request.json();
+
+    // Validate body
+    const bodyValidation = ManufacturerUpdateSchema.safeParse(body);
+    if (!bodyValidation.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Validation failed',
+          details: formatValidationError(bodyValidation.error),
+        },
+        { status: 400 }
+      );
+    }
+
+    const { producedQuantity, manufacturerNotes, status } = bodyValidation.data;
 
     // Fetch the request to get quantity
     const existingRequest = await prisma.productionRequest.findUnique({
@@ -80,7 +103,7 @@ export async function PATCH(
       data: updated,
     });
   } catch (error) {
-    console.error('Manufacturer request update error:', error);
+    logger.error('Manufacturer request update error:', error);
     return NextResponse.json(
       {
         success: false,

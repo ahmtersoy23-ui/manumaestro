@@ -6,6 +6,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { EntryType, RequestStatus } from '@prisma/client';
+import { createLogger } from '@/lib/logger';
+import { BulkRequestSchema, formatValidationError } from '@/lib/validation/schemas';
+
+const logger = createLogger('Bulk Requests API');
 
 interface BulkRequestItem {
   iwasku: string;
@@ -16,19 +20,22 @@ interface BulkRequestItem {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { marketplaceId, productionMonth, requests } = body as {
-      marketplaceId: string;
-      productionMonth: string;
-      requests: BulkRequestItem[];
-    };
 
-    // Validation
-    if (!marketplaceId || !productionMonth || !requests || requests.length === 0) {
+    // Validate input with Zod
+    const validation = BulkRequestSchema.safeParse(body);
+
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        {
+          success: false,
+          error: 'Validation failed',
+          details: formatValidationError(validation.error),
+        },
         { status: 400 }
       );
     }
+
+    const { marketplaceId, productionMonth, requests } = validation.data;
 
     // requestDate is always today (entry date)
     const requestDate = new Date();
@@ -87,7 +94,7 @@ export async function POST(request: NextRequest) {
 
         createdRequests.push(productionRequest);
       } catch (error) {
-        console.error(`Failed to create request for ${item.iwasku}:`, error);
+        logger.error(`Failed to create request for ${item.iwasku}:`, error);
         errors.push(`Failed to create request for ${item.iwasku}`);
       }
     }
@@ -101,7 +108,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Bulk create request error:', error);
+    logger.error('Bulk create request error:', error);
     return NextResponse.json(
       {
         success: false,

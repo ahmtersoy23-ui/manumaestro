@@ -5,6 +5,9 @@
 
 import { prisma } from '@/lib/db/prisma';
 import { AuditAction } from '@prisma/client';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('Audit Log');
 
 interface LogActionParams {
   userId: string;
@@ -35,6 +38,6 @@ export async function logAction(params: LogActionParams) {
     });
   } catch (error) {
     // Don't throw errors for logging failures - just log them
-    console.error('Failed to create audit log:', error);
+    logger.error('Failed to create audit log:', error);
   }
 }

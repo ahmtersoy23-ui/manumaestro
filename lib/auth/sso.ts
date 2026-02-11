@@ -3,8 +3,11 @@
  * Handles token management and verification with IWA Apps SSO
  */
 
-const SSO_URL = 'https://apps.iwa.web.tr';
-const APP_CODE = 'manumaestro';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('SSO');
+const SSO_URL = process.env.NEXT_PUBLIC_SSO_URL || 'https://apps.iwa.web.tr';
+const APP_CODE = process.env.NEXT_PUBLIC_SSO_APP_CODE || 'manumaestro';
 
 export interface SSOUser {
   id: string;
@@ -62,7 +65,7 @@ export const verifyToken = async (token: string): Promise<SSOVerifyResponse> => 
     const data = await response.json();
     return data;
   } catch (error) {
-    console.error('Token verification error:', error);
+    logger.error('Token verification error:', error);
     return { success: false, error: 'Verification failed' };
   }
 };
@@ -95,7 +98,7 @@ export const logout = async () => {
         },
       });
     } catch (error) {
-      console.error('Logout error:', error);
+      logger.error('Logout error:', error);
     }
   }
 

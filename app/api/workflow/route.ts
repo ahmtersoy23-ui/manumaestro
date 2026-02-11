@@ -5,6 +5,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('Workflow API');
 import { WorkflowStage } from '@prisma/client';
 import { logAction } from '@/lib/auditLog';
 
@@ -79,7 +82,7 @@ export async function PATCH(request: NextRequest) {
       data: updatedRequest,
     });
   } catch (error) {
-    console.error('Update workflow stage error:', error);
+    logger.error('Update workflow stage error:', error);
     return NextResponse.json(
       {
         success: false,
