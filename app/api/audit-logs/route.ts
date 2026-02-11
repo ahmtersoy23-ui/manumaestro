@@ -6,11 +6,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { createLogger } from '@/lib/logger';
+import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 
 const logger = createLogger('Audit Logs API');
 
 export async function GET(request: NextRequest) {
   try {
+    // Rate limiting: 200 requests per minute for read operations
+    const rateLimitResult = await rateLimiters.read.check(request, 'audit-logs');
+    if (!rateLimitResult.success) {
+      return rateLimitExceededResponse(rateLimitResult);
+    }
+
     // Get user from SSO headers (set by middleware)
     const userRole = request.headers.get('x-user-role');
     const userEmail = request.headers.get('x-user-email');

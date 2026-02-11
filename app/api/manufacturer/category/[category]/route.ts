@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { createLogger } from '@/lib/logger';
+import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 
 const logger = createLogger('Manufacturer Category API');
 import { formatMonthValue } from '@/lib/monthUtils';
@@ -15,6 +16,12 @@ export async function GET(
   { params }: { params: Promise<{ category: string }> }
 ) {
   try {
+    // Rate limiting: 200 requests per minute for read operations
+    const rateLimitResult = await rateLimiters.read.check(request, 'category-requests');
+    if (!rateLimitResult.success) {
+      return rateLimitExceededResponse(rateLimitResult);
+    }
+
     const { category } = await params;
     const searchParams = request.nextUrl.searchParams;
     const monthParam = searchParams.get('month');

@@ -8,11 +8,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { EntryType, RequestStatus } from '@prisma/client';
 import { createLogger } from '@/lib/logger';
+import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 
 const logger = createLogger('Requests API');
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting: 100 requests per minute for write operations
+    const rateLimitResult = await rateLimiters.write.check(request, 'create-request');
+    if (!rateLimitResult.success) {
+      return rateLimitExceededResponse(rateLimitResult);
+    }
+
     const body = await request.json();
     const { iwasku, productName, productCategory, productSize, marketplaceId, quantity, productionMonth, notes } = body;
 
@@ -79,6 +86,12 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
+    // Rate limiting: 200 requests per minute for read operations
+    const rateLimitResult = await rateLimiters.read.check(request, 'list-requests');
+    if (!rateLimitResult.success) {
+      return rateLimitExceededResponse(rateLimitResult);
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const marketplaceId = searchParams.get('marketplaceId');
     const status = searchParams.get('status');

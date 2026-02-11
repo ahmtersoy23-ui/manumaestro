@@ -10,9 +10,16 @@ import { logAction } from '@/lib/auditLog';
 import { MarketplaceCreateSchema, formatValidationError } from '@/lib/validation/schemas';
 import { successResponse, createdResponse, errorResponse } from '@/lib/api/response';
 import { ValidationError, InternalServerError, NotFoundError } from '@/lib/api/errors';
+import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // Rate limiting: 200 requests per minute for read operations
+    const rateLimitResult = await rateLimiters.read.check(request, 'list-marketplaces');
+    if (!rateLimitResult.success) {
+      return rateLimitExceededResponse(rateLimitResult);
+    }
+
     const marketplaces = await prisma.marketplace.findMany({
       where: {
         isActive: true,
@@ -30,6 +37,12 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting: 100 requests per minute for write operations
+    const rateLimitResult = await rateLimiters.write.check(request, 'create-marketplace');
+    if (!rateLimitResult.success) {
+      return rateLimitExceededResponse(rateLimitResult);
+    }
+
     const body = await request.json();
 
     // Validate with Zod

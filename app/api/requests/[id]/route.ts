@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { createLogger } from '@/lib/logger';
+import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 
 const logger = createLogger('Request API');
 
@@ -14,6 +15,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Rate limiting: 100 requests per minute for write operations
+    const rateLimitResult = await rateLimiters.write.check(request, 'delete-request');
+    if (!rateLimitResult.success) {
+      return rateLimitExceededResponse(rateLimitResult);
+    }
+
     const { id } = await params;
 
     if (!id) {

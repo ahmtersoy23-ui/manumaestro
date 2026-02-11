@@ -7,9 +7,16 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { successResponse, errorResponse } from '@/lib/api/response';
 import { ValidationError } from '@/lib/api/errors';
+import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 
 export async function GET(request: NextRequest) {
   try {
+    // Rate limiting: 200 requests per minute for read operations
+    const rateLimitResult = await rateLimiters.read.check(request, 'monthly-stats');
+    if (!rateLimitResult.success) {
+      return rateLimitExceededResponse(rateLimitResult);
+    }
+
     const { searchParams } = new URL(request.url);
     const month = searchParams.get('month');
 

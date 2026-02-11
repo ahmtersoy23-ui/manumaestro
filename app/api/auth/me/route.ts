@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-
 import { createLogger } from '@/lib/logger';
+import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 const logger = createLogger('Auth Me API');
 
 const SSO_VERIFY_URL = 'https://apps.iwa.web.tr/api/auth/verify';
@@ -12,6 +12,12 @@ const APP_CODE = 'manumaestro';
  */
 export async function GET(request: NextRequest) {
   try {
+    // Rate limiting: 200 requests per minute for read operations
+    const rateLimitResult = await rateLimiters.read.check(request, 'auth-me');
+    if (!rateLimitResult.success) {
+      return rateLimitExceededResponse(rateLimitResult);
+    }
+
     // Get token from cookie
     const token = request.cookies.get('sso_access_token')?.value;
 

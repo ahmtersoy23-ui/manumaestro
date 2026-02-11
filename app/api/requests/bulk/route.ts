@@ -8,6 +8,7 @@ import { prisma } from '@/lib/db/prisma';
 import { EntryType, RequestStatus } from '@prisma/client';
 import { createLogger } from '@/lib/logger';
 import { BulkRequestSchema, formatValidationError } from '@/lib/validation/schemas';
+import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 
 const logger = createLogger('Bulk Requests API');
 
@@ -19,6 +20,12 @@ interface BulkRequestItem {
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting: 10 requests per minute for bulk operations
+    const rateLimitResult = await rateLimiters.bulk.check(request, 'bulk-upload');
+    if (!rateLimitResult.success) {
+      return rateLimitExceededResponse(rateLimitResult);
+    }
+
     const body = await request.json();
 
     // Validate input with Zod

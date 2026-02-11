@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { createLogger } from '@/lib/logger';
+import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 
 const logger = createLogger('Workflow API');
 import { WorkflowStage } from '@prisma/client';
@@ -13,6 +14,12 @@ import { logAction } from '@/lib/auditLog';
 
 export async function PATCH(request: NextRequest) {
   try {
+    // Rate limiting: 100 requests per minute for write operations
+    const rateLimitResult = await rateLimiters.write.check(request, 'update-workflow');
+    if (!rateLimitResult.success) {
+      return rateLimitExceededResponse(rateLimitResult);
+    }
+
     const body = await request.json();
     const { requestId, workflowStage } = body;
 
