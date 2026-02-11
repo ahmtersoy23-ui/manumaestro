@@ -31,9 +31,22 @@ export default function ManufacturerPage() {
     setCategories(['Furniture', 'Lighting', 'Textiles', 'Outdoor']);
   }, []);
 
-  const handleExport = () => {
-    // Excel export functionality - to be implemented based on filtered data
-    alert('Excel export will be available in the next iteration. For now, use category-specific pages.');
+  const handleExport = async () => {
+    try {
+      // Build export URL with filters
+      const params = new URLSearchParams();
+
+      if (selectedCategory) {
+        params.append('category', selectedCategory);
+      }
+
+      // Trigger download
+      const url = `/api/export/manufacturer?${params.toString()}`;
+      window.location.href = url;
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Excel export failed. Please try again.');
+    }
   };
 
   return (
