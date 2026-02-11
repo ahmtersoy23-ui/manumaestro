@@ -11,15 +11,14 @@ const logger = createLogger('Audit Logs API');
 
 export async function GET(request: NextRequest) {
   try {
-    // TODO: Get actual user from session/auth
-    // For now, check if admin user exists (temporary)
-    const adminUser = await prisma.user.findFirst({
-      where: { role: 'ADMIN' },
-    });
+    // Get user from SSO headers (set by middleware)
+    const userRole = request.headers.get('x-user-role');
+    const userEmail = request.headers.get('x-user-email');
 
-    if (!adminUser) {
+    // Check if user is admin
+    if (userRole !== 'admin') {
       return NextResponse.json(
-        { error: 'Unauthorized - Admin access required' },
+        { error: 'Forbidden - Admin access required' },
         { status: 403 }
       );
     }

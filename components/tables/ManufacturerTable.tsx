@@ -59,8 +59,8 @@ export function ManufacturerTable({ selectedCategory }: ManufacturerTableProps) 
   const [data, setData] = useState<ProductData[]>([]);
 
   useEffect(() => {
-    // TODO: Fetch from API
-    // For now, use mock data with filtering
+    // Note: This table shows overview/mock data
+    // Real manufacturer workflow is in /dashboard/manufacturer/[category]
     let filteredData = mockData;
     if (selectedCategory) {
       filteredData = mockData.filter((item) => item.category === selectedCategory);

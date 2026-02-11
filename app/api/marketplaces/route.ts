@@ -4,13 +4,12 @@
  * POST: Create new custom marketplace
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { logAction } from '@/lib/auditLog';
-import { createLogger } from '@/lib/logger';
 import { MarketplaceCreateSchema, formatValidationError } from '@/lib/validation/schemas';
-
-const logger = createLogger('Marketplaces API');
+import { successResponse, createdResponse, errorResponse } from '@/lib/api/response';
+import { ValidationError, InternalServerError, NotFoundError } from '@/lib/api/errors';
 
 export async function GET() {
   try {
@@ -23,19 +22,9 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      data: marketplaces,
-    });
+    return successResponse(marketplaces);
   } catch (error) {
-    logger.error('Fetch marketplaces error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to fetch marketplaces',
-      },
-      { status: 500 }
-    );
+    return errorResponse(error, 'Failed to fetch marketplaces');
   }
 }
 
@@ -46,14 +35,7 @@ export async function POST(request: NextRequest) {
     // Validate with Zod
     const validation = MarketplaceCreateSchema.safeParse(body);
     if (!validation.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Validation failed',
-          details: formatValidationError(validation.error),
-        },
-        { status: 400 }
-      );
+      throw new ValidationError('Validation failed', formatValidationError(validation.error));
     }
 
     const { name, region, marketplaceType } = validation.data;
@@ -64,10 +46,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!adminUser) {
-      return NextResponse.json(
-        { error: 'No admin user found' },
-        { status: 500 }
-      );
+      throw new InternalServerError('No admin user found. Please run database seed.');
     }
 
     // Generate unique code for custom marketplace
@@ -107,19 +86,8 @@ export async function POST(request: NextRequest) {
       metadata: { code, region, marketplaceType },
     });
 
-    return NextResponse.json({
-      success: true,
-      data: marketplace,
-    });
+    return createdResponse(marketplace);
   } catch (error) {
-    logger.error('Create marketplace error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to create marketplace',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    return errorResponse(error, 'Failed to create marketplace');
   }
 }

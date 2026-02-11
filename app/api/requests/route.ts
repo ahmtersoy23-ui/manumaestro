@@ -27,16 +27,14 @@ export async function POST(request: NextRequest) {
     // requestDate is always today (entry date)
     const requestDate = new Date();
 
-    // TODO: Get actual user ID from session/SSO
-    // For now, get the admin user
-    const adminUser = await prisma.user.findFirst({
-      where: { role: 'ADMIN' },
-    });
+    // Get user from SSO headers (set by middleware)
+    const userId = request.headers.get('x-user-id');
+    const userEmail = request.headers.get('x-user-email');
 
-    if (!adminUser) {
+    if (!userId) {
       return NextResponse.json(
-        { error: 'No admin user found. Please run database seed.' },
-        { status: 500 }
+        { error: 'Unauthorized - User session not found' },
+        { status: 401 }
       );
     }
 
@@ -54,7 +52,7 @@ export async function POST(request: NextRequest) {
         notes,
         entryType: EntryType.MANUAL,
         status: RequestStatus.REQUESTED,
-        enteredById: adminUser.id,
+        enteredById: userId,
       },
       include: {
         marketplace: true,

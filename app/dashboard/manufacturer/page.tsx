@@ -26,14 +26,14 @@ export default function ManufacturerPage() {
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
 
   useEffect(() => {
-    // TODO: Fetch stats from API
-    // TODO: Fetch available categories from API
+    // Note: This is an overview page. Actual manufacturer work happens in /manufacturer/[category]
+    // Categories will be fetched dynamically in future iterations
     setCategories(['Furniture', 'Lighting', 'Textiles', 'Outdoor']);
   }, []);
 
   const handleExport = () => {
-    // TODO: Implement Excel export
-    console.log('Exporting to Excel...');
+    // Excel export functionality - to be implemented based on filtered data
+    alert('Excel export will be available in the next iteration. For now, use category-specific pages.');
   };
 
   return (

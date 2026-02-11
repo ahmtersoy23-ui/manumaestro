@@ -3,11 +3,10 @@
  * GET: Returns total requests and quantities for a specific production month
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { createLogger } from '@/lib/logger';
-
-const logger = createLogger('Monthly API');
+import { successResponse, errorResponse } from '@/lib/api/response';
+import { ValidationError } from '@/lib/api/errors';
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,19 +14,13 @@ export async function GET(request: NextRequest) {
     const month = searchParams.get('month');
 
     if (!month) {
-      return NextResponse.json(
-        { error: 'Month parameter is required' },
-        { status: 400 }
-      );
+      throw new ValidationError('Month parameter is required');
     }
 
     // Validate month format (YYYY-MM)
     const monthRegex = /^\d{4}-\d{2}$/;
     if (!monthRegex.test(month)) {
-      return NextResponse.json(
-        { error: 'Invalid month format. Expected YYYY-MM' },
-        { status: 400 }
-      );
+      throw new ValidationError('Invalid month format. Expected YYYY-MM');
     }
 
     // Query stats for the production month
@@ -168,11 +161,7 @@ export async function GET(request: NextRequest) {
       0
     );
 
-    // Debug logging
-    logger.debug(`Month: ${month}`);
-    logger.debug(`Aggregate sum: ${stats._sum.producedQuantity}`);
-    logger.debug(`Calculated totalProduced: ${totalProduced}`);
-    logger.debug(`Unique products: ${productMap.size}`);
+    // Debug info now in response meta
 
     const itemsWithoutSize = requests.filter(r => !r.productSize).length;
 
@@ -184,9 +173,8 @@ export async function GET(request: NextRequest) {
         productCategory: r.productCategory,
       }));
 
-    return NextResponse.json({
-      success: true,
-      data: {
+    return successResponse(
+      {
         totalRequests: stats._count.id || 0,
         totalQuantity: stats._sum.quantity || 0,
         totalProduced, // Use calculated value from unique products
@@ -197,22 +185,16 @@ export async function GET(request: NextRequest) {
         summary,
         marketplaceSummary,
       },
-      debug: {
-        aggregateSum: stats._sum.producedQuantity,
-        calculatedTotal: totalProduced,
-        uniqueProducts: productMap.size,
-        month,
-      },
-    });
-  } catch (error) {
-    logger.error('Monthly stats error:', error);
-    return NextResponse.json(
       {
-        success: false,
-        error: 'Failed to fetch monthly statistics',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
+        debug: {
+          aggregateSum: stats._sum.producedQuantity,
+          calculatedTotal: totalProduced,
+          uniqueProducts: productMap.size,
+          month,
+        },
+      }
     );
+  } catch (error) {
+    return errorResponse(error, 'Failed to fetch monthly statistics');
   }
 }
