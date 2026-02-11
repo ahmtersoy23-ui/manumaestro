@@ -101,33 +101,18 @@ export default function MonthDetailPage() {
 
           setMissingDesiItems(data.data.missingDesiItems || []);
 
-          // Group by category
-          const categoryMap = new Map<string, CategorySummary>();
-          data.data.summary?.forEach((item: any) => {
-            const existing = categoryMap.get(item.productCategory);
-            if (existing) {
-              existing.totalQuantity += item.totalQuantity;
-              existing.totalProduced += item.totalProduced || 0;
-              existing.totalDesi += item.totalDesi || 0;
-              existing.producedDesi += item.producedDesi || 0;
-              existing.requestCount += item.requestCount;
-              existing.itemsWithoutSize += item.itemsWithoutSize || 0;
-            } else {
-              categoryMap.set(item.productCategory, {
-                productCategory: item.productCategory,
-                totalQuantity: item.totalQuantity,
-                totalProduced: item.totalProduced || 0,
-                totalDesi: item.totalDesi || 0,
-                producedDesi: item.producedDesi || 0,
-                requestCount: item.requestCount,
-                itemsWithoutSize: item.itemsWithoutSize || 0,
-              });
-            }
-          });
+          // API now returns already grouped by category (simplified)
+          const categories: CategorySummary[] = (data.data.summary || []).map((item: any) => ({
+            productCategory: item.productCategory,
+            totalQuantity: item.totalQuantity || 0,
+            totalProduced: item.totalProduced || 0,
+            totalDesi: item.totalDesi || 0,
+            producedDesi: item.producedDesi || 0,
+            requestCount: item.requestCount || 0,
+            itemsWithoutSize: item.itemsWithoutSize || 0,
+          }));
 
-          setCategories(Array.from(categoryMap.values()).sort((a, b) =>
-            b.totalQuantity - a.totalQuantity
-          ));
+          setCategories(categories.sort((a: CategorySummary, b: CategorySummary) => b.totalQuantity - a.totalQuantity));
 
           // Marketplace summary - create a map for quick lookup
           const marketplaceDataMap = new Map<string, MarketplaceSummary>();

@@ -78,51 +78,54 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Now group by category and marketplace for summary
-    // Production quantities are distributed proportionally based on each marketplace's request
-    const summary = requests.reduce((acc: any[], request) => {
-      const existing = acc.find(
-        item =>
-          item.productCategory === request.productCategory &&
-          item.marketplaceId === request.marketplaceId
-      );
+    // Group by category only (simplified - marketplace is just metadata)
+    const categoryMap = new Map<string, any>();
 
-      const productData = productMap.get(request.iwasku);
+    requests.forEach((request) => {
+      const existing = categoryMap.get(request.productCategory);
       const desiPerUnit = request.productSize || 0;
       const requestTotalDesi = desiPerUnit * request.quantity;
 
-      // Distribute produced quantity proportionally
-      // If this marketplace requested 50 out of 150 total for this product,
-      // and 120 were produced, this marketplace gets (50/150) * 120 = 40
-      const productionRatio = productData.totalRequestedQty > 0
-        ? request.quantity / productData.totalRequestedQty
-        : 0;
-      const producedForThisRequest = productData.producedQty * productionRatio;
-      const producedTotalDesi = desiPerUnit * producedForThisRequest;
-
       if (existing) {
         existing.totalQuantity += request.quantity;
-        existing.totalProduced += producedForThisRequest;
         existing.totalDesi += requestTotalDesi;
-        existing.producedDesi += producedTotalDesi;
         existing.requestCount += 1;
         existing.itemsWithoutSize += request.productSize ? 0 : 1;
+        // Track unique marketplaces as metadata
+        if (!existing.marketplaces.includes(request.marketplace.name)) {
+          existing.marketplaces.push(request.marketplace.name);
+        }
       } else {
-        acc.push({
+        categoryMap.set(request.productCategory, {
           productCategory: request.productCategory,
-          marketplaceId: request.marketplaceId,
-          marketplaceName: request.marketplace.name,
           totalQuantity: request.quantity,
-          totalProduced: producedForThisRequest,
           totalDesi: requestTotalDesi,
-          producedDesi: producedTotalDesi,
           requestCount: 1,
           itemsWithoutSize: request.productSize ? 0 : 1,
+          marketplaces: [request.marketplace.name],
         });
       }
+    });
 
-      return acc;
-    }, []);
+    // Add production totals from productMap (by category)
+    const summary = Array.from(categoryMap.values()).map(category => {
+      // Calculate total produced for this category from all products in that category
+      const categoryProducts = Array.from(productMap.values()).filter(
+        p => p.productCategory === category.productCategory
+      );
+
+      const totalProduced = categoryProducts.reduce((sum, p) => sum + p.producedQty, 0);
+      const producedDesi = categoryProducts.reduce(
+        (sum, p) => sum + ((p.productSize || 0) * p.producedQty),
+        0
+      );
+
+      return {
+        ...category,
+        totalProduced,
+        producedDesi,
+      };
+    });
 
     // Calculate total desi (sum across all requests)
     const totalDesi = requests.reduce((sum, r) => sum + ((r.productSize || 0) * r.quantity), 0);
