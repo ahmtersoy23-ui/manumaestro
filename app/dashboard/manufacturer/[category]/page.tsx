@@ -137,20 +137,27 @@ export default function ManufacturerCategoryPage() {
       if (!group) return;
 
       const values = editValues[iwasku];
+      const totalProducedQuantity = values.producedQuantity;
 
-      // Update all requests in this group
-      // Send the total producedQuantity - backend will handle per-request distribution
-      const updatePromises = group.requests.map(request =>
-        fetch(`/api/manufacturer/requests/${request.id}`, {
+      // Distribute total produced quantity proportionally across marketplace requests
+      // Example: If A requested 50, B requested 100 (total 150), and 120 were produced:
+      // A gets (50/150) * 120 = 40, B gets (100/150) * 120 = 80
+      const updatePromises = group.requests.map(request => {
+        const proportion = group.totalQuantity > 0
+          ? request.quantity / group.totalQuantity
+          : 0;
+        const proportionalProducedQty = Math.round(totalProducedQuantity * proportion);
+
+        return fetch(`/api/manufacturer/requests/${request.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             status: values.status,
             manufacturerNotes: values.manufacturerNotes,
-            producedQuantity: values.producedQuantity,
+            producedQuantity: proportionalProducedQty,
           }),
-        })
-      );
+        });
+      });
 
       const responses = await Promise.all(updatePromises);
       const allSuccess = responses.every(r => r.ok);
