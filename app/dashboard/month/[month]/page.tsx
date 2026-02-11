@@ -324,7 +324,7 @@ export default function MonthDetailPage() {
                     <p className="text-xs text-gray-600">Produced</p>
                     <p className="text-sm font-bold text-green-600">
                       {viewMode === 'quantity'
-                        ? `${category.totalProduced} adet`
+                        ? `${Math.round(category.totalProduced)} adet`
                         : `${Math.round(category.producedDesi)} desi`}
                     </p>
                   </div>
