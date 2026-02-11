@@ -86,7 +86,10 @@ export function validateSchema<T>(schema: z.ZodSchema<T>, data: unknown): { succ
  * Format Zod error for API response
  */
 export function formatValidationError(error: any): { field: string; message: string }[] {
-  return error.errors.map((err: any) => ({
+  // Zod error structure: error.issues (not error.errors in some versions)
+  const issues = error.issues || error.errors || [];
+
+  return issues.map((err: any) => ({
     field: err.path.join('.'),
     message: err.message,
   }));
