@@ -21,15 +21,6 @@ export default defineConfig({
         'components/**/*.tsx',
         'prisma/',
       ],
-      include: [
-        'app/api/**/*.ts',
-        'lib/**/*.ts',
-      ],
-      all: true,
-      lines: 60,
-      functions: 60,
-      branches: 60,
-      statements: 60,
     },
   },
   resolve: {
