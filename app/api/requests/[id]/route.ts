@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { createLogger } from '@/lib/logger';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
+import { requireRole } from '@/lib/auth/verify';
 
 const logger = createLogger('Request API');
 
@@ -19,6 +20,12 @@ export async function DELETE(
     const rateLimitResult = await rateLimiters.write.check(request, 'delete-request');
     if (!rateLimitResult.success) {
       return rateLimitExceededResponse(rateLimitResult);
+    }
+
+    // Authentication & Authorization: Only admins can delete
+    const authResult = await requireRole(request, ['admin']);
+    if (authResult instanceof NextResponse) {
+      return authResult; // Return error response
     }
 
     const { id } = await params;
