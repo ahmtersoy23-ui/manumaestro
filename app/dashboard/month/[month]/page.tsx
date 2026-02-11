@@ -114,27 +114,16 @@ export default function MonthDetailPage() {
 
           setCategories(categories.sort((a: CategorySummary, b: CategorySummary) => b.totalQuantity - a.totalQuantity));
 
-          // Marketplace summary - create a map for quick lookup
-          const marketplaceDataMap = new Map<string, MarketplaceSummary>();
-          data.data.summary?.forEach((item: any) => {
-            const key = item.marketplaceId || item.marketplaceName;
-            const existing = marketplaceDataMap.get(key);
-            if (existing) {
-              existing.totalQuantity += item.totalQuantity;
-              existing.totalDesi += item.totalDesi || 0;
-              existing.requestCount += item.requestCount;
-            } else {
-              marketplaceDataMap.set(key, {
-                marketplaceId: item.marketplaceId,
-                marketplaceName: item.marketplaceName,
-                totalQuantity: item.totalQuantity,
-                totalDesi: item.totalDesi || 0,
-                requestCount: item.requestCount,
-              });
-            }
-          });
+          // Use marketplace summary directly from API
+          const marketplaceSummary: MarketplaceSummary[] = (data.data.marketplaceSummary || []).map((item: any) => ({
+            marketplaceId: item.marketplaceId,
+            marketplaceName: item.marketplaceName,
+            totalQuantity: item.totalQuantity || 0,
+            totalDesi: item.totalDesi || 0,
+            requestCount: item.requestCount || 0,
+          }));
 
-          setMarketplaces(Array.from(marketplaceDataMap.values()));
+          setMarketplaces(marketplaceSummary);
         }
       } catch (error) {
         console.error('Failed to fetch month data:', error);

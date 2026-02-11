@@ -127,6 +127,29 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    // Create marketplace summary (for marketplace cards)
+    const marketplaceMap = new Map<string, any>();
+    requests.forEach((request) => {
+      const existing = marketplaceMap.get(request.marketplace.id);
+      const requestTotalDesi = (request.productSize || 0) * request.quantity;
+
+      if (existing) {
+        existing.totalQuantity += request.quantity;
+        existing.totalDesi += requestTotalDesi;
+        existing.requestCount += 1;
+      } else {
+        marketplaceMap.set(request.marketplace.id, {
+          marketplaceId: request.marketplace.id,
+          marketplaceName: request.marketplace.name,
+          totalQuantity: request.quantity,
+          totalDesi: requestTotalDesi,
+          requestCount: 1,
+        });
+      }
+    });
+
+    const marketplaceSummary = Array.from(marketplaceMap.values());
+
     // Calculate total desi (sum across all requests)
     const totalDesi = requests.reduce((sum, r) => sum + ((r.productSize || 0) * r.quantity), 0);
 
@@ -169,6 +192,7 @@ export async function GET(request: NextRequest) {
         itemsWithoutSize,
         missingDesiItems,
         summary,
+        marketplaceSummary,
       },
       debug: {
         aggregateSum: stats._sum.producedQuantity,
