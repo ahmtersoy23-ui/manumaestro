@@ -105,24 +105,60 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
 
     setBulkDeleting(true);
     try {
-      // Delete each selected request
-      const deletePromises = Array.from(selectedIds).map(id =>
-        fetch(`/api/requests/${id}`, { method: 'DELETE' })
-      );
+      // Delete each selected request sequentially to avoid rate limiting
+      const failedIds: string[] = [];
+      let rateLimited = false;
 
-      await Promise.all(deletePromises);
+      for (const id of Array.from(selectedIds)) {
+        try {
+          const res = await fetch(`/api/requests/${id}`, { method: 'DELETE' });
 
-      // Remove deleted items from local state
-      setRequests(requests.filter(r => !selectedIds.has(r.id)));
-      setSelectedIds(new Set());
+          if (res.status === 429) {
+            rateLimited = true;
+            alert('⏳ Rate limit aşıldı. Lütfen birkaç saniye bekleyip tekrar deneyin.');
+            break;
+          }
 
-      // Trigger parent callback
-      if (onDelete) {
+          if (res.status === 401) {
+            alert('🔒 Oturum süreniz dolmuş. Lütfen yeniden giriş yapın.');
+            window.location.href = 'https://apps.iwa.web.tr';
+            return;
+          }
+
+          if (res.status === 403) {
+            alert('⛔ Bu işlem için yetkiniz yok.');
+            return;
+          }
+
+          const data = await res.json();
+          if (!data.success) {
+            failedIds.push(id);
+          }
+        } catch (error) {
+          console.error(`Failed to delete ${id}:`, error);
+          failedIds.push(id);
+        }
+      }
+
+      // Remove successfully deleted items from local state
+      const deletedIds = Array.from(selectedIds).filter(id => !failedIds.includes(id));
+      setRequests(requests.filter(r => !deletedIds.includes(r.id)));
+      setSelectedIds(new Set(failedIds));
+
+      // Show result
+      if (failedIds.length > 0 && !rateLimited) {
+        alert(`⚠️ ${deletedIds.length} talep silindi, ${failedIds.length} talep silinemedi.`);
+      } else if (!rateLimited && deletedIds.length > 0) {
+        alert(`✅ ${deletedIds.length} talep başarıyla silindi.`);
+      }
+
+      // Trigger parent callback if any were deleted
+      if (deletedIds.length > 0 && onDelete) {
         onDelete();
       }
     } catch (error) {
       console.error('Bulk delete error:', error);
-      alert('Failed to delete some requests');
+      alert('Toplu silme işlemi başarısız oldu.');
     } finally {
       setBulkDeleting(false);
     }
@@ -138,6 +174,26 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
       const res = await fetch(`/api/requests/${requestId}`, {
         method: 'DELETE',
       });
+
+      // Handle rate limiting
+      if (res.status === 429) {
+        const data = await res.json();
+        alert('⏳ Çok fazla istek yaptınız. Lütfen birkaç saniye bekleyip tekrar deneyin.');
+        return;
+      }
+
+      // Handle authentication errors
+      if (res.status === 401) {
+        alert('🔒 Oturum süreniz dolmuş. Lütfen yeniden giriş yapın.');
+        window.location.href = 'https://apps.iwa.web.tr';
+        return;
+      }
+
+      // Handle authorization errors
+      if (res.status === 403) {
+        alert('⛔ Bu işlem için yetkiniz yok. Sadece admin kullanıcılar silme işlemi yapabilir.');
+        return;
+      }
 
       const data = await res.json();
 
