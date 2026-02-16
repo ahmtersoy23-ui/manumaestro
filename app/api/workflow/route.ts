@@ -5,12 +5,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { createLogger } from '@/lib/logger';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-
-const logger = createLogger('Workflow API');
 import { WorkflowStage } from '@prisma/client';
 import { logAction } from '@/lib/auditLog';
+import { requireRole } from '@/lib/auth/verify';
+import { errorResponse } from '@/lib/api/response';
 
 export async function PATCH(request: NextRequest) {
   try {
@@ -19,6 +18,13 @@ export async function PATCH(request: NextRequest) {
     if (!rateLimitResult.success) {
       return rateLimitExceededResponse(rateLimitResult);
     }
+
+    // Authentication & Authorization: Require editor or admin role
+    const authResult = await requireRole(request, ['admin', 'editor']);
+    if (authResult instanceof NextResponse) {
+      return authResult;
+    }
+    const { user } = authResult;
 
     const body = await request.json();
     const { requestId, workflowStage } = body;
@@ -68,11 +74,11 @@ export async function PATCH(request: NextRequest) {
       },
     });
 
-    // Log action
+    // Log action with authenticated user (who performed the update)
     await logAction({
-      userId: request_data.enteredById,
-      userName: request_data.enteredBy.name,
-      userEmail: request_data.enteredBy.email,
+      userId: user.id,           // User who PERFORMED the update
+      userName: user.name,
+      userEmail: user.email,
       action: 'UPDATE_PRODUCTION',
       entityType: 'ProductionRequest',
       entityId: requestId,
@@ -89,14 +95,6 @@ export async function PATCH(request: NextRequest) {
       data: updatedRequest,
     });
   } catch (error) {
-    logger.error('Update workflow stage error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to update workflow stage',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    return errorResponse(error, 'Failed to update workflow stage');
   }
 }

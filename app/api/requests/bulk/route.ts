@@ -4,11 +4,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db/prisma';
+import { prisma, queryProductDb } from '@/lib/db/prisma';
 import { EntryType, RequestStatus } from '@prisma/client';
 import { createLogger } from '@/lib/logger';
 import { BulkRequestSchema, formatValidationError } from '@/lib/validation/schemas';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
+import { requireRole } from '@/lib/auth/verify';
 
 const logger = createLogger('Bulk Requests API');
 
@@ -25,6 +26,13 @@ export async function POST(request: NextRequest) {
     if (!rateLimitResult.success) {
       return rateLimitExceededResponse(rateLimitResult);
     }
+
+    // Authentication & Authorization: Require editor or admin role
+    const authResult = await requireRole(request, ['admin', 'editor']);
+    if (authResult instanceof NextResponse) {
+      return authResult;
+    }
+    const { user } = authResult;
 
     const body = await request.json();
 
@@ -47,35 +55,25 @@ export async function POST(request: NextRequest) {
     // requestDate is always today (entry date)
     const requestDate = new Date();
 
-    // Get admin user
-    const adminUser = await prisma.user.findFirst({
-      where: { role: 'ADMIN' },
-    });
-
-    if (!adminUser) {
-      return NextResponse.json(
-        { error: 'No admin user found. Please run database seed.' },
-        { status: 500 }
-      );
-    }
-
-    // Fetch product details from external products API
+    // Fetch product details directly from database (FIX 3: Remove self-referencing fetch)
     const createdRequests: any[] = [];
     const errors: string[] = [];
     const warnings: string[] = [];
 
     for (const item of requests) {
       try {
-        // Fetch product info from products API
-        const productRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/products/${encodeURIComponent(item.iwasku)}`);
-        const productData = await productRes.json();
+        // Direct database query instead of self-referencing API call
+        const products = await queryProductDb(
+          'SELECT product_sku as iwasku, name, category, size FROM products WHERE product_sku = $1 LIMIT 1',
+          [item.iwasku]
+        );
 
-        if (!productData.success || !productData.data) {
+        if (products.length === 0) {
           errors.push(`Product not found: ${item.iwasku}`);
           continue;
         }
 
-        const product = productData.data;
+        const product = products[0];
 
         // Warn if product has no size (desi) data
         if (!product.size) {
@@ -95,7 +93,7 @@ export async function POST(request: NextRequest) {
             notes: item.notes || null,
             entryType: EntryType.EXCEL,
             status: RequestStatus.REQUESTED,
-            enteredById: adminUser.id,
+            enteredById: user.id, // Real authenticated user
           },
         });
 

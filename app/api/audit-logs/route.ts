@@ -5,10 +5,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { createLogger } from '@/lib/logger';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-
-const logger = createLogger('Audit Logs API');
+import { requireRole } from '@/lib/auth/verify';
+import { errorResponse } from '@/lib/api/response';
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,20 +17,17 @@ export async function GET(request: NextRequest) {
       return rateLimitExceededResponse(rateLimitResult);
     }
 
-    // Get user from SSO headers (set by middleware)
-    const userRole = request.headers.get('x-user-role');
-    const userEmail = request.headers.get('x-user-email');
-
-    // Check if user is admin
-    if (userRole !== 'admin') {
-      return NextResponse.json(
-        { error: 'Forbidden - Admin access required' },
-        { status: 403 }
-      );
+    // Authentication & Authorization: Admin only
+    const authResult = await requireRole(request, ['admin']);
+    if (authResult instanceof NextResponse) {
+      return authResult;
     }
 
     const searchParams = request.nextUrl.searchParams;
-    const limit = parseInt(searchParams.get('limit') || '100');
+
+    // FIX 6: Add max limit of 500
+    const rawLimit = parseInt(searchParams.get('limit') || '100');
+    const limit = Math.min(Math.max(rawLimit, 1), 500); // min 1, max 500
     const action = searchParams.get('action');
     const userId = searchParams.get('userId');
 
@@ -67,14 +63,6 @@ export async function GET(request: NextRequest) {
       data: logs,
     });
   } catch (error) {
-    logger.error('Fetch audit logs error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to fetch audit logs',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    return errorResponse(error, 'Failed to fetch audit logs');
   }
 }

@@ -3,11 +3,12 @@
  * GET: Returns total requests and quantities for a specific production month
  */
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { successResponse, errorResponse } from '@/lib/api/response';
 import { ValidationError } from '@/lib/api/errors';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
+import { verifyAuth } from '@/lib/auth/verify';
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,6 +16,15 @@ export async function GET(request: NextRequest) {
     const rateLimitResult = await rateLimiters.read.check(request, 'monthly-stats');
     if (!rateLimitResult.success) {
       return rateLimitExceededResponse(rateLimitResult);
+    }
+
+    // Authentication: Require any authenticated user
+    const auth = await verifyAuth(request);
+    if (!auth.success || !auth.user) {
+      return NextResponse.json(
+        { success: false, error: auth.error || 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
     const { searchParams } = new URL(request.url);

@@ -9,6 +9,9 @@ import { prisma } from '@/lib/db/prisma';
 import { EntryType, RequestStatus } from '@prisma/client';
 import { createLogger } from '@/lib/logger';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
+import { verifyAuth, requireRole } from '@/lib/auth/verify';
+import { ProductionRequestSchema, formatValidationError } from '@/lib/validation/schemas';
+import { errorResponse } from '@/lib/api/response';
 
 const logger = createLogger('Requests API');
 
@@ -20,30 +23,32 @@ export async function POST(request: NextRequest) {
       return rateLimitExceededResponse(rateLimitResult);
     }
 
-    const body = await request.json();
-    const { iwasku, productName, productCategory, productSize, marketplaceId, quantity, productionMonth, notes } = body;
+    // Authentication & Authorization: Require editor or admin role
+    const authResult = await requireRole(request, ['admin', 'editor']);
+    if (authResult instanceof NextResponse) {
+      return authResult;
+    }
+    const { user } = authResult;
 
-    // Validation
-    if (!iwasku || !productName || !productCategory || !marketplaceId || !quantity || !productionMonth) {
+    const body = await request.json();
+
+    // Zod validation
+    const validation = ProductionRequestSchema.safeParse(body);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'Missing required fields (iwasku, productName, productCategory, marketplaceId, quantity, productionMonth)' },
+        {
+          success: false,
+          error: 'Validation failed',
+          details: formatValidationError(validation.error),
+        },
         { status: 400 }
       );
     }
 
+    const { iwasku, productName, productCategory, productSize, marketplaceId, quantity, productionMonth, notes } = validation.data;
+
     // requestDate is always today (entry date)
     const requestDate = new Date();
-
-    // Get user from SSO headers (set by middleware)
-    const userId = request.headers.get('x-user-id');
-    const userEmail = request.headers.get('x-user-email');
-
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized - User session not found' },
-        { status: 401 }
-      );
-    }
 
     // Create production request
     const productionRequest = await prisma.productionRequest.create({
@@ -51,15 +56,15 @@ export async function POST(request: NextRequest) {
         iwasku,
         productName,
         productCategory,
-        productSize: productSize ? parseFloat(productSize) : null,
+        productSize: productSize ?? null,
         marketplaceId,
-        quantity: parseInt(quantity),
+        quantity,
         requestDate,
         productionMonth, // YYYY-MM format (e.g., "2026-03")
-        notes,
+        notes: notes ?? null,
         entryType: EntryType.MANUAL,
         status: RequestStatus.REQUESTED,
-        enteredById: userId,
+        enteredById: user.id, // Real authenticated user
       },
       include: {
         marketplace: true,
@@ -72,15 +77,7 @@ export async function POST(request: NextRequest) {
       warning: !productSize ? `Product ${iwasku} is missing desi (size) data. Please update in PriceLab.` : undefined,
     });
   } catch (error) {
-    logger.error('Create request error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to create request',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    return errorResponse(error, 'Failed to create request');
   }
 }
 
@@ -92,12 +89,24 @@ export async function GET(request: NextRequest) {
       return rateLimitExceededResponse(rateLimitResult);
     }
 
+    // Authentication: Require any authenticated user (viewer, editor, or admin)
+    const auth = await verifyAuth(request);
+    if (!auth.success || !auth.user) {
+      return NextResponse.json(
+        { success: false, error: auth.error || 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const marketplaceId = searchParams.get('marketplaceId');
     const status = searchParams.get('status');
     const month = searchParams.get('month'); // YYYY-MM format
     const archiveMode = searchParams.get('archiveMode') === 'true';
-    const limit = parseInt(searchParams.get('limit') || '50');
+
+    // FIX 6: Add max limit of 500
+    const rawLimit = parseInt(searchParams.get('limit') || '50');
+    const limit = Math.min(Math.max(rawLimit, 1), 500); // min 1, max 500
 
     const where: any = {};
 
@@ -156,14 +165,6 @@ export async function GET(request: NextRequest) {
       count: requests.length,
     });
   } catch (error) {
-    logger.error('Fetch requests error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to fetch requests',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+    return errorResponse(error, 'Failed to fetch requests');
   }
 }

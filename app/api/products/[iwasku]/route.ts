@@ -5,10 +5,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { queryProductDb } from '@/lib/db/prisma';
-import { createLogger } from '@/lib/logger';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-
-const logger = createLogger('Products API');
+import { verifyAuth } from '@/lib/auth/verify';
+import { errorResponse } from '@/lib/api/response';
 
 export async function GET(
   request: NextRequest,
@@ -19,6 +18,15 @@ export async function GET(
     const rateLimitResult = await rateLimiters.read.check(request, 'get-product');
     if (!rateLimitResult.success) {
       return rateLimitExceededResponse(rateLimitResult);
+    }
+
+    // Authentication: Require any authenticated user
+    const auth = await verifyAuth(request);
+    if (!auth.success || !auth.user) {
+      return NextResponse.json(
+        { success: false, error: auth.error || 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
     const { iwasku } = await params;
@@ -54,14 +62,6 @@ export async function GET(
       data: products[0],
     });
   } catch (error) {
-    logger.error('Product fetch error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to fetch product',
-        message: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return errorResponse(error, 'Failed to fetch product');
   }
 }
