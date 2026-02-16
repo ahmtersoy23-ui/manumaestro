@@ -5,8 +5,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { createLogger } from '@/lib/logger';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
+import { verifyAuth } from '@/lib/auth/verify';
 import {
   exportToExcel,
   formatDateForExcel,
@@ -14,14 +14,21 @@ import {
   type ExportColumn,
 } from '@/lib/excel/exporter';
 
-const logger = createLogger('Monthly Export API');
-
 export async function GET(request: NextRequest) {
   try {
     // Rate limiting: 10 requests per minute for exports
     const rateLimitResult = await rateLimiters.bulk.check(request, 'export-monthly');
     if (!rateLimitResult.success) {
       return rateLimitExceededResponse(rateLimitResult);
+    }
+
+    // Authentication: Require any authenticated user
+    const auth = await verifyAuth(request);
+    if (!auth.success || !auth.user) {
+      return NextResponse.json(
+        { success: false, error: auth.error || 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
     const searchParams = request.nextUrl.searchParams;
@@ -34,7 +41,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    logger.info('Fetching monthly data for export', { month });
 
     // Fetch all requests for the month
     const requests = await prisma.productionRequest.findMany({
@@ -56,7 +62,6 @@ export async function GET(request: NextRequest) {
       ],
     });
 
-    logger.info(`Found ${requests.length} requests to export`);
 
     // Format data for export
     const exportData = requests.map((request) => ({
@@ -115,7 +120,6 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    logger.error('Monthly export error:', error);
     return NextResponse.json(
       {
         success: false,

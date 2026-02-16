@@ -5,11 +5,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { createLogger } from '@/lib/logger';
 import { ManufacturerUpdateSchema, UUIDParamSchema, formatValidationError } from '@/lib/validation/schemas';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-
-const logger = createLogger('Manufacturer Requests API');
+import { requireRole } from '@/lib/auth/verify';
+import { errorResponse } from '@/lib/api/response';
 
 export async function PATCH(
   request: NextRequest,
@@ -20,6 +19,12 @@ export async function PATCH(
     const rateLimitResult = await rateLimiters.write.check(request, 'manufacturer-update');
     if (!rateLimitResult.success) {
       return rateLimitExceededResponse(rateLimitResult);
+    }
+
+    // Authentication & Authorization: Require editor or admin role
+    const authResult = await requireRole(request, ['admin', 'editor']);
+    if (authResult instanceof NextResponse) {
+      return authResult;
     }
 
     const { id } = await params;
@@ -110,14 +115,6 @@ export async function PATCH(
       data: updated,
     });
   } catch (error) {
-    logger.error('Manufacturer request update error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to update request',
-        message: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+    return errorResponse(error, 'Failed to update request');
   }
 }

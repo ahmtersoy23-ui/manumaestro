@@ -5,8 +5,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { createLogger } from '@/lib/logger';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
+import { verifyAuth } from '@/lib/auth/verify';
 import {
   exportToExcel,
   formatDateForExcel,
@@ -14,14 +14,21 @@ import {
   type ExportColumn,
 } from '@/lib/excel/exporter';
 
-const logger = createLogger('Manufacturer Export API');
-
 export async function GET(request: NextRequest) {
   try {
     // Rate limiting: 10 requests per minute for exports (same as bulk)
     const rateLimitResult = await rateLimiters.bulk.check(request, 'export-manufacturer');
     if (!rateLimitResult.success) {
       return rateLimitExceededResponse(rateLimitResult);
+    }
+
+    // Authentication: Require any authenticated user
+    const auth = await verifyAuth(request);
+    if (!auth.success || !auth.user) {
+      return NextResponse.json(
+        { success: false, error: auth.error || 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
     const searchParams = request.nextUrl.searchParams;
@@ -39,7 +46,6 @@ export async function GET(request: NextRequest) {
       where.productionMonth = month;
     }
 
-    logger.info('Fetching manufacturer data for export', { category, month });
 
     // Fetch data from database
     const requests = await prisma.productionRequest.findMany({
@@ -58,7 +64,6 @@ export async function GET(request: NextRequest) {
       ],
     });
 
-    logger.info(`Found ${requests.length} requests to export`);
 
     // Aggregate data by IWASKU (group marketplace requests)
     const aggregatedData = new Map<string, any>();
@@ -129,7 +134,6 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    logger.error('Manufacturer export error:', error);
     return NextResponse.json(
       {
         success: false,

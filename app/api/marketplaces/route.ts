@@ -4,13 +4,14 @@
  * POST: Create new custom marketplace
  */
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { logAction } from '@/lib/auditLog';
 import { MarketplaceCreateSchema, formatValidationError } from '@/lib/validation/schemas';
 import { successResponse, createdResponse, errorResponse } from '@/lib/api/response';
 import { ValidationError, InternalServerError, NotFoundError } from '@/lib/api/errors';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
+import { verifyAuth, requireRole } from '@/lib/auth/verify';
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,6 +19,15 @@ export async function GET(request: NextRequest) {
     const rateLimitResult = await rateLimiters.read.check(request, 'list-marketplaces');
     if (!rateLimitResult.success) {
       return rateLimitExceededResponse(rateLimitResult);
+    }
+
+    // Authentication: Require any authenticated user
+    const auth = await verifyAuth(request);
+    if (!auth.success || !auth.user) {
+      return NextResponse.json(
+        { success: false, error: auth.error || 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
     const marketplaces = await prisma.marketplace.findMany({
@@ -43,6 +53,13 @@ export async function POST(request: NextRequest) {
       return rateLimitExceededResponse(rateLimitResult);
     }
 
+    // Authentication & Authorization: Admin only
+    const authResult = await requireRole(request, ['admin']);
+    if (authResult instanceof NextResponse) {
+      return authResult;
+    }
+    const { user } = authResult;
+
     const body = await request.json();
 
     // Validate with Zod
@@ -52,15 +69,6 @@ export async function POST(request: NextRequest) {
     }
 
     const { name, region, marketplaceType } = validation.data;
-
-    // Get admin user
-    const adminUser = await prisma.user.findFirst({
-      where: { role: 'ADMIN' },
-    });
-
-    if (!adminUser) {
-      throw new InternalServerError('No admin user found. Please run database seed.');
-    }
 
     // Generate unique code for custom marketplace
     const existingCustom = await prisma.marketplace.findMany({
@@ -83,15 +91,15 @@ export async function POST(request: NextRequest) {
         marketplaceType: marketplaceType || 'CUSTOM',
         isCustom: true,
         isActive: true,
-        createdById: adminUser.id,
+        createdById: user.id,
       },
     });
 
-    // Log action
+    // Log action with authenticated user
     await logAction({
-      userId: adminUser.id,
-      userName: adminUser.name,
-      userEmail: adminUser.email,
+      userId: user.id,
+      userName: user.name,
+      userEmail: user.email,
       action: 'CREATE_MARKETPLACE',
       entityType: 'Marketplace',
       entityId: marketplace.id,
