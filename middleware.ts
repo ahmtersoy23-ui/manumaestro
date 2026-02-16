@@ -30,8 +30,15 @@ export async function middleware(request: NextRequest) {
 
   const token = tokenFromCookie;
 
-  // No token - redirect to SSO
+  // No token - redirect to SSO (or return JSON for API routes)
   if (!token) {
+    // For API routes (except /api/auth/*), return JSON 401
+    if (request.nextUrl.pathname.startsWith('/api/') && !request.nextUrl.pathname.startsWith('/api/auth/')) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
     return NextResponse.redirect(new URL(SSO_URL, request.url));
   }
 
@@ -68,6 +75,16 @@ export async function middleware(request: NextRequest) {
     requestHeaders.set('x-user-role', data.data.role);
     requestHeaders.set('x-user-id', data.data.user.id);
 
+    // For API routes, return JSON responses for auth failures
+    if (request.nextUrl.pathname.startsWith('/api/')) {
+      if (!data.success) {
+        return NextResponse.json(
+          { error: 'Invalid or expired token' },
+          { status: 401 }
+        );
+      }
+    }
+
     return NextResponse.next({
       request: {
         headers: requestHeaders,
@@ -75,7 +92,13 @@ export async function middleware(request: NextRequest) {
     });
   } catch (error) {
     logger.error('SSO verification error:', error);
-    // On error, redirect to SSO
+    // On error, redirect to SSO (or return JSON for API routes)
+    if (request.nextUrl.pathname.startsWith('/api/') && !request.nextUrl.pathname.startsWith('/api/auth/')) {
+      return NextResponse.json(
+        { error: 'Auth service unavailable' },
+        { status: 503 }
+      );
+    }
     const redirectResponse = NextResponse.redirect(new URL(SSO_URL, request.url));
     redirectResponse.cookies.delete('sso_access_token');
     return redirectResponse;
@@ -86,12 +109,12 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except for the ones starting with:
-     * - api (API routes)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - public folder
+     * - public folder (svg, png, jpg, ico files)
+     * NOTE: API routes are now included for authentication
      */
-    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.svg|.*\\.png|.*\\.jpg|.*\\.ico).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.svg|.*\\.png|.*\\.jpg|.*\\.ico).*)',
   ],
 };
