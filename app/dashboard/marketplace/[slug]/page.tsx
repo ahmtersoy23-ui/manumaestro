@@ -14,6 +14,9 @@ import { ExcelUpload } from '@/components/forms/ExcelUpload';
 import { RequestsTable } from '@/components/tables/RequestsTable';
 import { Download, Upload, PlusCircle, Clock, Archive, ArrowLeft } from 'lucide-react';
 import { parseMonthValue, getActiveMonths } from '@/lib/monthUtils';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('MarketplacePage');
 
 interface Marketplace {
   id: string;
@@ -91,13 +94,11 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
 
           // Convert slug to code (e.g., custom-01 -> CUSTOM_01)
           const code = slugToCode[slug] || slug.toUpperCase().replace('-', '_');
-          console.log('DEBUG - Slug:', slug, 'Code:', code, 'Data:', data.data.map((m: Marketplace) => m.code));
           const found = data.data.find((m: Marketplace) => m.code === code);
-          console.log('DEBUG - Found:', found);
           setMarketplace(found || null);
         }
       } catch (error) {
-        console.error('Failed to fetch marketplace:', error);
+        logger.error('Failed to fetch marketplace:', error);
       } finally {
         setLoading(false);
       }
@@ -175,7 +176,7 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
       link.click();
       document.body.removeChild(link);
     } catch (error) {
-      console.error('Export error:', error);
+      logger.error('Export error:', error);
       alert('Failed to export data');
     } finally {
       setExporting(false);

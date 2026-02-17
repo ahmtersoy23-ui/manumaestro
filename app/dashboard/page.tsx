@@ -9,6 +9,9 @@ import { useState, useEffect } from 'react';
 import { Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import Link from 'next/link';
 import { getActiveMonths, getAllMonthsForViewing, formatMonthValue } from '@/lib/monthUtils';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('DashboardPage');
 
 interface MonthStats {
   month: string;
@@ -56,7 +59,7 @@ export default function DashboardPage() {
         const stats = await Promise.all(promises);
         setMonthStats(stats);
       } catch (error) {
-        console.error('Failed to fetch month stats:', error);
+        logger.error('Failed to fetch month stats:', error);
       } finally {
         setLoading(false);
       }

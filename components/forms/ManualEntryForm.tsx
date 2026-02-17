@@ -8,6 +8,9 @@
 import { useState, useEffect } from 'react';
 import { Search, Plus, Check, Calendar, AlertCircle } from 'lucide-react';
 import { getAvailableMonthsForEntry, formatMonthDisplay, getCurrentMonth } from '@/lib/monthUtils';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('ManualEntryForm');
 
 interface ManualEntryFormProps {
   marketplaceId: string;
@@ -66,7 +69,7 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
           setShowDropdown(true);
         }
       } catch (error) {
-        console.error('Search error:', error);
+        logger.error('Search error:', error);
       } finally {
         setSearching(false);
       }
@@ -140,7 +143,7 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
         alert(data.error || 'Failed to create request');
       }
     } catch (error) {
-      console.error('Submit error:', error);
+      logger.error('Submit error:', error);
       alert('Failed to submit request');
     } finally {
       setSubmitting(false);

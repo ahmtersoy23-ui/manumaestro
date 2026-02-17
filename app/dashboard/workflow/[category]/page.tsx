@@ -10,6 +10,9 @@ import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Package } from 'lucide-react';
 import { formatMonthValue, parseMonthValue } from '@/lib/monthUtils';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('WorkflowKanbanPage');
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCenter, useDroppable, useDraggable } from '@dnd-kit/core';
 
 interface Request {
@@ -73,7 +76,7 @@ export default function WorkflowKanbanPage() {
         setColumns(grouped);
       }
     } catch (error) {
-      console.error('Failed to fetch data:', error);
+      logger.error('Failed to fetch data:', error);
     } finally {
       setLoading(false);
     }
@@ -92,13 +95,13 @@ export default function WorkflowKanbanPage() {
       if (data.success) {
         // Don't refresh data - the optimistic update is correct
       } else {
-        console.error('Failed to update:', data.error);
+        logger.error('Failed to update:', data.error);
         alert('Failed to update workflow stage: ' + (data.error || 'Unknown error'));
         // Revert optimistic update by fetching fresh data
         fetchData();
       }
     } catch (error) {
-      console.error('Failed to update stage:', error);
+      logger.error('Failed to update stage:', error);
       alert('Failed to update workflow stage');
       // Revert optimistic update by fetching fresh data
       fetchData();

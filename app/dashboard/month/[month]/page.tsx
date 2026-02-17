@@ -10,6 +10,9 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Calendar, Package, ShoppingCart, Factory, ArrowLeft, Plus, LayoutGrid } from 'lucide-react';
 import { parseMonthValue, isMonthLocked } from '@/lib/monthUtils';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('MonthDetailPage');
 import { AddMarketplaceModal } from '@/components/modals/AddMarketplaceModal';
 
 interface CategorySummary {
@@ -126,7 +129,7 @@ export default function MonthDetailPage() {
           setMarketplaces(marketplaceSummary);
         }
       } catch (error) {
-        console.error('Failed to fetch month data:', error);
+        logger.error('Failed to fetch month data:', error);
       } finally {
         setLoading(false);
       }

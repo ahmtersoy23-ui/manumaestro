@@ -7,6 +7,9 @@
 
 import { useState, useEffect } from 'react';
 import { FileText, Filter, RefreshCw } from 'lucide-react';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('AuditLogsPage');
 
 interface AuditLog {
   id: string;
@@ -50,7 +53,7 @@ export default function AuditLogsPage() {
         setLogs(data.data);
       }
     } catch (error) {
-      console.error('Failed to fetch logs:', error);
+      logger.error('Failed to fetch logs:', error);
     } finally {
       setLoading(false);
     }

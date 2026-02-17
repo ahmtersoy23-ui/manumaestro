@@ -9,6 +9,9 @@ import { useState, useEffect } from 'react';
 import { Upload, Download, FileSpreadsheet, X, Calendar, AlertCircle, Check } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { getAvailableMonthsForEntry, formatMonthDisplay, getCurrentMonth } from '@/lib/monthUtils';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('ExcelUpload');
 
 interface ExcelUploadProps {
   marketplaceId: string;
@@ -122,7 +125,7 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
         alert(data.error || 'Failed to upload requests');
       }
     } catch (error) {
-      console.error('Upload error:', error);
+      logger.error('Upload error:', error);
       alert('Failed to process Excel file');
     } finally {
       setUploading(false);

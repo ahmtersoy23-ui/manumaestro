@@ -8,6 +8,9 @@
 import { useState, useEffect } from 'react';
 import { ManufacturerTable } from '@/components/tables/ManufacturerTable';
 import { Filter, Download, Calendar, X } from 'lucide-react';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('ManufacturerPage');
 
 interface Stats {
   totalProducts: number;
@@ -44,7 +47,7 @@ export default function ManufacturerPage() {
       const url = `/api/export/manufacturer?${params.toString()}`;
       window.location.href = url;
     } catch (error) {
-      console.error('Export failed:', error);
+      logger.error('Export failed:', error);
       alert('Excel export failed. Please try again.');
     }
   };

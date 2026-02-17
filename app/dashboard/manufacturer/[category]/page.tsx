@@ -10,6 +10,9 @@ import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Package, Save, Calendar } from 'lucide-react';
 import { formatMonthValue, parseMonthValue } from '@/lib/monthUtils';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('ManufacturerCategoryPage');
 
 interface Request {
   id: string;
@@ -107,7 +110,7 @@ export default function ManufacturerCategoryPage() {
           setEditValues(initialValues);
         }
       } catch (error) {
-        console.error('Failed to fetch requests:', error);
+        logger.error('Failed to fetch requests:', error);
       } finally {
         setLoading(false);
       }
@@ -206,7 +209,7 @@ export default function ManufacturerCategoryPage() {
         alert('Failed to save some changes');
       }
     } catch (error) {
-      console.error('Save error:', error);
+      logger.error('Save error:', error);
       alert('Failed to save changes');
     } finally {
       setSaving(null);

@@ -9,6 +9,9 @@
 import { useState, useEffect } from 'react';
 import { Calendar, Package, Trash2, CheckSquare, Square } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('RequestsTable');
 
 interface RequestsTableProps {
   marketplaceId: string;
@@ -68,7 +71,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
           setRequests(data.data);
         }
       } catch (error) {
-        console.error('Failed to fetch requests:', error);
+        logger.error('Failed to fetch requests:', error);
       } finally {
         setLoading(false);
       }
@@ -135,7 +138,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
             failedIds.push(id);
           }
         } catch (error) {
-          console.error(`Failed to delete ${id}:`, error);
+          logger.error(`Failed to delete ${id}:`, error);
           failedIds.push(id);
         }
       }
@@ -157,7 +160,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
         onDelete();
       }
     } catch (error) {
-      console.error('Bulk delete error:', error);
+      logger.error('Bulk delete error:', error);
       alert('Toplu silme işlemi başarısız oldu.');
     } finally {
       setBulkDeleting(false);
@@ -209,7 +212,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
         alert(data.error || 'Failed to delete request');
       }
     } catch (error) {
-      console.error('Delete error:', error);
+      logger.error('Delete error:', error);
       alert('Failed to delete request');
     } finally {
       setDeleting(null);

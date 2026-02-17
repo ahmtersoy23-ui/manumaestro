@@ -7,6 +7,9 @@
 
 import { useState } from 'react';
 import { X } from 'lucide-react';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('AddMarketplaceModal');
 
 interface AddMarketplaceModalProps {
   isOpen: boolean;
@@ -52,7 +55,7 @@ export function AddMarketplaceModal({ isOpen, onClose, onSuccess }: AddMarketpla
       }
     } catch (err) {
       setError('An error occurred while creating marketplace');
-      console.error('Create marketplace error:', err);
+      logger.error('Create marketplace error:', err);
     } finally {
       setLoading(false);
     }
