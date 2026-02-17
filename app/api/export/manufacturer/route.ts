@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
     // Aggregate data by IWASKU (group marketplace requests)
     const aggregatedData = new Map<string, any>();
 
-    requests.forEach((request) => {
+    requests.forEach((request: any) => {
       const key = request.iwasku;
       const existing = aggregatedData.get(key);
 
