@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createLogger } from '@/lib/logger';
+import { authRateLimiter, apiRateLimiter, exportRateLimiter } from '@/lib/rate-limiter';
 
 const logger = createLogger('SSO Middleware');
 const SSO_URL = process.env.SSO_URL || 'https://apps.iwa.web.tr';
@@ -8,6 +9,47 @@ const SSO_APP_CODE = process.env.SSO_APP_CODE || 'manumaestro';
 
 export async function middleware(request: NextRequest) {
   logger.debug('Request:', request.nextUrl.pathname);
+
+  // Apply rate limiting based on endpoint
+  let rateLimitResult;
+
+  if (request.nextUrl.pathname.startsWith('/api/auth/')) {
+    // Aggressive rate limiting for auth endpoints (5 req/15min)
+    rateLimitResult = authRateLimiter.check(request);
+  } else if (request.nextUrl.pathname.startsWith('/api/export/')) {
+    // Strict rate limiting for export endpoints (10 req/5min)
+    rateLimitResult = exportRateLimiter.check(request);
+  } else if (request.nextUrl.pathname.startsWith('/api/')) {
+    // Moderate rate limiting for general API (100 req/min)
+    rateLimitResult = apiRateLimiter.check(request);
+  }
+
+  // If rate limit exceeded, return 429
+  if (rateLimitResult?.limited) {
+    logger.warn('Rate limit exceeded:', request.nextUrl.pathname);
+    return NextResponse.json(
+      {
+        error: 'Too many requests',
+        retryAfter: rateLimitResult.retryAfter,
+      },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(rateLimitResult.retryAfter || 60),
+          'X-RateLimit-Limit': String(rateLimitResult.remaining + rateLimitResult.retryAfter!),
+          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': String(Math.floor(rateLimitResult.resetTime / 1000)),
+        },
+      }
+    );
+  }
+
+  // Add rate limit headers to successful responses
+  const rateLimitHeaders: Record<string, string> = {};
+  if (rateLimitResult) {
+    rateLimitHeaders['X-RateLimit-Remaining'] = String(rateLimitResult.remaining);
+    rateLimitHeaders['X-RateLimit-Reset'] = String(Math.floor(rateLimitResult.resetTime / 1000));
+  }
 
   // Get token from cookie or URL parameter
   const tokenFromCookie = request.cookies.get('sso_access_token')?.value;
@@ -85,11 +127,18 @@ export async function middleware(request: NextRequest) {
       }
     }
 
-    return NextResponse.next({
+    const response = NextResponse.next({
       request: {
         headers: requestHeaders,
       },
     });
+
+    // Add rate limit headers
+    Object.entries(rateLimitHeaders).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
+
+    return response;
   } catch (error) {
     logger.error('SSO verification error:', error);
     // On error, redirect to SSO (or return JSON for API routes)
