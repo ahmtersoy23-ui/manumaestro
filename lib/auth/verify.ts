@@ -106,7 +106,6 @@ export async function requireRole(
       {
         success: false,
         error: 'Insufficient permissions',
-        message: `This action requires one of: ${requiredRoles.join(', ')}`,
       },
       { status: 403 }
     );

@@ -10,6 +10,7 @@ import { PrismaClient, MarketplaceType, UserRole } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import 'dotenv/config';
 
 const pool = new Pool({
@@ -32,7 +33,8 @@ async function main() {
   // ============================================
   console.log('👤 Creating admin user...');
 
-  const adminPassword = await bcrypt.hash('admin123', 10);
+  const generatedPassword = crypto.randomBytes(16).toString('hex');
+  const adminPassword = await bcrypt.hash(generatedPassword, 10);
 
   const admin = await prisma.user.upsert({
     where: { email: 'admin@iwa.web.tr' },
@@ -47,7 +49,8 @@ async function main() {
   });
 
   console.log(`✅ Admin user created: ${admin.email}`);
-  console.log(`   Default password: admin123 (CHANGE THIS!)\n`);
+  console.log(`   Generated password: ${generatedPassword}`);
+  console.log(`   ⚠️  Save this password now — it will not be shown again.\n`);
 
   // ============================================
   // 2. CREATE DEFAULT MARKETPLACES
@@ -196,8 +199,8 @@ async function main() {
   console.log('📝 Next steps:');
   console.log('   1. Update .env with correct database password');
   console.log('   2. Run: npm run db:migrate');
-  console.log('   3. Login with: admin@iwa.web.tr / admin123');
-  console.log('   4. IMMEDIATELY change the admin password!\n');
+  console.log('   3. Login with: admin@iwa.web.tr and the generated password above');
+  console.log('   4. Change the admin password after first login!\n');
 }
 
 main()

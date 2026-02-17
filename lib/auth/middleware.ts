@@ -83,12 +83,10 @@ export function requireRole(userRole: string, allowedRoles: string[]): boolean {
 /**
  * Return 403 error for insufficient permissions
  */
-export function forbiddenResponse(userRole: string, requiredRoles: string[]) {
+export function forbiddenResponse() {
   return NextResponse.json(
     {
       error: 'Insufficient permissions',
-      yourRole: userRole,
-      requiredRoles,
     },
     { status: 403 }
   );
