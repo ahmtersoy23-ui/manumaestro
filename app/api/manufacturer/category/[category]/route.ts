@@ -34,6 +34,13 @@ export async function GET(
     const searchParams = request.nextUrl.searchParams;
     const monthParam = searchParams.get('month');
 
+    // Pagination parameters
+    const rawPage = parseInt(searchParams.get('page') || '1');
+    const rawLimit = parseInt(searchParams.get('limit') || '50');
+    const page = Math.max(rawPage, 1);
+    const limit = Math.min(Math.max(rawLimit, 1), 200);
+    const skip = (page - 1) * limit;
+
     if (!category) {
       return NextResponse.json(
         { error: 'Category is required' },
@@ -44,25 +51,34 @@ export async function GET(
     // Default to current month if not provided
     const productionMonth = monthParam || formatMonthValue(new Date());
 
+    const where = {
+      productCategory: decodeURIComponent(category),
+      productionMonth,
+    };
+
     // Fetch requests for this category and production month
-    const requests = await prisma.productionRequest.findMany({
-      where: {
-        productCategory: decodeURIComponent(category),
-        productionMonth,
-      },
-      include: {
-        marketplace: {
-          select: {
-            name: true,
+    const [requests, total] = await Promise.all([
+      prisma.productionRequest.findMany({
+        where,
+        include: {
+          marketplace: {
+            select: {
+              name: true,
+            },
           },
         },
-      },
-      orderBy: {
-        requestDate: 'desc',
-      },
-    });
+        orderBy: {
+          requestDate: 'desc',
+        },
+        skip,
+        take: limit,
+      }),
+      prisma.productionRequest.count({ where }),
+    ]);
 
-    const formattedRequests = requests.map((r) => ({
+    const totalPages = Math.ceil(total / limit);
+
+    const formattedRequests = requests.map((r: any) => ({
       id: r.id,
       iwasku: r.iwasku,
       productName: r.productName,
@@ -79,6 +95,12 @@ export async function GET(
     return NextResponse.json({
       success: true,
       data: formattedRequests,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+      },
     });
   } catch (error) {
     return errorResponse(error, 'Failed to fetch requests');

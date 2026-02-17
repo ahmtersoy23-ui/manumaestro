@@ -30,16 +30,40 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const marketplaces = await prisma.marketplace.findMany({
-      where: {
-        isActive: true,
-      },
-      orderBy: {
-        name: 'asc',
+    const searchParams = request.nextUrl.searchParams;
+
+    // Pagination parameters
+    const rawPage = parseInt(searchParams.get('page') || '1');
+    const rawLimit = parseInt(searchParams.get('limit') || '50');
+    const page = Math.max(rawPage, 1);
+    const limit = Math.min(Math.max(rawLimit, 1), 200);
+    const skip = (page - 1) * limit;
+
+    const where = { isActive: true };
+
+    const [marketplaces, total] = await Promise.all([
+      prisma.marketplace.findMany({
+        where,
+        orderBy: {
+          name: 'asc',
+        },
+        skip,
+        take: limit,
+      }),
+      prisma.marketplace.count({ where }),
+    ]);
+
+    const totalPages = Math.ceil(total / limit);
+
+    return successResponse({
+      data: marketplaces,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
       },
     });
-
-    return successResponse(marketplaces);
   } catch (error) {
     return errorResponse(error, 'Failed to fetch marketplaces');
   }

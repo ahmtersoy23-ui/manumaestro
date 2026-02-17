@@ -104,9 +104,12 @@ export async function GET(request: NextRequest) {
     const month = searchParams.get('month'); // YYYY-MM format
     const archiveMode = searchParams.get('archiveMode') === 'true';
 
-    // FIX 6: Add max limit of 500
+    // Pagination parameters
+    const rawPage = parseInt(searchParams.get('page') || '1');
     const rawLimit = parseInt(searchParams.get('limit') || '50');
-    const limit = Math.min(Math.max(rawLimit, 1), 500); // min 1, max 500
+    const page = Math.max(rawPage, 1);
+    const limit = Math.min(Math.max(rawLimit, 1), 200);
+    const skip = (page - 1) * limit;
 
     const where: any = {};
 
@@ -141,28 +144,39 @@ export async function GET(request: NextRequest) {
       // This case shouldn't happen in normal usage
     }
 
-    const requests = await prisma.productionRequest.findMany({
-      where,
-      include: {
-        marketplace: true,
-        enteredBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
+    const [requests, total] = await Promise.all([
+      prisma.productionRequest.findMany({
+        where,
+        include: {
+          marketplace: true,
+          enteredBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
           },
         },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take: limit,
-    });
+        orderBy: {
+          createdAt: 'desc',
+        },
+        skip,
+        take: limit,
+      }),
+      prisma.productionRequest.count({ where }),
+    ]);
+
+    const totalPages = Math.ceil(total / limit);
 
     return NextResponse.json({
       success: true,
       data: requests,
-      count: requests.length,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+      },
     });
   } catch (error) {
     return errorResponse(error, 'Failed to fetch requests');

@@ -40,26 +40,19 @@ export async function GET(request: NextRequest) {
       throw new ValidationError('Invalid month format. Expected YYYY-MM');
     }
 
-    // Query stats for the production month
-    const stats = await prisma.productionRequest.aggregate({
-      where: {
-        productionMonth: month,
-      },
-      _count: {
-        id: true,
-      },
-      _sum: {
-        quantity: true,
-        producedQuantity: true,
-      },
-    });
-
-    // Query detailed summary grouped by category and marketplace
+    // Single query: fetch all request data needed for both stats and summary
+    // This replaces the previous two separate queries (aggregate + findMany)
     const requests = await prisma.productionRequest.findMany({
       where: {
         productionMonth: month,
       },
-      include: {
+      select: {
+        iwasku: true,
+        productName: true,
+        productCategory: true,
+        productSize: true,
+        quantity: true,
+        producedQuantity: true,
         marketplace: {
           select: {
             id: true,
@@ -68,6 +61,15 @@ export async function GET(request: NextRequest) {
         },
       },
     });
+
+    // Compute aggregate stats in memory from the single query result
+    const stats = {
+      _count: { id: requests.length },
+      _sum: {
+        quantity: requests.reduce((sum, r) => sum + r.quantity, 0),
+        producedQuantity: requests.reduce((sum, r) => sum + (r.producedQuantity || 0), 0),
+      },
+    };
 
     // First, group by IWASKU to track production per product (not per request)
     const productMap = new Map<string, any>();

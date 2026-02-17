@@ -40,24 +40,14 @@ export default function DashboardPage() {
   useEffect(() => {
     async function fetchStats() {
       try {
-        // Fetch stats for all months
-        const promises = allMonths.map(async (month) => {
-          const res = await fetch(`/api/requests/monthly?month=${month.value}`);
-          const data = await res.json();
+        // Fetch stats for all months in a single batch request
+        const monthValues = allMonths.map(m => m.value).join(',');
+        const res = await fetch(`/api/dashboard/stats?months=${monthValues}`);
+        const data = await res.json();
 
-          return {
-            month: month.value,
-            totalRequests: data.data?.totalRequests || 0,
-            totalQuantity: data.data?.totalQuantity || 0,
-            totalProduced: data.data?.totalProduced || 0,
-            totalDesi: data.data?.totalDesi || 0,
-            totalProducedDesi: data.data?.totalProducedDesi || 0,
-            itemsWithoutSize: data.data?.itemsWithoutSize || 0,
-          };
-        });
-
-        const stats = await Promise.all(promises);
-        setMonthStats(stats);
+        if (data.success && Array.isArray(data.data)) {
+          setMonthStats(data.data);
+        }
       } catch (error) {
         logger.error('Failed to fetch month stats:', error);
       } finally {

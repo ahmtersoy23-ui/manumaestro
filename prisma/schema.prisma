@@ -29,6 +29,8 @@ model User {
   createdMarketplaces Marketplace[]           @relation("CreatedBy")
   auditLogs         AuditLog[]
 
+  @@index([role])
+  @@index([isActive])
   @@map("users")
 }
 
@@ -60,6 +62,8 @@ model Marketplace {
   permissions       UserMarketplacePermission[]
   requests          ProductionRequest[]
 
+  @@index([isActive, name])
+  @@index([createdById])
   @@map("marketplaces")
 }
 
@@ -91,6 +95,8 @@ model UserMarketplacePermission {
   marketplace     Marketplace  @relation(fields: [marketplaceId], references: [id], onDelete: Cascade)
 
   @@unique([userId, marketplaceId])
+  @@index([userId])
+  @@index([marketplaceId])
   @@map("user_marketplace_permissions")
 }
 
@@ -134,8 +140,13 @@ model ProductionRequest {
   @@index([productionMonth])
   @@index([status])
   @@index([workflowStage])
+  @@index([enteredById])
+  @@index([createdAt])
+  @@index([productCategory])
   @@index([productCategory, workflowStage])
   @@index([productCategory, productionMonth])
+  @@index([marketplaceId, productionMonth])
+  @@index([status, productionMonth])
   @@map("production_requests")
 }
 
