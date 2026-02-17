@@ -87,7 +87,7 @@ export async function middleware(request: NextRequest) {
   try {
     logger.debug('Verifying token with SSO backend...');
     // Verify token with SSO
-    const response = await fetch('https://apps.iwa.web.tr/api/auth/verify', {
+    const ssoResponse = await fetch('https://apps.iwa.web.tr/api/auth/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -96,8 +96,8 @@ export async function middleware(request: NextRequest) {
       })
     });
 
-    logger.debug('SSO response status:', response.status);
-    const data = await response.json();
+    logger.debug('SSO response status:', ssoResponse.status);
+    const data = await ssoResponse.json();
     logger.debug('SSO response:', JSON.stringify(data));
 
     if (!data.success) {
@@ -117,28 +117,28 @@ export async function middleware(request: NextRequest) {
     requestHeaders.set('x-user-role', data.data.role);
     requestHeaders.set('x-user-id', data.data.user.id);
 
+    // Prepare response headers (including rate limit headers)
+    const responseHeaders = new Headers();
+    Object.entries(rateLimitHeaders).forEach(([key, value]) => {
+      responseHeaders.set(key, value);
+    });
+
     // For API routes, return JSON responses for auth failures
     if (request.nextUrl.pathname.startsWith('/api/')) {
       if (!data.success) {
         return NextResponse.json(
           { error: 'Invalid or expired token' },
-          { status: 401 }
+          { status: 401, headers: responseHeaders }
         );
       }
     }
 
-    const response = NextResponse.next({
+    return NextResponse.next({
       request: {
         headers: requestHeaders,
       },
+      headers: responseHeaders,
     });
-
-    // Add rate limit headers
-    Object.entries(rateLimitHeaders).forEach(([key, value]) => {
-      response.headers.set(key, value);
-    });
-
-    return response;
   } catch (error) {
     logger.error('SSO verification error:', error);
     // On error, redirect to SSO (or return JSON for API routes)
