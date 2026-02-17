@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { requireRole } from '@/lib/auth/verify';
@@ -35,10 +36,10 @@ export async function GET(request: NextRequest) {
     const action = searchParams.get('action');
     const userId = searchParams.get('userId');
 
-    const where: any = {};
+    const where: Prisma.AuditLogWhereInput = {};
 
     if (action) {
-      where.action = action;
+      where.action = action as Prisma.AuditLogWhereInput['action'];
     }
 
     if (userId) {

@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { verifyAuth } from '@/lib/auth/verify';
@@ -13,6 +14,21 @@ import {
   formatStatusForExcel,
   type ExportColumn,
 } from '@/lib/excel/exporter';
+
+interface AggregatedProduct {
+  iwasku: string;
+  productName: string;
+  productCategory: string;
+  productSize: number;
+  marketplaces: string;
+  totalRequestedQty: number;
+  producedQty: number;
+  totalDesi: number;
+  status: string;
+  productionMonth: string;
+  notes: string;
+  manufacturerNotes: string;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -36,7 +52,7 @@ export async function GET(request: NextRequest) {
     const month = searchParams.get('month');
 
     // Build filter
-    const where: any = {};
+    const where: Prisma.ProductionRequestWhereInput = {};
 
     if (category) {
       where.productCategory = decodeURIComponent(category);
@@ -66,9 +82,9 @@ export async function GET(request: NextRequest) {
 
 
     // Aggregate data by IWASKU (group marketplace requests)
-    const aggregatedData = new Map<string, any>();
+    const aggregatedData = new Map<string, AggregatedProduct>();
 
-    requests.forEach((request: any) => {
+    requests.forEach((request) => {
       const key = request.iwasku;
       const existing = aggregatedData.get(key);
 

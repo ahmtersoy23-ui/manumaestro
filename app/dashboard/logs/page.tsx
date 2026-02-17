@@ -19,7 +19,7 @@ interface AuditLog {
   entityType: string | null;
   entityId: string | null;
   description: string;
-  metadata: any;
+  metadata: Record<string, unknown> | null;
   ipAddress: string | null;
   createdAt: string;
   user: {

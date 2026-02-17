@@ -78,7 +78,7 @@ export async function GET(
 
     const totalPages = Math.ceil(total / limit);
 
-    const formattedRequests = requests.map((r: any) => ({
+    const formattedRequests = requests.map((r) => ({
       id: r.id,
       iwasku: r.iwasku,
       productName: r.productName,

@@ -24,6 +24,17 @@ interface Marketplace {
   code: string;
 }
 
+interface ProductionRequest {
+  requestDate: string;
+  iwasku: string;
+  productName: string;
+  productCategory: string;
+  quantity: number;
+  productionMonth: string;
+  status: string;
+  notes: string | null;
+}
+
 export default function MarketplacePage({ params }: { params: Promise<{ slug: string }> }) {
   const searchParams = useSearchParams();
   const month = searchParams.get('month');
@@ -147,7 +158,7 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
       const headers = ['Date', 'IWASKU', 'Product Name', 'Category', 'Quantity', 'Production Month', 'Status', 'Notes'];
       const csvRows = [headers.join(',')];
 
-      data.data.forEach((request: any) => {
+      data.data.forEach((request: ProductionRequest) => {
         const row = [
           new Date(request.requestDate).toLocaleDateString('tr-TR'),
           request.iwasku,

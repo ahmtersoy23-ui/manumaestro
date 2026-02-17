@@ -5,8 +5,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma, EntryType, RequestStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
-import { EntryType, RequestStatus } from '@prisma/client';
 import { createLogger } from '@/lib/logger';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { verifyAuth, requireRole } from '@/lib/auth/verify';
@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(Math.max(rawLimit, 1), 200);
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Prisma.ProductionRequestWhereInput = {};
 
     if (marketplaceId) {
       where.marketplaceId = marketplaceId;

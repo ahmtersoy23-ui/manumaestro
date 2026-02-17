@@ -4,8 +4,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { ProductionRequest, EntryType, RequestStatus } from '@prisma/client';
 import { prisma, queryProductDb } from '@/lib/db/prisma';
-import { EntryType, RequestStatus } from '@prisma/client';
 import { createLogger } from '@/lib/logger';
 import { BulkRequestSchema, formatValidationError } from '@/lib/validation/schemas';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     const requestDate = new Date();
 
     // Fetch product details directly from database (FIX 3: Remove self-referencing fetch)
-    const createdRequests: any[] = [];
+    const createdRequests: ProductionRequest[] = [];
     const errors: string[] = [];
     const warnings: string[] = [];
 

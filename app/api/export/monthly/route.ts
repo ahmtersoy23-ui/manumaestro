@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
 
 
     // Format data for export
-    const exportData = requests.map((request: any) => ({
+    const exportData = requests.map((request) => ({
       iwasku: request.iwasku,
       productName: request.productName,
       productCategory: request.productCategory,

@@ -105,7 +105,7 @@ export default function MonthDetailPage() {
           setMissingDesiItems(data.data.missingDesiItems || []);
 
           // API now returns already grouped by category (simplified)
-          const categories: CategorySummary[] = (data.data.summary || []).map((item: any) => ({
+          const categories: CategorySummary[] = (data.data.summary || []).map((item: CategorySummary) => ({
             productCategory: item.productCategory,
             totalQuantity: item.totalQuantity || 0,
             totalProduced: item.totalProduced || 0,
@@ -118,7 +118,7 @@ export default function MonthDetailPage() {
           setCategories(categories.sort((a: CategorySummary, b: CategorySummary) => b.totalQuantity - a.totalQuantity));
 
           // Use marketplace summary directly from API
-          const marketplaceSummary: MarketplaceSummary[] = (data.data.marketplaceSummary || []).map((item: any) => ({
+          const marketplaceSummary: MarketplaceSummary[] = (data.data.marketplaceSummary || []).map((item: MarketplaceSummary) => ({
             marketplaceId: item.marketplaceId,
             marketplaceName: item.marketplaceName,
             totalQuantity: item.totalQuantity || 0,

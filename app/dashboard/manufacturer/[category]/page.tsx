@@ -122,7 +122,7 @@ export default function ManufacturerCategoryPage() {
   const updateEditValue = (
     iwasku: string,
     field: 'producedQuantity' | 'manufacturerNotes' | 'status',
-    value: any
+    value: string | number
   ) => {
     setEditValues((prev) => ({
       ...prev,
