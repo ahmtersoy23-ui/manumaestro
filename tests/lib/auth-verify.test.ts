@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth, requireRole } from '@/lib/auth/verify';
 
 // Mock fetch globally
@@ -181,7 +181,7 @@ describe('Auth Verify', () => {
       const result = await requireRole(request, ['admin']);
 
       expect(result).toHaveProperty('status', 401);
-      const json = await result.json();
+      const json = await (result as NextResponse).json();
       expect(json.success).toBe(false);
       expect(json.error).toBe('No authentication token');
     });
@@ -207,7 +207,7 @@ describe('Auth Verify', () => {
       const result = await requireRole(request, ['admin']);
 
       expect(result).toHaveProperty('status', 403);
-      const json = await result.json();
+      const json = await (result as NextResponse).json();
       expect(json.success).toBe(false);
       expect(json.error).toBe('Insufficient permissions');
     });
