@@ -60,6 +60,21 @@ export const MarketplaceCreateSchema = z.object({
 });
 
 /**
+ * Workflow Update Schema
+ */
+export const WorkflowUpdateSchema = z.object({
+  requestId: z.string().uuid('Invalid request ID'),
+  workflowStage: z.enum([
+    'REQUESTED',
+    'CUTTING',
+    'ASSEMBLY',
+    'QUALITY_CHECK',
+    'PACKAGING',
+    'READY_TO_SHIP',
+  ], { message: 'Invalid workflow stage' }),
+});
+
+/**
  * Month Parameter Schema
  */
 export const MonthParamSchema = z.string().regex(/^\d{4}-\d{2}$/, 'Invalid month format. Expected YYYY-MM');

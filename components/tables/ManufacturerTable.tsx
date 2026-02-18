@@ -5,8 +5,8 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
-import { ChevronDown, ChevronRight, Package } from 'lucide-react';
+import { useState, useEffect, Fragment } from 'react';
+import { ChevronDown, ChevronRight, Package, Loader2 } from 'lucide-react';
 
 interface ManufacturerTableProps {
   selectedCategory: string | null;
@@ -24,48 +24,80 @@ interface ProductData {
   }[];
 }
 
-// Mock data - will be replaced with API call
-const mockData: ProductData[] = [
-  {
-    iwasku: 'IW-SAMPLE-001',
-    productName: 'Premium Wooden Chair',
-    category: 'Furniture',
-    totalQuantity: 285,
-    breakdown: [
-      { marketplace: 'Amazon US', code: 'AMZN_US', quantity: 50 },
-      { marketplace: 'Amazon EU', code: 'AMZN_EU', quantity: 75 },
-      { marketplace: 'Amazon UK', code: 'AMZN_UK', quantity: 30 },
-      { marketplace: 'Amazon CA', code: 'AMZN_CA', quantity: 20 },
-      { marketplace: 'Amazon AU', code: 'AMZN_AU', quantity: 10 },
-      { marketplace: 'Wayfair US', code: 'WAYFAIR_US', quantity: 80 },
-      { marketplace: 'Wayfair UK', code: 'WAYFAIR_UK', quantity: 20 },
-    ],
-  },
-  {
-    iwasku: 'IW-SAMPLE-002',
-    productName: 'Modern Desk Lamp',
-    category: 'Lighting',
-    totalQuantity: 150,
-    breakdown: [
-      { marketplace: 'Amazon US', code: 'AMZN_US', quantity: 80 },
-      { marketplace: 'Amazon EU', code: 'AMZN_EU', quantity: 30 },
-      { marketplace: 'Wayfair US', code: 'WAYFAIR_US', quantity: 40 },
-    ],
-  },
-];
+interface RequestItem {
+  iwasku: string;
+  productName: string;
+  productCategory: string;
+  quantity: number;
+  marketplace: {
+    id: string;
+    name: string;
+    region: string;
+    code?: string;
+  };
+}
+
+function aggregateRequests(requests: RequestItem[]): ProductData[] {
+  const productMap = new Map<string, ProductData>();
+
+  for (const req of requests) {
+    let product = productMap.get(req.iwasku);
+    if (!product) {
+      product = {
+        iwasku: req.iwasku,
+        productName: req.productName,
+        category: req.productCategory,
+        totalQuantity: 0,
+        breakdown: [],
+      };
+      productMap.set(req.iwasku, product);
+    }
+
+    product.totalQuantity += req.quantity;
+
+    const marketplaceCode = req.marketplace.code || req.marketplace.name;
+    const existing = product.breakdown.find((b) => b.code === marketplaceCode);
+    if (existing) {
+      existing.quantity += req.quantity;
+    } else {
+      product.breakdown.push({
+        marketplace: req.marketplace.name,
+        code: marketplaceCode,
+        quantity: req.quantity,
+      });
+    }
+  }
+
+  return Array.from(productMap.values()).sort((a, b) => b.totalQuantity - a.totalQuantity);
+}
 
 export function ManufacturerTable({ selectedCategory }: ManufacturerTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [data, setData] = useState<ProductData[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Note: This table shows overview/mock data
-    // Real manufacturer workflow is in /dashboard/manufacturer/[category]
-    let filteredData = mockData;
-    if (selectedCategory) {
-      filteredData = mockData.filter((item) => item.category === selectedCategory);
+    async function fetchData() {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({ limit: '200' });
+        const res = await fetch(`/api/requests?${params.toString()}`);
+        if (!res.ok) throw new Error('Failed to fetch');
+        const json = await res.json();
+        const requests: RequestItem[] = json.data || [];
+
+        let aggregated = aggregateRequests(requests);
+        if (selectedCategory) {
+          aggregated = aggregated.filter((item) => item.category === selectedCategory);
+        }
+        setData(aggregated);
+      } catch {
+        setData([]);
+      } finally {
+        setLoading(false);
+      }
     }
-    setData(filteredData);
+    fetchData();
   }, [selectedCategory]);
 
   const toggleRow = (iwasku: string) => {
@@ -77,6 +109,17 @@ export function ManufacturerTable({ selectedCategory }: ManufacturerTableProps) 
     }
     setExpandedRows(newExpanded);
   };
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 p-12">
+        <div className="flex flex-col items-center justify-center text-center">
+          <Loader2 className="w-8 h-8 text-purple-500 animate-spin mb-4" />
+          <p className="text-sm text-gray-600">Loading production data...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (data.length === 0) {
     return (
@@ -124,10 +167,9 @@ export function ManufacturerTable({ selectedCategory }: ManufacturerTableProps) 
               const isExpanded = expandedRows.has(item.iwasku);
 
               return (
-                <>
+                <Fragment key={item.iwasku}>
                   {/* Main Row */}
                   <tr
-                    key={item.iwasku}
                     className="hover:bg-gray-50 transition-colors cursor-pointer"
                     onClick={() => toggleRow(item.iwasku)}
                   >
@@ -196,7 +238,7 @@ export function ManufacturerTable({ selectedCategory }: ManufacturerTableProps) 
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               );
             })}
           </tbody>

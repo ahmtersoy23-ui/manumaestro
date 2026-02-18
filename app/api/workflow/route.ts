@@ -10,6 +10,8 @@ import { WorkflowStage } from '@prisma/client';
 import { logAction } from '@/lib/auditLog';
 import { requireRole } from '@/lib/auth/verify';
 import { errorResponse } from '@/lib/api/response';
+import { WorkflowUpdateSchema, formatValidationError } from '@/lib/validation/schemas';
+import { ValidationError } from '@/lib/api/errors';
 
 export async function PATCH(request: NextRequest) {
   try {
@@ -27,24 +29,14 @@ export async function PATCH(request: NextRequest) {
     const { user } = authResult;
 
     const body = await request.json();
-    const { requestId, workflowStage } = body;
 
-    // Validation
-    if (!requestId || !workflowStage) {
-      return NextResponse.json(
-        { error: 'Request ID and workflow stage are required' },
-        { status: 400 }
-      );
+    // Validate input with Zod
+    const parsed = WorkflowUpdateSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new ValidationError('Validation failed', formatValidationError(parsed.error));
     }
 
-    // Validate workflow stage
-    const validStages = Object.values(WorkflowStage);
-    if (!validStages.includes(workflowStage)) {
-      return NextResponse.json(
-        { error: 'Invalid workflow stage' },
-        { status: 400 }
-      );
-    }
+    const { requestId, workflowStage } = parsed.data;
 
     // Get the request
     const request_data = await prisma.productionRequest.findUnique({

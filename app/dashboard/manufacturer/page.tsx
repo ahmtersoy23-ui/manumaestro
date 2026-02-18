@@ -7,7 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import { ManufacturerTable } from '@/components/tables/ManufacturerTable';
-import { Filter, Download, Calendar, X } from 'lucide-react';
+import { Filter, Download, X } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('ManufacturerPage');
@@ -29,9 +29,34 @@ export default function ManufacturerPage() {
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
 
   useEffect(() => {
-    // Note: This is an overview page. Actual manufacturer work happens in /manufacturer/[category]
-    // Categories will be fetched dynamically in future iterations
-    setCategories(['Furniture', 'Lighting', 'Textiles', 'Outdoor']);
+    async function fetchOverview() {
+      try {
+        const res = await fetch('/api/requests?limit=200');
+        if (!res.ok) return;
+        const json = await res.json();
+        const requests = json.data || [];
+
+        const categorySet = new Set<string>();
+        const productSet = new Set<string>();
+        let totalQty = 0;
+
+        for (const req of requests) {
+          if (req.productCategory) categorySet.add(req.productCategory);
+          productSet.add(req.iwasku);
+          totalQty += req.quantity || 0;
+        }
+
+        setCategories(Array.from(categorySet).sort());
+        setStats({
+          totalProducts: productSet.size,
+          totalQuantity: totalQty,
+          uniqueCategories: categorySet.size,
+        });
+      } catch {
+        // Keep empty state on error
+      }
+    }
+    fetchOverview();
   }, []);
 
   const handleExport = async () => {
