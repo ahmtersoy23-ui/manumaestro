@@ -11,7 +11,6 @@ module.exports = {
       PORT: 3000,
       DATABASE_URL: process.env.DATABASE_URL,
       PRODUCT_DB_URL: process.env.PRODUCT_DB_URL,
-      JWT_SECRET: process.env.JWT_SECRET,
       SSO_URL: process.env.SSO_URL,
       SSO_APP_CODE: process.env.SSO_APP_CODE
     },

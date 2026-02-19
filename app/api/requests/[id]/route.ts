@@ -64,7 +64,6 @@ export async function DELETE(
       {
         success: false,
         error: 'Failed to delete request',
-        message: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     );

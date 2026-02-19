@@ -118,7 +118,6 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         error: 'Failed to create bulk requests',
-        message: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     );

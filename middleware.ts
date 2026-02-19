@@ -8,6 +8,11 @@ const SSO_URL = process.env.SSO_URL || 'https://apps.iwa.web.tr';
 const SSO_APP_CODE = process.env.SSO_APP_CODE || 'manumaestro';
 
 export async function middleware(request: NextRequest) {
+  // Health endpoint bypasses auth (for monitoring/load balancers)
+  if (request.nextUrl.pathname === '/api/health') {
+    return NextResponse.next();
+  }
+
   logger.debug('Request:', request.nextUrl.pathname);
 
   // Apply rate limiting based on endpoint
