@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Calendar, Package, ShoppingCart, Factory, ArrowLeft, Plus, LayoutGrid } from 'lucide-react';
+import { Calendar, Package, ShoppingCart, Factory, ArrowLeft, Plus } from 'lucide-react';
 import { parseMonthValue, isMonthLocked } from '@/lib/monthUtils';
 import { createLogger } from '@/lib/logger';
 
@@ -255,24 +255,22 @@ export default function MonthDetailPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {categories.map((category) => {
-              const isFurniture = category.productCategory.toLowerCase().includes('mobilya');
-
-              return (
-                <div
-                  key={category.productCategory}
-                  className="p-6 bg-white rounded-xl border-2 border-gray-200 hover:border-orange-500 hover:shadow-lg transition-all"
-                >
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 bg-orange-100 rounded-lg transition-colors">
-                      <Package className="w-6 h-6 text-orange-600" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      {category.productCategory}
-                    </h3>
+            {categories.map((category) => (
+              <Link
+                key={category.productCategory}
+                href={`/dashboard/manufacturer/${encodeURIComponent(category.productCategory)}?month=${month}`}
+                className="block p-6 bg-white rounded-xl border-2 border-gray-200 hover:border-orange-500 hover:shadow-lg transition-all group"
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-orange-100 rounded-lg group-hover:bg-orange-200 transition-colors">
+                    <Package className="w-6 h-6 text-orange-600" />
                   </div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {category.productCategory}
+                  </h3>
+                </div>
 
-                  <div className="space-y-3 mt-4 pt-4 border-t border-gray-100">
+                <div className="space-y-3 mt-4 pt-4 border-t border-gray-100">
                   {/* Items count */}
                   <div className="flex justify-between items-center">
                     <p className="text-xs text-gray-600">Items</p>
@@ -335,30 +333,9 @@ export default function MonthDetailPage() {
                       ></div>
                     </div>
                   </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className={`flex gap-2 mt-4 pt-4 border-t border-gray-100 ${isFurniture ? '' : ''}`}>
-                    <Link
-                      href={`/dashboard/manufacturer/${encodeURIComponent(category.productCategory)}?month=${month}`}
-                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors text-sm font-medium"
-                    >
-                      <Package className="w-4 h-4" />
-                      Production
-                    </Link>
-                    {isFurniture && (
-                      <Link
-                        href={`/dashboard/workflow/${encodeURIComponent(category.productCategory)}?month=${month}`}
-                        className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm font-medium"
-                      >
-                        <LayoutGrid className="w-4 h-4" />
-                        Workflow
-                      </Link>
-                    )}
-                  </div>
                 </div>
-              );
-            })}
+              </Link>
+            ))}
           </div>
         )}
       </div>

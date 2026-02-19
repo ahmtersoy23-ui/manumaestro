@@ -87,7 +87,6 @@ export async function GET(
       quantity: r.quantity,
       producedQuantity: r.producedQuantity,
       manufacturerNotes: r.manufacturerNotes,
-      workflowStage: r.workflowStage,
       status: r.status,
       requestDate: r.requestDate.toISOString(),
     }));
