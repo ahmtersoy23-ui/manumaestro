@@ -55,8 +55,7 @@ export async function GET(request: NextRequest) {
 
     const totalPages = Math.ceil(total / limit);
 
-    return successResponse({
-      data: marketplaces,
+    return successResponse(marketplaces, {
       pagination: {
         page,
         limit,
