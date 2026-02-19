@@ -44,7 +44,7 @@ const productPool = new Pool({
   port: undefined,
 });
 
-export async function queryProductDb(query: string, params: any[] = []) {
+export async function queryProductDb(query: string, params: (string | number | boolean | null)[] = []) {
   const client = await productPool.connect();
   try {
     const result = await client.query(query, params);

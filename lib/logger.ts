@@ -23,7 +23,7 @@ class Logger {
     this.timestamp = options.timestamp ?? true;
   }
 
-  private formatMessage(level: LogLevel, ...args: any[]): any[] {
+  private formatMessage(level: LogLevel, ...args: unknown[]): unknown[] {
     const prefix = this.timestamp
       ? `[${new Date().toISOString()}] [${level.toUpperCase()}] [${this.module}]`
       : `[${level.toUpperCase()}] [${this.module}]`;
@@ -34,7 +34,7 @@ class Logger {
   /**
    * Debug logging - Only in development
    */
-  debug(...args: any[]) {
+  debug(...args: unknown[]) {
     if (this.isDevelopment) {
       console.log(...this.formatMessage('debug', ...args));
     }
@@ -43,7 +43,7 @@ class Logger {
   /**
    * Info logging - Only in development
    */
-  info(...args: any[]) {
+  info(...args: unknown[]) {
     if (this.isDevelopment) {
       console.info(...this.formatMessage('info', ...args));
     }
@@ -52,14 +52,14 @@ class Logger {
   /**
    * Warning logging - Always logged
    */
-  warn(...args: any[]) {
+  warn(...args: unknown[]) {
     console.warn(...this.formatMessage('warn', ...args));
   }
 
   /**
    * Error logging - Always logged
    */
-  error(...args: any[]) {
+  error(...args: unknown[]) {
     console.error(...this.formatMessage('error', ...args));
   }
 }

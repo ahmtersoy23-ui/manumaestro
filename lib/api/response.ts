@@ -12,7 +12,7 @@ const logger = createLogger('API Response');
 /**
  * Success response helper
  */
-export function successResponse<T>(data: T, meta?: any, status: number = 200) {
+export function successResponse<T>(data: T, meta?: Record<string, unknown>, status: number = 200) {
   return NextResponse.json(
     {
       success: true,
@@ -26,7 +26,7 @@ export function successResponse<T>(data: T, meta?: any, status: number = 200) {
 /**
  * Created response helper (201)
  */
-export function createdResponse<T>(data: T, meta?: any) {
+export function createdResponse<T>(data: T, meta?: Record<string, unknown>) {
   return successResponse(data, meta, 201);
 }
 

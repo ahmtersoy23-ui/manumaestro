@@ -11,7 +11,7 @@ export class ApiError extends Error {
     public statusCode: number,
     public message: string,
     public code?: string,
-    public details?: any
+    public details?: Record<string, unknown> | Record<string, unknown>[] | string
   ) {
     super(message);
     this.name = 'ApiError';
@@ -23,7 +23,7 @@ export class ApiError extends Error {
  * 400 Bad Request - Validation errors
  */
 export class ValidationError extends ApiError {
-  constructor(message: string = 'Validation failed', details?: any) {
+  constructor(message: string = 'Validation failed', details?: Record<string, unknown> | Record<string, unknown>[] | string) {
     super(400, message, 'VALIDATION_ERROR', details);
     this.name = 'ValidationError';
   }
@@ -73,7 +73,7 @@ export class ConflictError extends ApiError {
  * 500 Internal Server Error
  */
 export class InternalServerError extends ApiError {
-  constructor(message: string = 'Internal server error', details?: any) {
+  constructor(message: string = 'Internal server error', details?: Record<string, unknown> | Record<string, unknown>[] | string) {
     super(500, message, 'INTERNAL_ERROR', details);
     this.name = 'InternalServerError';
   }

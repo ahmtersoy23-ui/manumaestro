@@ -3,12 +3,14 @@
  * Tests for SSO token verification and role checking
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyAuth, requireRole } from '@/lib/auth/verify';
+import { verifyAuth, requireRole, type VerifiedUser } from '@/lib/auth/verify';
 
 // Mock fetch globally
 global.fetch = vi.fn();
+
+const mockFetch = global.fetch as Mock;
 
 describe('Auth Verify', () => {
   beforeEach(() => {
@@ -32,7 +34,7 @@ describe('Auth Verify', () => {
         },
       });
 
-      (global.fetch as any).mockResolvedValueOnce({
+      mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 401,
       });
@@ -51,7 +53,7 @@ describe('Auth Verify', () => {
         },
       });
 
-      (global.fetch as any).mockResolvedValueOnce({
+      mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           success: false,
@@ -78,7 +80,7 @@ describe('Auth Verify', () => {
         name: 'Test User',
       };
 
-      (global.fetch as any).mockResolvedValueOnce({
+      mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           success: true,
@@ -107,7 +109,7 @@ describe('Auth Verify', () => {
         },
       });
 
-      (global.fetch as any).mockResolvedValueOnce({
+      mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           success: true,
@@ -135,7 +137,7 @@ describe('Auth Verify', () => {
         },
       });
 
-      (global.fetch as any).mockRejectedValueOnce(new Error('Network error'));
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
       const result = await verifyAuth(request);
 
@@ -150,7 +152,7 @@ describe('Auth Verify', () => {
         },
       });
 
-      (global.fetch as any).mockResolvedValueOnce({
+      mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           success: true,
@@ -193,7 +195,7 @@ describe('Auth Verify', () => {
         },
       });
 
-      (global.fetch as any).mockResolvedValueOnce({
+      mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           success: true,
@@ -225,7 +227,7 @@ describe('Auth Verify', () => {
         name: 'Admin User',
       };
 
-      (global.fetch as any).mockResolvedValueOnce({
+      mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           success: true,
@@ -239,8 +241,8 @@ describe('Auth Verify', () => {
       const result = await requireRole(request, ['admin']);
 
       expect(result).toHaveProperty('user');
-      expect((result as any).user.email).toBe(mockUser.email);
-      expect((result as any).user.role).toBe('admin');
+      expect((result as { user: VerifiedUser }).user.email).toBe(mockUser.email);
+      expect((result as { user: VerifiedUser }).user.role).toBe('admin');
     });
 
     it('should return user when role matches (multiple allowed roles)', async () => {
@@ -250,7 +252,7 @@ describe('Auth Verify', () => {
         },
       });
 
-      (global.fetch as any).mockResolvedValueOnce({
+      mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           success: true,
@@ -264,11 +266,12 @@ describe('Auth Verify', () => {
       const result = await requireRole(request, ['admin', 'editor']);
 
       expect(result).toHaveProperty('user');
-      expect((result as any).user.role).toBe('editor');
+      expect((result as { user: VerifiedUser }).user.role).toBe('editor');
     });
 
     it('should handle all role types correctly', async () => {
-      const testCases = [
+      type Role = 'admin' | 'editor' | 'viewer';
+      const testCases: { role: string; allowed: Role[]; shouldPass: boolean }[] = [
         { role: 'admin', allowed: ['admin', 'editor', 'viewer'], shouldPass: true },
         { role: 'editor', allowed: ['admin', 'editor'], shouldPass: true },
         { role: 'viewer', allowed: ['admin'], shouldPass: false },
@@ -282,7 +285,7 @@ describe('Auth Verify', () => {
           },
         });
 
-        (global.fetch as any).mockResolvedValueOnce({
+        mockFetch.mockResolvedValueOnce({
           ok: true,
           json: async () => ({
             success: true,
@@ -293,7 +296,7 @@ describe('Auth Verify', () => {
           }),
         });
 
-        const result = await requireRole(request, testCase.allowed as any);
+        const result = await requireRole(request, testCase.allowed);
 
         if (testCase.shouldPass) {
           expect(result).toHaveProperty('user');

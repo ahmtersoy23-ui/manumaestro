@@ -5,6 +5,11 @@
  * For production with multiple instances, consider using Redis with Upstash.
  */
 
+interface RateLimitRequest {
+  ip?: string;
+  headers: { get(name: string): string | null };
+}
+
 interface RateLimitConfig {
   /**
    * Maximum number of requests allowed
@@ -17,7 +22,7 @@ interface RateLimitConfig {
   /**
    * Custom identifier function (default: uses IP)
    */
-  identifier?: (request: any) => string;
+  identifier?: (request: RateLimitRequest) => string;
 }
 
 interface RateLimitEntry {
@@ -58,7 +63,7 @@ export class RateLimiter {
   /**
    * Default identifier uses IP address
    */
-  private defaultIdentifier(request: any): string {
+  private defaultIdentifier(request: RateLimitRequest): string {
     const forwarded = request.headers.get('x-forwarded-for');
     const ip = forwarded ? forwarded.split(',')[0].trim() :
                request.headers.get('x-real-ip') ||
@@ -70,7 +75,7 @@ export class RateLimiter {
    * Check if request is rate limited
    * Returns { limited: boolean, remaining: number, resetTime: number }
    */
-  check(request: any): {
+  check(request: RateLimitRequest): {
     limited: boolean;
     remaining: number;
     resetTime: number;

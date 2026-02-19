@@ -16,13 +16,13 @@ interface ApiClientOptions extends RequestInit {
   successMessage?: string;
 }
 
-interface ApiResponse<T = any> {
+interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: {
     message: string;
     code?: string;
-    details?: any;
+    details?: Record<string, unknown>;
   };
 }
 
@@ -89,7 +89,7 @@ async function fetchWithRetry(
 /**
  * API Client with enhanced error handling
  */
-export async function apiClient<T = any>(
+export async function apiClient<T = unknown>(
   url: string,
   options: ApiClientOptions = {}
 ): Promise<T> {
@@ -169,10 +169,10 @@ export async function apiClient<T = any>(
  * Convenience methods for different HTTP verbs
  */
 export const api = {
-  get: <T = any>(url: string, options?: ApiClientOptions) =>
+  get: <T = unknown>(url: string, options?: ApiClientOptions) =>
     apiClient<T>(url, { ...options, method: 'GET' }),
 
-  post: <T = any>(url: string, body?: any, options?: ApiClientOptions) =>
+  post: <T = unknown>(url: string, body?: unknown, options?: ApiClientOptions) =>
     apiClient<T>(url, {
       ...options,
       method: 'POST',
@@ -183,7 +183,7 @@ export const api = {
       body: body ? JSON.stringify(body) : undefined,
     }),
 
-  put: <T = any>(url: string, body?: any, options?: ApiClientOptions) =>
+  put: <T = unknown>(url: string, body?: unknown, options?: ApiClientOptions) =>
     apiClient<T>(url, {
       ...options,
       method: 'PUT',
@@ -194,7 +194,7 @@ export const api = {
       body: body ? JSON.stringify(body) : undefined,
     }),
 
-  patch: <T = any>(url: string, body?: any, options?: ApiClientOptions) =>
+  patch: <T = unknown>(url: string, body?: unknown, options?: ApiClientOptions) =>
     apiClient<T>(url, {
       ...options,
       method: 'PATCH',
@@ -205,19 +205,19 @@ export const api = {
       body: body ? JSON.stringify(body) : undefined,
     }),
 
-  delete: <T = any>(url: string, options?: ApiClientOptions) =>
+  delete: <T = unknown>(url: string, options?: ApiClientOptions) =>
     apiClient<T>(url, { ...options, method: 'DELETE' }),
 };
 
 /**
  * Hook-like wrapper for easier usage in components
  */
-export function createApiCall<T = any>(options?: ApiClientOptions) {
+export function createApiCall<T = unknown>(options?: ApiClientOptions) {
   return {
     get: (url: string) => api.get<T>(url, options),
-    post: (url: string, body?: any) => api.post<T>(url, body, options),
-    put: (url: string, body?: any) => api.put<T>(url, body, options),
-    patch: (url: string, body?: any) => api.patch<T>(url, body, options),
+    post: (url: string, body?: unknown) => api.post<T>(url, body, options),
+    put: (url: string, body?: unknown) => api.put<T>(url, body, options),
+    patch: (url: string, body?: unknown) => api.patch<T>(url, body, options),
     delete: (url: string) => api.delete<T>(url, options),
   };
 }

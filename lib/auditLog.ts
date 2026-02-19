@@ -4,7 +4,7 @@
  */
 
 import { prisma } from '@/lib/db/prisma';
-import { AuditAction } from '@prisma/client';
+import { AuditAction, Prisma } from '@prisma/client';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('Audit Log');
@@ -17,7 +17,7 @@ interface LogActionParams {
   entityType?: string;
   entityId?: string;
   description: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   ipAddress?: string;
 }
 
@@ -32,7 +32,7 @@ export async function logAction(params: LogActionParams) {
         entityType: params.entityType,
         entityId: params.entityId,
         description: params.description,
-        metadata: params.metadata,
+        metadata: params.metadata as Prisma.InputJsonValue | undefined,
         ipAddress: params.ipAddress,
       },
     });

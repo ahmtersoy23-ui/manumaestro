@@ -17,6 +17,17 @@ import {
   UnauthorizedError,
 } from '@/lib/api/errors';
 
+interface ApiResponseBody {
+  success: boolean;
+  data?: unknown;
+  meta?: Record<string, unknown>;
+  error: {
+    message: string;
+    code: string;
+    details?: Record<string, unknown> | Record<string, unknown>[] | string;
+  };
+}
+
 describe('API Response Helpers', () => {
   describe('successResponse', () => {
     it('should create success response with data', () => {
@@ -26,7 +37,7 @@ describe('API Response Helpers', () => {
       expect(response.status).toBe(200);
 
       // Parse JSON body
-      response.json().then((body: any) => {
+      response.json().then((body: ApiResponseBody) => {
         expect(body.success).toBe(true);
         expect(body.data).toEqual(data);
       });
@@ -37,7 +48,7 @@ describe('API Response Helpers', () => {
       const meta = { page: 1, total: 10 };
       const response = successResponse(data, meta);
 
-      response.json().then((body: any) => {
+      response.json().then((body: ApiResponseBody) => {
         expect(body.meta).toEqual(meta);
       });
     });
@@ -70,7 +81,7 @@ describe('API Response Helpers', () => {
 
       expect(response.status).toBe(400);
 
-      response.json().then((body: any) => {
+      response.json().then((body: ApiResponseBody) => {
         expect(body.success).toBe(false);
         expect(body.error.message).toBe('Invalid input');
         expect(body.error.code).toBe('VALIDATION_ERROR');
@@ -84,7 +95,7 @@ describe('API Response Helpers', () => {
 
       expect(response.status).toBe(404);
 
-      response.json().then((body: any) => {
+      response.json().then((body: ApiResponseBody) => {
         expect(body.error.message).toBe('User not found');
         expect(body.error.code).toBe('NOT_FOUND');
       });
@@ -103,7 +114,7 @@ describe('API Response Helpers', () => {
 
       expect(response.status).toBe(500);
 
-      response.json().then((body: any) => {
+      response.json().then((body: ApiResponseBody) => {
         expect(body.success).toBe(false);
         expect(body.error.code).toBe('INTERNAL_ERROR');
       });
@@ -115,7 +126,7 @@ describe('API Response Helpers', () => {
 
       expect(response.status).toBe(500);
 
-      response.json().then((body: any) => {
+      response.json().then((body: ApiResponseBody) => {
         expect(body.error.code).toBe('UNKNOWN_ERROR');
       });
     });
