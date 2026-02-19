@@ -18,8 +18,8 @@ export async function middleware(request: NextRequest) {
   // Apply rate limiting based on endpoint
   let rateLimitResult;
 
-  if (request.nextUrl.pathname.startsWith('/api/auth/')) {
-    // Aggressive rate limiting for auth endpoints (5 req/15min)
+  if (request.nextUrl.pathname.startsWith('/api/auth/') && request.nextUrl.pathname !== '/api/auth/me') {
+    // Aggressive rate limiting for auth mutation endpoints (5 req/15min)
     rateLimitResult = authRateLimiter.check(request);
   } else if (request.nextUrl.pathname.startsWith('/api/export/')) {
     // Strict rate limiting for export endpoints (10 req/5min)
