@@ -4,11 +4,22 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { UserRole } from '@prisma/client';
+import { prisma } from '@/lib/db/prisma';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('Auth Verify');
 const SSO_VERIFY_URL = 'https://apps.iwa.web.tr/api/auth/verify';
 const APP_CODE = 'manumaestro';
+
+/** Map SSO role string to Prisma UserRole enum */
+function mapSSORole(ssoRole: string): UserRole {
+  switch (ssoRole) {
+    case 'admin': return UserRole.ADMIN;
+    case 'editor': return UserRole.OPERATOR;
+    default: return UserRole.VIEWER;
+  }
+}
 
 export interface VerifiedUser {
   id: string;
@@ -62,13 +73,30 @@ export async function verifyAuth(request: NextRequest): Promise<AuthResult> {
       };
     }
 
+    // Upsert user in local DB so FK constraints work
+    const ssoRole = data.data.role || 'viewer';
+    const localUser = await prisma.user.upsert({
+      where: { email: data.data.user.email },
+      update: {
+        name: data.data.user.name,
+        role: mapSSORole(ssoRole),
+      },
+      create: {
+        email: data.data.user.email,
+        name: data.data.user.name,
+        passwordHash: 'SSO_USER',
+        role: mapSSORole(ssoRole),
+        isActive: true,
+      },
+    });
+
     return {
       success: true,
       user: {
-        id: data.data.user.id,
-        email: data.data.user.email,
-        name: data.data.user.name,
-        role: data.data.role || 'viewer',
+        id: localUser.id,
+        email: localUser.email,
+        name: localUser.name,
+        role: ssoRole,
       },
     };
   } catch (error) {
