@@ -5,6 +5,18 @@
 
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+
+// Mock prisma before importing verify module
+const mockUpsert = vi.fn();
+vi.mock('@/lib/db/prisma', () => ({
+  prisma: {
+    user: {
+      upsert: (...args: unknown[]) => mockUpsert(...args),
+    },
+  },
+  queryProductDb: vi.fn(),
+}));
+
 import { verifyAuth, requireRole, type VerifiedUser } from '@/lib/auth/verify';
 
 // Mock fetch globally
@@ -12,9 +24,24 @@ global.fetch = vi.fn();
 
 const mockFetch = global.fetch as Mock;
 
+/** Helper: configure mockUpsert to return a local user based on SSO email */
+function setupPrismaUpsert(overrides?: Record<string, unknown>) {
+  mockUpsert.mockImplementation((args: { create: { email: string; name: string } }) =>
+    Promise.resolve({
+      id: 'local-db-uuid',
+      email: args.create.email,
+      name: args.create.name,
+      role: 'ADMIN',
+      isActive: true,
+      ...overrides,
+    })
+  );
+}
+
 describe('Auth Verify', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    setupPrismaUpsert();
   });
 
   describe('verifyAuth', () => {
@@ -95,7 +122,7 @@ describe('Auth Verify', () => {
 
       expect(result.success).toBe(true);
       expect(result.user).toEqual({
-        id: mockUser.id,
+        id: 'local-db-uuid',
         email: mockUser.email,
         name: mockUser.name,
         role: 'admin',
