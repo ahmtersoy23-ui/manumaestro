@@ -42,7 +42,7 @@ describe('API Error Classes', () => {
     it('should create 400 error with default message', () => {
       const error = new ValidationError();
       expect(error.statusCode).toBe(400);
-      expect(error.message).toBe('Validation failed');
+      expect(error.message).toBe('Doğrulama hatası');
       expect(error.code).toBe('VALIDATION_ERROR');
       expect(error.name).toBe('ValidationError');
     });
@@ -63,7 +63,7 @@ describe('API Error Classes', () => {
     it('should create 401 error with default message', () => {
       const error = new UnauthorizedError();
       expect(error.statusCode).toBe(401);
-      expect(error.message).toBe('Unauthorized');
+      expect(error.message).toBe('Yetkisiz erişim');
       expect(error.code).toBe('UNAUTHORIZED');
       expect(error.name).toBe('UnauthorizedError');
     });
@@ -78,7 +78,7 @@ describe('API Error Classes', () => {
     it('should create 403 error with default message', () => {
       const error = new ForbiddenError();
       expect(error.statusCode).toBe(403);
-      expect(error.message).toBe('Forbidden');
+      expect(error.message).toBe('Erişim engellendi');
       expect(error.code).toBe('FORBIDDEN');
       expect(error.name).toBe('ForbiddenError');
     });
@@ -93,19 +93,19 @@ describe('API Error Classes', () => {
     it('should create 404 error with default resource name', () => {
       const error = new NotFoundError();
       expect(error.statusCode).toBe(404);
-      expect(error.message).toBe('Resource not found');
+      expect(error.message).toBe('Kaynak bulunamadı');
       expect(error.code).toBe('NOT_FOUND');
       expect(error.name).toBe('NotFoundError');
     });
 
     it('should include custom resource name in message', () => {
       const error = new NotFoundError('User');
-      expect(error.message).toBe('User not found');
+      expect(error.message).toBe('User bulunamadı');
     });
 
     it('should include custom resource name in message', () => {
       const error = new NotFoundError('Marketplace');
-      expect(error.message).toBe('Marketplace not found');
+      expect(error.message).toBe('Marketplace bulunamadı');
     });
   });
 
@@ -113,7 +113,7 @@ describe('API Error Classes', () => {
     it('should create 409 error with default message', () => {
       const error = new ConflictError();
       expect(error.statusCode).toBe(409);
-      expect(error.message).toBe('Resource conflict');
+      expect(error.message).toBe('Kaynak çakışması');
       expect(error.code).toBe('CONFLICT');
       expect(error.name).toBe('ConflictError');
     });
@@ -128,7 +128,7 @@ describe('API Error Classes', () => {
     it('should create 500 error with default message', () => {
       const error = new InternalServerError();
       expect(error.statusCode).toBe(500);
-      expect(error.message).toBe('Internal server error');
+      expect(error.message).toBe('Sunucu hatası');
       expect(error.code).toBe('INTERNAL_ERROR');
       expect(error.name).toBe('InternalServerError');
     });
@@ -144,7 +144,7 @@ describe('API Error Classes', () => {
     it('should create 503 error with default message', () => {
       const error = new ServiceUnavailableError();
       expect(error.statusCode).toBe(503);
-      expect(error.message).toBe('Service temporarily unavailable');
+      expect(error.message).toBe('Servis geçici olarak kullanılamıyor');
       expect(error.code).toBe('SERVICE_UNAVAILABLE');
       expect(error.name).toBe('ServiceUnavailableError');
     });

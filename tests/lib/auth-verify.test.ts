@@ -50,7 +50,7 @@ describe('Auth Verify', () => {
       const result = await verifyAuth(request);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe('No authentication token');
+      expect(result.error).toBe('Kimlik doğrulama tokeni bulunamadı');
       expect(result.user).toBeUndefined();
     });
 
@@ -69,7 +69,7 @@ describe('Auth Verify', () => {
       const result = await verifyAuth(request);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe('Token verification failed');
+      expect(result.error).toBe('Token doğrulaması başarısız');
       expect(result.user).toBeUndefined();
     });
 
@@ -91,7 +91,7 @@ describe('Auth Verify', () => {
       const result = await verifyAuth(request);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe('Invalid token');
+      expect(result.error).toBe('Geçersiz token');
     });
 
     it('should return user data when token is valid', async () => {
@@ -169,7 +169,7 @@ describe('Auth Verify', () => {
       const result = await verifyAuth(request);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe('Internal server error');
+      expect(result.error).toBe('Sunucu hatası');
     });
 
     it('should send correct payload to SSO backend', async () => {
@@ -212,7 +212,7 @@ describe('Auth Verify', () => {
       expect(result).toHaveProperty('status', 401);
       const json = await (result as NextResponse).json();
       expect(json.success).toBe(false);
-      expect(json.error).toBe('No authentication token');
+      expect(json.error).toBe('Kimlik doğrulama tokeni bulunamadı');
     });
 
     it('should return 403 when user lacks required role', async () => {
@@ -238,7 +238,7 @@ describe('Auth Verify', () => {
       expect(result).toHaveProperty('status', 403);
       const json = await (result as NextResponse).json();
       expect(json.success).toBe(false);
-      expect(json.error).toBe('Insufficient permissions');
+      expect(json.error).toBe('Yetersiz yetki');
     });
 
     it('should return user when role matches (single role)', async () => {

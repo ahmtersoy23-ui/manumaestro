@@ -96,7 +96,7 @@ describe('API Response Helpers', () => {
       expect(response.status).toBe(404);
 
       response.json().then((body: ApiResponseBody) => {
-        expect(body.error.message).toBe('User not found');
+        expect(body.error.message).toBe('User bulunamadı');
         expect(body.error.code).toBe('NOT_FOUND');
       });
     });
