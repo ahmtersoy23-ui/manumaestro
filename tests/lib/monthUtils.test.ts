@@ -62,12 +62,12 @@ describe('monthUtils', () => {
   describe('formatMonthDisplay', () => {
     it('should format month value for display', () => {
       const result = formatMonthDisplay('2025-01');
-      expect(result).toBe('January 2025');
+      expect(result).toBe('Ocak 2025');
     });
 
     it('should handle all months correctly', () => {
-      expect(formatMonthDisplay('2025-06')).toBe('June 2025');
-      expect(formatMonthDisplay('2025-12')).toBe('December 2025');
+      expect(formatMonthDisplay('2025-06')).toBe('Haziran 2025');
+      expect(formatMonthDisplay('2025-12')).toBe('Aralık 2025');
     });
   });
 
@@ -158,7 +158,7 @@ describe('monthUtils', () => {
     it('should include proper labels', () => {
       vi.setSystemTime(new Date(2026, 1, 3)); // February 3, 2026
       const result = getActiveMonths();
-      expect(result[2].label).toBe('February 2026');
+      expect(result[2].label).toBe('Şubat 2026');
     });
   });
 
@@ -272,9 +272,9 @@ describe('monthUtils', () => {
 
   describe('getMonthName', () => {
     it('should return month name for valid month value', () => {
-      expect(getMonthName('2025-01')).toBe('January');
-      expect(getMonthName('2025-06')).toBe('June');
-      expect(getMonthName('2025-12')).toBe('December');
+      expect(getMonthName('2025-01')).toBe('Ocak');
+      expect(getMonthName('2025-06')).toBe('Haziran');
+      expect(getMonthName('2025-12')).toBe('Aralık');
     });
   });
 
@@ -299,9 +299,9 @@ describe('monthUtils', () => {
       const date = parseMonthValue(monthValue);
 
       expect(formatMonthValue(date)).toBe(monthValue);
-      expect(getMonthName(monthValue)).toBe('March');
+      expect(getMonthName(monthValue)).toBe('Mart');
       expect(getYear(monthValue)).toBe(2025);
-      expect(formatMonthDisplay(monthValue)).toBe('March 2025');
+      expect(formatMonthDisplay(monthValue)).toBe('Mart 2025');
     });
   });
 });

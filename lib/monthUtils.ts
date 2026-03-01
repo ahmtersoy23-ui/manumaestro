@@ -31,7 +31,7 @@ export function formatMonthValue(date: Date): string {
  */
 export function formatMonthDisplay(monthValue: string): string {
   const date = parseMonthValue(monthValue);
-  return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  return date.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
 }
 
 /**
@@ -158,7 +158,7 @@ export function getCurrentMonth(): string {
  */
 export function getMonthName(monthValue: string): string {
   const date = parseMonthValue(monthValue);
-  return date.toLocaleDateString('en-US', { month: 'long' });
+  return date.toLocaleDateString('tr-TR', { month: 'long' });
 }
 
 /**
