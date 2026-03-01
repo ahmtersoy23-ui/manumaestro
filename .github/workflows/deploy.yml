@@ -49,7 +49,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: 2222
-          source: ".next/*,public/*,package.json,package-lock.json,next.config.ts,.env.example,prisma/schema.prisma,prisma.config.ts"
+          source: ".next/*,public/*,package.json,package-lock.json,next.config.ts,.env.example,prisma/*,prisma.config.ts"
           target: "/var/www/manumaestro"
           strip_components: 0
 
@@ -65,4 +65,5 @@ jobs:
             cd /var/www/manumaestro
             npm ci --omit=dev
             npx prisma generate
+            npx prisma migrate deploy
             pm2 restart manumaestro
