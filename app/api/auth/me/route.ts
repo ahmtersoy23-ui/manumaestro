@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
 
     if (!token) {
       return NextResponse.json(
-        { success: false, error: 'No authentication token' },
+        { success: false, error: 'Kimlik doğrulama tokeni bulunamadı' },
         { status: 401 }
       );
     }
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
 
     if (!response.ok) {
       return NextResponse.json(
-        { success: false, error: 'Token verification failed' },
+        { success: false, error: 'Token doğrulaması başarısız' },
         { status: 401 }
       );
     }
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
 
     if (!data.success) {
       return NextResponse.json(
-        { success: false, error: 'Invalid token' },
+        { success: false, error: 'Geçersiz token' },
         { status: 401 }
       );
     }
@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     logger.error('Error in /api/auth/me:', error);
     return NextResponse.json(
-      { success: false, error: 'Internal server error' },
+      { success: false, error: 'Sunucu hatası' },
       { status: 500 }
     );
   }

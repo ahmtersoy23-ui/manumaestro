@@ -51,10 +51,10 @@ export function AddMarketplaceModal({ isOpen, onClose, onSuccess }: AddMarketpla
         onSuccess();
         onClose();
       } else {
-        setError(data.error || 'Failed to create marketplace');
+        setError(data.error || 'Pazar yeri oluşturulamadı');
       }
     } catch (err) {
-      setError('An error occurred while creating marketplace');
+      setError('Pazar yeri oluşturulurken bir hata oluştu');
       logger.error('Create marketplace error:', err);
     } finally {
       setLoading(false);
@@ -66,7 +66,7 @@ export function AddMarketplaceModal({ isOpen, onClose, onSuccess }: AddMarketpla
       <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900">Add Custom Marketplace</h2>
+          <h2 className="text-xl font-bold text-gray-900">Özel Pazar Yeri Ekle</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -85,14 +85,14 @@ export function AddMarketplaceModal({ isOpen, onClose, onSuccess }: AddMarketpla
 
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-              Marketplace Name <span className="text-red-500">*</span>
+              Pazar Yeri Adı <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Trendyol TR"
+              placeholder="ör: Trendyol TR"
               required
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
@@ -100,14 +100,14 @@ export function AddMarketplaceModal({ isOpen, onClose, onSuccess }: AddMarketpla
 
           <div>
             <label htmlFor="region" className="block text-sm font-medium text-gray-700 mb-1">
-              Region <span className="text-red-500">*</span>
+              Bölge <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               id="region"
               value={region}
               onChange={(e) => setRegion(e.target.value)}
-              placeholder="e.g., Turkey"
+              placeholder="ör: Türkiye"
               required
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
@@ -120,14 +120,14 @@ export function AddMarketplaceModal({ isOpen, onClose, onSuccess }: AddMarketpla
               onClick={onClose}
               className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
             >
-              Cancel
+              İptal
             </button>
             <button
               type="submit"
               disabled={loading || !name || !region}
               className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Creating...' : 'Create'}
+              {loading ? 'Oluşturuluyor...' : 'Oluştur'}
             </button>
           </div>
         </form>

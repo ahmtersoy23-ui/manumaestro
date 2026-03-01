@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     const auth = await verifyAuth(request);
     if (!auth.success || !auth.user) {
       return NextResponse.json(
-        { success: false, error: auth.error || 'Unauthorized' },
+        { success: false, error: auth.error || 'Yetkisiz erişim' },
         { status: 401 }
       );
     }
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 
     if (!monthsParam) {
       return NextResponse.json(
-        { success: false, error: 'months parameter is required (comma-separated YYYY-MM values)' },
+        { success: false, error: 'months parametresi gereklidir (virgülle ayrılmış YYYY-MM değerleri)' },
         { status: 400 }
       );
     }
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
 
     if (months.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'No valid months provided. Expected YYYY-MM format.' },
+        { success: false, error: 'Geçerli ay bulunamadı. Beklenen format: YYYY-MM' },
         { status: 400 }
       );
     }
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
     // Cap to prevent abuse
     if (months.length > 24) {
       return NextResponse.json(
-        { success: false, error: 'Maximum 24 months allowed per request' },
+        { success: false, error: 'İstek başına en fazla 24 ay izin verilir' },
         { status: 400 }
       );
     }
@@ -142,6 +142,6 @@ export async function GET(request: NextRequest) {
       data: result,
     });
   } catch (error) {
-    return errorResponse(error, 'Failed to fetch dashboard statistics');
+    return errorResponse(error, 'Panel istatistikleri getirilemedi');
   }
 }

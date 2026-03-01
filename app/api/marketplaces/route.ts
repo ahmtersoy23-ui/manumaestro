@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     const auth = await verifyAuth(request);
     if (!auth.success || !auth.user) {
       return NextResponse.json(
-        { success: false, error: auth.error || 'Unauthorized' },
+        { success: false, error: auth.error || 'Yetkisiz erişim' },
         { status: 401 }
       );
     }
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    return errorResponse(error, 'Failed to fetch marketplaces');
+    return errorResponse(error, 'Pazar yerleri getirilemedi');
   }
 }
 
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
     // Validate with Zod
     const validation = MarketplaceCreateSchema.safeParse(body);
     if (!validation.success) {
-      throw new ValidationError('Validation failed', formatValidationError(validation.error));
+      throw new ValidationError('Doğrulama hatası', formatValidationError(validation.error));
     }
 
     const { name, region, marketplaceType } = validation.data;
@@ -132,6 +132,6 @@ export async function POST(request: NextRequest) {
 
     return createdResponse(marketplace);
   } catch (error) {
-    return errorResponse(error, 'Failed to create marketplace');
+    return errorResponse(error, 'Pazar yeri oluşturulamadı');
   }
 }

@@ -44,10 +44,11 @@ interface EditValues {
 }
 
 const statusOptions = [
-  { value: 'REQUESTED', label: 'Requested' },
-  { value: 'IN_PRODUCTION', label: 'In Production' },
-  { value: 'COMPLETED', label: 'Completed' },
-  { value: 'CANCELLED', label: 'Cancelled' },
+  { value: 'REQUESTED', label: 'Talep Edildi' },
+  { value: 'IN_PRODUCTION', label: 'Üretimde' },
+  { value: 'PARTIALLY_PRODUCED', label: 'Kısmen Üretildi' },
+  { value: 'COMPLETED', label: 'Tamamlandı' },
+  { value: 'CANCELLED', label: 'İptal Edildi' },
 ];
 
 export default function ManufacturerCategoryPage() {
@@ -63,7 +64,7 @@ export default function ManufacturerCategoryPage() {
   const [saving, setSaving] = useState<string | null>(null);
 
   const monthDate = parseMonthValue(month);
-  const monthLabel = monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const monthLabel = monthDate.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
 
   useEffect(() => {
     async function fetchRequests() {
@@ -206,11 +207,11 @@ export default function ManufacturerCategoryPage() {
           }
         }));
       } else {
-        alert('Failed to save some changes');
+        alert('Bazı değişiklikler kaydedilemedi');
       }
     } catch (error) {
       logger.error('Save error:', error);
-      alert('Failed to save changes');
+      alert('Değişiklikler kaydedilemedi');
     } finally {
       setSaving(null);
     }
@@ -221,7 +222,7 @@ export default function ManufacturerCategoryPage() {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-gray-600">Yükleniyor...</p>
         </div>
       </div>
     );
@@ -235,7 +236,7 @@ export default function ManufacturerCategoryPage() {
         className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
-        Back to {monthLabel}
+        {monthLabel} ayına dön
       </Link>
 
       {/* Page Header */}
@@ -249,7 +250,7 @@ export default function ManufacturerCategoryPage() {
           <p>{monthLabel}</p>
         </div>
         <p className="text-gray-600 mt-2">
-          Enter produced quantities and production notes
+          Üretilen miktarları ve üretim notlarını girin
         </p>
       </div>
 
@@ -257,7 +258,7 @@ export default function ManufacturerCategoryPage() {
       {groupedRequests.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
           <Package className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-          <p className="text-gray-600">No production requests for this category in {monthLabel}</p>
+          <p className="text-gray-600">{monthLabel} ayında bu kategori için üretim talebi bulunmuyor</p>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -269,22 +270,22 @@ export default function ManufacturerCategoryPage() {
                     IWASKU
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Product Name
+                    Ürün Adı
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Requested
+                    Talep
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Produced
+                    Üretilen
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Status
+                    Durum
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Notes
+                    Notlar
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Actions
+                    İşlem
                   </th>
                 </tr>
               </thead>
@@ -316,7 +317,7 @@ export default function ManufacturerCategoryPage() {
                           className="w-20 px-2 py-1 text-sm text-gray-900 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                         />
                         {editValues[group.iwasku]?.status === 'COMPLETED' && (
-                          <span className="text-xs text-green-600">Auto-completed</span>
+                          <span className="text-xs text-green-600">Otomatik tamamlandı</span>
                         )}
                       </div>
                     </td>                    <td className="px-4 py-3 whitespace-nowrap">
@@ -338,7 +339,7 @@ export default function ManufacturerCategoryPage() {
                         onChange={(e) =>
                           updateEditValue(group.iwasku, 'manufacturerNotes', e.target.value)
                         }
-                        placeholder="Production notes..."
+                        placeholder="Üretim notları..."
                         rows={1}
                         className="w-full px-2 py-1 text-sm text-gray-900 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
                       />
@@ -352,12 +353,12 @@ export default function ManufacturerCategoryPage() {
                         {saving === group.iwasku ? (
                           <>
                             <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            Saving...
+                            Kaydediliyor...
                           </>
                         ) : (
                           <>
                             <Save className="w-3.5 h-3.5" />
-                            Save
+                            Kaydet
                           </>
                         )}
                       </button>

@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ManuMaestro - Production Request Management",
-  description: "Orchestrating Production Excellence",
+  title: "ManuMaestro - Üretim Talep Yönetimi",
+  description: "Üretim Mükemmelliğini Yönetin",
   icons: {
     icon: [
       { url: '/icon.svg', type: 'image/svg+xml' },
@@ -33,7 +33,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="tr">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

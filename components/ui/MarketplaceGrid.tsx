@@ -124,13 +124,13 @@ export function MarketplaceGrid() {
             {/* Stats */}
             <div className="space-y-3 mb-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Active Requests</span>
+                <span className="text-sm text-gray-600">Aktif Talepler</span>
                 <span className={`font-semibold ${marketplace.textColor}`}>
                   {marketplace.requestCount}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Code</span>
+                <span className="text-sm text-gray-600">Kod</span>
                 <span className="text-sm font-mono text-gray-900">
                   {marketplace.code}
                 </span>
@@ -140,7 +140,7 @@ export function MarketplaceGrid() {
             {/* Action Button */}
             <div className="pt-4 border-t border-gray-100">
               <div className="flex items-center justify-between text-sm font-medium group-hover:text-purple-600 transition-colors">
-                <span>Enter Requests</span>
+                <span>Talep Gir</span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </div>
             </div>
@@ -150,7 +150,7 @@ export function MarketplaceGrid() {
 
       {/* Add New Marketplace Card */}
       <button
-        onClick={() => alert('Add marketplace feature coming soon!')}
+        onClick={() => alert('Pazar yeri ekleme özelliği yakında!')}
         className="group w-full"
       >
         <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border-2 border-dashed border-gray-300 p-6 hover:border-purple-400 hover:from-purple-50 hover:to-purple-100 transition-all h-full flex flex-col items-center justify-center min-h-[240px]">
@@ -158,10 +158,10 @@ export function MarketplaceGrid() {
             <Plus className="w-8 h-8 text-gray-400 group-hover:text-purple-600 transition-colors" />
           </div>
           <h3 className="text-lg font-semibold text-gray-700 group-hover:text-purple-700 transition-colors">
-            Add Marketplace
+            Pazar Yeri Ekle
           </h3>
           <p className="text-sm text-gray-500 mt-1">
-            Create a custom marketplace
+            Özel bir pazar yeri oluşturun
           </p>
         </div>
       </button>

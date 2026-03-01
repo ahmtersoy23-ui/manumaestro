@@ -168,11 +168,12 @@ export function formatDateForExcel(date: Date | string | null | undefined): stri
  * Helper function to format status for Excel
  */
 export function formatStatusForExcel(
-  status: 'REQUESTED' | 'IN_PRODUCTION' | 'COMPLETED' | 'CANCELLED'
+  status: 'REQUESTED' | 'IN_PRODUCTION' | 'PARTIALLY_PRODUCED' | 'COMPLETED' | 'CANCELLED'
 ): string {
   const statusMap = {
     REQUESTED: 'Talep Edildi',
     IN_PRODUCTION: 'Üretimde',
+    PARTIALLY_PRODUCED: 'Kısmen Üretildi',
     COMPLETED: 'Tamamlandı',
     CANCELLED: 'İptal',
   };

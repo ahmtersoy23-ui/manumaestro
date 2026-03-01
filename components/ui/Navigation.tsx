@@ -18,13 +18,13 @@ import { cn } from '@/lib/utils/cn';
 
 const navSections = [
   {
-    title: 'Main',
+    title: 'Ana Menü',
     items: [
       {
-        label: 'Dashboard',
+        label: 'Panel',
         href: '/dashboard',
         icon: LayoutDashboard,
-        description: 'Month-based production view',
+        description: 'Aylık üretim görünümü',
       },
     ],
   },

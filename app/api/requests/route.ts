@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Validation failed',
+          error: 'Doğrulama hatası',
           details: formatValidationError(validation.error),
         },
         { status: 400 }
@@ -74,10 +74,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: productionRequest,
-      warning: !productSize ? `Product ${iwasku} is missing desi (size) data. Please update in PriceLab.` : undefined,
+      warning: !productSize ? `${iwasku} ürününde desi verisi eksik. Lütfen PriceLab'den güncelleyin.` : undefined,
     });
   } catch (error) {
-    return errorResponse(error, 'Failed to create request');
+    return errorResponse(error, 'Talep oluşturulamadı');
   }
 }
 
@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
     const auth = await verifyAuth(request);
     if (!auth.success || !auth.user) {
       return NextResponse.json(
-        { success: false, error: auth.error || 'Unauthorized' },
+        { success: false, error: auth.error || 'Yetkisiz erişim' },
         { status: 401 }
       );
     }
@@ -179,6 +179,6 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    return errorResponse(error, 'Failed to fetch requests');
+    return errorResponse(error, 'Talepler getirilemedi');
   }
 }

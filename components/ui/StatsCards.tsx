@@ -7,28 +7,28 @@ import { Package, TrendingUp, Clock, CheckCircle } from 'lucide-react';
 
 const stats = [
   {
-    label: 'Total Requests',
+    label: 'Toplam Talep',
     value: '0',
     icon: Package,
     color: 'bg-blue-500',
     change: '+0%',
   },
   {
-    label: 'In Production',
+    label: 'Üretimde',
     value: '0',
     icon: Clock,
     color: 'bg-orange-500',
     change: '+0%',
   },
   {
-    label: 'Completed',
+    label: 'Tamamlandı',
     value: '0',
     icon: CheckCircle,
     color: 'bg-green-500',
     change: '+0%',
   },
   {
-    label: 'This Month',
+    label: 'Bu Ay',
     value: '0',
     icon: TrendingUp,
     color: 'bg-purple-500',

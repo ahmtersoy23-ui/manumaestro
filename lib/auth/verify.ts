@@ -46,7 +46,7 @@ export async function verifyAuth(request: NextRequest): Promise<AuthResult> {
     if (!token) {
       return {
         success: false,
-        error: 'No authentication token',
+        error: 'Kimlik doğrulama tokeni bulunamadı',
       };
     }
 
@@ -60,7 +60,7 @@ export async function verifyAuth(request: NextRequest): Promise<AuthResult> {
     if (!response.ok) {
       return {
         success: false,
-        error: 'Token verification failed',
+        error: 'Token doğrulaması başarısız',
       };
     }
 
@@ -69,7 +69,7 @@ export async function verifyAuth(request: NextRequest): Promise<AuthResult> {
     if (!data.success) {
       return {
         success: false,
-        error: 'Invalid token',
+        error: 'Geçersiz token',
       };
     }
 
@@ -103,7 +103,7 @@ export async function verifyAuth(request: NextRequest): Promise<AuthResult> {
     logger.error('Auth verification error:', error);
     return {
       success: false,
-      error: 'Internal server error',
+      error: 'Sunucu hatası',
     };
   }
 }
@@ -122,7 +122,7 @@ export async function requireRole(
     return NextResponse.json(
       {
         success: false,
-        error: authResult.error || 'Unauthorized',
+        error: authResult.error || 'Yetkisiz erişim',
       },
       { status: 401 }
     );
@@ -133,7 +133,7 @@ export async function requireRole(
     return NextResponse.json(
       {
         success: false,
-        error: 'Insufficient permissions',
+        error: 'Yetersiz yetki',
       },
       { status: 403 }
     );

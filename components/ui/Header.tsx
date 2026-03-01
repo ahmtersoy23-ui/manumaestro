@@ -14,9 +14,9 @@ export function Header() {
   const { user, role, logout } = useAuth();
 
   const roleLabels = {
-    admin: 'Administrator',
-    editor: 'Editor',
-    viewer: 'Viewer',
+    admin: 'Yönetici',
+    editor: 'Editör',
+    viewer: 'İzleyici',
   };
 
   return (
@@ -36,7 +36,7 @@ export function Header() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-900">ManuMaestro</h1>
-              <p className="text-xs text-gray-500">Orchestrating Production Excellence</p>
+              <p className="text-xs text-gray-500">Üretim Mükemmelliğini Yönetin</p>
             </div>
           </div>
 
@@ -52,18 +52,18 @@ export function Header() {
               <Link
                 href="/dashboard/logs"
                 className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                title="Audit Logs"
+                title="İşlem Geçmişi"
               >
                 <FileText className="w-4 h-4" />
-                <span className="hidden lg:inline">Logs</span>
+                <span className="hidden lg:inline">Geçmiş</span>
               </Link>
             )}
 
             {/* User Menu */}
             <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
               <div className="text-right">
-                <p className="text-sm font-medium text-gray-900">{user?.name || 'User'}</p>
-                <p className="text-xs text-gray-500">{role ? roleLabels[role] : 'Loading...'}</p>
+                <p className="text-sm font-medium text-gray-900">{user?.name || 'Kullanıcı'}</p>
+                <p className="text-xs text-gray-500">{role ? roleLabels[role] : 'Yükleniyor...'}</p>
               </div>
               {user?.picture ? (
                 <img
@@ -79,7 +79,7 @@ export function Header() {
               <button
                 onClick={logout}
                 className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                title="Logout"
+                title="Çıkış"
               >
                 <LogOut className="w-5 h-5" />
               </button>

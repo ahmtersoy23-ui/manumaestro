@@ -123,7 +123,7 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-gray-600">Yükleniyor...</p>
         </div>
       </div>
     );
@@ -133,8 +133,8 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Marketplace Not Found</h1>
-          <p className="text-gray-600">The requested marketplace could not be found.</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Pazar Yeri Bulunamadı</h1>
+          <p className="text-gray-600">İstenen pazar yeri bulunamadı.</p>
           <p className="text-xs text-gray-400 mt-4">Slug: {slug}</p>
         </div>
       </div>
@@ -150,12 +150,12 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
       const data = await res.json();
 
       if (!data.success || !data.data.length) {
-        alert('No data to export');
+        alert('Dışa aktarılacak veri yok');
         return;
       }
 
       // Convert to CSV
-      const headers = ['Date', 'IWASKU', 'Product Name', 'Category', 'Quantity', 'Production Month', 'Status', 'Notes'];
+      const headers = ['Tarih', 'IWASKU', 'Ürün Adı', 'Kategori', 'Miktar', 'Üretim Ayı', 'Durum', 'Notlar'];
       const csvRows = [headers.join(',')];
 
       data.data.forEach((request: ProductionRequest) => {
@@ -188,7 +188,7 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
       document.body.removeChild(link);
     } catch (error) {
       logger.error('Export error:', error);
-      alert('Failed to export data');
+      alert('Dışa aktarma başarısız oldu');
     } finally {
       setExporting(false);
     }
@@ -203,7 +203,7 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
           className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to {getMonthLabel(month)}
+          {getMonthLabel(month)} ayına dön
         </Link>
       )}
 
@@ -213,7 +213,7 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
           <div>
             <h1 className="text-3xl font-bold text-gray-900">{marketplace.name}</h1>
             <p className="text-gray-600 mt-1">
-              Enter production requests manually or upload via Excel
+              Üretim taleplerini manuel girin veya Excel ile yükleyin
             </p>
           </div>
         </div>
@@ -232,7 +232,7 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
               }`}
             >
               <PlusCircle className="w-4 h-4" />
-              Manual Entry
+              Manuel Giriş
             </button>
             <button
               onClick={() => setActiveTab('excel')}
@@ -243,7 +243,7 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
               }`}
             >
               <Upload className="w-4 h-4" />
-              Excel Upload
+              Excel Yükleme
             </button>
           </nav>
         </div>
@@ -288,7 +288,7 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
               }`}
             >
               <Archive className="w-4 h-4" />
-              Archive
+              Arşiv
             </button>
           </div>
           <button
@@ -297,7 +297,7 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download className="w-4 h-4" />
-            {exporting ? 'Exporting...' : 'Export'}
+            {exporting ? 'Aktarılıyor...' : 'Dışa Aktar'}
           </button>
         </div>
         <RequestsTable

@@ -32,7 +32,7 @@ export async function DELETE(
 
     if (!id) {
       return NextResponse.json(
-        { error: 'Request ID is required' },
+        { error: 'Talep ID gereklidir' },
         { status: 400 }
       );
     }
@@ -44,7 +44,7 @@ export async function DELETE(
 
     return NextResponse.json({
       success: true,
-      message: 'Request deleted successfully',
+      message: 'Talep başarıyla silindi',
     });
   } catch (error) {
     logger.error('Delete request error:', error);
@@ -54,7 +54,7 @@ export async function DELETE(
       return NextResponse.json(
         {
           success: false,
-          error: 'Request not found',
+          error: 'Talep bulunamadı',
         },
         { status: 404 }
       );
@@ -63,7 +63,7 @@ export async function DELETE(
     return NextResponse.json(
       {
         success: false,
-        error: 'Failed to delete request',
+        error: 'Talep silinemedi',
       },
       { status: 500 }
     );

@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Validation failed',
+          error: 'Doğrulama hatası',
           details: formatValidationError(validation.error),
         },
         { status: 400 }
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
         );
 
         if (products.length === 0) {
-          errors.push(`Product not found: ${item.iwasku}`);
+          errors.push(`Ürün bulunamadı: ${item.iwasku}`);
           continue;
         }
 
@@ -77,14 +77,14 @@ export async function POST(request: NextRequest) {
 
         // Warn if product has no size (desi) data
         if (!product.size) {
-          warnings.push(`${item.iwasku}: Missing desi data`);
+          warnings.push(`${item.iwasku}: Desi verisi eksik`);
         }
 
         const productionRequest = await prisma.productionRequest.create({
           data: {
             iwasku: item.iwasku,
             productName: product.name,
-            productCategory: product.category || 'Uncategorized',
+            productCategory: product.category || 'Kategorisiz',
             productSize: product.size ? parseFloat(product.size) : null,
             marketplaceId,
             quantity: item.quantity,
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
         createdRequests.push(productionRequest);
       } catch (error) {
         logger.error(`Failed to create request for ${item.iwasku}:`, error);
-        errors.push(`Failed to create request for ${item.iwasku}`);
+        errors.push(`Talep oluşturulamadı: ${item.iwasku}`);
       }
     }
 
@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: 'Failed to create bulk requests',
+        error: 'Toplu talepler oluşturulamadı',
       },
       { status: 500 }
     );

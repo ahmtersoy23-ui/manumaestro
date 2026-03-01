@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     const auth = await verifyAuth(request);
     if (!auth.success || !auth.user) {
       return NextResponse.json(
-        { success: false, error: auth.error || 'Unauthorized' },
+        { success: false, error: auth.error || 'Yetkisiz erişim' },
         { status: 401 }
       );
     }
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 
     if (!query || query.length < 2) {
       return NextResponse.json(
-        { error: 'Search query must be at least 2 characters' },
+        { error: 'Arama sorgusu en az 2 karakter olmalı' },
         { status: 400 }
       );
     }
@@ -56,6 +56,6 @@ export async function GET(request: NextRequest) {
       data: products,
     });
   } catch (error) {
-    return errorResponse(error, 'Failed to search products');
+    return errorResponse(error, 'Ürün araması başarısız');
   }
 }

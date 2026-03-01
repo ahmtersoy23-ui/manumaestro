@@ -39,15 +39,17 @@ interface Request {
 const statusColors = {
   REQUESTED: 'bg-blue-100 text-blue-700',
   IN_PRODUCTION: 'bg-orange-100 text-orange-700',
+  PARTIALLY_PRODUCED: 'bg-yellow-100 text-yellow-700',
   COMPLETED: 'bg-green-100 text-green-700',
   CANCELLED: 'bg-gray-100 text-gray-700',
 };
 
 const statusLabels = {
-  REQUESTED: 'Requested',
-  IN_PRODUCTION: 'In Production',
-  COMPLETED: 'Completed',
-  CANCELLED: 'Cancelled',
+  REQUESTED: 'Talep Edildi',
+  IN_PRODUCTION: 'Üretimde',
+  PARTIALLY_PRODUCED: 'Kısmen Üretildi',
+  COMPLETED: 'Tamamlandı',
+  CANCELLED: 'İptal Edildi',
 };
 
 export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, archiveMode = false }: RequestsTableProps) {
@@ -102,7 +104,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
 
-    if (!confirm(`Are you sure you want to delete ${selectedIds.size} request(s)?`)) {
+    if (!confirm(`${selectedIds.size} talebi silmek istediğinize emin misiniz?`)) {
       return;
     }
 
@@ -168,7 +170,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
   };
 
   const handleDelete = async (requestId: string) => {
-    if (!confirm('Are you sure you want to delete this request?')) {
+    if (!confirm('Bu talebi silmek istediğinize emin misiniz?')) {
       return;
     }
 
@@ -209,11 +211,11 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
           onDelete();
         }
       } else {
-        alert(data.error || 'Failed to delete request');
+        alert(data.error || 'Talep silinemedi');
       }
     } catch (error) {
       logger.error('Delete error:', error);
-      alert('Failed to delete request');
+      alert('Talep silinemedi');
     } finally {
       setDeleting(null);
     }
@@ -237,10 +239,10 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
             <Package className="w-8 h-8 text-gray-400" />
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            No requests yet
+            Henüz talep yok
           </h3>
           <p className="text-sm text-gray-600">
-            Start by adding your first production request above
+            Yukarıdan ilk üretim talebinizi ekleyerek başlayın
           </p>
         </div>
       </div>
@@ -253,7 +255,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
       {hasRole(['admin']) && selectedIds.size > 0 && (
         <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 flex items-center justify-between">
           <p className="text-sm font-medium text-purple-900">
-            {selectedIds.size} item(s) selected
+            {selectedIds.size} öğe seçildi
           </p>
           <button
             onClick={handleBulkDelete}
@@ -263,12 +265,12 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
             {bulkDeleting ? (
               <>
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Deleting...
+                Siliniyor...
               </>
             ) : (
               <>
                 <Trash2 className="w-4 h-4" />
-                Delete Selected
+                Seçilenleri Sil
               </>
             )}
           </button>
@@ -297,7 +299,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                     <button
                       onClick={handleSelectAll}
                       className="text-gray-600 hover:text-purple-600 transition-colors"
-                      title={selectedIds.size === requests.length ? 'Deselect all' : 'Select all'}
+                      title={selectedIds.size === requests.length ? 'Tümünü kaldır' : 'Tümünü seç'}
                     >
                       {selectedIds.size === requests.length ? (
                         <CheckSquare className="w-5 h-5" />
@@ -308,29 +310,29 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                   </th>
                 )}
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Production Month
+                  Üretim Ayı
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Date
+                  Tarih
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   IWASKU
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Product Name
+                  Ürün Adı
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Category
+                  Kategori
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Quantity
+                  Miktar
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Status
+                  Durum
                 </th>
                 {hasRole(['admin']) && (
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Actions
+                    İşlem
                   </th>
                 )}
               </tr>
@@ -354,7 +356,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                   )}
                   <td className="px-4 py-3 whitespace-nowrap">
                     <span className="text-sm font-medium text-gray-900">
-                      {new Date(request.requestDate).toLocaleDateString('en-US', {
+                      {new Date(request.requestDate).toLocaleDateString('tr-TR', {
                         month: 'short',
                         year: 'numeric',
                       })}
@@ -363,7 +365,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                   <td className="px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-2 text-sm text-gray-900">
                       <Calendar className="w-4 h-4 text-gray-400" />
-                      {new Date(request.createdAt).toLocaleDateString('en-US', {
+                      {new Date(request.createdAt).toLocaleDateString('tr-TR', {
                         month: 'short',
                         day: 'numeric',
                         year: 'numeric',
@@ -405,7 +407,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                         onClick={() => handleDelete(request.id)}
                         disabled={deleting === request.id}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        title="Delete request"
+                        title="Talebi sil"
                       >
                         {deleting === request.id ? (
                           <>

@@ -115,7 +115,7 @@ export function ManufacturerTable({ selectedCategory }: ManufacturerTableProps) 
       <div className="bg-white rounded-xl border border-gray-200 p-12">
         <div className="flex flex-col items-center justify-center text-center">
           <Loader2 className="w-8 h-8 text-purple-500 animate-spin mb-4" />
-          <p className="text-sm text-gray-600">Loading production data...</p>
+          <p className="text-sm text-gray-600">Üretim verileri yükleniyor...</p>
         </div>
       </div>
     );
@@ -129,10 +129,10 @@ export function ManufacturerTable({ selectedCategory }: ManufacturerTableProps) 
             <Package className="w-8 h-8 text-gray-400" />
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            {selectedCategory ? `No products in ${selectedCategory}` : 'No production requests'}
+            {selectedCategory ? `${selectedCategory} kategorisinde ürün yok` : 'Üretim talebi bulunamadı'}
           </h3>
           <p className="text-sm text-gray-600">
-            {selectedCategory ? 'Try selecting a different category' : 'Production requests will appear here once you start adding them'}
+            {selectedCategory ? 'Farklı bir kategori seçmeyi deneyin' : 'Üretim talepleri ekledikçe burada görünecektir'}
           </p>
         </div>
       </div>
@@ -152,13 +152,13 @@ export function ManufacturerTable({ selectedCategory }: ManufacturerTableProps) 
                 IWASKU
               </th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                Product Name
+                Ürün Adı
               </th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                Category
+                Kategori
               </th>
               <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                Total Quantity
+                Toplam Miktar
               </th>
             </tr>
           </thead>
@@ -210,7 +210,7 @@ export function ManufacturerTable({ selectedCategory }: ManufacturerTableProps) 
                       <td colSpan={5} className="px-6 py-4 bg-gray-50">
                         <div className="space-y-3">
                           <h4 className="text-sm font-semibold text-gray-700 mb-3">
-                            Marketplace Breakdown
+                            Pazar Yeri Dağılımı
                           </h4>
                           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                             {item.breakdown.map((market) => (

@@ -81,7 +81,7 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
   const selectProduct = (product: Product) => {
     setIwasku(product.iwasku);
     setProductName(product.name);
-    setProductCategory(product.category || 'Uncategorized');
+    setProductCategory(product.category || 'Kategorisiz');
     setShowDropdown(false);
   };
 
@@ -89,13 +89,13 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
     e.preventDefault();
 
     if (!productName) {
-      alert('Please select a valid product');
+      alert('Lütfen geçerli bir ürün seçin');
       return;
     }
 
     // Validate: Cannot enter for current month after 5th
     if (dayOfMonth > 5 && productionMonth === currentMonth) {
-      setMonthError('Cannot enter requests for current month after the 5th. Please select next month.');
+      setMonthError('Ayın 5\'inden sonra mevcut ay için talep girilemez. Lütfen sonraki ayı seçin.');
       return;
     }
 
@@ -140,11 +140,11 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
           onSuccess();
         }
       } else {
-        alert(data.error || 'Failed to create request');
+        alert(data.error || 'Talep oluşturulamadı');
       }
     } catch (error) {
       logger.error('Submit error:', error);
-      alert('Failed to submit request');
+      alert('Talep gönderilemedi');
     } finally {
       setSubmitting(false);
     }
@@ -156,7 +156,7 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
         <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
           <Check className="w-5 h-5 text-green-600" />
           <p className="text-sm font-medium text-green-900">
-            Request successfully added!
+            Talep başarıyla eklendi!
           </p>
         </div>
       )}
@@ -167,11 +167,11 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
           <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-semibold text-orange-900 mb-1">
-              Current Month Entry Closed
+              Mevcut Ay Girişi Kapandı
             </p>
             <p className="text-sm text-orange-800">
-              Today is the {dayOfMonth}th. Requests for {formatMonthDisplay(currentMonth)} are now closed.
-              Please enter for next month.
+              Bugün ayın {dayOfMonth}'i. {formatMonthDisplay(currentMonth)} talepleri kapanmıştır.
+              Lütfen sonraki ay için giriş yapın.
             </p>
           </div>
         </div>
@@ -189,7 +189,7 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
         {/* Production Month Selector */}
         <div>
           <label htmlFor="productionMonth" className="block text-sm font-medium text-gray-700 mb-2">
-            Production Month *
+            Üretim Ayı *
           </label>
           <div className="relative">
             <select
@@ -224,14 +224,14 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
         {/* Quantity Input */}
         <div>
           <label htmlFor="quantity" className="block text-sm font-medium text-gray-700 mb-2">
-            Quantity *
+            Miktar *
           </label>
           <input
             type="number"
             id="quantity"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
-            placeholder="Enter quantity"
+            placeholder="Miktar girin"
             min="1"
             className={`w-full px-4 py-2 border-2 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all text-gray-900 ${
               quantity
@@ -247,7 +247,7 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
         {/* IWASKU Input with Search */}
         <div className="relative">
           <label htmlFor="iwasku" className="block text-sm font-medium text-gray-700 mb-2">
-            IWASKU / Product SKU *
+            IWASKU / Ürün SKU *
           </label>
           <div className="relative">
             <input
@@ -256,7 +256,7 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
               value={iwasku}
               onChange={(e) => setIwasku(e.target.value)}
               onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
-              placeholder="Type to search products..."
+              placeholder="Ürün aramak için yazın..."
               className={`w-full px-4 py-2 pl-10 border-2 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all text-gray-900 ${
                 productName
                   ? 'border-purple-400 bg-purple-50 font-bold'
@@ -300,12 +300,12 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
         <div className="bg-purple-50 border-2 border-purple-300 rounded-lg p-5">
           <h4 className="text-base font-bold text-purple-900 mb-4 flex items-center gap-2">
             <Check className="w-5 h-5" />
-            Product Details (Auto-populated)
+            Ürün Bilgileri (Otomatik)
           </h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-purple-800 mb-1.5 uppercase tracking-wide">
-                Product Name
+                Ürün Adı
               </label>
               <p className="text-base text-purple-950 font-semibold leading-snug">
                 {productName}
@@ -313,10 +313,10 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
             </div>
             <div>
               <label className="block text-xs font-semibold text-purple-800 mb-1.5 uppercase tracking-wide">
-                Category
+                Kategori
               </label>
               <p className="text-base text-purple-950 font-semibold">
-                {productCategory || 'Uncategorized'}
+                {productCategory || 'Kategorisiz'}
               </p>
             </div>
           </div>
@@ -326,13 +326,13 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
       {/* Notes (Optional) */}
       <div>
         <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-2">
-          Notes (Optional)
+          Notlar (İsteğe bağlı)
         </label>
         <textarea
           id="notes"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="Add any additional notes or comments"
+          placeholder="Ek not veya yorum ekleyin"
           rows={3}
           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900"
         />
@@ -353,7 +353,7 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
           }}
           className="px-6 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
         >
-          Clear
+          Temizle
         </button>
         <button
           type="submit"
@@ -363,12 +363,12 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
           {submitting ? (
             <>
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              Saving...
+              Kaydediliyor...
             </>
           ) : (
             <>
               <Plus className="w-4 h-4" />
-              Add Request
+              Talep Ekle
             </>
           )}
         </button>

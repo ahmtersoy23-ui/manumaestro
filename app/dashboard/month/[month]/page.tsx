@@ -75,7 +75,7 @@ export default function MonthDetailPage() {
   const [refreshMarketplaces, setRefreshMarketplaces] = useState(0);
 
   const monthDate = parseMonthValue(month);
-  const monthLabel = monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const monthLabel = monthDate.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
   const isLocked = isMonthLocked(month);
 
   useEffect(() => {
@@ -143,7 +143,7 @@ export default function MonthDetailPage() {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-gray-600">Yükleniyor...</p>
         </div>
       </div>
     );
@@ -157,7 +157,7 @@ export default function MonthDetailPage() {
         className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
-        Back to Dashboard
+        Panele Dön
       </Link>
 
       {/* Month Header */}
@@ -168,7 +168,7 @@ export default function MonthDetailPage() {
             <h1 className="text-3xl font-bold">{monthLabel}</h1>
             {isLocked && (
               <span className="px-3 py-1 bg-white/20 rounded-full text-sm">
-                View Only
+                Sadece Görüntüle
               </span>
             )}
           </div>
@@ -202,7 +202,7 @@ export default function MonthDetailPage() {
               onClick={() => setShowMissingItems(!showMissingItems)}
               className="w-full bg-yellow-500/20 px-4 py-2 rounded-lg text-sm hover:bg-yellow-500/30 transition-colors flex items-center justify-between"
             >
-              <span>⚠️ {monthStats.itemsWithoutSize} items missing desi data</span>
+              <span>⚠️ {monthStats.itemsWithoutSize} üründe desi bilgisi eksik</span>
               <span>{showMissingItems ? '▼' : '▶'}</span>
             </button>
             {showMissingItems && (
@@ -220,12 +220,12 @@ export default function MonthDetailPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
           <div className="bg-white/10 rounded-lg p-4">
-            <p className="text-purple-100 text-sm mb-1">Total Requests</p>
+            <p className="text-purple-100 text-sm mb-1">Toplam Talep</p>
             <p className="text-4xl font-bold">{monthStats.totalRequests}</p>
           </div>
           <div className="bg-white/10 rounded-lg p-4">
             <p className="text-purple-100 text-sm mb-1">
-              Total {viewMode === 'quantity' ? 'Quantity' : 'Desi'}
+              Toplam {viewMode === 'quantity' ? 'Miktar' : 'Desi'}
             </p>
             <p className="text-4xl font-bold">
               {viewMode === 'quantity'
@@ -241,17 +241,17 @@ export default function MonthDetailPage() {
         <div className="flex items-center gap-3 mb-4">
           <Factory className="w-6 h-6 text-gray-700" />
           <h2 className="text-2xl font-semibold text-gray-900">
-            Production by Category
+            Kategoriye Göre Üretim
           </h2>
         </div>
         <p className="text-gray-600 mb-6">
-          Track production progress and enter manufactured quantities
+          Üretim ilerlemesini takip edin ve üretilen miktarları girin
         </p>
 
         {categories.length === 0 ? (
           <div className="bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 p-12 text-center">
             <Factory className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-            <p className="text-gray-600">No production requests for this month</p>
+            <p className="text-gray-600">Bu ay için üretim talebi bulunmuyor</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -273,20 +273,20 @@ export default function MonthDetailPage() {
                 <div className="space-y-3 mt-4 pt-4 border-t border-gray-100">
                   {/* Items count */}
                   <div className="flex justify-between items-center">
-                    <p className="text-xs text-gray-600">Items</p>
+                    <p className="text-xs text-gray-600">Ürün</p>
                     <p className="text-sm font-bold text-gray-900">{category.requestCount}</p>
                   </div>
 
                   {/* Warning for missing desi */}
                   {viewMode === 'desi' && category.itemsWithoutSize > 0 && (
                     <div className="text-xs text-yellow-600 bg-yellow-50 px-2 py-1 rounded">
-                      ⚠️ {category.itemsWithoutSize} items without desi
+                      ⚠️ {category.itemsWithoutSize} üründe desi eksik
                     </div>
                   )}
 
                   {/* Requested */}
                   <div className="flex justify-between items-center">
-                    <p className="text-xs text-gray-600">Requested</p>
+                    <p className="text-xs text-gray-600">Talep Edilen</p>
                     <p className="text-sm font-bold text-orange-600">
                       {viewMode === 'quantity'
                         ? `${category.totalQuantity} adet`
@@ -296,7 +296,7 @@ export default function MonthDetailPage() {
 
                   {/* Produced */}
                   <div className="flex justify-between items-center">
-                    <p className="text-xs text-gray-600">Produced</p>
+                    <p className="text-xs text-gray-600">Üretilen</p>
                     <p className="text-sm font-bold text-green-600">
                       {viewMode === 'quantity'
                         ? `${Math.round(category.totalProduced)} adet`
@@ -307,7 +307,7 @@ export default function MonthDetailPage() {
                   {/* Progress bar */}
                   <div>
                     <div className="flex justify-between items-center mb-1">
-                      <p className="text-xs text-gray-600">Progress</p>
+                      <p className="text-xs text-gray-600">İlerleme</p>
                       <p className="text-xs font-semibold text-gray-900">
                         {viewMode === 'quantity'
                           ? (category.totalQuantity > 0
@@ -345,11 +345,11 @@ export default function MonthDetailPage() {
         <div className="flex items-center gap-3 mb-4">
           <ShoppingCart className="w-6 h-6 text-gray-700" />
           <h2 className="text-2xl font-semibold text-gray-900">
-            Marketplaces
+            Pazar Yerleri
           </h2>
         </div>
         <p className="text-gray-600 mb-6">
-          Enter new production requests for each marketplace
+          Her pazar yeri için yeni üretim talebi girin
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -386,7 +386,7 @@ export default function MonthDetailPage() {
 
                 <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-100">
                   <div>
-                    <p className="text-xs text-gray-600 mb-1">Requests</p>
+                    <p className="text-xs text-gray-600 mb-1">Talep</p>
                     <p className={`text-xl font-bold ${requestCount > 0 ? 'text-gray-900' : 'text-gray-400'}`}>
                       {requestCount}
                     </p>
@@ -412,10 +412,10 @@ export default function MonthDetailPage() {
                 <Plus className="w-6 h-6 text-gray-400 group-hover:text-purple-600 transition-colors" />
               </div>
               <h3 className="text-lg font-semibold text-gray-700 group-hover:text-purple-700 transition-colors">
-                Add Marketplace
+                Pazar Yeri Ekle
               </h3>
               <p className="text-xs text-gray-500 mt-1">
-                Create custom marketplace
+                Özel pazar yeri oluşturun
               </p>
             </div>
           </button>

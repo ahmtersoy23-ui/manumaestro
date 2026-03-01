@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     const auth = await verifyAuth(request);
     if (!auth.success || !auth.user) {
       return NextResponse.json(
-        { success: false, error: auth.error || 'Unauthorized' },
+        { success: false, error: auth.error || 'Yetkisiz erişim' },
         { status: 401 }
       );
     }
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 
     if (!month) {
       return NextResponse.json(
-        { error: 'Month parameter is required' },
+        { error: 'Ay parametresi gereklidir' },
         { status: 400 }
       );
     }
@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: 'Failed to export data',
+        error: 'Veri dışa aktarılamadı',
       },
       { status: 500 }
     );

@@ -38,7 +38,7 @@ export const BulkRequestSchema = z.object({
 export const ManufacturerUpdateSchema = z.object({
   producedQuantity: z.number().int('Produced quantity must be integer').nonnegative('Cannot be negative').max(999999, 'Quantity too large').optional(),
   manufacturerNotes: z.string().max(500, 'Notes too long').optional().nullable(),
-  status: z.enum(['REQUESTED', 'IN_PRODUCTION', 'COMPLETED', 'CANCELLED']).optional(),
+  status: z.enum(['REQUESTED', 'IN_PRODUCTION', 'PARTIALLY_PRODUCED', 'COMPLETED', 'CANCELLED']).optional(),
 });
 
 /**

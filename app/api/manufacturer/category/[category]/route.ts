@@ -25,7 +25,7 @@ export async function GET(
     const auth = await verifyAuth(request);
     if (!auth.success || !auth.user) {
       return NextResponse.json(
-        { success: false, error: auth.error || 'Unauthorized' },
+        { success: false, error: auth.error || 'Yetkisiz erişim' },
         { status: 401 }
       );
     }
@@ -43,7 +43,7 @@ export async function GET(
 
     if (!category) {
       return NextResponse.json(
-        { error: 'Category is required' },
+        { error: 'Kategori gereklidir' },
         { status: 400 }
       );
     }
@@ -102,6 +102,6 @@ export async function GET(
       },
     });
   } catch (error) {
-    return errorResponse(error, 'Failed to fetch requests');
+    return errorResponse(error, 'Talepler getirilemedi');
   }
 }

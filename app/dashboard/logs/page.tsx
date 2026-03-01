@@ -61,9 +61,9 @@ export default function AuditLogsPage() {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleString('en-US', {
-      month: 'short',
+    return date.toLocaleString('tr-TR', {
       day: 'numeric',
+      month: 'long',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
@@ -82,7 +82,7 @@ export default function AuditLogsPage() {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading logs...</p>
+          <p className="text-gray-600">Kayıtlar yükleniyor...</p>
         </div>
       </div>
     );
@@ -93,15 +93,15 @@ export default function AuditLogsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Audit Logs</h1>
-          <p className="text-gray-600 mt-1">System activity and user actions</p>
+          <h1 className="text-3xl font-bold text-gray-900">Denetim Kayıtları</h1>
+          <p className="text-gray-600 mt-1">Sistem etkinliği ve kullanıcı işlemleri</p>
         </div>
         <button
           onClick={fetchLogs}
           className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
         >
           <RefreshCw className="w-4 h-4" />
-          Refresh
+          Yenile
         </button>
       </div>
 
@@ -114,15 +114,15 @@ export default function AuditLogsPage() {
             onChange={(e) => setFilterAction(e.target.value)}
             className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           >
-            <option value="">All Actions</option>
-            <option value="CREATE_REQUEST">Create Request</option>
-            <option value="UPDATE_REQUEST">Update Request</option>
-            <option value="DELETE_REQUEST">Delete Request</option>
-            <option value="CREATE_MARKETPLACE">Create Marketplace</option>
-            <option value="UPDATE_PRODUCTION">Update Production</option>
-            <option value="BULK_UPLOAD">Bulk Upload</option>
-            <option value="LOGIN">Login</option>
-            <option value="LOGOUT">Logout</option>
+            <option value="">Tüm İşlemler</option>
+            <option value="CREATE_REQUEST">Talep Oluştur</option>
+            <option value="UPDATE_REQUEST">Talep Güncelle</option>
+            <option value="DELETE_REQUEST">Talep Sil</option>
+            <option value="CREATE_MARKETPLACE">Pazar Yeri Oluştur</option>
+            <option value="UPDATE_PRODUCTION">Üretim Güncelle</option>
+            <option value="BULK_UPLOAD">Toplu Yükleme</option>
+            <option value="LOGIN">Giriş</option>
+            <option value="LOGOUT">Çıkış</option>
           </select>
         </div>
       </div>
@@ -132,7 +132,7 @@ export default function AuditLogsPage() {
         {logs.length === 0 ? (
           <div className="p-12 text-center">
             <FileText className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-            <p className="text-gray-600">No audit logs found</p>
+            <p className="text-gray-600">Denetim kaydı bulunamadı</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -140,22 +140,22 @@ export default function AuditLogsPage() {
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Timestamp
+                    Tarih
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    User
+                    Kullanıcı
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Action
+                    İşlem
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Description
+                    Açıklama
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Entity
+                    Varlık
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    IP Address
+                    IP Adresi
                   </th>
                 </tr>
               </thead>

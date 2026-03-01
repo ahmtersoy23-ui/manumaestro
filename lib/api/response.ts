@@ -42,7 +42,7 @@ export function noContentResponse() {
  */
 export function errorResponse(
   error: unknown,
-  fallbackMessage: string = 'An error occurred',
+  fallbackMessage: string = 'Bir hata oluştu',
   fallbackStatus: number = 500
 ): NextResponse {
   // Handle ApiError instances

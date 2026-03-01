@@ -73,7 +73,7 @@ export default function ManufacturerPage() {
       window.location.href = url;
     } catch (error) {
       logger.error('Export failed:', error);
-      alert('Excel export failed. Please try again.');
+      alert('Excel aktarımı başarısız. Lütfen tekrar deneyin.');
     }
   };
 
@@ -81,9 +81,9 @@ export default function ManufacturerPage() {
     <div className="space-y-8">
       {/* Page Header */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Manufacturer Dashboard</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Üretici Paneli</h1>
         <p className="text-gray-600 mt-1">
-          Consolidated production requirements from all marketplaces
+          Tüm pazar yerlerinden birleştirilmiş üretim gereksinimleri
         </p>
       </div>
 
@@ -98,7 +98,7 @@ export default function ManufacturerPage() {
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 <Filter className="w-4 h-4" />
-                {selectedCategory || 'Filter by Category'}
+                {selectedCategory || 'Kategoriye Göre Filtrele'}
               </button>
 
               {showCategoryDropdown && (
@@ -111,7 +111,7 @@ export default function ManufacturerPage() {
                       }}
                       className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
                     >
-                      All Categories
+                      Tüm Kategoriler
                     </button>
                     {categories.map((category) => (
                       <button
@@ -148,7 +148,7 @@ export default function ManufacturerPage() {
               className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg hover:from-purple-700 hover:to-blue-700 transition-colors"
             >
               <Download className="w-4 h-4" />
-              Export to Excel
+              Excel'e Aktar
             </button>
           </div>
         </div>
@@ -157,15 +157,15 @@ export default function ManufacturerPage() {
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <p className="text-sm font-medium text-gray-600 mb-2">Total Products</p>
+          <p className="text-sm font-medium text-gray-600 mb-2">Toplam Ürün</p>
           <p className="text-3xl font-bold text-gray-900">{stats.totalProducts}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <p className="text-sm font-medium text-gray-600 mb-2">Total Quantity</p>
+          <p className="text-sm font-medium text-gray-600 mb-2">Toplam Miktar</p>
           <p className="text-3xl font-bold text-gray-900">{stats.totalQuantity}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <p className="text-sm font-medium text-gray-600 mb-2">Unique Categories</p>
+          <p className="text-sm font-medium text-gray-600 mb-2">Kategori Sayısı</p>
           <p className="text-3xl font-bold text-gray-900">{stats.uniqueCategories}</p>
         </div>
       </div>

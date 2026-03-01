@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     const auth = await verifyAuth(request);
     if (!auth.success || !auth.user) {
       return NextResponse.json(
-        { success: false, error: auth.error || 'Unauthorized' },
+        { success: false, error: auth.error || 'Yetkisiz erişim' },
         { status: 401 }
       );
     }
@@ -31,13 +31,13 @@ export async function GET(request: NextRequest) {
     const month = searchParams.get('month');
 
     if (!month) {
-      throw new ValidationError('Month parameter is required');
+      throw new ValidationError('Ay parametresi gereklidir');
     }
 
     // Validate month format (YYYY-MM)
     const monthRegex = /^\d{4}-\d{2}$/;
     if (!monthRegex.test(month)) {
-      throw new ValidationError('Invalid month format. Expected YYYY-MM');
+      throw new ValidationError('Geçersiz ay formatı. Beklenen: YYYY-MM');
     }
 
     // Single query: fetch all request data needed for both stats and summary
@@ -214,6 +214,6 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (error) {
-    return errorResponse(error, 'Failed to fetch monthly statistics');
+    return errorResponse(error, 'Aylık istatistikler getirilemedi');
   }
 }

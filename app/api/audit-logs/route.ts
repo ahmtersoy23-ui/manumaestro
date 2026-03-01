@@ -80,6 +80,6 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    return errorResponse(error, 'Failed to fetch audit logs');
+    return errorResponse(error, 'Denetim kayıtları getirilemedi');
   }
 }

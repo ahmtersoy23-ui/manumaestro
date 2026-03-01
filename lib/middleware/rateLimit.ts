@@ -179,7 +179,7 @@ export function rateLimitExceededResponse(result: RateLimitResult): NextResponse
     {
       success: false,
       error: {
-        message: 'Too many requests. Please try again later.',
+        message: 'Çok fazla istek. Lütfen daha sonra tekrar deneyin.',
         code: 'RATE_LIMIT_EXCEEDED',
         details: {
           limit: result.limit,

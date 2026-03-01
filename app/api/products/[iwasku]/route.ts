@@ -24,7 +24,7 @@ export async function GET(
     const auth = await verifyAuth(request);
     if (!auth.success || !auth.user) {
       return NextResponse.json(
-        { success: false, error: auth.error || 'Unauthorized' },
+        { success: false, error: auth.error || 'Yetkisiz erişim' },
         { status: 401 }
       );
     }
@@ -33,7 +33,7 @@ export async function GET(
 
     if (!iwasku) {
       return NextResponse.json(
-        { error: 'IWASKU is required' },
+        { error: 'IWASKU gereklidir' },
         { status: 400 }
       );
     }
@@ -52,7 +52,7 @@ export async function GET(
 
     if (products.length === 0) {
       return NextResponse.json(
-        { error: 'Product not found' },
+        { error: 'Ürün bulunamadı' },
         { status: 404 }
       );
     }
@@ -62,6 +62,6 @@ export async function GET(
       data: products[0],
     });
   } catch (error) {
-    return errorResponse(error, 'Failed to fetch product');
+    return errorResponse(error, 'Ürün getirilemedi');
   }
 }

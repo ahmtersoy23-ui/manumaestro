@@ -153,6 +153,7 @@ model ProductionRequest {
 enum RequestStatus {
   REQUESTED
   IN_PRODUCTION
+  PARTIALLY_PRODUCED
   COMPLETED
   CANCELLED
 }

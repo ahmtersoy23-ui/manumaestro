@@ -36,7 +36,7 @@ export async function PATCH(
       return NextResponse.json(
         {
           success: false,
-          error: 'Invalid request ID format',
+          error: 'Geçersiz talep ID formatı',
         },
         { status: 400 }
       );
@@ -50,7 +50,7 @@ export async function PATCH(
       return NextResponse.json(
         {
           success: false,
-          error: 'Validation failed',
+          error: 'Doğrulama hatası',
           details: formatValidationError(bodyValidation.error),
         },
         { status: 400 }
@@ -67,7 +67,7 @@ export async function PATCH(
 
     if (!existingRequest) {
       return NextResponse.json(
-        { error: 'Request not found' },
+        { error: 'Talep bulunamadı' },
         { status: 404 }
       );
     }
@@ -116,6 +116,6 @@ export async function PATCH(
       data: updated,
     });
   } catch (error) {
-    return errorResponse(error, 'Failed to update request');
+    return errorResponse(error, 'Talep güncellenemedi');
   }
 }

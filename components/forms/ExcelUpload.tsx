@@ -78,7 +78,7 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
         }
       };
 
-      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.onerror = () => reject(new Error('Dosya okunamadı'));
       reader.readAsBinaryString(file);
     });
   };
@@ -95,7 +95,7 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
       const rows = await parseExcel(file);
 
       if (rows.length === 0) {
-        alert('No valid data found in Excel file');
+        alert('Excel dosyasında geçerli veri bulunamadı');
         setUploading(false);
         return;
       }
@@ -122,11 +122,11 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
         // Hide success message after 3 seconds
         setTimeout(() => setSuccess(false), 3000);
       } else {
-        alert(data.error || 'Failed to upload requests');
+        alert(data.error || 'Talepler yüklenemedi');
       }
     } catch (error) {
       logger.error('Upload error:', error);
-      alert('Failed to process Excel file');
+      alert('Excel dosyası işlenemedi');
     } finally {
       setUploading(false);
     }
@@ -136,8 +136,8 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
     // Create template workbook
     const wb = XLSX.utils.book_new();
     const wsData = [
-      ['IWASKU', 'Quantity', 'Notes'],
-      ['IM154@0QXFF0', '100', 'Optional note'],
+      ['IWASKU', 'Miktar', 'Notlar'],
+      ['IM154@0QXFF0', '100', 'İsteğe bağlı not'],
       ['CA120@0R53ZY', '50', ''],
     ];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
@@ -151,7 +151,7 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
         <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
           <Check className="w-5 h-5 text-green-600" />
           <p className="text-sm font-medium text-green-900">
-            Requests successfully uploaded!
+            Talepler başarıyla yüklendi!
           </p>
         </div>
       )}
@@ -167,7 +167,7 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
       {/* Production Month Selector */}
       <div>
         <label htmlFor="productionMonth" className="block text-sm font-medium text-gray-700 mb-2">
-          Production Month *
+          Üretim Ayı *
         </label>
         <div className="relative">
           <select
@@ -205,17 +205,17 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
           <FileSpreadsheet className="w-5 h-5 text-blue-600 mt-0.5" />
           <div className="flex-1">
             <h4 className="text-sm font-semibold text-blue-900 mb-1">
-              Download Excel Template
+              Excel Şablonu İndir
             </h4>
             <p className="text-sm text-blue-700 mb-3">
-              Use our template to ensure correct formatting. Required columns: IWASKU, Quantity
+              Doğru format için şablonumuzu kullanın. Zorunlu sütunlar: IWASKU, Miktar
             </p>
             <button
               onClick={downloadTemplate}
               className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-white border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors"
             >
               <Download className="w-4 h-4" />
-              Download Template
+              Şablonu İndir
             </button>
           </div>
         </div>
@@ -231,10 +231,10 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
           {!file ? (
             <>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                Upload Excel File
+                Excel Dosyası Yükle
               </h3>
               <p className="text-sm text-gray-600 mb-4 text-center">
-                Drop your Excel file here or click to browse
+                Excel dosyanızı buraya sürükleyin veya dosya seçin
               </p>
               <label className="cursor-pointer">
                 <input
@@ -244,7 +244,7 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
                   className="hidden"
                 />
                 <span className="inline-flex items-center gap-2 px-6 py-2 text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg hover:from-purple-700 hover:to-blue-700 transition-colors">
-                  Select File
+                  Dosya Seç
                 </span>
               </label>
             </>
@@ -273,12 +273,12 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
                 {uploading ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Uploading...
+                    Yükleniyor...
                   </>
                 ) : (
                   <>
                     <Upload className="w-4 h-4" />
-                    Upload File
+                    Dosyayı Yükle
                   </>
                 )}
               </button>
@@ -290,14 +290,14 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
       {/* Instructions */}
       <div className="bg-gray-50 rounded-lg p-4">
         <h4 className="text-sm font-semibold text-gray-900 mb-2">
-          Excel Format Instructions
+          Excel Format Talimatları
         </h4>
         <ul className="text-sm text-gray-600 space-y-1">
-          <li>• Column A: IWASKU (Required)</li>
-          <li>• Column B: Quantity (Required, must be a number)</li>
-          <li>• Column C: Notes (Optional)</li>
-          <li>• First row should contain headers</li>
-          <li>• Maximum 1000 rows per upload</li>
+          <li>• Sütun A: IWASKU (Zorunlu)</li>
+          <li>• Sütun B: Miktar (Zorunlu, sayı olmalı)</li>
+          <li>• Sütun C: Notlar (İsteğe bağlı)</li>
+          <li>• İlk satır başlık içermelidir</li>
+          <li>• Yükleme başına en fazla 1000 satır</li>
         </ul>
       </div>
     </div>

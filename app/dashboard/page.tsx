@@ -100,7 +100,7 @@ export default function DashboardPage() {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-gray-600">Yükleniyor...</p>
         </div>
       </div>
     );
@@ -110,9 +110,9 @@ export default function DashboardPage() {
     <div className="space-y-8">
       {/* Page Header */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Production Dashboard</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Üretim Paneli</h1>
         <p className="text-gray-600 mt-1">
-          Select a month to manage production requests and track manufacturing
+          Üretim taleplerini yönetmek ve üretimi takip etmek için bir ay seçin
         </p>
       </div>
 
@@ -120,30 +120,30 @@ export default function DashboardPage() {
       {overallSummary.totalRequests > 0 && (
         <div className="bg-gradient-to-r from-purple-600 to-purple-700 rounded-xl p-6 text-white">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Overall Production Summary</h2>
+            <h2 className="text-xl font-semibold">Genel Üretim Özeti</h2>
             {overallSummary.itemsWithoutSize > 0 && (
               <div className="bg-yellow-500/20 px-3 py-1 rounded-full text-sm">
-                ⚠️ {overallSummary.itemsWithoutSize} items missing desi data
+                ⚠️ {overallSummary.itemsWithoutSize} üründe desi bilgisi eksik
               </div>
             )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white/10 rounded-lg p-4">
-              <p className="text-purple-100 text-sm mb-1">Total Requests</p>
+              <p className="text-purple-100 text-sm mb-1">Toplam Talep</p>
               <p className="text-3xl font-bold">{overallSummary.totalRequests}</p>
             </div>
             <div className="bg-white/10 rounded-lg p-4">
-              <p className="text-purple-100 text-sm mb-1">Requested</p>
+              <p className="text-purple-100 text-sm mb-1">Talep Edilen</p>
               <p className="text-2xl font-bold">{overallSummary.totalQuantity} adet</p>
               <p className="text-2xl font-bold mt-1">{Math.round(overallSummary.totalDesi)} desi</p>
             </div>
             <div className="bg-white/10 rounded-lg p-4">
-              <p className="text-purple-100 text-sm mb-1">Produced</p>
+              <p className="text-purple-100 text-sm mb-1">Üretilen</p>
               <p className="text-2xl font-bold">{overallSummary.totalProduced} adet</p>
               <p className="text-2xl font-bold mt-1">{Math.round(overallSummary.totalProducedDesi)} desi</p>
             </div>
             <div className="bg-white/10 rounded-lg p-4">
-              <p className="text-purple-100 text-sm mb-1">Completion Rate</p>
+              <p className="text-purple-100 text-sm mb-1">Tamamlanma Oranı</p>
               <p className="text-2xl font-bold">{completionRate}% (adet)</p>
               <p className="text-2xl font-bold mt-1">{desiCompletionRate}% (desi)</p>
               <div className="w-full bg-white/20 rounded-full h-2 mt-2">
@@ -160,7 +160,7 @@ export default function DashboardPage() {
       {/* Active Months */}
       <div>
         <h2 className="text-xl font-semibold text-gray-900 mb-4">
-          Active Months
+          Aktif Aylar
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {availableMonths.map((month) => {
@@ -180,18 +180,18 @@ export default function DashboardPage() {
                       <h3 className="text-lg font-semibold text-gray-900">
                         {month.label}
                       </h3>
-                      <p className="text-xs text-gray-500">Click to manage</p>
+                      <p className="text-xs text-gray-500">Yönetmek için tıklayın</p>
                     </div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-100">
                   <div>
-                    <p className="text-xs text-gray-600 mb-1">Requests</p>
+                    <p className="text-xs text-gray-600 mb-1">Talep</p>
                     <p className="text-2xl font-bold text-gray-900">{stats.totalRequests}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-600 mb-1">Total Quantity</p>
+                    <p className="text-xs text-gray-600 mb-1">Toplam Miktar</p>
                     <p className="text-2xl font-bold text-purple-600">{stats.totalQuantity}</p>
                   </div>
                 </div>
@@ -208,14 +208,14 @@ export default function DashboardPage() {
             onClick={() => setShowArchived(!showArchived)}
             className="flex items-center gap-2 text-lg font-semibold text-gray-900 hover:text-purple-600 transition-colors mb-4"
           >
-            Archived Months
+            Arşiv Aylar
             {showArchived ? (
               <ChevronUp className="w-5 h-5" />
             ) : (
               <ChevronDown className="w-5 h-5" />
             )}
             <span className="text-sm font-normal text-gray-600">
-              ({archivedMonths.length} months)
+              ({archivedMonths.length} ay)
             </span>
           </button>
 
@@ -238,18 +238,18 @@ export default function DashboardPage() {
                           <h3 className="text-lg font-semibold text-gray-900">
                             {month.label}
                           </h3>
-                          <p className="text-xs text-gray-500">View only</p>
+                          <p className="text-xs text-gray-500">Sadece görüntüle</p>
                         </div>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-200">
                       <div>
-                        <p className="text-xs text-gray-600 mb-1">Requests</p>
+                        <p className="text-xs text-gray-600 mb-1">Talep</p>
                         <p className="text-2xl font-bold text-gray-900">{stats.totalRequests}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-gray-600 mb-1">Total Quantity</p>
+                        <p className="text-xs text-gray-600 mb-1">Toplam Miktar</p>
                         <p className="text-2xl font-bold text-gray-600">{stats.totalQuantity}</p>
                       </div>
                     </div>
