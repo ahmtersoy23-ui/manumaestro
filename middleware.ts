@@ -118,7 +118,7 @@ export async function middleware(request: NextRequest) {
     // Token valid - add user info to headers
     const requestHeaders = new Headers(request.headers);
     requestHeaders.set('x-user-email', data.data.user.email);
-    requestHeaders.set('x-user-name', data.data.user.name);
+    requestHeaders.set('x-user-name', encodeURIComponent(data.data.user.name));
     requestHeaders.set('x-user-role', data.data.role);
     requestHeaders.set('x-user-id', data.data.user.id);
 
