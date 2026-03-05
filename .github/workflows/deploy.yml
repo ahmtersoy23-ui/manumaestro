@@ -27,6 +27,9 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      - name: Lint
+        run: npm run lint
+
       - name: Run tests
         run: npm test
 
@@ -49,7 +52,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: 2222
-          source: ".next/*,public/*,package.json,package-lock.json,next.config.ts,.env.example,prisma/*,prisma.config.ts"
+          source: ".next/*,public/*,package.json,package-lock.json,next.config.ts,prisma/*,prisma.config.ts"
           target: "/var/www/manumaestro"
           strip_components: 0
 
