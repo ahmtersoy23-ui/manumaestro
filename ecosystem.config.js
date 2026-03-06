@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 require('dotenv').config({ path: '/var/www/manumaestro/.env' });
 
 module.exports = {

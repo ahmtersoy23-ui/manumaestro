@@ -72,6 +72,7 @@ export async function GET(request: NextRequest) {
     };
 
     // First, group by IWASKU to track production per product (not per request)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const productMap = new Map<string, any>();
     requests.forEach((request) => {
       const existing = productMap.get(request.iwasku);
@@ -94,6 +95,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Group by category only (simplified - marketplace is just metadata)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const categoryMap = new Map<string, any>();
 
     requests.forEach((request) => {
@@ -143,6 +145,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Create marketplace summary (for marketplace cards)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const marketplaceMap = new Map<string, any>();
     requests.forEach((request) => {
       const existing = marketplaceMap.get(request.marketplace.id);

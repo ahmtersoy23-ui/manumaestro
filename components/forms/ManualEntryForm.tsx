@@ -170,7 +170,7 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
               Mevcut Ay Girişi Kapandı
             </p>
             <p className="text-sm text-orange-800">
-              Bugün ayın {dayOfMonth}'i. {formatMonthDisplay(currentMonth)} talepleri kapanmıştır.
+              Bugün ayın {dayOfMonth}&apos;i. {formatMonthDisplay(currentMonth)} talepleri kapanmıştır.
               Lütfen sonraki ay için giriş yapın.
             </p>
           </div>

@@ -27,6 +27,7 @@ export interface ExportOptions {
  * Create Excel workbook with data
  * Memory-efficient streaming approach
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function createExcelWorkbook<T extends Record<string, any>>(
   data: T[],
   options: ExportOptions
@@ -126,6 +127,7 @@ export async function createExcelWorkbook<T extends Record<string, any>>(
 /**
  * Export data to Excel buffer
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function exportToExcel<T extends Record<string, any>>(
   data: T[],
   options: ExportOptions

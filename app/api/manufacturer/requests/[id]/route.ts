@@ -57,7 +57,7 @@ export async function PATCH(
       );
     }
 
-    const { producedQuantity, manufacturerNotes, status } = bodyValidation.data;
+    const { producedQuantity, manufacturerNotes, status, workflowStage } = bodyValidation.data;
 
     // Fetch the request to get quantity
     const existingRequest = await prisma.productionRequest.findUnique({
@@ -103,6 +103,10 @@ export async function PATCH(
 
     if (manufacturerNotes !== undefined) {
       updateData.manufacturerNotes = manufacturerNotes;
+    }
+
+    if (workflowStage !== undefined) {
+      updateData.workflowStage = workflowStage;
     }
 
     // Update the request

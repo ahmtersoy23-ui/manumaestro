@@ -40,8 +40,12 @@ export interface AuthResult {
  */
 export async function verifyAuth(request: NextRequest): Promise<AuthResult> {
   try {
-    // Get token from cookie
-    const token = request.cookies.get('sso_access_token')?.value;
+    // Get token from Authorization header (mobile) or cookie (web)
+    const authHeader = request.headers.get('Authorization');
+    const bearerToken = authHeader?.startsWith('Bearer ')
+      ? authHeader.slice(7)
+      : null;
+    const token = bearerToken ?? request.cookies.get('sso_access_token')?.value;
 
     if (!token) {
       return {
