@@ -206,16 +206,23 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
         <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-2">
           Öncelik
         </label>
-        <select
-          id="priority"
-          value={priority}
-          onChange={(e) => setPriority(e.target.value as 'HIGH' | 'MEDIUM' | 'LOW')}
-          className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-400 transition-all appearance-none bg-white cursor-pointer text-gray-900"
-        >
-          <option value="HIGH">Yüksek</option>
-          <option value="MEDIUM">Orta</option>
-          <option value="LOW">Düşük</option>
-        </select>
+        <div className="relative">
+          <select
+            id="priority"
+            value={priority}
+            onChange={(e) => setPriority(e.target.value as 'HIGH' | 'MEDIUM' | 'LOW')}
+            className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-400 transition-all appearance-none bg-white cursor-pointer text-gray-900"
+          >
+            <option value="HIGH">Yüksek</option>
+            <option value="MEDIUM">Orta</option>
+            <option value="LOW">Düşük</option>
+          </select>
+          <div className="absolute right-3 top-2.5 pointer-events-none">
+            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </div>
       </div>
 
       {/* Download Template */}
@@ -227,7 +234,7 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
               Excel Şablonu İndir
             </h4>
             <p className="text-sm text-blue-700 mb-3">
-              Doğru format için şablonumuzu kullanın. Zorunlu sütunlar: IWASKU, Miktar
+              Doğru format için şablonumuzu kullanın. Zorunlu sütunlar: IWASKU, Miktar. Öncelik yukarıdan seçilir ve tüm satırlara uygulanır.
             </p>
             <button
               onClick={downloadTemplate}
@@ -315,6 +322,7 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
           <li>• Sütun A: IWASKU (Zorunlu)</li>
           <li>• Sütun B: Miktar (Zorunlu, sayı olmalı)</li>
           <li>• Sütun C: Notlar (İsteğe bağlı)</li>
+          <li>• Öncelik: Excel&apos;e sütun eklenmez — yukarıdaki seçiciden belirlenir, tüm satırlara uygulanır</li>
           <li>• İlk satır başlık içermelidir</li>
           <li>• Yükleme başına en fazla 1000 satır</li>
         </ul>
