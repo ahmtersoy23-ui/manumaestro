@@ -395,11 +395,15 @@ export default function ManufacturerCategoryPage() {
         onClose={() => setSelectedProduct(null)}
         iwasku={selectedProduct?.iwasku || ''}
         productName={selectedProduct?.productName || ''}
-        requests={selectedProduct?.requests.map(r => ({
-          marketplaceName: r.marketplaceName,
-          quantity: r.quantity,
-          colorTag: r.marketplaceColorTag,
-        })) || []}
+        requests={selectedProduct?.requests.reduce((acc, r) => {
+          const existing = acc.find(x => x.marketplaceName === r.marketplaceName);
+          if (existing) {
+            existing.quantity += r.quantity;
+          } else {
+            acc.push({ marketplaceName: r.marketplaceName, quantity: r.quantity, colorTag: r.marketplaceColorTag });
+          }
+          return acc;
+        }, [] as Array<{ marketplaceName: string; quantity: number; colorTag?: string | null }>) || []}
       />
     </div>
   );
