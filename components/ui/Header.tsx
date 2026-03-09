@@ -7,7 +7,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { Bell, User, LogOut, FileText } from 'lucide-react';
+import { Bell, User, LogOut, FileText, Shield } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 export function Header() {
@@ -47,16 +47,26 @@ export function Header() {
               <Bell className="w-5 h-5" />
             </button>
 
-            {/* Admin Logs (Admin Only) */}
+            {/* Admin Links (Admin Only) */}
             {role === 'admin' && (
-              <Link
-                href="/dashboard/logs"
-                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                title="İşlem Geçmişi"
-              >
-                <FileText className="w-4 h-4" />
-                <span className="hidden lg:inline">Geçmiş</span>
-              </Link>
+              <>
+                <Link
+                  href="/dashboard/admin/permissions"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                  title="Pazar Yeri İzinleri"
+                >
+                  <Shield className="w-4 h-4" />
+                  <span className="hidden lg:inline">İzinler</span>
+                </Link>
+                <Link
+                  href="/dashboard/logs"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                  title="İşlem Geçmişi"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span className="hidden lg:inline">Geçmiş</span>
+                </Link>
+              </>
             )}
 
             {/* User Menu */}

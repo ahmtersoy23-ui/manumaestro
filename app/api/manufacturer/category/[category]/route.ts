@@ -64,6 +64,7 @@ export async function GET(
           marketplace: {
             select: {
               name: true,
+              colorTag: true,
             },
           },
         },
@@ -84,6 +85,7 @@ export async function GET(
       productName: r.productName,
       productCategory: r.productCategory,
       marketplaceName: r.marketplace.name,
+      marketplaceColorTag: r.marketplace.colorTag,
       quantity: r.quantity,
       producedQuantity: r.producedQuantity,
       manufacturerNotes: r.manufacturerNotes,

@@ -61,6 +61,19 @@ export const MarketplaceCreateSchema = z.object({
 });
 
 /**
+ * Marketplace Permission Schema
+ */
+export const MarketplacePermissionSchema = z.object({
+  userId: z.string().uuid('Geçersiz kullanıcı ID'),
+  marketplaceId: z.string().uuid('Geçersiz pazar yeri ID'),
+  canView: z.boolean(),
+  canEdit: z.boolean(),
+}).refine(d => !(d.canEdit && !d.canView), {
+  message: 'Düzenleme izni görüntüleme iznini gerektirir',
+  path: ['canView'],
+});
+
+/**
  * Month Parameter Schema
  */
 export const MonthParamSchema = z.string().regex(/^\d{4}-\d{2}$/, 'Invalid month format. Expected YYYY-MM');

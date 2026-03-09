@@ -113,6 +113,42 @@ export async function verifyAuth(request: NextRequest): Promise<AuthResult> {
 }
 
 /**
+ * Check if user has permission to view/edit a specific marketplace
+ * ADMIN bypasses all checks. OPERATOR must have an explicit UserMarketplacePermission row.
+ */
+export async function checkMarketplacePermission(
+  userId: string,
+  userRole: 'admin' | 'editor' | 'viewer',
+  marketplaceId: string,
+  mode: 'view' | 'edit'
+): Promise<{ allowed: boolean; reason?: string }> {
+  if (userRole === 'admin') return { allowed: true };
+
+  if (userRole === 'viewer' && mode === 'edit') {
+    return { allowed: false, reason: 'Görüntüleme yetkisine sahipsiniz, düzenleme yapamazsınız' };
+  }
+
+  // OPERATOR: check UserMarketplacePermission table
+  const perm = await prisma.userMarketplacePermission.findUnique({
+    where: { userId_marketplaceId: { userId, marketplaceId } },
+  });
+
+  if (!perm) {
+    return { allowed: false, reason: 'Bu pazar yerine erişim izniniz yok' };
+  }
+
+  if (mode === 'view' && !perm.canView) {
+    return { allowed: false, reason: 'Bu pazar yerini görüntüleme izniniz yok' };
+  }
+
+  if (mode === 'edit' && !perm.canEdit) {
+    return { allowed: false, reason: 'Bu pazar yerini düzenleme izniniz yok' };
+  }
+
+  return { allowed: true };
+}
+
+/**
  * Verify user has required role
  * Returns user if authorized, error response if not
  */

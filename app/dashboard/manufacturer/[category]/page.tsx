@@ -8,9 +8,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Package, Save, Calendar } from 'lucide-react';
+import { ArrowLeft, Package, Save, Calendar, Store } from 'lucide-react';
 import { formatMonthValue, parseMonthValue } from '@/lib/monthUtils';
 import { createLogger } from '@/lib/logger';
+import { ProductMarketplaceModal } from '@/components/modals/ProductMarketplaceModal';
 
 const logger = createLogger('ManufacturerCategoryPage');
 
@@ -20,6 +21,7 @@ interface Request {
   productName: string;
   productCategory: string;
   marketplaceName: string;
+  marketplaceColorTag?: string | null;
   quantity: number;
   producedQuantity: number | null;
   manufacturerNotes: string | null;
@@ -62,6 +64,7 @@ export default function ManufacturerCategoryPage() {
   const [loading, setLoading] = useState(true);
   const [editValues, setEditValues] = useState<EditValues>({});
   const [saving, setSaving] = useState<string | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<GroupedRequest | null>(null);
 
   const monthDate = parseMonthValue(month);
   const monthLabel = monthDate.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
@@ -293,9 +296,24 @@ export default function ManufacturerCategoryPage() {
                 {groupedRequests.map((group) => (
                   <tr key={group.iwasku} className="hover:bg-gray-50">
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <span className="text-sm font-mono text-gray-900">
-                        {group.iwasku}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-mono text-gray-900">
+                          {group.iwasku}
+                        </span>
+                        {group.requests.length > 1 && (
+                          <button
+                            onClick={() => setSelectedProduct(group)}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs text-purple-700 bg-purple-50 border border-purple-200 rounded hover:bg-purple-100 transition-colors"
+                            title="Pazar yeri dağılımını gör"
+                          >
+                            <Store className="w-3 h-3" />
+                            {group.requests.length}
+                          </button>
+                        )}
+                        {group.requests.length === 1 && (
+                          <span className="text-xs text-gray-400">{group.requests[0].marketplaceName}</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-sm text-gray-900">
@@ -370,6 +388,19 @@ export default function ManufacturerCategoryPage() {
           </div>
         </div>
       )}
+
+      {/* Marketplace Breakdown Modal */}
+      <ProductMarketplaceModal
+        isOpen={selectedProduct !== null}
+        onClose={() => setSelectedProduct(null)}
+        iwasku={selectedProduct?.iwasku || ''}
+        productName={selectedProduct?.productName || ''}
+        requests={selectedProduct?.requests.map(r => ({
+          marketplaceName: r.marketplaceName,
+          quantity: r.quantity,
+          colorTag: r.marketplaceColorTag,
+        })) || []}
+      />
     </div>
   );
 }

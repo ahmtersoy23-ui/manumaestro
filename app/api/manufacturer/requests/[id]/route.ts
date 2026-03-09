@@ -8,7 +8,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { ManufacturerUpdateSchema, UUIDParamSchema, formatValidationError } from '@/lib/validation/schemas';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-import { requireRole } from '@/lib/auth/verify';
+import { requireRole, checkMarketplacePermission } from '@/lib/auth/verify';
 import { errorResponse } from '@/lib/api/response';
 
 export async function PATCH(
@@ -27,6 +27,7 @@ export async function PATCH(
     if (authResult instanceof NextResponse) {
       return authResult;
     }
+    const { user } = authResult;
 
     const { id } = await params;
 
@@ -59,16 +60,25 @@ export async function PATCH(
 
     const { producedQuantity, manufacturerNotes, status, workflowStage } = bodyValidation.data;
 
-    // Fetch the request to get quantity
+    // Fetch the request to get quantity and marketplaceId
     const existingRequest = await prisma.productionRequest.findUnique({
       where: { id },
-      select: { quantity: true },
+      select: { quantity: true, marketplaceId: true },
     });
 
     if (!existingRequest) {
       return NextResponse.json(
         { error: 'Talep bulunamadı' },
         { status: 404 }
+      );
+    }
+
+    // Marketplace permission check for OPERATOR users
+    const permCheck = await checkMarketplacePermission(user.id, user.role, existingRequest.marketplaceId, 'edit');
+    if (!permCheck.allowed) {
+      return NextResponse.json(
+        { success: false, error: permCheck.reason || 'Bu talebi güncelleyemezsiniz' },
+        { status: 403 }
       );
     }
 

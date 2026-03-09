@@ -9,7 +9,7 @@ import { Prisma, EntryType, RequestStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { createLogger } from '@/lib/logger';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-import { verifyAuth, requireRole } from '@/lib/auth/verify';
+import { verifyAuth, requireRole, checkMarketplacePermission } from '@/lib/auth/verify';
 import { ProductionRequestSchema, formatValidationError } from '@/lib/validation/schemas';
 import { errorResponse } from '@/lib/api/response';
 
@@ -46,6 +46,15 @@ export async function POST(request: NextRequest) {
     }
 
     const { iwasku, productName, productCategory, productSize, marketplaceId, quantity, productionMonth, notes } = validation.data;
+
+    // Marketplace permission check for OPERATOR users
+    const permCheck = await checkMarketplacePermission(user.id, user.role, marketplaceId, 'edit');
+    if (!permCheck.allowed) {
+      return NextResponse.json(
+        { success: false, error: permCheck.reason || 'Bu pazar yerine talep oluşturamazsınız' },
+        { status: 403 }
+      );
+    }
 
     // requestDate is always today (entry date)
     const requestDate = new Date();
