@@ -28,10 +28,10 @@ export const BulkRequestSchema = z.object({
     iwasku: z.string().min(1).max(50),
     quantity: z.number().int().positive().max(999999),
     notes: z.string().max(500).optional().nullable(),
+    priority: z.enum(['HIGH', 'MEDIUM', 'LOW']).optional().default('MEDIUM'),
   })).min(1, 'At least one request required').max(1000, 'Too many requests (max 1000)'),
   marketplaceId: z.string().uuid('Invalid marketplace ID'),
   productionMonth: z.string().regex(/^\d{4}-\d{2}$/),
-  priority: z.enum(['HIGH', 'MEDIUM', 'LOW']).optional().default('MEDIUM'),
 });
 
 /**

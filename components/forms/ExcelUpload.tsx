@@ -22,13 +22,19 @@ interface ParsedRow {
   iwasku: string;
   quantity: number;
   notes?: string;
+  priority?: 'HIGH' | 'MEDIUM' | 'LOW';
 }
+
+const PRIORITY_MAP: Record<string, 'HIGH' | 'MEDIUM' | 'LOW'> = {
+  'yüksek': 'HIGH', 'yuksek': 'HIGH', 'high': 'HIGH', 'h': 'HIGH',
+  'orta': 'MEDIUM', 'medium': 'MEDIUM', 'm': 'MEDIUM',
+  'düşük': 'LOW', 'dusuk': 'LOW', 'low': 'LOW', 'l': 'LOW',
+};
 
 export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps) {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [productionMonth, setProductionMonth] = useState('');
-  const [priority, setPriority] = useState<'HIGH' | 'MEDIUM' | 'LOW'>('MEDIUM');
   const [monthError, setMonthError] = useState('');
   const [success, setSuccess] = useState(false);
 
@@ -65,10 +71,12 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
           for (let i = 1; i < jsonData.length && i <= 1000; i++) {
             const row = jsonData[i];
             if (row && row[0] && row[1]) {
+              const rawPriority = row[3] ? String(row[3]).trim().toLowerCase() : '';
               rows.push({
                 iwasku: String(row[0]).trim(),
                 quantity: parseInt(String(row[1])),
                 notes: row[2] ? String(row[2]).trim() : undefined,
+                priority: PRIORITY_MAP[rawPriority] ?? 'MEDIUM',
               });
             }
           }
@@ -110,7 +118,6 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
         body: JSON.stringify({
           marketplaceId,
           productionMonth,
-          priority,
           requests: rows,
         }),
       });
@@ -138,9 +145,10 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
     // Create template workbook
     const wb = XLSX.utils.book_new();
     const wsData = [
-      ['IWASKU', 'Miktar', 'Notlar'],
-      ['IM154@0QXFF0', '100', 'İsteğe bağlı not'],
-      ['CA120@0R53ZY', '50', ''],
+      ['IWASKU', 'Miktar', 'Notlar', 'Öncelik'],
+      ['IM154@0QXFF0', '100', 'İsteğe bağlı not', 'Yüksek'],
+      ['CA120@0R53ZY', '50', '', 'Orta'],
+      ['EX789@0AB12C', '200', '', 'Düşük'],
     ];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     XLSX.utils.book_append_sheet(wb, ws, 'Template');
@@ -201,30 +209,6 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
         </div>
       </div>
 
-      {/* Priority Selection */}
-      <div>
-        <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-2">
-          Öncelik
-        </label>
-        <div className="relative">
-          <select
-            id="priority"
-            value={priority}
-            onChange={(e) => setPriority(e.target.value as 'HIGH' | 'MEDIUM' | 'LOW')}
-            className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-400 transition-all appearance-none bg-white cursor-pointer text-gray-900"
-          >
-            <option value="HIGH">Yüksek</option>
-            <option value="MEDIUM">Orta</option>
-            <option value="LOW">Düşük</option>
-          </select>
-          <div className="absolute right-3 top-2.5 pointer-events-none">
-            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
-        </div>
-      </div>
-
       {/* Download Template */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start gap-3">
@@ -234,7 +218,7 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
               Excel Şablonu İndir
             </h4>
             <p className="text-sm text-blue-700 mb-3">
-              Doğru format için şablonumuzu kullanın. Zorunlu sütunlar: IWASKU, Miktar. Öncelik yukarıdan seçilir ve tüm satırlara uygulanır.
+              Doğru format için şablonumuzu kullanın. Zorunlu sütunlar: IWASKU, Miktar. Öncelik her satır için D sütununa yazılır.
             </p>
             <button
               onClick={downloadTemplate}
@@ -322,7 +306,7 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
           <li>• Sütun A: IWASKU (Zorunlu)</li>
           <li>• Sütun B: Miktar (Zorunlu, sayı olmalı)</li>
           <li>• Sütun C: Notlar (İsteğe bağlı)</li>
-          <li>• Öncelik: Excel&apos;e sütun eklenmez — yukarıdaki seçiciden belirlenir, tüm satırlara uygulanır</li>
+          <li>• Sütun D: Öncelik (İsteğe bağlı — Yüksek / Orta / Düşük, boş bırakılırsa Orta)</li>
           <li>• İlk satır başlık içermelidir</li>
           <li>• Yükleme başına en fazla 1000 satır</li>
         </ul>

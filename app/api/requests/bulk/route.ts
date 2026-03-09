@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { marketplaceId, productionMonth, requests, priority } = validation.data;
+    const { marketplaceId, productionMonth, requests } = validation.data;
 
     // requestDate is always today (entry date)
     const requestDate = new Date();
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
             requestDate,
             productionMonth, // YYYY-MM format (e.g., "2026-03")
             notes: item.notes || null,
-            priority: priority ?? 'MEDIUM',
+            priority: item.priority ?? 'MEDIUM',
             entryType: EntryType.EXCEL,
             status: RequestStatus.REQUESTED,
             enteredById: user.id, // Real authenticated user
