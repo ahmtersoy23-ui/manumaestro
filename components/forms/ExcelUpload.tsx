@@ -28,6 +28,7 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [productionMonth, setProductionMonth] = useState('');
+  const [priority, setPriority] = useState<'HIGH' | 'MEDIUM' | 'LOW'>('MEDIUM');
   const [monthError, setMonthError] = useState('');
   const [success, setSuccess] = useState(false);
 
@@ -109,6 +110,7 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
         body: JSON.stringify({
           marketplaceId,
           productionMonth,
+          priority,
           requests: rows,
         }),
       });
@@ -197,6 +199,23 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
             </svg>
           </div>
         </div>
+      </div>
+
+      {/* Priority Selection */}
+      <div>
+        <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-2">
+          Öncelik
+        </label>
+        <select
+          id="priority"
+          value={priority}
+          onChange={(e) => setPriority(e.target.value as 'HIGH' | 'MEDIUM' | 'LOW')}
+          className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-400 transition-all appearance-none bg-white cursor-pointer text-gray-900"
+        >
+          <option value="HIGH">Yüksek</option>
+          <option value="MEDIUM">Orta</option>
+          <option value="LOW">Düşük</option>
+        </select>
       </div>
 
       {/* Download Template */}

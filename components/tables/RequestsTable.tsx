@@ -28,13 +28,27 @@ interface Request {
   productCategory: string;
   quantity: number;
   status: string;
+  priority: string;
   requestDate: string;
+  productionMonth: string;
   createdAt: string;
   notes: string | null;
   enteredBy: {
     name: string;
   };
 }
+
+const PRIORITY_STYLE: Record<string, string> = {
+  HIGH: 'bg-red-100 text-red-700',
+  MEDIUM: 'bg-amber-100 text-amber-700',
+  LOW: 'bg-blue-100 text-blue-700',
+};
+
+const PRIORITY_LABEL: Record<string, string> = {
+  HIGH: 'Yüksek',
+  MEDIUM: 'Orta',
+  LOW: 'Düşük',
+};
 
 const statusColors = {
   REQUESTED: 'bg-blue-100 text-blue-700',
@@ -289,6 +303,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
               <col className="w-auto" /> {/* Product Name */}
               <col className="w-48" /> {/* Category */}
               <col className="w-24" /> {/* Quantity */}
+              <col className="w-24" /> {/* Priority */}
               <col className="w-32" /> {/* Status */}
               {hasRole(['admin']) && <col className="w-32" />} {/* Actions */}
             </colgroup>
@@ -328,6 +343,9 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                   Miktar
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Öncelik
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Durum
                 </th>
                 {hasRole(['admin']) && (
@@ -356,10 +374,13 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                   )}
                   <td className="px-4 py-3 whitespace-nowrap">
                     <span className="text-sm font-medium text-gray-900">
-                      {new Date(request.requestDate).toLocaleDateString('tr-TR', {
-                        month: 'short',
-                        year: 'numeric',
-                      })}
+                      {(() => {
+                        const [year, month] = request.productionMonth.split('-');
+                        return new Date(parseInt(year), parseInt(month) - 1, 1).toLocaleDateString('tr-TR', {
+                          month: 'short',
+                          year: 'numeric',
+                        });
+                      })()}
                     </span>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
@@ -390,6 +411,11 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                   <td className="px-4 py-3 whitespace-nowrap">
                     <span className="text-sm font-semibold text-gray-900">
                       {request.quantity}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${PRIORITY_STYLE[request.priority] ?? PRIORITY_STYLE['MEDIUM']}`}>
+                      {PRIORITY_LABEL[request.priority] ?? 'Orta'}
                     </span>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
