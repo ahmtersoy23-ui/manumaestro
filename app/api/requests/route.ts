@@ -12,6 +12,7 @@ import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLi
 import { verifyAuth, requireRole, checkMarketplacePermission } from '@/lib/auth/verify';
 import { ProductionRequestSchema, formatValidationError } from '@/lib/validation/schemas';
 import { errorResponse } from '@/lib/api/response';
+import { logAction } from '@/lib/auditLog';
 
 const logger = createLogger('Requests API');
 
@@ -79,6 +80,17 @@ export async function POST(request: NextRequest) {
       include: {
         marketplace: true,
       },
+    });
+
+    await logAction({
+      userId: user.id,
+      userName: user.name,
+      userEmail: user.email,
+      action: 'CREATE_REQUEST',
+      entityType: 'ProductionRequest',
+      entityId: productionRequest.id,
+      description: `Talep oluşturuldu: ${iwasku} — ${productName} (${quantity} adet, ${productionMonth})`,
+      metadata: { iwasku, productName, productCategory, quantity, productionMonth, priority, marketplaceId },
     });
 
     return NextResponse.json({

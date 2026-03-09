@@ -8,6 +8,7 @@ import { prisma } from '@/lib/db/prisma';
 import { createLogger } from '@/lib/logger';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { requireRole } from '@/lib/auth/verify';
+import { logAction } from '@/lib/auditLog';
 
 const logger = createLogger('Request API');
 
@@ -37,9 +38,29 @@ export async function DELETE(
       );
     }
 
+    // Fetch request info before deleting (for audit log)
+    const existingRequest = await prisma.productionRequest.findUnique({
+      where: { id },
+      select: { iwasku: true, productName: true, quantity: true, productionMonth: true, marketplaceId: true },
+    });
+
     // Delete the production request
     await prisma.productionRequest.delete({
       where: { id },
+    });
+
+    const { user } = authResult;
+    await logAction({
+      userId: user.id,
+      userName: user.name,
+      userEmail: user.email,
+      action: 'DELETE_REQUEST',
+      entityType: 'ProductionRequest',
+      entityId: id,
+      description: existingRequest
+        ? `Talep silindi: ${existingRequest.iwasku} — ${existingRequest.productName} (${existingRequest.quantity} adet, ${existingRequest.productionMonth})`
+        : `Talep silindi: ${id}`,
+      metadata: existingRequest ? { ...existingRequest, id } : { id },
     });
 
     return NextResponse.json({

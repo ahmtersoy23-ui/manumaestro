@@ -10,6 +10,7 @@ import { ManufacturerUpdateSchema, UUIDParamSchema, formatValidationError } from
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { requireRole, checkMarketplacePermission, checkCategoryPermission } from '@/lib/auth/verify';
 import { errorResponse } from '@/lib/api/response';
+import { logAction } from '@/lib/auditLog';
 
 export async function PATCH(
   request: NextRequest,
@@ -132,6 +133,17 @@ export async function PATCH(
     const updated = await prisma.productionRequest.update({
       where: { id },
       data: updateData,
+    });
+
+    await logAction({
+      userId: user.id,
+      userName: user.name,
+      userEmail: user.email,
+      action: 'UPDATE_PRODUCTION',
+      entityType: 'ProductionRequest',
+      entityId: id,
+      description: `Üretim güncellendi: ${existingRequest.productCategory} — durum: ${updated.status}, üretilen: ${updated.producedQuantity ?? '-'}`,
+      metadata: { ...updateData, requestId: id, productCategory: existingRequest.productCategory },
     });
 
     return NextResponse.json({

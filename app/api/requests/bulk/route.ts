@@ -10,6 +10,7 @@ import { createLogger } from '@/lib/logger';
 import { BulkRequestSchema, formatValidationError } from '@/lib/validation/schemas';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { requireRole } from '@/lib/auth/verify';
+import { logAction } from '@/lib/auditLog';
 
 const logger = createLogger('Bulk Requests API');
 
@@ -104,6 +105,16 @@ export async function POST(request: NextRequest) {
         errors.push(`Talep oluşturulamadı: ${item.iwasku}`);
       }
     }
+
+    await logAction({
+      userId: user.id,
+      userName: user.name,
+      userEmail: user.email,
+      action: 'BULK_UPLOAD',
+      entityType: 'ProductionRequest',
+      description: `Toplu yükleme: ${createdRequests.length} talep oluşturuldu, ${errors.length} hata (${productionMonth}, pazaryeri: ${marketplaceId})`,
+      metadata: { created: createdRequests.length, errors, warnings, marketplaceId, productionMonth },
+    });
 
     return NextResponse.json({
       success: true,
