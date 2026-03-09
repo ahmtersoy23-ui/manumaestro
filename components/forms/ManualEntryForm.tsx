@@ -30,6 +30,7 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
   const [productName, setProductName] = useState('');
   const [productCategory, setProductCategory] = useState('');
   const [productionMonth, setProductionMonth] = useState('');
+  const [priority, setPriority] = useState<'HIGH' | 'MEDIUM' | 'LOW'>('MEDIUM');
   const [notes, setNotes] = useState('');
   const [searching, setSearching] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -116,6 +117,7 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
           marketplaceId,
           quantity: parseInt(quantity),
           productionMonth,
+          priority,
           notes,
         }),
       });
@@ -129,6 +131,7 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
         setQuantity('');
         setProductName('');
         setProductCategory('');
+        setPriority('MEDIUM');
         setNotes('');
         setSearchResults([]);
 
@@ -185,7 +188,7 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Production Month Selector */}
         <div>
           <label htmlFor="productionMonth" className="block text-sm font-medium text-gray-700 mb-2">
@@ -240,6 +243,23 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
             }`}
             required
           />
+        </div>
+
+        {/* Priority Selector */}
+        <div>
+          <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-2">
+            Öncelik
+          </label>
+          <select
+            id="priority"
+            value={priority}
+            onChange={(e) => setPriority(e.target.value as 'HIGH' | 'MEDIUM' | 'LOW')}
+            className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-400 transition-all appearance-none bg-white cursor-pointer text-gray-900"
+          >
+            <option value="HIGH">Yüksek</option>
+            <option value="MEDIUM">Orta</option>
+            <option value="LOW">Düşük</option>
+          </select>
         </div>
       </div>
 
@@ -347,6 +367,7 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
             setQuantity('');
             setProductName('');
             setProductCategory('');
+            setPriority('MEDIUM');
             setNotes('');
             setSearchResults([]);
             setMonthError('');

@@ -90,6 +90,7 @@ export async function GET(
       producedQuantity: r.producedQuantity,
       manufacturerNotes: r.manufacturerNotes,
       status: r.status,
+      priority: r.priority,
       requestDate: r.requestDate.toISOString(),
     }));
 

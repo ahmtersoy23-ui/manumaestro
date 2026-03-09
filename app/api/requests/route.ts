@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { iwasku, productName, productCategory, productSize, marketplaceId, quantity, productionMonth, notes } = validation.data;
+    const { iwasku, productName, productCategory, productSize, marketplaceId, quantity, productionMonth, notes, priority } = validation.data;
 
     // Marketplace permission check for OPERATOR users
     const permCheck = await checkMarketplacePermission(user.id, user.role, marketplaceId, 'edit');
@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
         requestDate,
         productionMonth, // YYYY-MM format (e.g., "2026-03")
         notes: notes ?? null,
+        priority: priority ?? 'MEDIUM',
         entryType: EntryType.MANUAL,
         status: RequestStatus.REQUESTED,
         enteredById: user.id, // Real authenticated user

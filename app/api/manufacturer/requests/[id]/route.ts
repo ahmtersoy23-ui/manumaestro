@@ -8,7 +8,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { ManufacturerUpdateSchema, UUIDParamSchema, formatValidationError } from '@/lib/validation/schemas';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-import { requireRole, checkMarketplacePermission } from '@/lib/auth/verify';
+import { requireRole, checkMarketplacePermission, checkCategoryPermission } from '@/lib/auth/verify';
 import { errorResponse } from '@/lib/api/response';
 
 export async function PATCH(
@@ -63,7 +63,7 @@ export async function PATCH(
     // Fetch the request to get quantity and marketplaceId
     const existingRequest = await prisma.productionRequest.findUnique({
       where: { id },
-      select: { quantity: true, marketplaceId: true },
+      select: { quantity: true, marketplaceId: true, productCategory: true },
     });
 
     if (!existingRequest) {
@@ -78,6 +78,15 @@ export async function PATCH(
     if (!permCheck.allowed) {
       return NextResponse.json(
         { success: false, error: permCheck.reason || 'Bu talebi güncelleyemezsiniz' },
+        { status: 403 }
+      );
+    }
+
+    // Category permission check for OPERATOR users
+    const catCheck = await checkCategoryPermission(user.id, user.role, existingRequest.productCategory, 'edit');
+    if (!catCheck.allowed) {
+      return NextResponse.json(
+        { success: false, error: catCheck.reason || 'Bu kategoriye erişim izniniz yok' },
         { status: 403 }
       );
     }

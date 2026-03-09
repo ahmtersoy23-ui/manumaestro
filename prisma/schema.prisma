@@ -24,10 +24,11 @@ model User {
   updatedAt         DateTime                  @updatedAt
 
   // Relations
-  permissions       UserMarketplacePermission[]
-  requests          ProductionRequest[]
-  createdMarketplaces Marketplace[]           @relation("CreatedBy")
-  auditLogs         AuditLog[]
+  permissions           UserMarketplacePermission[]
+  categoryPermissions   UserCategoryPermission[]
+  requests              ProductionRequest[]
+  createdMarketplaces   Marketplace[]             @relation("CreatedBy")
+  auditLogs             AuditLog[]
 
   @@index([role])
   @@index([isActive])
@@ -100,6 +101,19 @@ model UserMarketplacePermission {
   @@map("user_marketplace_permissions")
 }
 
+model UserCategoryPermission {
+  userId    String
+  category  String   // ProductionRequest.productCategory değeriyle eşleşir
+  canView   Boolean  @default(true)
+  canEdit   Boolean  @default(true)
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category])
+  @@index([userId])
+  @@map("user_category_permissions")
+}
+
 // ============================================
 // PRODUCT REFERENCE (From existing DB)
 // ============================================
@@ -121,6 +135,7 @@ model ProductionRequest {
   producedQuantity  Int?         // Quantity actually produced by manufacturer
   requestDate       DateTime     @default(now()) // Entry date (today)
   productionMonth   String       // Production month in YYYY-MM format (e.g., "2026-03")
+  priority          RequestPriority @default(MEDIUM)
   status            RequestStatus @default(REQUESTED)
   workflowStage     WorkflowStage? // For furniture category workflow tracking
   entryType         EntryType
@@ -144,10 +159,17 @@ model ProductionRequest {
   @@index([createdAt])
   @@index([productCategory])
   @@index([productCategory, workflowStage])
+  @@index([priority])
   @@index([productCategory, productionMonth])
   @@index([marketplaceId, productionMonth])
   @@index([status, productionMonth])
   @@map("production_requests")
+}
+
+enum RequestPriority {
+  HIGH
+  MEDIUM
+  LOW
 }
 
 enum RequestStatus {

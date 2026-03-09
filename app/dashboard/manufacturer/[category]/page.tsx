@@ -15,6 +15,27 @@ import { ProductMarketplaceModal } from '@/components/modals/ProductMarketplaceM
 
 const logger = createLogger('ManufacturerCategoryPage');
 
+const PRIORITY_ORDER = { HIGH: 3, MEDIUM: 2, LOW: 1 } as const;
+
+function getHighestPriority(requests: { priority: string }[]): 'HIGH' | 'MEDIUM' | 'LOW' {
+  return requests.reduce((best, r) => {
+    const rPri = r.priority as 'HIGH' | 'MEDIUM' | 'LOW';
+    return PRIORITY_ORDER[rPri] > PRIORITY_ORDER[best] ? rPri : best;
+  }, 'LOW' as 'HIGH' | 'MEDIUM' | 'LOW');
+}
+
+const PRIORITY_STYLE: Record<string, string> = {
+  HIGH: 'bg-red-100 text-red-700 border-red-200',
+  MEDIUM: 'bg-amber-100 text-amber-700 border-amber-200',
+  LOW: 'bg-blue-100 text-blue-700 border-blue-200',
+};
+
+const PRIORITY_LABEL: Record<string, string> = {
+  HIGH: 'Yüksek',
+  MEDIUM: 'Orta',
+  LOW: 'Düşük',
+};
+
 interface Request {
   id: string;
   iwasku: string;
@@ -26,6 +47,7 @@ interface Request {
   producedQuantity: number | null;
   manufacturerNotes: string | null;
   status: string;
+  priority: string;
   requestDate: string;
 }
 
@@ -296,24 +318,32 @@ export default function ManufacturerCategoryPage() {
                 {groupedRequests.map((group) => (
                   <tr key={group.iwasku} className="hover:bg-gray-50">
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-mono text-gray-900">
-                          {group.iwasku}
-                        </span>
-                        {group.requests.length > 1 && (
-                          <button
-                            onClick={() => setSelectedProduct(group)}
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs text-purple-700 bg-purple-50 border border-purple-200 rounded hover:bg-purple-100 transition-colors"
-                            title="Pazar yeri dağılımını gör"
-                          >
-                            <Store className="w-3 h-3" />
-                            {group.requests.length}
-                          </button>
-                        )}
-                        {group.requests.length === 1 && (
-                          <span className="text-xs text-gray-400">{group.requests[0].marketplaceName}</span>
-                        )}
-                      </div>
+                      {(() => {
+                        const uniqueMarketplaceCount = new Set(group.requests.map(r => r.marketplaceName)).size;
+                        const highestPriority = getHighestPriority(group.requests);
+                        return (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-mono text-gray-900">
+                              {group.iwasku}
+                            </span>
+                            {uniqueMarketplaceCount > 1 ? (
+                              <button
+                                onClick={() => setSelectedProduct(group)}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs text-purple-700 bg-purple-50 border border-purple-200 rounded hover:bg-purple-100 transition-colors"
+                                title="Pazar yeri dağılımını gör"
+                              >
+                                <Store className="w-3 h-3" />
+                                {uniqueMarketplaceCount}
+                              </button>
+                            ) : (
+                              <span className="text-xs text-gray-400">{group.requests[0].marketplaceName}</span>
+                            )}
+                            <span className={`text-xs px-1.5 py-0.5 rounded border ${PRIORITY_STYLE[highestPriority]}`}>
+                              {PRIORITY_LABEL[highestPriority]}
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-sm text-gray-900">
@@ -396,14 +426,18 @@ export default function ManufacturerCategoryPage() {
         iwasku={selectedProduct?.iwasku || ''}
         productName={selectedProduct?.productName || ''}
         requests={selectedProduct?.requests.reduce((acc, r) => {
+          const pri = r.priority as 'HIGH' | 'MEDIUM' | 'LOW';
           const existing = acc.find(x => x.marketplaceName === r.marketplaceName);
           if (existing) {
             existing.quantity += r.quantity;
+            if (PRIORITY_ORDER[pri] > PRIORITY_ORDER[existing.priority as 'HIGH' | 'MEDIUM' | 'LOW']) {
+              existing.priority = pri;
+            }
           } else {
-            acc.push({ marketplaceName: r.marketplaceName, quantity: r.quantity, colorTag: r.marketplaceColorTag });
+            acc.push({ marketplaceName: r.marketplaceName, quantity: r.quantity, colorTag: r.marketplaceColorTag, priority: pri });
           }
           return acc;
-        }, [] as Array<{ marketplaceName: string; quantity: number; colorTag?: string | null }>) || []}
+        }, [] as Array<{ marketplaceName: string; quantity: number; colorTag?: string | null; priority: string }>) || []}
       />
     </div>
   );

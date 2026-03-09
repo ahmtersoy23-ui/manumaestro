@@ -149,6 +149,42 @@ export async function checkMarketplacePermission(
 }
 
 /**
+ * Check if user has permission to view/edit a specific category
+ * ADMIN bypasses all checks. OPERATOR must have an explicit UserCategoryPermission row.
+ */
+export async function checkCategoryPermission(
+  userId: string,
+  userRole: 'admin' | 'editor' | 'viewer',
+  category: string,
+  mode: 'view' | 'edit'
+): Promise<{ allowed: boolean; reason?: string }> {
+  if (userRole === 'admin') return { allowed: true };
+
+  if (userRole === 'viewer' && mode === 'edit') {
+    return { allowed: false, reason: 'Görüntüleme yetkisine sahipsiniz, düzenleme yapamazsınız' };
+  }
+
+  // OPERATOR: check UserCategoryPermission table
+  const perm = await prisma.userCategoryPermission.findUnique({
+    where: { userId_category: { userId, category } },
+  });
+
+  if (!perm) {
+    return { allowed: false, reason: 'Bu kategoriye erişim izniniz yok' };
+  }
+
+  if (mode === 'view' && !perm.canView) {
+    return { allowed: false, reason: 'Bu kategoriyi görüntüleme izniniz yok' };
+  }
+
+  if (mode === 'edit' && !perm.canEdit) {
+    return { allowed: false, reason: 'Bu kategoriyi düzenleme izniniz yok' };
+  }
+
+  return { allowed: true };
+}
+
+/**
  * Verify user has required role
  * Returns user if authorized, error response if not
  */

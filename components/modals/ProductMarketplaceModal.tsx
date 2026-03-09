@@ -7,10 +7,23 @@
 
 import { X, ShoppingBag } from 'lucide-react';
 
+const PRIORITY_STYLE: Record<string, string> = {
+  HIGH: 'bg-red-100 text-red-700 border-red-200',
+  MEDIUM: 'bg-amber-100 text-amber-700 border-amber-200',
+  LOW: 'bg-blue-100 text-blue-700 border-blue-200',
+};
+
+const PRIORITY_LABEL: Record<string, string> = {
+  HIGH: 'Yüksek',
+  MEDIUM: 'Orta',
+  LOW: 'Düşük',
+};
+
 interface MarketplaceRequest {
   marketplaceName: string;
   quantity: number;
   colorTag?: string | null;
+  priority?: string;
 }
 
 interface ProductMarketplaceModalProps {
@@ -73,6 +86,11 @@ export function ProductMarketplaceModal({
                       />
                     )}
                     <span className="text-sm text-gray-900">{req.marketplaceName}</span>
+                    {req.priority && (
+                      <span className={`text-xs px-1.5 py-0.5 rounded border ${PRIORITY_STYLE[req.priority]}`}>
+                        {PRIORITY_LABEL[req.priority]}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 text-sm">
                     <span className="font-semibold text-gray-900">{req.quantity}</span>

@@ -17,6 +17,7 @@ export const ProductionRequestSchema = z.object({
   quantity: z.number().int('Quantity must be integer').positive('Quantity must be positive').max(999999, 'Quantity too large'),
   productionMonth: z.string().regex(/^\d{4}-\d{2}$/, 'Invalid month format. Expected YYYY-MM'),
   notes: z.string().max(500, 'Notes too long').optional().nullable(),
+  priority: z.enum(['HIGH', 'MEDIUM', 'LOW']).optional().default('MEDIUM'),
 });
 
 /**
@@ -30,6 +31,7 @@ export const BulkRequestSchema = z.object({
   })).min(1, 'At least one request required').max(1000, 'Too many requests (max 1000)'),
   marketplaceId: z.string().uuid('Invalid marketplace ID'),
   productionMonth: z.string().regex(/^\d{4}-\d{2}$/),
+  priority: z.enum(['HIGH', 'MEDIUM', 'LOW']).optional().default('MEDIUM'),
 });
 
 /**
@@ -66,6 +68,19 @@ export const MarketplaceCreateSchema = z.object({
 export const MarketplacePermissionSchema = z.object({
   userId: z.string().uuid('Geçersiz kullanıcı ID'),
   marketplaceId: z.string().uuid('Geçersiz pazar yeri ID'),
+  canView: z.boolean(),
+  canEdit: z.boolean(),
+}).refine(d => !(d.canEdit && !d.canView), {
+  message: 'Düzenleme izni görüntüleme iznini gerektirir',
+  path: ['canView'],
+});
+
+/**
+ * Category Permission Schema
+ */
+export const CategoryPermissionSchema = z.object({
+  userId: z.string().uuid('Geçersiz kullanıcı ID'),
+  category: z.string().min(1).max(100),
   canView: z.boolean(),
   canEdit: z.boolean(),
 }).refine(d => !(d.canEdit && !d.canView), {
