@@ -289,13 +289,13 @@ export default function AdminPermissionsPage() {
       </Link>
 
       {/* Page Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <Shield className="w-8 h-8 text-purple-600" />
-            <h1 className="text-3xl font-bold text-gray-900">İzin Yönetimi</h1>
+            <Shield className="w-6 h-6 md:w-8 md:h-8 text-purple-600" />
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">İzin Yönetimi</h1>
           </div>
-          <p className="text-gray-600">
+          <p className="text-sm md:text-base text-gray-600">
             OPERATOR kullanıcılarının pazar yeri ve kategori erişimlerini yönetin.
           </p>
         </div>

@@ -240,7 +240,7 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
 
       {/* Requests - Month Tabs */}
       <div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
           <div className="flex items-center gap-2 overflow-x-auto pb-2">
             {availableMonths.map((month) => (
               <button

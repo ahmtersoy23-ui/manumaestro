@@ -292,11 +292,11 @@ export default function ManufacturerCategoryPage() {
       </Link>
 
       {/* Page Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <Package className="w-8 h-8 text-orange-600" />
-            <h1 className="text-3xl font-bold text-gray-900">{category}</h1>
+            <Package className="w-6 h-6 md:w-8 md:h-8 text-orange-600" />
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{category}</h1>
           </div>
           <div className="flex items-center gap-2 text-gray-600">
             <Calendar className="w-4 h-4" />

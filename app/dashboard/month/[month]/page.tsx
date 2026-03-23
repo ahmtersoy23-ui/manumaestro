@@ -161,11 +161,11 @@ export default function MonthDetailPage() {
       </Link>
 
       {/* Month Header */}
-      <div className="bg-gradient-to-r from-purple-600 to-purple-700 rounded-xl p-8 text-white">
-        <div className="flex items-center justify-between mb-4">
+      <div className="bg-gradient-to-r from-purple-600 to-purple-700 rounded-xl p-4 md:p-8 text-white">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
           <div className="flex items-center gap-3">
-            <Calendar className="w-8 h-8" />
-            <h1 className="text-3xl font-bold">{monthLabel}</h1>
+            <Calendar className="w-6 h-6 md:w-8 md:h-8" />
+            <h1 className="text-2xl md:text-3xl font-bold">{monthLabel}</h1>
             {isLocked && (
               <span className="px-3 py-1 bg-white/20 rounded-full text-sm">
                 Sadece Görüntüle
