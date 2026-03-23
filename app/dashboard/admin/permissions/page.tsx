@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Shield, ChevronDown, AlertTriangle, CheckSquare, Square, ArrowLeft } from 'lucide-react';
+import { Shield, ChevronDown, AlertTriangle, CheckSquare, Square, ArrowLeft, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
 
@@ -51,43 +51,65 @@ export default function AdminPermissionsPage() {
   const [catLoading, setCatLoading] = useState(true);
   const [catSaving, setCatSaving] = useState<string | null>(null);
 
-  // Load marketplace permissions data
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const res = await fetch('/api/admin/marketplace-permissions');
-        const data = await res.json();
-        if (data.success) {
-          setUsers(data.data.users);
-          setMarketplaces(data.data.marketplaces);
-        }
-      } catch (err) {
-        logger.error('Failed to fetch marketplace permissions data:', err);
-      } finally {
-        setLoading(false);
+  // SSO sync state
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+
+  const fetchMarketplaceData = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/marketplace-permissions');
+      const data = await res.json();
+      if (data.success) {
+        setUsers(data.data.users);
+        setMarketplaces(data.data.marketplaces);
       }
+    } catch (err) {
+      logger.error('Failed to fetch marketplace permissions data:', err);
+    } finally {
+      setLoading(false);
     }
-    fetchData();
   }, []);
 
-  // Load category permissions data
-  useEffect(() => {
-    async function fetchCatData() {
-      try {
-        const res = await fetch('/api/admin/category-permissions');
-        const data = await res.json();
-        if (data.success) {
-          setCatUsers(data.data.users);
-          setCategories(data.data.categories);
-        }
-      } catch (err) {
-        logger.error('Failed to fetch category permissions data:', err);
-      } finally {
-        setCatLoading(false);
+  const fetchCatData = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/category-permissions');
+      const data = await res.json();
+      if (data.success) {
+        setCatUsers(data.data.users);
+        setCategories(data.data.categories);
       }
+    } catch (err) {
+      logger.error('Failed to fetch category permissions data:', err);
+    } finally {
+      setCatLoading(false);
     }
-    fetchCatData();
   }, []);
+
+  // Load data on mount
+  useEffect(() => { fetchMarketplaceData(); }, [fetchMarketplaceData]);
+  useEffect(() => { fetchCatData(); }, [fetchCatData]);
+
+  // SSO sync: fetch users from SSO and upsert into local DB
+  const syncUsers = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch('/api/admin/sync-users', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setSyncResult(`${data.data.synced} kullanıcı senkronize edildi`);
+        // Reload both tabs
+        await Promise.all([fetchMarketplaceData(), fetchCatData()]);
+      } else {
+        setSyncResult(data.error || 'Senkronizasyon başarısız');
+      }
+    } catch (err) {
+      logger.error('SSO sync failed:', err);
+      setSyncResult('Senkronizasyon hatası');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // --- Marketplace helpers ---
   const buildPermMap = useCallback((userId: string): PermMap => {
@@ -267,14 +289,29 @@ export default function AdminPermissionsPage() {
       </Link>
 
       {/* Page Header */}
-      <div>
-        <div className="flex items-center gap-3 mb-2">
-          <Shield className="w-8 h-8 text-purple-600" />
-          <h1 className="text-3xl font-bold text-gray-900">İzin Yönetimi</h1>
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <Shield className="w-8 h-8 text-purple-600" />
+            <h1 className="text-3xl font-bold text-gray-900">İzin Yönetimi</h1>
+          </div>
+          <p className="text-gray-600">
+            OPERATOR kullanıcılarının pazar yeri ve kategori erişimlerini yönetin.
+          </p>
         </div>
-        <p className="text-gray-600">
-          OPERATOR kullanıcılarının pazar yeri ve kategori erişimlerini yönetin.
-        </p>
+        <div className="flex flex-col items-end gap-1">
+          <button
+            onClick={syncUsers}
+            disabled={syncing}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Senkronize ediliyor...' : 'SSO Senkronize Et'}
+          </button>
+          {syncResult && (
+            <span className="text-xs text-gray-500">{syncResult}</span>
+          )}
+        </div>
       </div>
 
       {/* Tabs */}

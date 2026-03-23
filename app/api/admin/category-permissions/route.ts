@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     const authResult = await requireRole(request, ['admin']);
     if (authResult instanceof NextResponse) return authResult;
 
-    const [users, categoryRows] = await Promise.all([
+    const [users, reqCategories, permCategories] = await Promise.all([
       prisma.user.findMany({
         where: { role: UserRole.OPERATOR, isActive: true },
         select: {
@@ -39,11 +39,18 @@ export async function GET(request: NextRequest) {
       prisma.productionRequest.findMany({
         select: { productCategory: true },
         distinct: ['productCategory'],
-        orderBy: { productCategory: 'asc' },
+      }),
+      prisma.userCategoryPermission.findMany({
+        select: { category: true },
+        distinct: ['category'],
       }),
     ]);
 
-    const categories = categoryRows.map(r => r.productCategory).filter(Boolean);
+    // Merge categories from both production requests and existing permissions
+    const categories = [...new Set([
+      ...reqCategories.map(r => r.productCategory),
+      ...permCategories.map(p => p.category),
+    ])].filter(Boolean).sort();
 
     return NextResponse.json({ success: true, data: { users, categories } });
   } catch (error) {

@@ -144,48 +144,24 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
   const handleExport = async () => {
     setExporting(true);
     try {
-      const archiveParam = selectedMonth === 'archive' ? '&archiveMode=true' : '';
       const monthParam = selectedMonth !== 'archive' ? `&month=${selectedMonth}` : '';
-      const res = await fetch(`/api/requests?marketplaceId=${marketplace.id}&limit=1000${archiveParam}${monthParam}`);
-      const data = await res.json();
+      const res = await fetch(`/api/export/marketplace?marketplaceId=${marketplace.id}${monthParam}`);
 
-      if (!data.success || !data.data.length) {
+      if (!res.ok) {
         alert('Dışa aktarılacak veri yok');
         return;
       }
 
-      // Convert to CSV
-      const headers = ['Tarih', 'IWASKU', 'Ürün Adı', 'Kategori', 'Miktar', 'Üretim Ayı', 'Durum', 'Notlar'];
-      const csvRows = [headers.join(',')];
-
-      data.data.forEach((request: ProductionRequest) => {
-        const row = [
-          new Date(request.requestDate).toLocaleDateString('tr-TR'),
-          request.iwasku,
-          `"${request.productName.replace(/"/g, '""')}"`,
-          request.productCategory,
-          request.quantity,
-          request.productionMonth,
-          request.status,
-          request.notes ? `"${request.notes.replace(/"/g, '""')}"` : '',
-        ];
-        csvRows.push(row.join(','));
-      });
-
-      // Download CSV with UTF-8 BOM for proper Turkish character support
-      const BOM = '\uFEFF';
-      const csvContent = BOM + csvRows.join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const blob = await res.blob();
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
-      const filename = `${marketplace.name.replace(/\s+/g, '_')}_${selectedMonth === 'archive' ? 'archive' : selectedMonth}_${new Date().toISOString().split('T')[0]}.csv`;
-
       link.setAttribute('href', url);
-      link.setAttribute('download', filename);
+      link.setAttribute('download', `${marketplace.code}_${selectedMonth === 'archive' ? 'all' : selectedMonth}.xlsx`);
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     } catch (error) {
       logger.error('Export error:', error);
       alert('Dışa aktarma başarısız oldu');

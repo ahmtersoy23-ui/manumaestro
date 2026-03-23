@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Package, Save, Calendar, Store } from 'lucide-react';
+import { ArrowLeft, Package, Save, Calendar, Store, Download } from 'lucide-react';
 import { formatMonthValue, parseMonthValue } from '@/lib/monthUtils';
 import { createLogger } from '@/lib/logger';
 import { ProductMarketplaceModal } from '@/components/modals/ProductMarketplaceModal';
@@ -87,6 +87,7 @@ export default function ManufacturerCategoryPage() {
   const [editValues, setEditValues] = useState<EditValues>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<GroupedRequest | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const monthDate = parseMonthValue(month);
   const monthLabel = monthDate.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
@@ -242,6 +243,32 @@ export default function ManufacturerCategoryPage() {
     }
   };
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await fetch(`/api/export/category?category=${encodeURIComponent(category)}&month=${month}`);
+      if (!res.ok) {
+        alert('Dışa aktarılacak veri yok');
+        return;
+      }
+      const blob = await res.blob();
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `${category.replace(/\s+/g, '-')}_${month}.xlsx`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      logger.error('Export error:', error);
+      alert('Dışa aktarma başarısız oldu');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -265,18 +292,28 @@ export default function ManufacturerCategoryPage() {
       </Link>
 
       {/* Page Header */}
-      <div>
-        <div className="flex items-center gap-3 mb-2">
-          <Package className="w-8 h-8 text-orange-600" />
-          <h1 className="text-3xl font-bold text-gray-900">{category}</h1>
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <Package className="w-8 h-8 text-orange-600" />
+            <h1 className="text-3xl font-bold text-gray-900">{category}</h1>
+          </div>
+          <div className="flex items-center gap-2 text-gray-600">
+            <Calendar className="w-4 h-4" />
+            <p>{monthLabel}</p>
+          </div>
+          <p className="text-gray-600 mt-2">
+            Üretilen miktarları ve üretim notlarını girin
+          </p>
         </div>
-        <div className="flex items-center gap-2 text-gray-600">
-          <Calendar className="w-4 h-4" />
-          <p>{monthLabel}</p>
-        </div>
-        <p className="text-gray-600 mt-2">
-          Üretilen miktarları ve üretim notlarını girin
-        </p>
+        <button
+          onClick={handleExport}
+          disabled={exporting || groupedRequests.length === 0}
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors disabled:opacity-50"
+        >
+          <Download className={`w-4 h-4 ${exporting ? 'animate-bounce' : ''}`} />
+          {exporting ? 'İndiriliyor...' : 'Excel İndir'}
+        </button>
       </div>
 
       {/* Requests Table */}

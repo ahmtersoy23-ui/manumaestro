@@ -8,7 +8,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { ManufacturerUpdateSchema, UUIDParamSchema, formatValidationError } from '@/lib/validation/schemas';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-import { requireRole, checkMarketplacePermission, checkCategoryPermission } from '@/lib/auth/verify';
+import { requireRole, checkCategoryPermission } from '@/lib/auth/verify';
 import { errorResponse } from '@/lib/api/response';
 import { logAction } from '@/lib/auditLog';
 
@@ -61,10 +61,10 @@ export async function PATCH(
 
     const { producedQuantity, manufacturerNotes, status, workflowStage } = bodyValidation.data;
 
-    // Fetch the request to get quantity and marketplaceId
+    // Fetch the request to get quantity and category
     const existingRequest = await prisma.productionRequest.findUnique({
       where: { id },
-      select: { quantity: true, marketplaceId: true, productCategory: true },
+      select: { quantity: true, productCategory: true },
     });
 
     if (!existingRequest) {
@@ -74,16 +74,7 @@ export async function PATCH(
       );
     }
 
-    // Marketplace permission check for OPERATOR users
-    const permCheck = await checkMarketplacePermission(user.id, user.role, existingRequest.marketplaceId, 'edit');
-    if (!permCheck.allowed) {
-      return NextResponse.json(
-        { success: false, error: permCheck.reason || 'Bu talebi güncelleyemezsiniz' },
-        { status: 403 }
-      );
-    }
-
-    // Category permission check for OPERATOR users
+    // Category permission check for OPERATOR users (üretim durumu kategori bazlı)
     const catCheck = await checkCategoryPermission(user.id, user.role, existingRequest.productCategory, 'edit');
     if (!catCheck.allowed) {
       return NextResponse.json(
