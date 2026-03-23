@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     const ssoResponse = await fetch(SSO_ADMIN_USERS_URL, {
       headers: {
         'Content-Type': 'application/json',
-        'Cookie': `access_token=${token}`,
+        'Authorization': `Bearer ${token}`,
       },
     });
 
