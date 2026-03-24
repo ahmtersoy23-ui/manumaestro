@@ -42,7 +42,7 @@ function getWeekLabelsForMonth(month: string): string[] {
   const end = new Date(year, m, 0); // last day
   const weeks: string[] = [];
 
-  let current = new Date(start);
+  const current = new Date(start);
   while (current <= end) {
     const weekStart = new Date(current);
     const weekEnd = new Date(current);
