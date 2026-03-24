@@ -1,6 +1,6 @@
 /**
  * Month Utilities Tests
- * Comprehensive tests for month handling functions
+ * Updated for new locking rule: month locks on the 1st of that month
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -82,32 +82,38 @@ describe('monthUtils', () => {
 
     it('should return true for past months', () => {
       vi.setSystemTime(new Date(2026, 1, 10)); // February 10, 2026
-      const result = isMonthLocked('2026-01'); // January 2026
-      expect(result).toBe(true);
+      expect(isMonthLocked('2026-01')).toBe(true); // January - past
     });
 
-    it('should return false for current month before day 5', () => {
-      vi.setSystemTime(new Date(2026, 1, 3)); // February 3, 2026
-      const result = isMonthLocked('2026-02'); // Current month
-      expect(result).toBe(false);
+    it('should return true for current month (locked on 1st)', () => {
+      vi.setSystemTime(new Date(2026, 1, 1)); // February 1, 2026
+      expect(isMonthLocked('2026-02')).toBe(true); // Feb locked because today >= Feb 1
     });
 
-    it('should return true for current month on day 5', () => {
-      vi.setSystemTime(new Date(2026, 1, 5)); // February 5, 2026
-      const result = isMonthLocked('2026-02');
-      expect(result).toBe(true);
+    it('should return true for current month mid-month', () => {
+      vi.setSystemTime(new Date(2026, 1, 15)); // February 15, 2026
+      expect(isMonthLocked('2026-02')).toBe(true);
     });
 
-    it('should return true for current month after day 5', () => {
-      vi.setSystemTime(new Date(2026, 1, 10)); // February 10, 2026
-      const result = isMonthLocked('2026-02');
-      expect(result).toBe(true);
+    it('should return false for next month (entries open)', () => {
+      vi.setSystemTime(new Date(2026, 1, 15)); // February 15, 2026
+      expect(isMonthLocked('2026-03')).toBe(false); // March entries open during Feb
     });
 
     it('should return false for future months', () => {
       vi.setSystemTime(new Date(2026, 1, 10)); // February 10, 2026
-      const result = isMonthLocked('2026-03'); // March 2026
-      expect(result).toBe(false);
+      expect(isMonthLocked('2026-04')).toBe(false); // April - future
+    });
+
+    it('should lock month exactly on the 1st', () => {
+      vi.setSystemTime(new Date(2026, 2, 1)); // March 1, 2026
+      expect(isMonthLocked('2026-03')).toBe(true); // March locked on March 1
+      expect(isMonthLocked('2026-04')).toBe(false); // April still open
+    });
+
+    it('should keep month open on last day of previous month', () => {
+      vi.setSystemTime(new Date(2026, 1, 28)); // Feb 28, 2026
+      expect(isMonthLocked('2026-03')).toBe(false); // March entries still open
     });
   });
 
@@ -120,19 +126,8 @@ describe('monthUtils', () => {
       vi.useRealTimers();
     });
 
-    it('should return 5 months before day 5', () => {
-      vi.setSystemTime(new Date(2026, 1, 3)); // February 3, 2026
-      const result = getActiveMonths();
-      expect(result).toHaveLength(5);
-      expect(result[0].value).toBe('2025-12'); // December
-      expect(result[1].value).toBe('2026-01'); // January
-      expect(result[2].value).toBe('2026-02'); // February (current)
-      expect(result[3].value).toBe('2026-03'); // March
-      expect(result[4].value).toBe('2026-04'); // April
-    });
-
-    it('should return 4 months on or after day 5', () => {
-      vi.setSystemTime(new Date(2026, 1, 5)); // February 5, 2026
+    it('should return 4 months (prev 1 + current + next 2)', () => {
+      vi.setSystemTime(new Date(2026, 1, 10)); // February 10, 2026
       const result = getActiveMonths();
       expect(result).toHaveLength(4);
       expect(result[0].value).toBe('2026-01'); // January
@@ -141,24 +136,24 @@ describe('monthUtils', () => {
       expect(result[3].value).toBe('2026-04'); // April
     });
 
-    it('should mark past months as locked', () => {
+    it('should mark current and past months as locked', () => {
       vi.setSystemTime(new Date(2026, 1, 10)); // February 10, 2026
       const result = getActiveMonths();
-      const januaryMonth = result.find(m => m.value === '2026-01');
-      expect(januaryMonth?.locked).toBe(true);
+      expect(result.find(m => m.value === '2026-01')?.locked).toBe(true); // past
+      expect(result.find(m => m.value === '2026-02')?.locked).toBe(true); // current = locked
     });
 
-    it('should mark current month as locked after day 5', () => {
+    it('should mark future months as unlocked', () => {
       vi.setSystemTime(new Date(2026, 1, 10)); // February 10, 2026
       const result = getActiveMonths();
-      const currentMonth = result.find(m => m.value === '2026-02');
-      expect(currentMonth?.locked).toBe(true);
+      expect(result.find(m => m.value === '2026-03')?.locked).toBe(false);
+      expect(result.find(m => m.value === '2026-04')?.locked).toBe(false);
     });
 
     it('should include proper labels', () => {
       vi.setSystemTime(new Date(2026, 1, 3)); // February 3, 2026
       const result = getActiveMonths();
-      expect(result[2].label).toBe('Şubat 2026');
+      expect(result[1].label).toBe('Şubat 2026');
     });
   });
 
@@ -172,37 +167,29 @@ describe('monthUtils', () => {
     });
 
     it('should return only unlocked months', () => {
-      vi.setSystemTime(new Date(2026, 1, 10)); // February 10, 2026 (after day 5)
+      vi.setSystemTime(new Date(2026, 1, 10)); // February 10, 2026
       const result = getAvailableMonthsForEntry();
 
-      // All returned months should not be locked
       result.forEach(month => {
         expect(isMonthLocked(month.value)).toBe(false);
       });
     });
 
-    it('should not include past months', () => {
+    it('should not include current or past months', () => {
       vi.setSystemTime(new Date(2026, 1, 10)); // February 10, 2026
       const result = getAvailableMonthsForEntry();
 
-      const hasPastMonths = result.some(m => m.value === '2026-01');
-      expect(hasPastMonths).toBe(false);
+      // Current month (Feb) is locked, should not be in entry list
+      expect(result.some(m => m.value === '2026-02')).toBe(false);
+      expect(result.some(m => m.value === '2026-01')).toBe(false);
     });
 
-    it('should include current month before day 5', () => {
-      vi.setSystemTime(new Date(2026, 1, 3)); // February 3, 2026
+    it('should include future months for entry', () => {
+      vi.setSystemTime(new Date(2026, 1, 10)); // February 10, 2026
       const result = getAvailableMonthsForEntry();
 
-      const hasCurrentMonth = result.some(m => m.value === '2026-02');
-      expect(hasCurrentMonth).toBe(true);
-    });
-
-    it('should exclude current month on or after day 5', () => {
-      vi.setSystemTime(new Date(2026, 1, 5)); // February 5, 2026
-      const result = getAvailableMonthsForEntry();
-
-      const hasCurrentMonth = result.some(m => m.value === '2026-02');
-      expect(hasCurrentMonth).toBe(false);
+      expect(result.some(m => m.value === '2026-03')).toBe(true);
+      expect(result.some(m => m.value === '2026-04')).toBe(true);
     });
   });
 
@@ -225,7 +212,6 @@ describe('monthUtils', () => {
       vi.setSystemTime(new Date(2026, 1, 10)); // February 10, 2026
       const result = getAllMonthsForViewing();
 
-      // First month should be the furthest in the future
       const firstMonthDate = parseMonthValue(result[0].value);
       const lastMonthDate = parseMonthValue(result[result.length - 1].value);
       expect(firstMonthDate.getTime()).toBeGreaterThan(lastMonthDate.getTime());
