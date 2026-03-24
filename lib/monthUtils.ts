@@ -36,59 +36,31 @@ export function formatMonthDisplay(monthValue: string): string {
 
 /**
  * Check if a month is locked for NEW entries
- * Rule: After the 5th day of a month, that month becomes locked
+ * Rule: A production month locks on the 1st of that month.
+ * Example: "2026-04" entries close on April 1st (entries made during March).
  * @param monthValue - Month string in format "YYYY-MM"
  * @returns true if the month is locked for new entries
  */
 export function isMonthLocked(monthValue: string): boolean {
   const monthDate = parseMonthValue(monthValue);
   const today = new Date();
-  const dayOfMonth = today.getDate();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-  const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-
-  // If month is in the past, it's locked
-  if (monthDate < currentMonth) {
-    return true;
-  }
-
-  // If month is current month and we're past day 5, it's locked
-  if (monthDate.getTime() === currentMonth.getTime() && dayOfMonth >= 5) {
-    return true;
-  }
-
-  // Otherwise, not locked
-  return false;
+  // Locked if today >= the 1st of the production month
+  return todayStart >= monthDate;
 }
 
 /**
  * Get active months for display (Dashboard)
- * Rule:
- * - Before 5th of month: current + previous 2 + next 2 = 5 months
- *   Example (Feb 4): Dec, Jan, Feb, Mar, Apr
- * - After 5th of month: current + previous 1 + next 2 = 4 months
- *   Example (Feb 11): Jan, Feb, Mar, Apr
+ * Shows: current month (locked) + next 2 months (open for entry) + previous 1 month
  * @returns Array of month objects with value, label, and locked status
  */
 export function getActiveMonths(): Array<{ value: string; label: string; locked: boolean }> {
   const months: Array<{ value: string; label: string; locked: boolean }> = [];
   const today = new Date();
-  const dayOfMonth = today.getDate();
 
-  let startOffset: number;
-  let endOffset: number;
-
-  if (dayOfMonth < 5) {
-    // Before 5th: current + previous 2 + next 2 = 5 months
-    startOffset = -2;
-    endOffset = 2;
-  } else {
-    // After 5th: current + previous 1 + next 2 = 4 months
-    startOffset = -1;
-    endOffset = 2;
-  }
-
-  for (let i = startOffset; i <= endOffset; i++) {
+  // Previous 1 + current + next 2 = 4 months
+  for (let i = -1; i <= 2; i++) {
     const date = new Date(today.getFullYear(), today.getMonth() + i, 1);
     const monthValue = formatMonthValue(date);
 

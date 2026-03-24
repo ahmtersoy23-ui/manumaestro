@@ -33,7 +33,7 @@ type CatPermMap = Map<string, { canView: boolean; canEdit: boolean }>;
 
 export default function AdminPermissionsPage() {
   const { role } = useAuth();
-  const [activeTab, setActiveTab] = useState<'marketplace' | 'category'>('marketplace');
+  const [activeTab, setActiveTab] = useState<'marketplace' | 'category' | 'stock'>('marketplace');
 
   // Marketplace tab state
   const [users, setUsers] = useState<OperatorUser[]>([]);
@@ -50,6 +50,17 @@ export default function AdminPermissionsPage() {
   const [catPermMap, setCatPermMap] = useState<CatPermMap>(new Map());
   const [catLoading, setCatLoading] = useState(true);
   const [catSaving, setCatSaving] = useState<string | null>(null);
+
+  // Stock tab state
+  interface StockUser {
+    id: string;
+    name: string;
+    email: string;
+    stockPermission: { canView: boolean; canEdit: boolean } | null;
+  }
+  const [stockUsers, setStockUsers] = useState<StockUser[]>([]);
+  const [stockLoading, setStockLoading] = useState(true);
+  const [stockSaving, setStockSaving] = useState<string | null>(null);
 
   // SSO sync state
   const [syncing, setSyncing] = useState(false);
@@ -85,9 +96,24 @@ export default function AdminPermissionsPage() {
     }
   }, []);
 
+  const fetchStockData = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/stock-permissions');
+      const data = await res.json();
+      if (data.success) {
+        setStockUsers(data.data.users);
+      }
+    } catch (err) {
+      logger.error('Failed to fetch stock permissions data:', err);
+    } finally {
+      setStockLoading(false);
+    }
+  }, []);
+
   // Load data on mount
   useEffect(() => { fetchMarketplaceData(); }, [fetchMarketplaceData]);
   useEffect(() => { fetchCatData(); }, [fetchCatData]);
+  useEffect(() => { fetchStockData(); }, [fetchStockData]);
 
   // SSO sync: fetch users from SSO and upsert into local DB
   const syncUsers = async () => {
@@ -99,7 +125,7 @@ export default function AdminPermissionsPage() {
       if (data.success) {
         setSyncResult(`${data.data.synced} kullanıcı senkronize edildi`);
         // Reload both tabs
-        await Promise.all([fetchMarketplaceData(), fetchCatData()]);
+        await Promise.all([fetchMarketplaceData(), fetchCatData(), fetchStockData()]);
       } else {
         setSyncResult(data.error || 'Senkronizasyon başarısız');
       }
@@ -267,6 +293,47 @@ export default function AdminPermissionsPage() {
   const grantAllCat = () => { categories.forEach(c => upsertCatPermission(c, true, true)); };
   const revokeAllCat = () => { categories.forEach(c => { if (catPermMap.has(c)) deleteCatPermission(c); }); };
 
+  // --- Stock helpers ---
+  const upsertStockPermission = async (userId: string, canView: boolean, canEdit: boolean) => {
+    setStockSaving(userId);
+    try {
+      const res = await fetch('/api/admin/stock-permissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, canView, canEdit }),
+      });
+      if (res.ok) {
+        setStockUsers(prev => prev.map(u =>
+          u.id === userId ? { ...u, stockPermission: { canView, canEdit } } : u
+        ));
+      }
+    } catch (err) {
+      logger.error('Failed to update stock permission:', err);
+    } finally {
+      setStockSaving(null);
+    }
+  };
+
+  const deleteStockPermission = async (userId: string) => {
+    setStockSaving(userId);
+    try {
+      const res = await fetch('/api/admin/stock-permissions', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      if (res.ok) {
+        setStockUsers(prev => prev.map(u =>
+          u.id === userId ? { ...u, stockPermission: null } : u
+        ));
+      }
+    } catch (err) {
+      logger.error('Failed to delete stock permission:', err);
+    } finally {
+      setStockSaving(null);
+    }
+  };
+
   if (role !== 'admin') {
     return (
       <div className="flex items-center justify-center min-h-64">
@@ -336,6 +403,16 @@ export default function AdminPermissionsPage() {
             }`}
           >
             Kategori İzinleri
+          </button>
+          <button
+            onClick={() => setActiveTab('stock')}
+            className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'stock'
+                ? 'border-purple-600 text-purple-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Stok İzinleri
           </button>
         </nav>
       </div>
@@ -541,6 +618,77 @@ export default function AdminPermissionsPage() {
                   </table>
                 </div>
               )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Stock Tab */}
+      {activeTab === 'stock' && (
+        <>
+          {stockLoading ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <div className="h-10 bg-gray-100 rounded-lg animate-pulse" />
+            </div>
+          ) : stockUsers.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <p className="text-sm text-gray-500">Sistemde OPERATOR rolünde aktif kullanıcı bulunmuyor.</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <p className="text-sm font-semibold text-gray-900">Depo Stoğu Erişim İzinleri</p>
+                <p className="text-xs text-gray-500 mt-1">Hangi kullanıcılar depo stoğunu görebilir/düzenleyebilir</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Kullanıcı</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider w-28">Görüntüle</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider w-28">Düzenle</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {stockUsers.map(u => {
+                      const perm = u.stockPermission;
+                      const isSaving = stockSaving === u.id;
+                      return (
+                        <tr key={u.id} className={`hover:bg-gray-50 ${isSaving ? 'opacity-50' : ''}`}>
+                          <td className="px-6 py-3">
+                            <p className="text-sm font-medium text-gray-900">{u.name}</p>
+                            <p className="text-xs text-gray-500">{u.email}</p>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={perm?.canView ?? false}
+                              disabled={isSaving}
+                              onChange={e => {
+                                if (!e.target.checked) { if (perm) deleteStockPermission(u.id); }
+                                else { upsertStockPermission(u.id, true, perm?.canEdit ?? false); }
+                              }}
+                              className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer disabled:cursor-not-allowed"
+                            />
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={perm?.canEdit ?? false}
+                              disabled={isSaving}
+                              onChange={e => {
+                                if (e.target.checked) { upsertStockPermission(u.id, true, true); }
+                                else { upsertStockPermission(u.id, perm?.canView ?? true, false); }
+                              }}
+                              className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer disabled:cursor-not-allowed"
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </>

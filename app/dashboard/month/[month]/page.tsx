@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Calendar, Package, ShoppingCart, Factory, ArrowLeft, Plus } from 'lucide-react';
+import { Calendar, Package, ShoppingCart, Factory, ArrowLeft, Plus, ChevronDown, ChevronUp, Warehouse } from 'lucide-react';
 import { parseMonthValue, isMonthLocked } from '@/lib/monthUtils';
 import { createLogger } from '@/lib/logger';
 
@@ -74,6 +74,21 @@ export default function MonthDetailPage() {
   const [showAddMarketplaceModal, setShowAddMarketplaceModal] = useState(false);
   const [refreshMarketplaces, setRefreshMarketplaces] = useState(0);
 
+  // Snapshot state
+  interface SnapshotItem {
+    iwasku: string;
+    productName: string;
+    productCategory: string;
+    totalRequested: number;
+    warehouseStock: number;
+    netProduction: number;
+  }
+  const [snapshotData, setSnapshotData] = useState<{
+    summary: { totalRequested: number; totalStock: number; totalNet: number };
+    snapshots: SnapshotItem[];
+  } | null>(null);
+  const [snapshotOpen, setSnapshotOpen] = useState(false);
+
   const monthDate = parseMonthValue(month);
   const monthLabel = monthDate.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
   const isLocked = isMonthLocked(month);
@@ -137,6 +152,26 @@ export default function MonthDetailPage() {
 
     fetchData();
   }, [month, refreshMarketplaces]);
+
+  // Fetch snapshot for locked months
+  useEffect(() => {
+    if (!isLocked) return;
+    async function fetchSnapshot() {
+      try {
+        const res = await fetch(`/api/month-snapshot?month=${month}`);
+        const data = await res.json();
+        if (data.success && data.data.locked && data.data.snapshots.length > 0) {
+          setSnapshotData({
+            summary: data.data.summary,
+            snapshots: data.data.snapshots,
+          });
+        }
+      } catch (error) {
+        logger.error('Failed to fetch snapshot:', error);
+      }
+    }
+    fetchSnapshot();
+  }, [month, isLocked]);
 
   if (loading) {
     return (
@@ -235,6 +270,55 @@ export default function MonthDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Snapshot Panel - only for locked months with data */}
+      {snapshotData && (
+        <div className="bg-white rounded-xl border border-emerald-200 overflow-hidden">
+          <button
+            onClick={() => setSnapshotOpen(!snapshotOpen)}
+            className="w-full flex items-center justify-between px-4 md:px-6 py-4 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <Warehouse className="w-5 h-5 text-emerald-600" />
+              <div className="text-left">
+                <p className="text-sm font-semibold text-gray-900">Ay Kapanışı — Net Üretim İhtiyacı</p>
+                <p className="text-xs text-gray-500">
+                  Talep: {snapshotData.summary.totalRequested.toLocaleString()} · Stok: {snapshotData.summary.totalStock.toLocaleString()} · Net: {snapshotData.summary.totalNet.toLocaleString()}
+                </p>
+              </div>
+            </div>
+            {snapshotOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+          </button>
+          {snapshotOpen && (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">IWASKU</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Ürün</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Kategori</th>
+                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Talep</th>
+                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Stok</th>
+                    <th className="px-4 py-2 text-right text-xs font-semibold text-emerald-700 uppercase">Net İhtiyaç</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {snapshotData.snapshots.map(s => (
+                    <tr key={s.iwasku} className="hover:bg-gray-50">
+                      <td className="px-4 py-2 text-sm font-mono text-blue-600">{s.iwasku}</td>
+                      <td className="px-4 py-2 text-sm text-gray-900 max-w-xs truncate">{s.productName}</td>
+                      <td className="px-4 py-2 text-xs text-gray-500">{s.productCategory}</td>
+                      <td className="px-4 py-2 text-sm text-right">{s.totalRequested}</td>
+                      <td className="px-4 py-2 text-sm text-right text-gray-500">{s.warehouseStock}</td>
+                      <td className="px-4 py-2 text-sm text-right font-bold text-emerald-700">{s.netProduction}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Categories Section - Production Tracking */}
       <div>

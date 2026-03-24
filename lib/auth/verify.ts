@@ -185,6 +185,36 @@ export async function checkCategoryPermission(
 }
 
 /**
+ * Check if user has permission to view/edit warehouse stock
+ * ADMIN bypasses all checks.
+ */
+export async function checkStockPermission(
+  userId: string,
+  userRole: 'admin' | 'editor' | 'viewer',
+  mode: 'view' | 'edit'
+): Promise<{ allowed: boolean; reason?: string }> {
+  if (userRole === 'admin') return { allowed: true };
+
+  const perm = await prisma.userStockPermission.findUnique({
+    where: { userId },
+  });
+
+  if (!perm) {
+    return { allowed: false, reason: 'Depo stoğu erişim izniniz yok' };
+  }
+
+  if (mode === 'view' && !perm.canView) {
+    return { allowed: false, reason: 'Depo stoğunu görüntüleme izniniz yok' };
+  }
+
+  if (mode === 'edit' && !perm.canEdit) {
+    return { allowed: false, reason: 'Depo stoğunu düzenleme izniniz yok' };
+  }
+
+  return { allowed: true };
+}
+
+/**
  * Verify user has required role
  * Returns user if authorized, error response if not
  */

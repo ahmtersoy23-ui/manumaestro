@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Bell, User, LogOut, FileText, Shield, Menu, X } from 'lucide-react';
+import { Bell, User, LogOut, FileText, Shield, Menu, X, Warehouse } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 export function Header() {
@@ -58,6 +58,14 @@ export function Header() {
                 >
                   <Shield className="w-4 h-4" />
                   <span className="hidden lg:inline">İzinler</span>
+                </Link>
+                <Link
+                  href="/dashboard/warehouse-stock"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                  title="Depo Stoğu"
+                >
+                  <Warehouse className="w-4 h-4" />
+                  <span className="hidden lg:inline">Depo</span>
                 </Link>
                 <Link
                   href="/dashboard/logs"
@@ -133,6 +141,14 @@ export function Header() {
                 >
                   <Shield className="w-4 h-4" />
                   İzin Yönetimi
+                </Link>
+                <Link
+                  href="/dashboard/warehouse-stock"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
+                >
+                  <Warehouse className="w-4 h-4" />
+                  Depo Stoğu
                 </Link>
                 <Link
                   href="/dashboard/logs"

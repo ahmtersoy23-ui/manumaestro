@@ -26,6 +26,7 @@ model User {
   // Relations
   permissions           UserMarketplacePermission[]
   categoryPermissions   UserCategoryPermission[]
+  stockPermission       UserStockPermission?
   requests              ProductionRequest[]
   createdMarketplaces   Marketplace[]             @relation("CreatedBy")
   auditLogs             AuditLog[]
@@ -233,4 +234,50 @@ enum AuditAction {
   LOGOUT
   BULK_UPLOAD
   EXPORT_DATA
+  MONTH_CLOSE
+  UPDATE_STOCK
+}
+
+// ============================================
+// WAREHOUSE STOCK
+// ============================================
+
+model UserStockPermission {
+  userId    String   @unique
+  canView   Boolean  @default(true)
+  canEdit   Boolean  @default(false)
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_stock_permissions")
+}
+
+model WarehouseStock {
+  id            String   @id @default(uuid())
+  iwasku        String
+  quantity      Int      @default(0)
+  month         String                 // YYYY-MM
+  weekLabel     String?                // null=başlangıç stoğu, "23-29 Mar 26"=haftalık giriş
+  enteredById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([iwasku, month, weekLabel])
+  @@index([month])
+  @@index([iwasku])
+  @@map("warehouse_stock")
+}
+
+model MonthSnapshot {
+  id              String   @id @default(uuid())
+  month           String
+  iwasku          String
+  totalRequested  Int
+  warehouseStock  Int
+  netProduction   Int
+  createdAt       DateTime @default(now())
+
+  @@unique([month, iwasku])
+  @@index([month])
+  @@map("month_snapshots")
 }
