@@ -44,7 +44,7 @@ export async function GET(
         product_sku as iwasku,
         name,
         category,
-        size
+        COALESCE(manual_size, size) as size
       FROM products
       WHERE product_sku = $1
       LIMIT 1

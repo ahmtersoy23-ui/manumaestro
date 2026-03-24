@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     if (iwaskus.length > 0) {
       const placeholders = iwaskus.map((_, i) => `$${i + 1}`).join(',');
       const details = await queryProductDb(
-        `SELECT product_sku, name, category, size FROM products WHERE product_sku IN (${placeholders})`,
+        `SELECT product_sku, name, category, COALESCE(manual_size, size) as size FROM products WHERE product_sku IN (${placeholders})`,
         iwaskus
       );
       productMap = Object.fromEntries(

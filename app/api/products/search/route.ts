@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
         product_sku as iwasku,
         name,
         category,
-        size
+        COALESCE(manual_size, size) as size
       FROM products
       WHERE
         product_sku ILIKE $1

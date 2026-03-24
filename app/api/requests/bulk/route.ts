@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
       try {
         // Direct database query instead of self-referencing API call
         const products = await queryProductDb(
-          'SELECT product_sku as iwasku, name, category, size FROM products WHERE product_sku = $1 LIMIT 1',
+          'SELECT product_sku as iwasku, name, category, COALESCE(manual_size, size) as size FROM products WHERE product_sku = $1 LIMIT 1',
           [item.iwasku]
         );
 
