@@ -79,6 +79,18 @@ export async function GET(
 
     const totalPages = Math.ceil(total / limit);
 
+    // Fetch snapshot stock for this month (point-in-time at month close)
+    const iwaskus = [...new Set(requests.map(r => r.iwasku))];
+    const snapshots = iwaskus.length > 0
+      ? await prisma.monthSnapshot.findMany({
+          where: { month: productionMonth, iwasku: { in: iwaskus } },
+        })
+      : [];
+    const stockMap = new Map<string, number>();
+    for (const s of snapshots) {
+      stockMap.set(s.iwasku, s.warehouseStock);
+    }
+
     const formattedRequests = requests.map((r) => ({
       id: r.id,
       iwasku: r.iwasku,
@@ -92,6 +104,7 @@ export async function GET(
       status: r.status,
       priority: r.priority,
       requestDate: r.requestDate.toISOString(),
+      warehouseStock: stockMap.get(r.iwasku) ?? null,
     }));
 
     return NextResponse.json({

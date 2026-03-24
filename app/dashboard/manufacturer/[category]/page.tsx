@@ -49,12 +49,15 @@ interface Request {
   status: string;
   priority: string;
   requestDate: string;
+  warehouseStock: number | null;
 }
 
 interface GroupedRequest {
   iwasku: string;
   productName: string;
   totalQuantity: number;
+  warehouseStock: number | null;
+  netNeed: number;
   requestIds: string[];
   requests: Request[];
 }
@@ -109,11 +112,15 @@ export default function ManufacturerCategoryPage() {
               existing.totalQuantity += request.quantity;
               existing.requestIds.push(request.id);
               existing.requests.push(request);
+              existing.netNeed = Math.max(0, existing.totalQuantity - (existing.warehouseStock ?? 0));
             } else {
+              const stock = request.warehouseStock;
               acc.push({
                 iwasku: request.iwasku,
                 productName: request.productName,
                 totalQuantity: request.quantity,
+                warehouseStock: stock,
+                netNeed: Math.max(0, request.quantity - (stock ?? 0)),
                 requestIds: [request.id],
                 requests: [request],
               });
@@ -337,6 +344,12 @@ export default function ManufacturerCategoryPage() {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Talep
                   </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-emerald-700 uppercase tracking-wider">
+                    Stok
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-orange-700 uppercase tracking-wider">
+                    Net İhtiyaç
+                  </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Üretilen
                   </th>
@@ -390,6 +403,16 @@ export default function ManufacturerCategoryPage() {
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className="text-sm font-semibold text-gray-900">
                         {group.totalQuantity}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className="text-sm text-emerald-700">
+                        {group.warehouseStock !== null ? group.warehouseStock : '-'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className={`text-sm font-semibold ${group.netNeed > 0 ? 'text-orange-700' : 'text-green-600'}`}>
+                        {group.warehouseStock !== null ? (group.netNeed > 0 ? group.netNeed : '✓ Yeterli') : '-'}
                       </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">

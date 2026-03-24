@@ -329,7 +329,7 @@ export default function WarehouseStockPage() {
             <div className="relative">
               <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400" />
               <input type="text" value={searchFilter} onChange={e => setSearchFilter(e.target.value)}
-                placeholder="SKU veya ürün ara..." className="pl-8 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs w-52" />
+                placeholder="SKU veya ürün ara..." className="pl-8 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs w-52 placeholder:text-gray-400" />
             </div>
             <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
               className={`px-3 py-1.5 border rounded-lg text-xs ${categoryFilter ? 'border-emerald-400 bg-emerald-50 text-emerald-700 font-medium' : 'border-gray-300 text-gray-600'}`}>
@@ -342,7 +342,7 @@ export default function WarehouseStockPage() {
                 <div className="relative">
                   <Plus className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400" />
                   <input type="text" value={addQuery} onChange={e => setAddQuery(e.target.value)}
-                    placeholder="Yeni ürün ekle..." className="pl-8 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs w-48" />
+                    placeholder="Yeni ürün ekle..." className="pl-8 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs w-48 placeholder:text-gray-400" />
                   {addResults.length > 0 && (
                     <div className="absolute z-20 mt-1 w-72 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-auto">
                       {addResults.filter(r => !products.some(p => p.iwasku === r.product_sku)).map(p => (
@@ -460,8 +460,8 @@ export default function WarehouseStockPage() {
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <select value={snapshotMonth} onChange={e => { setSnapshotMonth(e.target.value); if (e.target.value) fetchSnapshot(e.target.value); }}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm">
-              <option value="">Ay seçin...</option>
+              className={`px-3 py-2 border border-gray-300 rounded-lg text-sm ${!snapshotMonth ? 'text-gray-500' : 'text-gray-900'}`}>
+              <option value="" className="text-gray-500">Ay seçin...</option>
               {snapshotMonths.map(m => <option key={m} value={m}>{new Date(m + '-01').toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}</option>)}
             </select>
             <p className="text-xs text-gray-500">Kilitli aylar için otomatik snapshot oluşturulur</p>
