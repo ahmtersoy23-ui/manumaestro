@@ -252,20 +252,34 @@ model UserStockPermission {
   @@map("user_stock_permissions")
 }
 
-model WarehouseStock {
-  id            String   @id @default(uuid())
-  iwasku        String
-  quantity      Int      @default(0)
-  month         String                 // YYYY-MM
-  weekLabel     String?                // null=başlangıç stoğu, "23-29 Mar 26"=haftalık giriş
-  enteredById   String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+model WarehouseProduct {
+  id          String   @id @default(uuid())
+  iwasku      String   @unique
+  eskiStok    Int      @default(0)   // Başlangıç stoğu
+  ilaveStok   Int      @default(0)   // Düzeltme / ilave
+  cikis       Int      @default(0)   // Gönderilen (pozitif saklanır, mevcut'tan çıkarılır)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  @@unique([iwasku, month, weekLabel])
-  @@index([month])
+  weeklyEntries WarehouseWeekly[]
+
+  @@map("warehouse_products")
+}
+
+model WarehouseWeekly {
+  id          String   @id @default(uuid())
+  iwasku      String
+  weekStart   DateTime @db.Date       // Haftanın Pazartesi günü
+  quantity    Int      @default(0)     // O hafta üretimden gelen miktar
+  enteredById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  product     WarehouseProduct @relation(fields: [iwasku], references: [iwasku], onDelete: Cascade)
+
+  @@unique([iwasku, weekStart])
   @@index([iwasku])
-  @@map("warehouse_stock")
+  @@map("warehouse_weekly")
 }
 
 model MonthSnapshot {

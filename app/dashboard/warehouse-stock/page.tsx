@@ -1,171 +1,196 @@
 /**
- * Warehouse Stock Page
- * Manage warehouse (İvedik depo) stock levels
- * - Initial stock entry per product per month
- * - Weekly stock arrival entries
- * - Excel/CSV bulk import
+ * Warehouse Stock Page — Spreadsheet-style inventory management
+ * Continuous inventory (not monthly). Snapshot'lar ayrı tab'da.
  */
 
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Warehouse, Upload, Search, Plus, Trash2, Calendar } from 'lucide-react';
+import { ArrowLeft, Warehouse, Upload, Search, Plus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { formatMonthValue, formatMonthDisplay } from '@/lib/monthUtils';
 import { createLogger } from '@/lib/logger';
 import * as XLSX from 'xlsx';
 
 const logger = createLogger('WarehouseStockPage');
 
-interface StockEntry {
+interface WeeklyEntry {
+  id: string;
+  weekStart: string;
+  quantity: number;
+}
+
+interface StockProduct {
   id: string;
   iwasku: string;
-  quantity: number;
-  month: string;
-  weekLabel: string | null;
   productName: string;
   productCategory: string;
   desi: number | null;
+  eskiStok: number;
+  ilaveStok: number;
+  cikis: number;
+  uretilen: number;
+  mevcut: number;
+  toplamDesi: number | null;
+  weeklyEntries: WeeklyEntry[];
 }
 
-interface ProductSearchResult {
-  product_sku: string;
-  name: string;
-  category: string;
-  size: number | null;
-}
-
-function getWeekLabelsForMonth(month: string): string[] {
-  const [year, m] = month.split('-').map(Number);
-  const start = new Date(year, m - 1, 1);
-  const end = new Date(year, m, 0); // last day
+// Generate week starts (Mondays) for a date range
+function getWeekStarts(weeksBack: number = 12): string[] {
   const weeks: string[] = [];
+  const today = new Date();
+  // Find this Monday
+  const dayOfWeek = today.getDay();
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - ((dayOfWeek + 6) % 7));
 
-  const current = new Date(start);
-  while (current <= end) {
-    const weekStart = new Date(current);
-    const weekEnd = new Date(current);
-    weekEnd.setDate(weekEnd.getDate() + 6);
-    if (weekEnd > end) weekEnd.setTime(end.getTime());
-
-    const fmt = (d: Date) => `${d.getDate()} ${d.toLocaleDateString('tr-TR', { month: 'short' })}`;
-    weeks.push(`${fmt(weekStart)}-${fmt(weekEnd)} ${year.toString().slice(2)}`);
-
-    current.setDate(current.getDate() + 7);
+  for (let i = -weeksBack; i <= 0; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i * 7);
+    weeks.push(d.toISOString().split('T')[0]);
   }
-
   return weeks;
+}
+
+function formatWeekLabel(dateStr: string): string {
+  const d = new Date(dateStr);
+  const endD = new Date(d);
+  endD.setDate(d.getDate() + 6);
+  const fmt = (dt: Date) => `${dt.getDate()}.${dt.getMonth() + 1}`;
+  return `${fmt(d)}-${fmt(endD)}`;
 }
 
 export default function WarehouseStockPage() {
   const { role } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // State
-  const [month, setMonth] = useState(formatMonthValue(new Date()));
-  const [entries, setEntries] = useState<StockEntry[]>([]);
+  const [products, setProducts] = useState<StockProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [canEdit, setCanEdit] = useState(false);
-
-  // Search & add state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<ProductSearchResult[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [newQuantity, setNewQuantity] = useState(0);
-  const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
-
-  // Import state
+  const [saving, setSaving] = useState<string | null>(null);
+  const [searchFilter, setSearchFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ imported: number; warnings: string[] } | null>(null);
 
-  const weekLabels = getWeekLabelsForMonth(month);
+  // Add product state
+  const [addQuery, setAddQuery] = useState('');
+  const [addResults, setAddResults] = useState<{ product_sku: string; name: string; category: string; size: number | null }[]>([]);
+  const [addQty, setAddQty] = useState(0);
 
-  // Check permissions
+  const weekStarts = getWeekStarts(12);
+
   useEffect(() => {
-    async function checkPerm() {
-      if (role === 'admin') { setCanEdit(true); return; }
-      try {
-        // Permission check happens via API — if 403, no edit access
-        const res = await fetch(`/api/admin/warehouse-stock?month=${month}`);
-        if (res.ok) setCanEdit(true);
-      } catch { /* no access */ }
-    }
-    checkPerm();
-  }, [role, month]);
+    setCanEdit(role === 'admin' || role === 'editor');
+  }, [role]);
 
-  // Fetch stock data
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/warehouse-stock?month=${month}`);
+      const res = await fetch('/api/admin/warehouse-stock');
       if (res.ok) {
         const data = await res.json();
-        if (data.success) setEntries(data.data);
+        if (data.success) setProducts(data.data);
       }
     } catch (err) {
       logger.error('Failed to fetch stock data:', err);
     } finally {
       setLoading(false);
     }
-  }, [month]);
+  }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Search products
+  // Search for adding new product
   useEffect(() => {
-    if (searchQuery.length < 2) { setSearchResults([]); return; }
+    if (addQuery.length < 2) { setAddResults([]); return; }
     const timer = setTimeout(async () => {
-      setSearching(true);
       try {
-        const res = await fetch(`/api/products/search?q=${encodeURIComponent(searchQuery)}`);
+        const res = await fetch(`/api/products/search?q=${encodeURIComponent(addQuery)}`);
         const data = await res.json();
-        if (data.success) setSearchResults(data.data);
-      } catch (err) {
-        logger.error('Product search failed:', err);
-      } finally {
-        setSearching(false);
-      }
+        if (data.success) setAddResults(data.data);
+      } catch { /* ignore */ }
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [addQuery]);
 
-  // Add stock entry
-  const addEntry = async (product: ProductSearchResult) => {
-    if (newQuantity <= 0) return;
+  // Update product field (eskiStok, ilaveStok, cikis)
+  const updateField = async (iwasku: string, field: 'eskiStok' | 'ilaveStok' | 'cikis', value: number) => {
+    setSaving(`${iwasku}-${field}`);
     try {
-      const res = await fetch('/api/admin/warehouse-stock', {
+      await fetch('/api/admin/warehouse-stock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          iwasku: product.product_sku,
-          quantity: newQuantity,
-          month,
-          weekLabel: selectedWeek,
-        }),
+        body: JSON.stringify({ iwasku, field, value }),
       });
-      if (res.ok) {
-        setSearchQuery('');
-        setSearchResults([]);
-        setNewQuantity(0);
-        fetchData();
-      }
+      // Optimistic update
+      setProducts(prev => prev.map(p => {
+        if (p.iwasku !== iwasku) return p;
+        const updated = { ...p, [field]: value };
+        updated.mevcut = updated.eskiStok + updated.uretilen + updated.ilaveStok - updated.cikis;
+        updated.toplamDesi = updated.desi ? Math.round(updated.mevcut * updated.desi * 100) / 100 : null;
+        return updated;
+      }));
     } catch (err) {
-      logger.error('Failed to add stock entry:', err);
+      logger.error('Update failed:', err);
+    } finally {
+      setSaving(null);
     }
   };
 
-  // Delete entry
-  const deleteEntry = async (id: string) => {
+  // Update weekly entry
+  const updateWeekly = async (iwasku: string, weekStart: string, quantity: number) => {
+    setSaving(`${iwasku}-${weekStart}`);
+    try {
+      await fetch('/api/admin/warehouse-stock/weekly', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ iwasku, weekStart, quantity }),
+      });
+      // Optimistic update
+      setProducts(prev => prev.map(p => {
+        if (p.iwasku !== iwasku) return p;
+        const entries = [...p.weeklyEntries];
+        const idx = entries.findIndex(e => e.weekStart.startsWith(weekStart));
+        if (quantity === 0) {
+          if (idx >= 0) entries.splice(idx, 1);
+        } else if (idx >= 0) {
+          entries[idx] = { ...entries[idx], quantity };
+        } else {
+          entries.push({ id: 'temp', weekStart, quantity });
+        }
+        const uretilen = entries.reduce((sum, e) => sum + e.quantity, 0);
+        const mevcut = p.eskiStok + uretilen + p.ilaveStok - p.cikis;
+        return {
+          ...p,
+          weeklyEntries: entries,
+          uretilen,
+          mevcut,
+          toplamDesi: p.desi ? Math.round(mevcut * p.desi * 100) / 100 : null,
+        };
+      }));
+    } catch (err) {
+      logger.error('Weekly update failed:', err);
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  // Add new product
+  const addProduct = async (sku: string) => {
+    if (addQty <= 0) return;
     try {
       await fetch('/api/admin/warehouse-stock', {
-        method: 'DELETE',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify({ iwasku: sku, field: 'eskiStok', value: addQty }),
       });
+      setAddQuery('');
+      setAddResults([]);
+      setAddQty(0);
       fetchData();
     } catch (err) {
-      logger.error('Failed to delete stock entry:', err);
+      logger.error('Add product failed:', err);
     }
   };
 
@@ -175,14 +200,11 @@ export default function WarehouseStockPage() {
     if (!file) return;
     setImporting(true);
     setImportResult(null);
-
     try {
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer);
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
-
-      // Detect columns: first col = iwasku, second = quantity
       const items = rows
         .map(row => {
           const values = Object.values(row);
@@ -191,24 +213,19 @@ export default function WarehouseStockPage() {
           return { iwasku, quantity: isNaN(qty) ? 0 : qty };
         })
         .filter(item => item.iwasku && item.quantity > 0);
-
       if (items.length === 0) {
         setImportResult({ imported: 0, warnings: ['Geçerli veri bulunamadı'] });
         return;
       }
-
       const res = await fetch('/api/admin/warehouse-stock/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ month, weekLabel: selectedWeek, items }),
+        body: JSON.stringify({ items }),
       });
-
       const data = await res.json();
       if (data.success) {
         setImportResult(data.data);
         fetchData();
-      } else {
-        setImportResult({ imported: 0, warnings: [data.error || 'Import başarısız'] });
       }
     } catch (err) {
       logger.error('Import failed:', err);
@@ -219,253 +236,220 @@ export default function WarehouseStockPage() {
     }
   };
 
-  // Group entries: initial vs weekly
-  const initialEntries = entries.filter(e => e.weekLabel === null);
-  const weeklyEntries = entries.filter(e => e.weekLabel !== null);
-
-  // Month options
-  const monthOptions = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date();
-    d.setMonth(d.getMonth() + i - 2);
-    const val = formatMonthValue(d);
-    return { value: val, label: formatMonthDisplay(val) };
+  // Filters
+  const categories = [...new Set(products.map(p => p.productCategory).filter(Boolean))].sort();
+  const filtered = products.filter(p => {
+    if (searchFilter && !p.iwasku.toLowerCase().includes(searchFilter.toLowerCase()) && !p.productName.toLowerCase().includes(searchFilter.toLowerCase())) return false;
+    if (categoryFilter && p.productCategory !== categoryFilter) return false;
+    return true;
   });
 
-  // Category summary
-  const categoryTotals = new Map<string, { count: number; totalQty: number; totalDesi: number }>();
-  initialEntries.forEach(e => {
-    const cat = e.productCategory || 'Diğer';
-    const prev = categoryTotals.get(cat) || { count: 0, totalQty: 0, totalDesi: 0 };
-    categoryTotals.set(cat, {
-      count: prev.count + 1,
-      totalQty: prev.totalQty + e.quantity,
-      totalDesi: prev.totalDesi + (e.desi ? e.desi * e.quantity : 0),
-    });
-  });
+  // Editable cell component
+  const EditableCell = ({ value, onSave, disabled, className = '' }: {
+    value: number; onSave: (v: number) => void; disabled?: boolean; className?: string;
+  }) => {
+    const [editing, setEditing] = useState(false);
+    const [localVal, setLocalVal] = useState(String(value));
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => { setLocalVal(String(value)); }, [value]);
+    useEffect(() => { if (editing) inputRef.current?.select(); }, [editing]);
+
+    if (!canEdit || disabled) {
+      return <span className={className}>{value || '-'}</span>;
+    }
+
+    if (editing) {
+      return (
+        <input
+          ref={inputRef}
+          type="number"
+          value={localVal}
+          onChange={e => setLocalVal(e.target.value)}
+          onBlur={() => {
+            setEditing(false);
+            const v = parseInt(localVal) || 0;
+            if (v !== value) onSave(v);
+          }}
+          onKeyDown={e => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+            if (e.key === 'Escape') { setLocalVal(String(value)); setEditing(false); }
+          }}
+          className="w-16 px-1 py-0.5 text-xs text-right border border-purple-400 rounded bg-white focus:outline-none"
+        />
+      );
+    }
+
+    return (
+      <span
+        onClick={() => setEditing(true)}
+        className={`cursor-pointer hover:bg-purple-50 px-1 py-0.5 rounded ${className}`}
+      >
+        {value || '-'}
+      </span>
+    );
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Link href="/dashboard" className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
         <ArrowLeft className="w-4 h-4" />
         Panele Dön
       </Link>
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <Warehouse className="w-6 h-6 md:w-8 md:h-8 text-emerald-600" />
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Depo Stoğu</h1>
-          </div>
-          <p className="text-sm text-gray-600">İvedik depo stok durumunu yönetin</p>
-        </div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
+          <Warehouse className="w-6 h-6 text-emerald-600" />
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Depo Stoğu</h1>
+            <p className="text-xs text-gray-500">{products.length} ürün · Mevcut: {products.reduce((s, p) => s + p.mevcut, 0).toLocaleString()} adet</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400" />
+            <input
+              type="text"
+              value={searchFilter}
+              onChange={e => setSearchFilter(e.target.value)}
+              placeholder="SKU veya ürün ara..."
+              className="pl-8 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs w-48"
+            />
+          </div>
           <select
-            value={month}
-            onChange={e => setMonth(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg text-sm"
+            value={categoryFilter}
+            onChange={e => setCategoryFilter(e.target.value)}
+            className="px-2 py-1.5 border border-gray-300 rounded-lg text-xs"
           >
-            {monthOptions.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
+            <option value="">Tüm Kategoriler</option>
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
       </div>
 
-      {/* Category Summary */}
-      {categoryTotals.size > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[...categoryTotals.entries()].map(([cat, stats]) => (
-            <div key={cat} className="bg-white rounded-lg border border-gray-200 p-4">
-              <p className="text-xs text-gray-500 truncate">{cat}</p>
-              <p className="text-lg font-bold text-gray-900">{stats.totalQty.toLocaleString()}</p>
-              <p className="text-xs text-gray-400">{stats.count} ürün · {Math.round(stats.totalDesi)} desi</p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Add Entry / Import */}
+      {/* Add product + Import */}
       {canEdit && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-6 space-y-4">
-          <div className="flex flex-col md:flex-row gap-4">
-            {/* Week selector */}
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Giriş Tipi</label>
-              <select
-                value={selectedWeek ?? ''}
-                onChange={e => setSelectedWeek(e.target.value || null)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm w-full md:w-auto"
-              >
-                <option value="">Başlangıç Stoğu</option>
-                {weekLabels.map(w => (
-                  <option key={w} value={w}>{w}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Product search */}
-            <div className="flex-1 relative">
-              <label className="block text-xs font-medium text-gray-600 mb-1">Ürün Ara (IWASKU veya isim)</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="IWASKU veya ürün adı..."
-                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm"
-                />
-              </div>
-              {searchResults.length > 0 && (
-                <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
-                  {searchResults.map(p => (
-                    <button
-                      key={p.product_sku}
-                      onClick={() => addEntry(p)}
-                      className="w-full text-left px-4 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-0"
-                    >
-                      <p className="text-sm font-medium text-blue-600">{p.product_sku}</p>
-                      <p className="text-xs text-gray-600 truncate">{p.name}</p>
-                      <p className="text-xs text-gray-400">{p.category} · {p.size || '?'} desi</p>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {searching && <p className="absolute mt-1 text-xs text-gray-400">Aranıyor...</p>}
-            </div>
-
-            {/* Quantity */}
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Miktar</label>
-              <input
-                type="number"
-                value={newQuantity || ''}
-                onChange={e => setNewQuantity(parseInt(e.target.value) || 0)}
-                min={0}
-                className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                placeholder="0"
-              />
-            </div>
-          </div>
-
-          {/* Import */}
-          <div className="flex items-center gap-3 pt-3 border-t border-gray-200">
+        <div className="flex flex-wrap items-center gap-3 bg-white rounded-lg border border-gray-200 p-3">
+          <div className="relative flex-1 min-w-48">
+            <Plus className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-400" />
             <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              onChange={handleImport}
-              className="hidden"
+              type="text"
+              value={addQuery}
+              onChange={e => setAddQuery(e.target.value)}
+              placeholder="Yeni ürün ekle (IWASKU ara)..."
+              className="w-full pl-8 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs"
             />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={importing}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors disabled:opacity-50"
-            >
-              <Upload className="w-4 h-4" />
-              {importing ? 'İçe aktarılıyor...' : 'Excel / CSV İçe Aktar'}
-            </button>
-            <p className="text-xs text-gray-400">A: IWASKU, B: Miktar</p>
+            {addResults.length > 0 && (
+              <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-auto">
+                {addResults.filter(r => !products.some(p => p.iwasku === r.product_sku)).map(p => (
+                  <button
+                    key={p.product_sku}
+                    onClick={() => addProduct(p.product_sku)}
+                    className="w-full text-left px-3 py-1.5 hover:bg-gray-50 border-b border-gray-100 last:border-0"
+                  >
+                    <span className="text-xs font-mono text-blue-600">{p.product_sku}</span>
+                    <span className="text-xs text-gray-500 ml-2">{p.name?.slice(0, 40)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-
-          {importResult && (
-            <div className={`p-3 rounded-lg text-sm ${importResult.warnings.length > 0 ? 'bg-amber-50 border border-amber-200' : 'bg-emerald-50 border border-emerald-200'}`}>
-              <p className="font-medium">{importResult.imported} ürün içe aktarıldı</p>
-              {importResult.warnings.map((w, i) => (
-                <p key={i} className="text-xs text-amber-700 mt-1">⚠ {w}</p>
-              ))}
-            </div>
-          )}
+          <input
+            type="number"
+            value={addQty || ''}
+            onChange={e => setAddQty(parseInt(e.target.value) || 0)}
+            placeholder="Miktar"
+            className="w-20 px-2 py-1.5 border border-gray-300 rounded-lg text-xs"
+          />
+          <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImport} className="hidden" />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 disabled:opacity-50"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            {importing ? 'İçe aktarılıyor...' : 'Excel İçe Aktar'}
+          </button>
         </div>
       )}
 
-      {/* Stock Table - Initial */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-4 md:px-6 py-3 border-b border-gray-200 bg-gray-50">
-          <h2 className="text-sm font-semibold text-gray-900">Başlangıç Stoğu ({initialEntries.length} ürün)</h2>
+      {importResult && (
+        <div className={`p-2 rounded-lg text-xs ${importResult.warnings.length > 0 ? 'bg-amber-50 border border-amber-200' : 'bg-emerald-50 border border-emerald-200'}`}>
+          <span className="font-medium">{importResult.imported} ürün aktarıldı</span>
+          {importResult.warnings.slice(0, 5).map((w, i) => <span key={i} className="block text-amber-700">⚠ {w}</span>)}
+          {importResult.warnings.length > 5 && <span className="block text-amber-700">... ve {importResult.warnings.length - 5} uyarı daha</span>}
         </div>
+      )}
+
+      {/* Spreadsheet Table */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-sm text-gray-400">Yükleniyor...</div>
-        ) : initialEntries.length === 0 ? (
-          <div className="p-8 text-center text-sm text-gray-400">Bu ay için başlangıç stoğu girilmemiş</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">IWASKU</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Ürün</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Kategori</th>
-                  <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Miktar</th>
-                  <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Desi</th>
-                  {canEdit && <th className="px-4 py-2 w-10"></th>}
+            <table className="w-auto text-xs border-collapse">
+              <thead className="bg-gray-50 sticky top-0 z-10">
+                <tr className="border-b border-gray-200">
+                  <th className="px-2 py-2 text-left font-semibold text-gray-700 sticky left-0 bg-gray-50 z-20 min-w-[120px]">IWASKU</th>
+                  <th className="px-2 py-2 text-left font-semibold text-gray-700 min-w-[200px]">Ürün</th>
+                  <th className="px-2 py-2 text-left font-semibold text-gray-500 min-w-[80px]">Kategori</th>
+                  <th className="px-2 py-2 text-right font-semibold text-gray-500 min-w-[45px]">Desi</th>
+                  <th className="px-2 py-2 text-right font-semibold text-amber-700 bg-amber-50 min-w-[60px]">Eski Stok</th>
+                  {weekStarts.map(ws => (
+                    <th key={ws} className="px-1 py-2 text-center font-medium text-blue-600 bg-blue-50/50 min-w-[50px] whitespace-nowrap">
+                      {formatWeekLabel(ws)}
+                    </th>
+                  ))}
+                  <th className="px-2 py-2 text-right font-semibold text-blue-700 bg-blue-50 min-w-[55px]">Üretilen</th>
+                  <th className="px-2 py-2 text-right font-semibold text-green-700 bg-green-50 min-w-[55px]">İlave</th>
+                  <th className="px-2 py-2 text-right font-semibold text-red-700 bg-red-50 min-w-[55px]">Çıkış</th>
+                  <th className="px-2 py-2 text-right font-bold text-purple-700 bg-purple-50 min-w-[60px]">Mevcut</th>
+                  <th className="px-2 py-2 text-right font-semibold text-gray-500 min-w-[65px]">T.Desi</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
-                {initialEntries.map(e => (
-                  <tr key={e.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-2 text-sm font-mono text-blue-600">{e.iwasku}</td>
-                    <td className="px-4 py-2 text-sm text-gray-900 max-w-xs truncate">{e.productName}</td>
-                    <td className="px-4 py-2 text-xs text-gray-500">{e.productCategory}</td>
-                    <td className="px-4 py-2 text-sm text-right font-medium">{e.quantity}</td>
-                    <td className="px-4 py-2 text-sm text-right text-gray-500">{e.desi || '-'}</td>
-                    {canEdit && (
-                      <td className="px-4 py-2 text-center">
-                        <button onClick={() => deleteEntry(e.id)} className="text-gray-400 hover:text-red-500">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+              <tbody>
+                {filtered.map(p => {
+                  const weekMap = new Map(p.weeklyEntries.map(e => [e.weekStart.split('T')[0], e.quantity]));
+                  const isSaving = saving?.startsWith(p.iwasku);
+
+                  return (
+                    <tr key={p.iwasku} className={`border-b border-gray-100 hover:bg-gray-50 ${isSaving ? 'opacity-60' : ''}`}>
+                      <td className="px-2 py-1.5 font-mono text-blue-600 sticky left-0 bg-white z-10">{p.iwasku}</td>
+                      <td className="px-2 py-1.5 text-gray-900 truncate max-w-[200px]" title={p.productName}>{p.productName}</td>
+                      <td className="px-2 py-1.5 text-gray-500">{p.productCategory}</td>
+                      <td className="px-2 py-1.5 text-right text-gray-400">{p.desi || '-'}</td>
+                      <td className="px-2 py-1.5 text-right bg-amber-50/30">
+                        <EditableCell value={p.eskiStok} onSave={v => updateField(p.iwasku, 'eskiStok', v)} className="text-amber-700 font-medium" />
                       </td>
-                    )}
-                  </tr>
-                ))}
+                      {weekStarts.map(ws => (
+                        <td key={ws} className="px-1 py-1.5 text-center bg-blue-50/10">
+                          <EditableCell
+                            value={weekMap.get(ws) || 0}
+                            onSave={v => updateWeekly(p.iwasku, ws, v)}
+                            className="text-blue-600"
+                          />
+                        </td>
+                      ))}
+                      <td className="px-2 py-1.5 text-right font-medium text-blue-700 bg-blue-50/30">{p.uretilen || '-'}</td>
+                      <td className="px-2 py-1.5 text-right bg-green-50/30">
+                        <EditableCell value={p.ilaveStok} onSave={v => updateField(p.iwasku, 'ilaveStok', v)} className="text-green-700" />
+                      </td>
+                      <td className="px-2 py-1.5 text-right bg-red-50/30">
+                        <EditableCell value={p.cikis} onSave={v => updateField(p.iwasku, 'cikis', v)} className="text-red-700" />
+                      </td>
+                      <td className="px-2 py-1.5 text-right font-bold text-purple-700 bg-purple-50/30">{p.mevcut}</td>
+                      <td className="px-2 py-1.5 text-right text-gray-400">{p.toplamDesi ?? '-'}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </div>
 
-      {/* Weekly Entries */}
-      {weeklyEntries.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 md:px-6 py-3 border-b border-gray-200 bg-gray-50">
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-gray-500" />
-              <h2 className="text-sm font-semibold text-gray-900">Haftalık Girişler ({weeklyEntries.length})</h2>
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Hafta</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">IWASKU</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Ürün</th>
-                  <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Miktar</th>
-                  {canEdit && <th className="px-4 py-2 w-10"></th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {weeklyEntries.map(e => (
-                  <tr key={e.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-2 text-xs text-gray-500 whitespace-nowrap">{e.weekLabel}</td>
-                    <td className="px-4 py-2 text-sm font-mono text-blue-600">{e.iwasku}</td>
-                    <td className="px-4 py-2 text-sm text-gray-900 max-w-xs truncate">{e.productName}</td>
-                    <td className="px-4 py-2 text-sm text-right font-medium">{e.quantity}</td>
-                    {canEdit && (
-                      <td className="px-4 py-2 text-center">
-                        <button onClick={() => deleteEntry(e.id)} className="text-gray-400 hover:text-red-500">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      <p className="text-xs text-gray-400">{filtered.length} / {products.length} ürün gösteriliyor · Hücrelere tıklayarak düzenleyin</p>
     </div>
   );
 }

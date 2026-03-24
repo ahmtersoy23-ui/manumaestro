@@ -1,8 +1,8 @@
 /**
- * Warehouse Stock API
- * GET:    List stock entries for a month (with product details from pricelab_db)
- * POST:   Upsert a stock entry (initial or weekly)
- * DELETE: Remove a stock entry
+ * Warehouse Stock API (Redesigned)
+ * GET:    List all products with stock data + weekly entries
+ * POST:   Update a product's eskiStok, ilaveStok, or cikis
+ * DELETE: Remove a product from warehouse
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -12,13 +12,6 @@ import { verifyAuth, checkStockPermission } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
 import { errorResponse } from '@/lib/api/response';
 import { z } from 'zod';
-
-const StockEntrySchema = z.object({
-  iwasku: z.string().min(1),
-  quantity: z.number().int().min(0),
-  month: z.string().regex(/^\d{4}-\d{2}$/),
-  weekLabel: z.string().nullable().optional(),
-});
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,49 +25,72 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: permCheck.reason }, { status: 403 });
     }
 
-    const month = request.nextUrl.searchParams.get('month');
-    if (!month) {
-      return NextResponse.json({ success: false, error: 'month parametresi gerekli' }, { status: 400 });
-    }
-
-    // Get stock entries
-    const entries = await prisma.warehouseStock.findMany({
-      where: { month },
-      orderBy: [{ iwasku: 'asc' }, { weekLabel: 'asc' }],
+    // Get all warehouse products with their weekly entries
+    const products = await prisma.warehouseProduct.findMany({
+      include: {
+        weeklyEntries: {
+          orderBy: { weekStart: 'asc' },
+        },
+      },
+      orderBy: { iwasku: 'asc' },
     });
 
-    // Get unique iwaskus to fetch product details
-    const iwaskus = [...new Set(entries.map(e => e.iwasku))];
-
     // Fetch product details from pricelab_db
+    const iwaskus = products.map(p => p.iwasku);
     let productMap: Record<string, { name: string; category: string; desi: number | null }> = {};
+
     if (iwaskus.length > 0) {
       const placeholders = iwaskus.map((_, i) => `$${i + 1}`).join(',');
-      const products = await queryProductDb(
+      const details = await queryProductDb(
         `SELECT product_sku, name, category, size FROM products WHERE product_sku IN (${placeholders})`,
         iwaskus
       );
       productMap = Object.fromEntries(
-        products.map((p: { product_sku: string; name: string; category: string; size: number | null }) => [
+        details.map((p: { product_sku: string; name: string; category: string; size: number | null }) => [
           p.product_sku,
           { name: p.name, category: p.category, desi: p.size },
         ])
       );
     }
 
-    // Merge entries with product details
-    const data = entries.map(e => ({
-      ...e,
-      productName: productMap[e.iwasku]?.name || e.iwasku,
-      productCategory: productMap[e.iwasku]?.category || '',
-      desi: productMap[e.iwasku]?.desi || null,
-    }));
+    // Enrich with product details and calculated fields
+    const data = products.map(p => {
+      const uretilen = p.weeklyEntries.reduce((sum, w) => sum + w.quantity, 0);
+      const mevcut = p.eskiStok + uretilen + p.ilaveStok - p.cikis;
+      const info = productMap[p.iwasku];
+      const desi = info?.desi || null;
+
+      return {
+        id: p.id,
+        iwasku: p.iwasku,
+        productName: info?.name || p.iwasku,
+        productCategory: info?.category || '',
+        desi,
+        eskiStok: p.eskiStok,
+        ilaveStok: p.ilaveStok,
+        cikis: p.cikis,
+        uretilen,
+        mevcut,
+        toplamDesi: desi ? Math.round(mevcut * desi * 100) / 100 : null,
+        weeklyEntries: p.weeklyEntries.map(w => ({
+          id: w.id,
+          weekStart: w.weekStart,
+          quantity: w.quantity,
+        })),
+      };
+    });
 
     return NextResponse.json({ success: true, data });
   } catch (error) {
     return errorResponse(error, 'Stok verileri getirilemedi');
   }
 }
+
+const UpdateProductSchema = z.object({
+  iwasku: z.string().min(1),
+  field: z.enum(['eskiStok', 'ilaveStok', 'cikis']),
+  value: z.number().int(),
+});
 
 export async function POST(request: NextRequest) {
   try {
@@ -89,7 +105,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const validation = StockEntrySchema.safeParse(body);
+    const validation = UpdateProductSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json(
         { success: false, error: 'Doğrulama hatası', details: validation.error.issues },
@@ -97,35 +113,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { iwasku, quantity, month, weekLabel } = validation.data;
-    const wl = weekLabel ?? null;
+    const { iwasku, field, value } = validation.data;
 
-    // Prisma nullable composite unique: use findFirst + create/update
-    const existing = await prisma.warehouseStock.findFirst({
-      where: { iwasku, month, weekLabel: wl },
+    const product = await prisma.warehouseProduct.upsert({
+      where: { iwasku },
+      update: { [field]: value },
+      create: { iwasku, [field]: value },
     });
-
-    const entry = existing
-      ? await prisma.warehouseStock.update({
-          where: { id: existing.id },
-          data: { quantity, enteredById: auth.user.id },
-        })
-      : await prisma.warehouseStock.create({
-          data: { iwasku, quantity, month, weekLabel: wl, enteredById: auth.user.id },
-        });
 
     await logAction({
       userId: auth.user.id,
       userName: auth.user.name,
       userEmail: auth.user.email,
       action: 'UPDATE_STOCK',
-      entityType: 'WarehouseStock',
-      entityId: entry.id,
-      description: `Stok güncellendi: ${iwasku} → ${quantity} adet (${wl || 'başlangıç'})`,
-      metadata: { iwasku, quantity, month, weekLabel: wl },
+      entityType: 'WarehouseProduct',
+      entityId: product.id,
+      description: `Stok güncellendi: ${iwasku} → ${field}=${value}`,
+      metadata: { iwasku, field, value },
     });
 
-    return NextResponse.json({ success: true, data: entry });
+    return NextResponse.json({ success: true, data: product });
   } catch (error) {
     return errorResponse(error, 'Stok güncellenemedi');
   }
@@ -144,15 +151,15 @@ export async function DELETE(request: NextRequest) {
     }
 
     const body = await request.json();
-    const id = z.string().uuid().safeParse(body.id);
-    if (!id.success) {
-      return NextResponse.json({ success: false, error: 'Geçersiz id' }, { status: 400 });
+    const iwasku = z.string().min(1).safeParse(body.iwasku);
+    if (!iwasku.success) {
+      return NextResponse.json({ success: false, error: 'Geçersiz iwasku' }, { status: 400 });
     }
 
-    await prisma.warehouseStock.delete({ where: { id: id.data } });
+    await prisma.warehouseProduct.delete({ where: { iwasku: iwasku.data } });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    return errorResponse(error, 'Stok kaydı silinemedi');
+    return errorResponse(error, 'Ürün silinemedi');
   }
 }

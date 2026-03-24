@@ -1,6 +1,6 @@
 /**
  * Warehouse Stock Bulk Import API
- * POST: Import stock entries from array (spreadsheet data)
+ * POST: Import products with eskiStok from Excel/CSV
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -12,8 +12,6 @@ import { errorResponse } from '@/lib/api/response';
 import { z } from 'zod';
 
 const BulkStockSchema = z.object({
-  month: z.string().regex(/^\d{4}-\d{2}$/),
-  weekLabel: z.string().nullable().optional(),
   items: z.array(z.object({
     iwasku: z.string().min(1),
     quantity: z.number().int().min(0),
@@ -41,8 +39,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { month, items, weekLabel } = validation.data;
-    const wl = weekLabel ?? null;
+    const { items } = validation.data;
 
     // Validate iwaskus against pricelab_db
     const iwaskus = items.map(i => i.iwasku);
@@ -62,19 +59,11 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      const existing = await prisma.warehouseStock.findFirst({
-        where: { iwasku: item.iwasku, month, weekLabel: wl },
+      await prisma.warehouseProduct.upsert({
+        where: { iwasku: item.iwasku },
+        update: { eskiStok: item.quantity },
+        create: { iwasku: item.iwasku, eskiStok: item.quantity },
       });
-      if (existing) {
-        await prisma.warehouseStock.update({
-          where: { id: existing.id },
-          data: { quantity: item.quantity, enteredById: auth.user.id },
-        });
-      } else {
-        await prisma.warehouseStock.create({
-          data: { iwasku: item.iwasku, quantity: item.quantity, month, weekLabel: wl, enteredById: auth.user.id },
-        });
-      }
       imported++;
     }
 
@@ -83,10 +72,10 @@ export async function POST(request: NextRequest) {
       userName: auth.user.name,
       userEmail: auth.user.email,
       action: 'UPDATE_STOCK',
-      entityType: 'WarehouseStock',
-      entityId: month,
+      entityType: 'WarehouseProduct',
+      entityId: 'bulk',
       description: `Toplu stok import: ${imported} ürün, ${warnings.length} uyarı`,
-      metadata: { month, weekLabel: wl, imported, warnings: warnings.length },
+      metadata: { imported, warnings: warnings.length },
     });
 
     return NextResponse.json({

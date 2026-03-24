@@ -1,9 +1,7 @@
 /**
  * Month Snapshot API
  * GET: Read snapshot for a locked month (auto-generates if missing)
- *
- * Lazy trigger: When a locked month is accessed and no snapshot exists,
- * the system automatically calculates and stores it.
+ * Snapshot captures current warehouse "mevcut" at month boundary.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -17,7 +15,7 @@ import { createLogger } from '@/lib/logger';
 const logger = createLogger('MonthSnapshot');
 
 async function generateSnapshot(month: string): Promise<void> {
-  // 1. Aggregate all production requests for this month by IWASKU
+  // 1. Get all production requests for this month, grouped by IWASKU
   const requests = await prisma.productionRequest.groupBy({
     by: ['iwasku'],
     where: { productionMonth: month },
@@ -26,37 +24,38 @@ async function generateSnapshot(month: string): Promise<void> {
 
   if (requests.length === 0) return;
 
-  // 2. Get warehouse stock (initial stock: weekLabel IS NULL) for this month
-  const stockEntries = await prisma.warehouseStock.findMany({
-    where: { month, weekLabel: null },
+  // 2. Get warehouse mevcut for each product
+  const warehouseProducts = await prisma.warehouseProduct.findMany({
+    include: { weeklyEntries: true },
   });
-  const stockMap = new Map(stockEntries.map(s => [s.iwasku, s.quantity]));
+
+  const stockMap = new Map<string, number>();
+  for (const p of warehouseProducts) {
+    const uretilen = p.weeklyEntries.reduce((sum, w) => sum + w.quantity, 0);
+    const mevcut = p.eskiStok + uretilen + p.ilaveStok - p.cikis;
+    stockMap.set(p.iwasku, mevcut);
+  }
 
   // 3. Calculate and store snapshots
-  const snapshots = requests.map(r => ({
-    month,
-    iwasku: r.iwasku,
-    totalRequested: r._sum.quantity || 0,
-    warehouseStock: stockMap.get(r.iwasku) || 0,
-    netProduction: Math.max(0, (r._sum.quantity || 0) - (stockMap.get(r.iwasku) || 0)),
-  }));
+  for (const r of requests) {
+    const totalRequested = r._sum.quantity || 0;
+    const warehouseStock = stockMap.get(r.iwasku) || 0;
+    const netProduction = Math.max(0, totalRequested - warehouseStock);
 
-  // Upsert all snapshots (in case of re-generation)
-  for (const snap of snapshots) {
     const existing = await prisma.monthSnapshot.findFirst({
-      where: { month: snap.month, iwasku: snap.iwasku },
+      where: { month, iwasku: r.iwasku },
     });
+
+    const data = { month, iwasku: r.iwasku, totalRequested, warehouseStock, netProduction };
+
     if (existing) {
-      await prisma.monthSnapshot.update({
-        where: { id: existing.id },
-        data: snap,
-      });
+      await prisma.monthSnapshot.update({ where: { id: existing.id }, data });
     } else {
-      await prisma.monthSnapshot.create({ data: snap });
+      await prisma.monthSnapshot.create({ data });
     }
   }
 
-  logger.info(`Snapshot generated for ${month}: ${snapshots.length} products`);
+  logger.info(`Snapshot generated for ${month}: ${requests.length} products`);
 }
 
 export async function GET(request: NextRequest) {
@@ -71,7 +70,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'month parametresi gerekli' }, { status: 400 });
     }
 
-    // Only locked months can have snapshots
     if (!isMonthLocked(month)) {
       return NextResponse.json({
         success: true,
@@ -79,10 +77,8 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Check if snapshot exists
+    // Lazy trigger: generate if missing
     const existingCount = await prisma.monthSnapshot.count({ where: { month } });
-
-    // Lazy trigger: generate snapshot if missing
     if (existingCount === 0) {
       await generateSnapshot(month);
     }
@@ -93,7 +89,7 @@ export async function GET(request: NextRequest) {
       orderBy: { iwasku: 'asc' },
     });
 
-    // Enrich with product details from pricelab_db
+    // Enrich with product details
     const iwaskus = snapshots.map(s => s.iwasku);
     let productMap: Record<string, { name: string; category: string; desi: number | null }> = {};
 
@@ -118,7 +114,6 @@ export async function GET(request: NextRequest) {
       desi: productMap[s.iwasku]?.desi || null,
     }));
 
-    // Summary stats
     const totalRequested = snapshots.reduce((sum, s) => sum + s.totalRequested, 0);
     const totalStock = snapshots.reduce((sum, s) => sum + s.warehouseStock, 0);
     const totalNet = snapshots.reduce((sum, s) => sum + s.netProduction, 0);
