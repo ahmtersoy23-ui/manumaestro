@@ -13,7 +13,7 @@ import { Bell, User, LogOut, FileText, Shield, Menu, X, Warehouse } from 'lucide
 import { useAuth } from '@/contexts/AuthContext';
 
 export function Header() {
-  const { user, role, logout } = useAuth();
+  const { user, role, canViewStock, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const roleLabels = {
@@ -49,6 +49,17 @@ export function Header() {
               <Bell className="w-5 h-5" />
             </button>
 
+            {canViewStock && (
+              <Link
+                href="/dashboard/warehouse-stock"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Depo Stoğu"
+              >
+                <Warehouse className="w-4 h-4" />
+                <span className="hidden lg:inline">Depo</span>
+              </Link>
+            )}
+
             {role === 'admin' && (
               <>
                 <Link
@@ -58,14 +69,6 @@ export function Header() {
                 >
                   <Shield className="w-4 h-4" />
                   <span className="hidden lg:inline">İzinler</span>
-                </Link>
-                <Link
-                  href="/dashboard/warehouse-stock"
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                  title="Depo Stoğu"
-                >
-                  <Warehouse className="w-4 h-4" />
-                  <span className="hidden lg:inline">Depo</span>
                 </Link>
                 <Link
                   href="/dashboard/logs"
@@ -132,6 +135,17 @@ export function Header() {
               </div>
             </div>
 
+            {canViewStock && (
+              <Link
+                href="/dashboard/warehouse-stock"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
+              >
+                <Warehouse className="w-4 h-4" />
+                Depo Stoğu
+              </Link>
+            )}
+
             {role === 'admin' && (
               <>
                 <Link
@@ -141,14 +155,6 @@ export function Header() {
                 >
                   <Shield className="w-4 h-4" />
                   İzin Yönetimi
-                </Link>
-                <Link
-                  href="/dashboard/warehouse-stock"
-                  onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
-                >
-                  <Warehouse className="w-4 h-4" />
-                  Depo Stoğu
                 </Link>
                 <Link
                   href="/dashboard/logs"

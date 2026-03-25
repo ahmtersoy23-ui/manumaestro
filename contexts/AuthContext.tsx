@@ -24,6 +24,7 @@ interface AuthContextType {
   role: 'admin' | 'editor' | 'viewer' | null;
   loading: boolean;
   isAuthenticated: boolean;
+  canViewStock: boolean;
   logout: () => void;
   hasRole: (roles: string[]) => boolean;
 }
@@ -33,6 +34,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SSOUser | null>(null);
   const [role, setRole] = useState<'admin' | 'editor' | 'viewer' | null>(null);
+  const [canViewStock, setCanViewStock] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -44,6 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const data = await response.json();
           setUser(data.user);
           setRole(data.role);
+          setCanViewStock(data.permissions?.canViewStock ?? false);
         } else {
           // If API fails, redirect to SSO
           window.location.href = SSO_URL;
@@ -74,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     role,
     loading,
     isAuthenticated: !!user,
+    canViewStock,
     logout: handleLogout,
     hasRole: hasRoleCheck,
   };

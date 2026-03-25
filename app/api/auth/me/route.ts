@@ -1,66 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db/prisma';
 import { createLogger } from '@/lib/logger';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-const logger = createLogger('Auth Me API');
+import { verifyAuth } from '@/lib/auth/verify';
 
-const SSO_VERIFY_URL = process.env.SSO_URL
-  ? `${process.env.SSO_URL}/api/auth/verify`
-  : 'https://apps.iwa.web.tr/api/auth/verify';
-const APP_CODE = process.env.SSO_APP_CODE || 'manumaestro';
+const logger = createLogger('Auth Me API');
 
 /**
  * GET /api/auth/me
- * Returns current user info by verifying SSO token from cookie
+ * Returns current user info + permissions
  */
 export async function GET(request: NextRequest) {
   try {
-    // Rate limiting: 200 requests per minute for read operations
     const rateLimitResult = await rateLimiters.read.check(request, 'auth-me');
     if (!rateLimitResult.success) {
       return rateLimitExceededResponse(rateLimitResult);
     }
 
-    // Get token from cookie
-    const token = request.cookies.get('sso_access_token')?.value;
-
-    if (!token) {
+    const auth = await verifyAuth(request);
+    if (!auth.success || !auth.user) {
       return NextResponse.json(
-        { success: false, error: 'Kimlik doğrulama tokeni bulunamadı' },
+        { success: false, error: auth.error || 'Yetkisiz erişim' },
         { status: 401 }
       );
     }
 
-    // Verify token with SSO backend
-    const response = await fetch(SSO_VERIFY_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, app_code: APP_CODE })
-    });
-
-    if (!response.ok) {
-      return NextResponse.json(
-        { success: false, error: 'Token doğrulaması başarısız' },
-        { status: 401 }
-      );
-    }
-
-    const data = await response.json();
-
-    if (!data.success) {
-      return NextResponse.json(
-        { success: false, error: 'Geçersiz token' },
-        { status: 401 }
-      );
+    // Check stock permission for non-admin users
+    let canViewStock = auth.user.role === 'admin';
+    if (!canViewStock) {
+      const stockPerm = await prisma.userStockPermission.findUnique({
+        where: { userId: auth.user.id },
+      });
+      canViewStock = stockPerm?.canView ?? false;
     }
 
     return NextResponse.json({
       success: true,
       user: {
-        id: data.data.user.id,
-        email: data.data.user.email,
-        name: data.data.user.name,
+        id: auth.user.id,
+        email: auth.user.email,
+        name: auth.user.name,
       },
-      role: data.data.role || 'viewer',
+      role: auth.user.role,
+      permissions: { canViewStock },
     });
   } catch (error) {
     logger.error('Error in /api/auth/me:', error);
