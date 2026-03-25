@@ -306,10 +306,7 @@ export default function WarehouseStockPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Warehouse className="w-6 h-6 text-emerald-600" />
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Depo Stoğu</h1>
-            <p className="text-xs text-gray-500">{products.length} ürün · Mevcut: {products.reduce((s, p) => s + p.mevcut, 0).toLocaleString()} adet</p>
-          </div>
+          <h1 className="text-2xl font-bold text-gray-900">Depo Stoğu</h1>
         </div>
       </div>
 
@@ -326,8 +323,19 @@ export default function WarehouseStockPage() {
           });
         });
         const sorted = [...catStats.entries()].sort((a, b) => b[1].mevcut - a[1].mevcut);
+        const totalCount = products.length;
+        const totalMevcut = products.reduce((s, p) => s + p.mevcut, 0);
+        const totalDesi = products.reduce((s, p) => s + (p.toplamDesi ?? 0), 0);
         return (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+            <button
+              onClick={() => setCategoryFilter('')}
+              className={`text-left rounded-lg border p-2.5 transition-colors ${!categoryFilter ? 'border-emerald-400 bg-emerald-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+            >
+              <p className="text-[10px] text-emerald-600 font-semibold">Tüm Kategoriler</p>
+              <p className="text-sm font-bold text-gray-900">{totalMevcut.toLocaleString()} <span className="text-[10px] font-normal text-gray-400">adet</span></p>
+              <p className="text-[10px] text-gray-400">{totalCount} ürün · {Math.round(totalDesi).toLocaleString()} desi</p>
+            </button>
             {sorted.map(([cat, s]) => (
               <button
                 key={cat}
