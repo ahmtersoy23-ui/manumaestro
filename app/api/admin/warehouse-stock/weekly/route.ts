@@ -13,6 +13,7 @@ const WeeklyEntrySchema = z.object({
   iwasku: z.string().min(1),
   weekStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD (Monday)
   quantity: z.number().int().min(0),
+  type: z.enum(['PRODUCTION', 'SHIPMENT']).default('PRODUCTION'),
 });
 
 export async function POST(request: NextRequest) {
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { iwasku, weekStart, quantity } = validation.data;
+    const { iwasku, weekStart, quantity, type } = validation.data;
     const weekDate = new Date(weekStart);
 
     // Ensure product exists in warehouse
@@ -46,14 +47,13 @@ export async function POST(request: NextRequest) {
       create: { iwasku },
     });
 
-    // Upsert weekly entry
+    // Upsert weekly entry (unique by iwasku + weekStart + type)
     const existing = await prisma.warehouseWeekly.findFirst({
-      where: { iwasku, weekStart: weekDate },
+      where: { iwasku, weekStart: weekDate, type },
     });
 
     let entry;
     if (quantity === 0 && existing) {
-      // Delete entry if quantity is 0
       await prisma.warehouseWeekly.delete({ where: { id: existing.id } });
       entry = null;
     } else if (quantity > 0) {
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
         });
       } else {
         entry = await prisma.warehouseWeekly.create({
-          data: { iwasku, weekStart: weekDate, quantity, enteredById: auth.user.id },
+          data: { iwasku, weekStart: weekDate, quantity, type, enteredById: auth.user.id },
         });
       }
     }

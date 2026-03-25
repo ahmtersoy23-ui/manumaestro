@@ -18,22 +18,23 @@ interface WeeklyEntry { id: string; weekStart: string; quantity: number; }
 interface StockProduct {
   id: string; iwasku: string; productName: string; productCategory: string;
   desi: number | null; eskiStok: number; ilaveStok: number; cikis: number;
-  uretilen: number; mevcut: number; toplamDesi: number | null;
+  uretilen: number; haftalikCikis: number; toplamCikis: number; mevcut: number; toplamDesi: number | null;
   weeklyEntries: WeeklyEntry[];
+  shipmentEntries: WeeklyEntry[];
 }
 interface SnapshotItem {
   iwasku: string; productName: string; productCategory: string;
   totalRequested: number; warehouseStock: number; netProduction: number;
 }
 
-// Pzt-Cum week starts (4 weeks: prev 2, current, next 1)
+// Pzt-Cum week starts (2 weeks: prev, current)
 function getWeekStarts(): string[] {
   const weeks: string[] = [];
   const today = new Date();
   const dayOfWeek = today.getDay();
   const monday = new Date(today);
   monday.setDate(today.getDate() - ((dayOfWeek + 6) % 7));
-  for (let i = -2; i <= 1; i++) {
+  for (let i = -1; i <= 0; i++) {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i * 7);
     weeks.push(d.toISOString().split('T')[0]);
@@ -53,13 +54,22 @@ function formatWeekLabel(dateStr: string): { range: string; month: string } {
   const d = new Date(dateStr);
   const fri = new Date(d);
   fri.setDate(d.getDate() + 4);
+  const monMonth = d.toLocaleDateString('tr-TR', { month: 'short' }).replace('.', '');
+  const friMonth = fri.toLocaleDateString('tr-TR', { month: 'short' }).replace('.', '');
+  // Ay geçişi varsa her iki ayı da göster (ör: 30 Mar-3 Nis)
+  if (d.getMonth() !== fri.getMonth()) {
+    return {
+      range: `${d.getDate()} ${monMonth}`,
+      month: `${fri.getDate()} ${friMonth}`,
+    };
+  }
   return {
     range: `${d.getDate()}-${fri.getDate()}`,
-    month: d.toLocaleDateString('tr-TR', { month: 'short' }).replace('.', ''),
+    month: monMonth,
   };
 }
 
-type SortKey = 'iwasku' | 'productName' | 'productCategory' | 'desi' | 'eskiStok' | 'uretilen' | 'ilaveStok' | 'cikis' | 'mevcut' | 'toplamDesi';
+type SortKey = 'iwasku' | 'productName' | 'productCategory' | 'desi' | 'eskiStok' | 'uretilen' | 'ilaveStok' | 'toplamCikis' | 'mevcut' | 'toplamDesi';
 
 export default function WarehouseStockPage() {
   const { role } = useAuth();
@@ -89,7 +99,7 @@ export default function WarehouseStockPage() {
 
   const weekStarts = getWeekStarts();
   const currentWeek = getCurrentWeekStart();
-  const prevWeek = weekStarts.length >= 3 ? weekStarts[1] : '';
+  const prevWeek = weekStarts[0] || '';
 
   useEffect(() => { setCanEdit(role === 'admin' || role === 'editor'); }, [role]);
 
@@ -131,7 +141,8 @@ export default function WarehouseStockPage() {
       setProducts(prev => prev.map(p => {
         if (p.iwasku !== iwasku) return p;
         const updated = { ...p, [field]: value };
-        updated.mevcut = updated.eskiStok + updated.uretilen + updated.ilaveStok - updated.cikis;
+        updated.toplamCikis = updated.cikis + updated.haftalikCikis;
+        updated.mevcut = updated.eskiStok + updated.uretilen + updated.ilaveStok - updated.toplamCikis;
         updated.toplamDesi = updated.desi ? Math.round(updated.mevcut * updated.desi * 100) / 100 : null;
         return updated;
       }));
@@ -139,24 +150,32 @@ export default function WarehouseStockPage() {
     finally { setSaving(null); }
   };
 
-  // Update weekly
-  const updateWeekly = async (iwasku: string, weekStart: string, quantity: number) => {
-    setSaving(`${iwasku}-${weekStart}`);
+  // Update weekly (production or shipment)
+  const updateWeekly = async (iwasku: string, weekStart: string, quantity: number, type: 'PRODUCTION' | 'SHIPMENT' = 'PRODUCTION') => {
+    setSaving(`${iwasku}-${type}-${weekStart}`);
     try {
       await fetch('/api/admin/warehouse-stock/weekly', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ iwasku, weekStart, quantity }),
+        body: JSON.stringify({ iwasku, weekStart, quantity, type }),
       });
       setProducts(prev => prev.map(p => {
         if (p.iwasku !== iwasku) return p;
-        const entries = [...p.weeklyEntries];
+        const entriesKey = type === 'PRODUCTION' ? 'weeklyEntries' : 'shipmentEntries';
+        const entries = [...p[entriesKey]];
         const idx = entries.findIndex(e => e.weekStart.startsWith(weekStart));
         if (quantity === 0 && idx >= 0) entries.splice(idx, 1);
         else if (quantity > 0 && idx >= 0) entries[idx] = { ...entries[idx], quantity };
         else if (quantity > 0) entries.push({ id: 'temp', weekStart, quantity });
-        const uretilen = entries.reduce((sum, e) => sum + e.quantity, 0);
-        const mevcut = p.eskiStok + uretilen + p.ilaveStok - p.cikis;
-        return { ...p, weeklyEntries: entries, uretilen, mevcut, toplamDesi: p.desi ? Math.round(mevcut * p.desi * 100) / 100 : null };
+        const uretilen = type === 'PRODUCTION' ? entries.reduce((sum, e) => sum + e.quantity, 0) : p.uretilen;
+        const haftalikCikis = type === 'SHIPMENT' ? entries.reduce((sum, e) => sum + e.quantity, 0) : p.haftalikCikis;
+        const toplamCikis = p.cikis + haftalikCikis;
+        const mevcut = p.eskiStok + uretilen + p.ilaveStok - toplamCikis;
+        return {
+          ...p,
+          [entriesKey]: entries,
+          uretilen, haftalikCikis, toplamCikis, mevcut,
+          toplamDesi: p.desi ? Math.round(mevcut * p.desi * 100) / 100 : null,
+        };
       }));
     } catch (err) { logger.error('Weekly update failed:', err); }
     finally { setSaving(null); }
@@ -211,9 +230,10 @@ export default function WarehouseStockPage() {
         IWASKU: p.iwasku, 'Ürün Adı': p.productName, Kategori: p.productCategory,
         Desi: p.desi, 'Eski Stok': p.eskiStok,
       };
-      p.weeklyEntries.forEach(w => { row[w.weekStart.split('T')[0]] = w.quantity; });
+      p.weeklyEntries.forEach(w => { row[`Üretim ${w.weekStart.split('T')[0]}`] = w.quantity; });
       row['Üretilen'] = p.uretilen; row['İlave'] = p.ilaveStok;
-      row['Çıkış'] = p.cikis; row['Mevcut'] = p.mevcut; row['Toplam Desi'] = p.toplamDesi;
+      p.shipmentEntries.forEach(w => { row[`Çıkış ${w.weekStart.split('T')[0]}`] = w.quantity; });
+      row['Çıkış'] = p.toplamCikis; row['Mevcut'] = p.mevcut; row['Toplam Desi'] = p.toplamDesi;
       return row;
     });
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -437,22 +457,32 @@ export default function WarehouseStockPage() {
                       {weekStarts.map(ws => {
                         const wl = formatWeekLabel(ws);
                         return (
-                        <th key={ws} className="px-2 py-1 text-center bg-blue-50/50">
-                          <div className="text-[10px] font-semibold text-blue-600 leading-tight">{wl.range}</div>
-                          <div className="text-[9px] text-blue-400">{wl.month}</div>
+                        <th key={`prod-${ws}`} className="px-2 py-1 text-center bg-emerald-50/50">
+                          <div className="text-[10px] font-semibold text-emerald-600 leading-tight">{wl.range}</div>
+                          <div className="text-[9px] text-emerald-400">{wl.month}</div>
                         </th>
                         );
                       })}
-                      <SortHeader label="Üretilen" sortField="uretilen" className="text-right font-semibold text-blue-700 bg-blue-50 min-w-[50px]" />
-                      <SortHeader label="İlave" sortField="ilaveStok" className="text-right font-semibold text-green-700 bg-green-50 min-w-[45px]" />
-                      <SortHeader label="Çıkış" sortField="cikis" className="text-right font-semibold text-red-700 bg-red-50 min-w-[45px]" />
+                      <SortHeader label="Üretilen" sortField="uretilen" className="text-right font-semibold text-emerald-700 bg-emerald-50 min-w-[50px]" />
+                      <SortHeader label="İlave" sortField="ilaveStok" className="text-right font-semibold text-blue-700 bg-blue-50 min-w-[45px]" />
+                      {weekStarts.map(ws => {
+                        const wl = formatWeekLabel(ws);
+                        return (
+                        <th key={`ship-${ws}`} className="px-2 py-1 text-center bg-red-50/50">
+                          <div className="text-[10px] font-semibold text-red-600 leading-tight">{wl.range}</div>
+                          <div className="text-[9px] text-red-400">{wl.month}</div>
+                        </th>
+                        );
+                      })}
+                      <SortHeader label="Çıkış" sortField="toplamCikis" className="text-right font-semibold text-red-700 bg-red-50 min-w-[45px]" />
                       <SortHeader label="Mevcut" sortField="mevcut" className="text-right font-bold text-purple-700 bg-purple-50 min-w-[55px]" />
                       <SortHeader label="T.Desi" sortField="toplamDesi" className="text-right font-semibold text-gray-500 min-w-[55px]" />
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.map(p => {
-                      const weekMap = new Map(p.weeklyEntries.map(e => [e.weekStart.split('T')[0], e.quantity]));
+                      const prodMap = new Map(p.weeklyEntries.map(e => [e.weekStart.split('T')[0], e.quantity]));
+                      const shipMap = new Map(p.shipmentEntries.map(e => [e.weekStart.split('T')[0], e.quantity]));
                       const isSaving = saving?.startsWith(p.iwasku);
                       return (
                         <tr key={p.iwasku} className={`border-b border-gray-100 hover:bg-gray-50/70 ${isSaving ? 'opacity-60' : ''}`}>
@@ -465,28 +495,33 @@ export default function WarehouseStockPage() {
                           </td>
                           <td className="px-2 py-1 text-right text-gray-400">{p.desi || '-'}</td>
                           <td className="px-2 py-1 text-right bg-amber-50/30">
-                            <EditableCell value={p.eskiStok} onSave={v => updateField(p.iwasku, 'eskiStok', v)} className="text-amber-700 font-medium" />
+                            <span className="text-amber-700 font-medium">{p.eskiStok || '-'}</span>
                           </td>
-                          {weekStarts.map(ws => {
-                            const isEditable = ws === currentWeek || ws === prevWeek;
-                            return (
-                              <td key={ws} className="px-0.5 py-1 text-center bg-blue-50/10">
-                                <EditableCell
-                                  value={weekMap.get(ws) || 0}
-                                  onSave={v => updateWeekly(p.iwasku, ws, v)}
-                                  editable={isEditable}
-                                  className={`text-blue-600 ${!isEditable ? 'opacity-50' : ''}`}
-                                />
-                              </td>
-                            );
-                          })}
-                          <td className="px-2 py-1 text-right font-medium text-blue-700 bg-blue-50/30">{p.uretilen || '-'}</td>
-                          <td className="px-2 py-1 text-right bg-green-50/30">
-                            <EditableCell value={p.ilaveStok} onSave={v => updateField(p.iwasku, 'ilaveStok', v)} className="text-green-700" />
+                          {/* Üretilen haftalık (yeşil) */}
+                          {weekStarts.map(ws => (
+                            <td key={`prod-${ws}`} className="px-0.5 py-1 text-center bg-emerald-50/10">
+                              <EditableCell
+                                value={prodMap.get(ws) || 0}
+                                onSave={v => updateWeekly(p.iwasku, ws, v, 'PRODUCTION')}
+                                className="text-emerald-600"
+                              />
+                            </td>
+                          ))}
+                          <td className="px-2 py-1 text-right font-medium text-emerald-700 bg-emerald-50/30">{p.uretilen || '-'}</td>
+                          <td className="px-2 py-1 text-right bg-blue-50/30">
+                            <EditableCell value={p.ilaveStok} onSave={v => updateField(p.iwasku, 'ilaveStok', v)} className="text-blue-700" />
                           </td>
-                          <td className="px-2 py-1 text-right bg-red-50/30">
-                            <EditableCell value={p.cikis} onSave={v => updateField(p.iwasku, 'cikis', v)} className="text-red-700" />
-                          </td>
+                          {/* Çıkış haftalık (kırmızı) */}
+                          {weekStarts.map(ws => (
+                            <td key={`ship-${ws}`} className="px-0.5 py-1 text-center bg-red-50/10">
+                              <EditableCell
+                                value={shipMap.get(ws) || 0}
+                                onSave={v => updateWeekly(p.iwasku, ws, v, 'SHIPMENT')}
+                                className="text-red-600"
+                              />
+                            </td>
+                          ))}
+                          <td className="px-2 py-1 text-right font-medium text-red-700 bg-red-50/30">{p.toplamCikis || '-'}</td>
                           <td className="px-2 py-1 text-right font-bold text-purple-700 bg-purple-50/30">{p.mevcut}</td>
                           <td className="px-2 py-1 text-right text-gray-400">{p.toplamDesi ?? '-'}</td>
                         </tr>

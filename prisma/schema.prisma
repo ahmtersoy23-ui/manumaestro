@@ -271,14 +271,15 @@ model WarehouseWeekly {
   id          String   @id @default(uuid())
   iwasku      String
   weekStart   DateTime @db.Date       // Haftanın Pazartesi günü
-  quantity    Int      @default(0)     // O hafta üretimden gelen miktar
+  quantity    Int      @default(0)     // O hafta miktar
+  type        String   @default("PRODUCTION") // PRODUCTION veya SHIPMENT
   enteredById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   product     WarehouseProduct @relation(fields: [iwasku], references: [iwasku], onDelete: Cascade)
 
-  @@unique([iwasku, weekStart])
+  @@unique([iwasku, weekStart, type])
   @@index([iwasku])
   @@map("warehouse_weekly")
 }

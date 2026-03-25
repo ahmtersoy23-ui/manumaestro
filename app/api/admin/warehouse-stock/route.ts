@@ -56,8 +56,12 @@ export async function GET(request: NextRequest) {
 
     // Enrich with product details and calculated fields
     const data = products.map(p => {
-      const uretilen = p.weeklyEntries.reduce((sum, w) => sum + w.quantity, 0);
-      const mevcut = p.eskiStok + uretilen + p.ilaveStok - p.cikis;
+      const productionEntries = p.weeklyEntries.filter(w => w.type === 'PRODUCTION');
+      const shipmentEntries = p.weeklyEntries.filter(w => w.type === 'SHIPMENT');
+      const uretilen = productionEntries.reduce((sum, w) => sum + w.quantity, 0);
+      const haftalikCikis = shipmentEntries.reduce((sum, w) => sum + w.quantity, 0);
+      const toplamCikis = p.cikis + haftalikCikis;
+      const mevcut = p.eskiStok + uretilen + p.ilaveStok - toplamCikis;
       const info = productMap[p.iwasku];
       const desi = info?.desi || null;
 
@@ -71,9 +75,16 @@ export async function GET(request: NextRequest) {
         ilaveStok: p.ilaveStok,
         cikis: p.cikis,
         uretilen,
+        haftalikCikis,
+        toplamCikis,
         mevcut,
         toplamDesi: desi ? Math.round(mevcut * desi * 100) / 100 : null,
-        weeklyEntries: p.weeklyEntries.map(w => ({
+        weeklyEntries: productionEntries.map(w => ({
+          id: w.id,
+          weekStart: w.weekStart,
+          quantity: w.quantity,
+        })),
+        shipmentEntries: shipmentEntries.map(w => ({
           id: w.id,
           weekStart: w.weekStart,
           quantity: w.quantity,
