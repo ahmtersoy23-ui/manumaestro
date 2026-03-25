@@ -1,27 +1,47 @@
 /**
- * Add Marketplace Modal
- * Modal for creating custom marketplaces
+ * Add / Edit Marketplace Modal
+ * Modal for creating and editing marketplaces
  */
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 
-const logger = createLogger('AddMarketplaceModal');
+const logger = createLogger('MarketplaceModal');
+
+interface MarketplaceData {
+  id: string;
+  name: string;
+  region: string;
+}
 
 interface AddMarketplaceModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  editData?: MarketplaceData | null;
 }
 
-export function AddMarketplaceModal({ isOpen, onClose, onSuccess }: AddMarketplaceModalProps) {
+export function AddMarketplaceModal({ isOpen, onClose, onSuccess, editData }: AddMarketplaceModalProps) {
   const [name, setName] = useState('');
   const [region, setRegion] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isEditMode = !!editData;
+
+  useEffect(() => {
+    if (editData) {
+      setName(editData.name);
+      setRegion(editData.region);
+    } else {
+      setName('');
+      setRegion('');
+    }
+    setError(null);
+  }, [editData, isOpen]);
 
   if (!isOpen) return null;
 
@@ -31,16 +51,16 @@ export function AddMarketplaceModal({ isOpen, onClose, onSuccess }: AddMarketpla
     setError(null);
 
     try {
-      const res = await fetch('/api/marketplaces', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name,
-          region,
-          marketplaceType: 'CUSTOM',
-        }),
+      const url = '/api/marketplaces';
+      const method = isEditMode ? 'PATCH' : 'POST';
+      const body = isEditMode
+        ? { id: editData!.id, name, region }
+        : { name, region, marketplaceType: 'CUSTOM' };
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
       });
 
       const data = await res.json();
@@ -51,11 +71,11 @@ export function AddMarketplaceModal({ isOpen, onClose, onSuccess }: AddMarketpla
         onSuccess();
         onClose();
       } else {
-        setError(data.error || 'Pazar yeri oluşturulamadı');
+        setError(data.error || (isEditMode ? 'Pazar yeri güncellenemedi' : 'Pazar yeri oluşturulamadı'));
       }
     } catch (err) {
-      setError('Pazar yeri oluşturulurken bir hata oluştu');
-      logger.error('Create marketplace error:', err);
+      setError('Bir hata oluştu');
+      logger.error('Marketplace modal error:', err);
     } finally {
       setLoading(false);
     }
@@ -66,7 +86,9 @@ export function AddMarketplaceModal({ isOpen, onClose, onSuccess }: AddMarketpla
       <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900">Özel Pazar Yeri Ekle</h2>
+          <h2 className="text-xl font-bold text-gray-900">
+            {isEditMode ? 'Pazar Yeri Düzenle' : 'Özel Pazar Yeri Ekle'}
+          </h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -107,7 +129,7 @@ export function AddMarketplaceModal({ isOpen, onClose, onSuccess }: AddMarketpla
               id="region"
               value={region}
               onChange={(e) => setRegion(e.target.value)}
-              placeholder="ör: Türkiye"
+              placeholder="ör: TR"
               required
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
@@ -127,7 +149,7 @@ export function AddMarketplaceModal({ isOpen, onClose, onSuccess }: AddMarketpla
               disabled={loading || !name || !region}
               className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Oluşturuluyor...' : 'Oluştur'}
+              {loading ? (isEditMode ? 'Güncelleniyor...' : 'Oluşturuluyor...') : (isEditMode ? 'Güncelle' : 'Oluştur')}
             </button>
           </div>
         </form>

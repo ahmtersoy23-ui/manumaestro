@@ -8,8 +8,9 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Calendar, Package, ShoppingCart, Factory, ArrowLeft, Plus, ChevronDown, ChevronUp, Warehouse } from 'lucide-react';
+import { Calendar, Package, ShoppingCart, Factory, ArrowLeft, Plus, ChevronDown, ChevronUp, Warehouse, Pencil } from 'lucide-react';
 import { parseMonthValue, isMonthLocked } from '@/lib/monthUtils';
+import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('MonthDetailPage');
@@ -62,6 +63,7 @@ const marketplaceSlugMap: Record<string, string> = {
 export default function MonthDetailPage() {
   const params = useParams();
   const month = params.month as string;
+  const { role } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<CategorySummary[]>([]);
@@ -72,6 +74,7 @@ export default function MonthDetailPage() {
   const [showMissingItems, setShowMissingItems] = useState(false);
   const [missingDesiItems, setMissingDesiItems] = useState<MissingDesiItem[]>([]);
   const [showAddMarketplaceModal, setShowAddMarketplaceModal] = useState(false);
+  const [editMarketplace, setEditMarketplace] = useState<{ id: string; name: string; region: string } | null>(null);
   const [refreshMarketplaces, setRefreshMarketplaces] = useState(0);
 
   // Snapshot state
@@ -448,10 +451,19 @@ export default function MonthDetailPage() {
             const slug = marketplaceSlugMap[mp.code] || mp.code.toLowerCase().replace('_', '-');
 
             return (
+              <div key={mp.id} className="relative group">
+                {role === 'admin' && (
+                  <button
+                    onClick={(e) => { e.preventDefault(); setEditMarketplace({ id: mp.id, name: mp.name, region: mp.region }); setShowAddMarketplaceModal(true); }}
+                    className="absolute top-2 right-2 z-10 p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                    title="Düzenle"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                )}
               <Link
-                key={mp.id}
                 href={`/dashboard/marketplace/${slug}?month=${month}`}
-                className="block p-6 bg-white rounded-xl border-2 border-gray-200 hover:border-purple-500 hover:shadow-lg transition-all group"
+                className="block p-6 bg-white rounded-xl border-2 border-gray-200 hover:border-purple-500 hover:shadow-lg transition-all"
               >
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
@@ -482,12 +494,13 @@ export default function MonthDetailPage() {
                   </div>
                 </div>
               </Link>
+              </div>
             );
           })}
 
           {/* Add New Marketplace Card */}
           <button
-            onClick={() => setShowAddMarketplaceModal(true)}
+            onClick={() => { setEditMarketplace(null); setShowAddMarketplaceModal(true); }}
             className="block p-6 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border-2 border-dashed border-gray-300 hover:border-purple-400 hover:from-purple-50 hover:to-purple-100 transition-all group"
           >
             <div className="flex flex-col items-center justify-center h-full min-h-[140px]">
@@ -505,11 +518,12 @@ export default function MonthDetailPage() {
         </div>
       </div>
 
-      {/* Add Marketplace Modal */}
+      {/* Add / Edit Marketplace Modal */}
       <AddMarketplaceModal
         isOpen={showAddMarketplaceModal}
-        onClose={() => setShowAddMarketplaceModal(false)}
+        onClose={() => { setShowAddMarketplaceModal(false); setEditMarketplace(null); }}
         onSuccess={() => setRefreshMarketplaces(prev => prev + 1)}
+        editData={editMarketplace}
       />
     </div>
   );

@@ -12,6 +12,7 @@ import { successResponse, createdResponse, errorResponse } from '@/lib/api/respo
 import { ValidationError, InternalServerError, NotFoundError } from '@/lib/api/errors';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { verifyAuth, requireRole } from '@/lib/auth/verify';
+import { z } from 'zod';
 
 export async function GET(request: NextRequest) {
   try {
@@ -133,5 +134,60 @@ export async function POST(request: NextRequest) {
     return createdResponse(marketplace);
   } catch (error) {
     return errorResponse(error, 'Pazar yeri oluşturulamadı');
+  }
+}
+
+const MarketplaceUpdateSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).optional(),
+  region: z.string().min(1).optional(),
+});
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const rateLimitResult = await rateLimiters.write.check(request, 'update-marketplace');
+    if (!rateLimitResult.success) {
+      return rateLimitExceededResponse(rateLimitResult);
+    }
+
+    const authResult = await requireRole(request, ['admin']);
+    if (authResult instanceof NextResponse) return authResult;
+    const { user } = authResult;
+
+    const body = await request.json();
+    const validation = MarketplaceUpdateSchema.safeParse(body);
+    if (!validation.success) {
+      throw new ValidationError('Doğrulama hatası', formatValidationError(validation.error));
+    }
+
+    const { id, name, region } = validation.data;
+
+    const existing = await prisma.marketplace.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundError('Pazar yeri bulunamadı');
+
+    const data: Record<string, string> = {};
+    if (name !== undefined) data.name = name;
+    if (region !== undefined) data.region = region;
+
+    const updated = await prisma.marketplace.update({ where: { id }, data });
+
+    const changes: string[] = [];
+    if (name && name !== existing.name) changes.push(`ad: ${existing.name} → ${name}`);
+    if (region && region !== existing.region) changes.push(`bölge: ${existing.region} → ${region}`);
+
+    await logAction({
+      userId: user.id,
+      userName: user.name,
+      userEmail: user.email,
+      action: 'UPDATE_MARKETPLACE',
+      entityType: 'Marketplace',
+      entityId: id,
+      description: `Pazar yeri güncellendi: ${updated.name} — ${changes.join(', ')}`,
+      metadata: { old: { name: existing.name, region: existing.region }, new: { name: updated.name, region: updated.region } },
+    });
+
+    return successResponse(updated);
+  } catch (error) {
+    return errorResponse(error, 'Pazar yeri güncellenemedi');
   }
 }
