@@ -80,7 +80,7 @@ export default function WarehouseStockPage() {
 
   // Add product
   const [addQuery, setAddQuery] = useState('');
-  const [addResults, setAddResults] = useState<{ product_sku: string; name: string; category: string; size: number | null }[]>([]);
+  const [addResults, setAddResults] = useState<{ iwasku: string; name: string; category: string; size: number | null }[]>([]);
 
   // Snapshot state
   const [snapshotMonth, setSnapshotMonth] = useState('');
@@ -376,10 +376,10 @@ export default function WarehouseStockPage() {
                     placeholder="Yeni ürün ekle..." className="pl-8 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs w-48 placeholder:text-gray-400" />
                   {addResults.length > 0 && (
                     <div className="absolute z-20 mt-1 w-72 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-auto">
-                      {addResults.filter(r => !products.some(p => p.iwasku === r.product_sku)).map(p => (
-                        <button key={p.product_sku} onClick={() => addProduct(p.product_sku)}
+                      {addResults.filter(r => !products.some(p => p.iwasku === r.iwasku)).map(p => (
+                        <button key={p.iwasku} onClick={() => addProduct(p.iwasku)}
                           className="w-full text-left px-3 py-1.5 hover:bg-gray-50 border-b border-gray-100 last:border-0">
-                          <span className="text-xs font-mono text-blue-600">{p.product_sku}</span>
+                          <span className="text-xs font-mono text-blue-600">{p.iwasku}</span>
                           <span className="text-xs text-gray-500 ml-2">{p.name?.slice(0, 50)}</span>
                         </button>
                       ))}
