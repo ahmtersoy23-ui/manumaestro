@@ -165,10 +165,15 @@ export default function WarehouseStockPage() {
   // Add product (no quantity, just add to list)
   const addProduct = async (sku: string) => {
     try {
-      await fetch('/api/admin/warehouse-stock', {
+      const res = await fetch('/api/admin/warehouse-stock', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ iwasku: sku, field: 'eskiStok', value: 0 }),
       });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        logger.error('Add product failed:', res.status, err);
+        return;
+      }
       setAddQuery(''); setAddResults([]);
       fetchData();
     } catch (err) { logger.error('Add failed:', err); }
