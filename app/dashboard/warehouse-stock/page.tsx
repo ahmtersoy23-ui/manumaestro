@@ -228,7 +228,7 @@ export default function WarehouseStockPage() {
     const rows = products.map(p => {
       const row: Record<string, unknown> = {
         IWASKU: p.iwasku, 'Ürün Adı': p.productName, Kategori: p.productCategory,
-        Desi: p.desi, 'Eski Stok': p.eskiStok,
+        Desi: p.desi, 'Başlangıç Stoğu': p.eskiStok,
       };
       p.weeklyEntries.forEach(w => { row[`Üretim ${w.weekStart.split('T')[0]}`] = w.quantity; });
       row['Üretilen'] = p.uretilen; row['İlave'] = p.ilaveStok;
@@ -468,7 +468,7 @@ export default function WarehouseStockPage() {
                       <SortHeader label="Ürün Adı" sortField="productName" className="text-left font-semibold text-gray-700 min-w-[250px]" />
                       <SortHeader label="Kategori" sortField="productCategory" className="text-left font-semibold text-gray-500 min-w-[80px] max-w-[120px]" />
                       <SortHeader label="Desi" sortField="desi" className="text-right font-semibold text-gray-500 min-w-[40px]" />
-                      <SortHeader label="Eski Stok" sortField="eskiStok" className="text-right font-semibold text-amber-700 bg-amber-50 min-w-[55px]" />
+                      <SortHeader label="Başlangıç" sortField="eskiStok" className="text-right font-semibold text-amber-700 bg-amber-50 min-w-[55px]" />
                       {weekStarts.map(ws => {
                         const wl = formatWeekLabel(ws);
                         return (

@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
       create: { iwasku, [field]: value },
     });
 
-    const fieldLabels: Record<string, string> = { eskiStok: 'Eski Stok', ilaveStok: 'İlave', cikis: 'Çıkış' };
+    const fieldLabels: Record<string, string> = { eskiStok: 'Başlangıç Stoğu', ilaveStok: 'İlave', cikis: 'Çıkış' };
     await logAction({
       userId: auth.user.id,
       userName: auth.user.name,
