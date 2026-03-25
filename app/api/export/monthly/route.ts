@@ -42,11 +42,12 @@ export async function GET(request: NextRequest) {
     }
 
 
-    // Fetch all requests for the month
+    // Fetch requests for the month (capped at 10000 rows for memory safety)
     const requests = await prisma.productionRequest.findMany({
       where: {
         productionMonth: month,
       },
+      take: 10000,
       include: {
         marketplace: {
           select: {

@@ -69,7 +69,7 @@ export async function middleware(request: NextRequest) {
     response.cookies.set('sso_access_token', tokenFromUrl, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
       maxAge: 60 * 60 * 24 // 24 hours
     });
     return response;
@@ -92,7 +92,7 @@ export async function middleware(request: NextRequest) {
   try {
     logger.debug('Verifying token with SSO backend...');
     // Verify token with SSO
-    const ssoResponse = await fetch('https://apps.iwa.web.tr/api/auth/verify', {
+    const ssoResponse = await fetch(`${SSO_URL}/api/auth/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

@@ -17,7 +17,7 @@ vi.mock('@/lib/db/prisma', () => ({
   queryProductDb: vi.fn(),
 }));
 
-import { verifyAuth, requireRole, type VerifiedUser } from '@/lib/auth/verify';
+import { verifyAuth, requireRole, clearSsoCache, type VerifiedUser } from '@/lib/auth/verify';
 
 // Mock fetch globally
 global.fetch = vi.fn();
@@ -41,6 +41,7 @@ function setupPrismaUpsert(overrides?: Record<string, unknown>) {
 describe('Auth Verify', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearSsoCache();
     setupPrismaUpsert();
   });
 
@@ -306,6 +307,7 @@ describe('Auth Verify', () => {
       ];
 
       for (const testCase of testCases) {
+        clearSsoCache(); // Each iteration needs fresh SSO verification
         const request = new NextRequest('http://localhost:3000/api/test', {
           headers: {
             Cookie: 'sso_access_token=valid-token',

@@ -51,21 +51,28 @@ export async function POST(request: NextRequest) {
     const validSkus = new Set(products.map((p: { product_sku: string }) => p.product_sku));
 
     const warnings: string[] = [];
-    let imported = 0;
-
-    for (const item of items) {
+    const validItems = items.filter(item => {
       if (!validSkus.has(item.iwasku)) {
         warnings.push(`SKU bulunamadı: ${item.iwasku}`);
-        continue;
+        return false;
       }
+      return true;
+    });
 
-      await prisma.warehouseProduct.upsert({
+    // Batch upsert in single transaction
+    const upsertOps = validItems.map(item =>
+      prisma.warehouseProduct.upsert({
         where: { iwasku: item.iwasku },
         update: { eskiStok: item.quantity },
         create: { iwasku: item.iwasku, eskiStok: item.quantity },
-      });
-      imported++;
+      })
+    );
+
+    if (upsertOps.length > 0) {
+      await prisma.$transaction(upsertOps);
     }
+
+    const imported = validItems.length;
 
     await logAction({
       userId: auth.user.id,

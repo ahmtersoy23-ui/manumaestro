@@ -7,6 +7,10 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('AuthContext');
+const SSO_URL = process.env.NEXT_PUBLIC_SSO_URL || 'https://apps.iwa.web.tr';
 
 export interface SSOUser {
   id: string;
@@ -42,11 +46,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setRole(data.role);
         } else {
           // If API fails, redirect to SSO
-          window.location.href = 'https://apps.iwa.web.tr';
+          window.location.href = SSO_URL;
         }
       } catch (error) {
-        console.error('Failed to fetch user info:', error);
-        window.location.href = 'https://apps.iwa.web.tr';
+        logger.error('Failed to fetch user info:', error);
+        window.location.href = SSO_URL;
       } finally {
         setLoading(false);
       }
@@ -62,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const handleLogout = () => {
     // Redirect to SSO portal for logout
-    window.location.href = 'https://apps.iwa.web.tr';
+    window.location.href = SSO_URL;
   };
 
   const value: AuthContextType = {

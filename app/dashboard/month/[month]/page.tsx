@@ -97,17 +97,16 @@ export default function MonthDetailPage() {
     async function fetchData() {
       setLoading(true);
       try {
-        // Fetch ALL marketplaces
-        const mpRes = await fetch('/api/marketplaces');
-        const mpData = await mpRes.json();
+        // Fetch marketplaces and monthly summary in parallel
+        const [mpRes, res] = await Promise.all([
+          fetch('/api/marketplaces'),
+          fetch(`/api/requests/monthly?month=${month}`),
+        ]);
+        const [mpData, data] = await Promise.all([mpRes.json(), res.json()]);
 
         if (mpData.success) {
           setAllMarketplaces(mpData.data);
         }
-
-        // Fetch monthly summary
-        const res = await fetch(`/api/requests/monthly?month=${month}`);
-        const data = await res.json();
 
         if (data.success) {
           setMonthStats({

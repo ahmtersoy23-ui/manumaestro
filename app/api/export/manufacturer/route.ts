@@ -63,9 +63,10 @@ export async function GET(request: NextRequest) {
     }
 
 
-    // Fetch data from database
+    // Fetch data from database (capped at 10000 rows for memory safety)
     const requests = await prisma.productionRequest.findMany({
       where,
+      take: 10000,
       include: {
         marketplace: {
           select: {

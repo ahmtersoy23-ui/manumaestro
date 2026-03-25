@@ -6,12 +6,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { UserRole } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
-import { requireRole } from '@/lib/auth/verify';
+import { requireRole, extractToken } from '@/lib/auth/verify';
 import { errorResponse } from '@/lib/api/response';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('SSO Sync');
-const SSO_ADMIN_USERS_URL = 'https://apps.iwa.web.tr/api/admin/users';
+const SSO_ADMIN_USERS_URL = process.env.SSO_URL
+  ? `${process.env.SSO_URL}/api/admin/users`
+  : 'https://apps.iwa.web.tr/api/admin/users';
 const APP_CODE = 'manumaestro';
 
 function mapSSORole(ssoRole: string): UserRole {
@@ -40,11 +42,7 @@ export async function POST(request: NextRequest) {
     if (authResult instanceof NextResponse) return authResult;
 
     // Forward admin's SSO token to fetch all users
-    const authHeader = request.headers.get('Authorization');
-    const bearerToken = authHeader?.startsWith('Bearer ')
-      ? authHeader.slice(7)
-      : null;
-    const token = bearerToken ?? request.cookies.get('sso_access_token')?.value;
+    const token = extractToken(request);
 
     if (!token) {
       return NextResponse.json(

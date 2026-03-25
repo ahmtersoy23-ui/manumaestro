@@ -36,24 +36,20 @@ async function generateSnapshot(month: string): Promise<void> {
     stockMap.set(p.iwasku, mevcut);
   }
 
-  // 3. Calculate and store snapshots
-  for (const r of requests) {
+  // 3. Calculate and store snapshots (batch upsert in single transaction)
+  const upsertOps = requests.map(r => {
     const totalRequested = r._sum.quantity || 0;
     const warehouseStock = stockMap.get(r.iwasku) || 0;
     const netProduction = Math.max(0, totalRequested - warehouseStock);
 
-    const existing = await prisma.monthSnapshot.findFirst({
-      where: { month, iwasku: r.iwasku },
+    return prisma.monthSnapshot.upsert({
+      where: { month_iwasku: { month, iwasku: r.iwasku } },
+      update: { totalRequested, warehouseStock, netProduction },
+      create: { month, iwasku: r.iwasku, totalRequested, warehouseStock, netProduction },
     });
+  });
 
-    const data = { month, iwasku: r.iwasku, totalRequested, warehouseStock, netProduction };
-
-    if (existing) {
-      await prisma.monthSnapshot.update({ where: { id: existing.id }, data });
-    } else {
-      await prisma.monthSnapshot.create({ data });
-    }
-  }
+  await prisma.$transaction(upsertOps);
 
   logger.info(`Snapshot generated for ${month}: ${requests.length} products`);
 }

@@ -9,8 +9,29 @@ import { prisma } from '@/lib/db/prisma';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('Auth Verify');
-const SSO_VERIFY_URL = 'https://apps.iwa.web.tr/api/auth/verify';
-const APP_CODE = 'manumaestro';
+const SSO_VERIFY_URL = process.env.SSO_URL
+  ? `${process.env.SSO_URL}/api/auth/verify`
+  : 'https://apps.iwa.web.tr/api/auth/verify';
+const APP_CODE = process.env.SSO_APP_CODE || 'manumaestro';
+
+// In-memory SSO verification cache (5 min TTL)
+const SSO_CACHE_TTL = 5 * 60 * 1000;
+const ssoCache = new Map<string, { result: AuthResult; expiresAt: number }>();
+
+// Cleanup expired cache entries every 2 minutes
+if (process.env.NODE_ENV !== 'test') {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of ssoCache.entries()) {
+      if (now > entry.expiresAt) ssoCache.delete(key);
+    }
+  }, 2 * 60 * 1000);
+}
+
+/** Clear SSO verification cache (for testing) */
+export function clearSsoCache() {
+  ssoCache.clear();
+}
 
 /** Map SSO role string to Prisma UserRole enum */
 function mapSSORole(ssoRole: string): UserRole {
@@ -41,17 +62,19 @@ export interface AuthResult {
 export async function verifyAuth(request: NextRequest): Promise<AuthResult> {
   try {
     // Get token from Authorization header (mobile) or cookie (web)
-    const authHeader = request.headers.get('Authorization');
-    const bearerToken = authHeader?.startsWith('Bearer ')
-      ? authHeader.slice(7)
-      : null;
-    const token = bearerToken ?? request.cookies.get('sso_access_token')?.value;
+    const token = extractToken(request);
 
     if (!token) {
       return {
         success: false,
         error: 'Kimlik doğrulama tokeni bulunamadı',
       };
+    }
+
+    // Check cache first (avoids SSO network call + DB upsert on every request)
+    const cached = ssoCache.get(token);
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.result;
     }
 
     // Verify token with SSO backend
@@ -94,7 +117,7 @@ export async function verifyAuth(request: NextRequest): Promise<AuthResult> {
       },
     });
 
-    return {
+    const result: AuthResult = {
       success: true,
       user: {
         id: localUser.id,
@@ -103,6 +126,11 @@ export async function verifyAuth(request: NextRequest): Promise<AuthResult> {
         role: ssoRole,
       },
     };
+
+    // Cache successful verification
+    ssoCache.set(token, { result, expiresAt: Date.now() + SSO_CACHE_TTL });
+
+    return result;
   } catch (error) {
     logger.error('Auth verification error:', error);
     return {
@@ -110,6 +138,17 @@ export async function verifyAuth(request: NextRequest): Promise<AuthResult> {
       error: 'Sunucu hatası',
     };
   }
+}
+
+/**
+ * Extract bearer token or SSO cookie from request
+ */
+export function extractToken(request: NextRequest): string | null {
+  const authHeader = request.headers.get('Authorization');
+  const bearerToken = authHeader?.startsWith('Bearer ')
+    ? authHeader.slice(7)
+    : null;
+  return bearerToken ?? request.cookies.get('sso_access_token')?.value ?? null;
 }
 
 /**

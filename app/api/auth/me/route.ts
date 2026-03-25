@@ -3,8 +3,10 @@ import { createLogger } from '@/lib/logger';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 const logger = createLogger('Auth Me API');
 
-const SSO_VERIFY_URL = 'https://apps.iwa.web.tr/api/auth/verify';
-const APP_CODE = 'manumaestro';
+const SSO_VERIFY_URL = process.env.SSO_URL
+  ? `${process.env.SSO_URL}/api/auth/verify`
+  : 'https://apps.iwa.web.tr/api/auth/verify';
+const APP_CODE = process.env.SSO_APP_CODE || 'manumaestro';
 
 /**
  * GET /api/auth/me

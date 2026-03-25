@@ -53,3 +53,14 @@ export async function queryProductDb(query: string, params: (string | number | b
     client.release();
   }
 }
+
+// Graceful shutdown: close both connection pools (register once)
+if (!(globalThis as Record<string, unknown>).__dbCleanupRegistered) {
+  (globalThis as Record<string, unknown>).__dbCleanupRegistered = true;
+  const cleanup = async () => {
+    await productPool.end().catch(() => {});
+    await pool.end().catch(() => {});
+  };
+  process.on('SIGTERM', cleanup);
+  process.on('SIGINT', cleanup);
+}

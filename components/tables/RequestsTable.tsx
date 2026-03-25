@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('RequestsTable');
+const SSO_URL = process.env.NEXT_PUBLIC_SSO_URL || 'https://apps.iwa.web.tr';
 
 interface RequestsTableProps {
   marketplaceId: string;
@@ -140,7 +141,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
 
           if (res.status === 401) {
             alert('🔒 Oturum süreniz dolmuş. Lütfen yeniden giriş yapın.');
-            window.location.href = 'https://apps.iwa.web.tr';
+            window.location.href = SSO_URL;
             return;
           }
 
@@ -204,7 +205,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
       // Handle authentication errors
       if (res.status === 401) {
         alert('🔒 Oturum süreniz dolmuş. Lütfen yeniden giriş yapın.');
-        window.location.href = 'https://apps.iwa.web.tr';
+        window.location.href = SSO_URL;
         return;
       }
 

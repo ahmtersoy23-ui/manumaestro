@@ -25,8 +25,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: permCheck.reason }, { status: 403 });
     }
 
-    // Get all warehouse products with their weekly entries
+    // Get warehouse products with their weekly entries (capped at 5000 for safety)
     const products = await prisma.warehouseProduct.findMany({
+      take: 5000,
       include: {
         weeklyEntries: {
           orderBy: { weekStart: 'asc' },

@@ -64,6 +64,7 @@ export async function GET(request: NextRequest) {
 
     const requests = await prisma.productionRequest.findMany({
       where,
+      take: 10000,
       orderBy: [
         { productCategory: 'asc' },
         { iwasku: 'asc' },

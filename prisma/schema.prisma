@@ -164,6 +164,7 @@ model ProductionRequest {
   @@index([productCategory, productionMonth])
   @@index([marketplaceId, productionMonth])
   @@index([status, productionMonth])
+  @@index([productionMonth, iwasku])
   @@map("production_requests")
 }
 
