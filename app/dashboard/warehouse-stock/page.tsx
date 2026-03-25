@@ -49,13 +49,14 @@ function getCurrentWeekStart(): string {
   return monday.toISOString().split('T')[0];
 }
 
-function formatWeekLabel(dateStr: string): string {
+function formatWeekLabel(dateStr: string): { range: string; month: string } {
   const d = new Date(dateStr);
   const fri = new Date(d);
   fri.setDate(d.getDate() + 4);
-  const fmt = (dt: Date) => `${dt.getDate()}`;
-  const monthShort = d.toLocaleDateString('tr-TR', { month: 'short' }).replace('.', '');
-  return `${fmt(d)}-${fmt(fri)} ${monthShort}`;
+  return {
+    range: `${d.getDate()}-${fri.getDate()}`,
+    month: d.toLocaleDateString('tr-TR', { month: 'short' }).replace('.', ''),
+  };
 }
 
 type SortKey = 'iwasku' | 'productName' | 'productCategory' | 'desi' | 'eskiStok' | 'uretilen' | 'ilaveStok' | 'cikis' | 'mevcut' | 'toplamDesi';
@@ -382,7 +383,7 @@ export default function WarehouseStockPage() {
               <div className="p-8 text-center text-sm text-gray-400">Yükleniyor...</div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-auto text-xs border-collapse">
+                <table className="w-full text-xs border-collapse">
                   <thead className="bg-gray-50 sticky top-0 z-10">
                     <tr className="border-b border-gray-200">
                       <SortHeader label="IWASKU" sortField="iwasku" className="text-left font-semibold text-gray-700 sticky left-0 bg-gray-50 z-20 min-w-[120px]" />
@@ -390,13 +391,15 @@ export default function WarehouseStockPage() {
                       <SortHeader label="Kategori" sortField="productCategory" className="text-left font-semibold text-gray-500 min-w-[80px] max-w-[120px]" />
                       <SortHeader label="Desi" sortField="desi" className="text-right font-semibold text-gray-500 min-w-[40px]" />
                       <SortHeader label="Eski Stok" sortField="eskiStok" className="text-right font-semibold text-amber-700 bg-amber-50 min-w-[55px]" />
-                      {weekStarts.map(ws => (
-                        <th key={ws} className="px-0 py-1 text-center bg-blue-50/50 min-w-[38px] w-[38px]">
-                          <span className="inline-block text-[9px] font-medium text-blue-600 [writing-mode:vertical-rl] rotate-180 whitespace-nowrap">
-                            {formatWeekLabel(ws)}
-                          </span>
+                      {weekStarts.map(ws => {
+                        const wl = formatWeekLabel(ws);
+                        return (
+                        <th key={ws} className="px-2 py-1 text-center bg-blue-50/50">
+                          <div className="text-[10px] font-semibold text-blue-600 leading-tight">{wl.range}</div>
+                          <div className="text-[9px] text-blue-400">{wl.month}</div>
                         </th>
-                      ))}
+                        );
+                      })}
                       <SortHeader label="Üretilen" sortField="uretilen" className="text-right font-semibold text-blue-700 bg-blue-50 min-w-[50px]" />
                       <SortHeader label="İlave" sortField="ilaveStok" className="text-right font-semibold text-green-700 bg-green-50 min-w-[45px]" />
                       <SortHeader label="Çıkış" sortField="cikis" className="text-right font-semibold text-red-700 bg-red-50 min-w-[45px]" />
