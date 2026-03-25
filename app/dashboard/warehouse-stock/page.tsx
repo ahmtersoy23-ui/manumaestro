@@ -308,6 +308,36 @@ export default function WarehouseStockPage() {
         </div>
       </div>
 
+      {/* Category Dashboard */}
+      {products.length > 0 && (() => {
+        const catStats = new Map<string, { count: number; mevcut: number; desi: number }>();
+        products.forEach(p => {
+          const cat = p.productCategory || 'Diğer';
+          const prev = catStats.get(cat) || { count: 0, mevcut: 0, desi: 0 };
+          catStats.set(cat, {
+            count: prev.count + 1,
+            mevcut: prev.mevcut + p.mevcut,
+            desi: prev.desi + (p.toplamDesi ?? 0),
+          });
+        });
+        const sorted = [...catStats.entries()].sort((a, b) => b[1].mevcut - a[1].mevcut);
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+            {sorted.map(([cat, s]) => (
+              <button
+                key={cat}
+                onClick={() => setCategoryFilter(categoryFilter === cat ? '' : cat)}
+                className={`text-left rounded-lg border p-2.5 transition-colors ${categoryFilter === cat ? 'border-emerald-400 bg-emerald-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+              >
+                <p className="text-[10px] text-gray-500 truncate">{cat}</p>
+                <p className="text-sm font-bold text-gray-900">{s.mevcut.toLocaleString()} <span className="text-[10px] font-normal text-gray-400">adet</span></p>
+                <p className="text-[10px] text-gray-400">{s.count} ürün · {Math.round(s.desi)} desi</p>
+              </button>
+            ))}
+          </div>
+        );
+      })()}
+
       {/* Tabs */}
       <div className="border-b border-gray-200">
         <nav className="flex gap-0">
