@@ -127,12 +127,17 @@ export async function POST(request: NextRequest) {
 
     const { iwasku, field, value } = validation.data;
 
+    // Get old value for audit log
+    const existing = await prisma.warehouseProduct.findUnique({ where: { iwasku }, select: { eskiStok: true, ilaveStok: true, cikis: true } });
+    const oldValue = existing ? existing[field as keyof typeof existing] : null;
+
     const product = await prisma.warehouseProduct.upsert({
       where: { iwasku },
       update: { [field]: value },
       create: { iwasku, [field]: value },
     });
 
+    const fieldLabels: Record<string, string> = { eskiStok: 'Eski Stok', ilaveStok: 'İlave', cikis: 'Çıkış' };
     await logAction({
       userId: auth.user.id,
       userName: auth.user.name,
@@ -140,8 +145,8 @@ export async function POST(request: NextRequest) {
       action: 'UPDATE_STOCK',
       entityType: 'WarehouseProduct',
       entityId: product.id,
-      description: `Stok güncellendi: ${iwasku} → ${field}=${value}`,
-      metadata: { iwasku, field, value },
+      description: `${iwasku} — ${fieldLabels[field] || field}: ${oldValue ?? 0} → ${value}`,
+      metadata: { iwasku, field, oldValue, newValue: value },
     });
 
     return NextResponse.json({ success: true, data: product });

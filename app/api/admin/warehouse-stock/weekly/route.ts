@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { verifyAuth, checkStockPermission } from '@/lib/auth/verify';
+import { logAction } from '@/lib/auditLog';
 import { errorResponse } from '@/lib/api/response';
 import { z } from 'zod';
 
@@ -68,6 +69,19 @@ export async function POST(request: NextRequest) {
         });
       }
     }
+
+    const oldQty = existing?.quantity ?? 0;
+    const typeLabel = type === 'PRODUCTION' ? 'Üretim' : 'Çıkış';
+    await logAction({
+      userId: auth.user.id,
+      userName: auth.user.name,
+      userEmail: auth.user.email,
+      action: 'UPDATE_STOCK',
+      entityType: 'WarehouseWeekly',
+      entityId: iwasku,
+      description: `${iwasku} — ${typeLabel} (${weekStart}): ${oldQty} → ${quantity}`,
+      metadata: { iwasku, weekStart, type, oldQty, newQty: quantity },
+    });
 
     return NextResponse.json({ success: true, data: entry });
   } catch (error) {
