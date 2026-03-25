@@ -282,24 +282,39 @@ export default function WarehouseStockPage() {
     return `${y}-${m}`;
   });
 
-  // Editable cell
+  // Editable cell — supports "+N" for additive input, plain number for override
   const EditableCell = ({ value, onSave, editable = true, className = '' }: {
     value: number; onSave: (v: number) => void; editable?: boolean; className?: string;
   }) => {
     const [editing, setEditing] = useState(false);
-    const [localVal, setLocalVal] = useState(String(value));
+    const [localVal, setLocalVal] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
-    useEffect(() => { setLocalVal(String(value)); }, [value]);
-    useEffect(() => { if (editing) inputRef.current?.select(); }, [editing]);
+    useEffect(() => { if (editing) { setLocalVal(String(value)); inputRef.current?.select(); } }, [editing, value]);
+
+    const commit = () => {
+      setEditing(false);
+      const raw = localVal.trim();
+      if (!raw) return;
+      let newVal: number;
+      if (raw.startsWith('+')) {
+        // Additive: +5 means value + 5
+        newVal = value + (parseInt(raw.slice(1)) || 0);
+      } else {
+        newVal = parseInt(raw) || 0;
+      }
+      if (newVal < 0) newVal = 0;
+      if (newVal !== value) onSave(newVal);
+    };
 
     if (!canEdit || !editable) return <span className={className}>{value || '-'}</span>;
     if (editing) {
       return (
-        <input ref={inputRef} type="number" value={localVal}
+        <input ref={inputRef} type="text" inputMode="numeric" value={localVal}
           onChange={e => setLocalVal(e.target.value)}
-          onBlur={() => { setEditing(false); const v = parseInt(localVal) || 0; if (v !== value) onSave(v); }}
-          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') { setLocalVal(String(value)); setEditing(false); } }}
-          className="w-14 px-1 py-0.5 text-xs text-right border border-purple-400 rounded bg-white focus:outline-none"
+          onBlur={commit}
+          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') { setEditing(false); } }}
+          placeholder={`+${value ? '' : '0'}`}
+          className="w-16 px-1 py-0.5 text-xs text-right border border-purple-400 rounded bg-white focus:outline-none"
         />
       );
     }

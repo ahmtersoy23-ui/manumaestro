@@ -267,7 +267,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
   return (
     <div className="space-y-4">
       {/* Bulk Actions Bar */}
-      {hasRole(['admin']) && selectedIds.size > 0 && (
+      {hasRole(['admin', 'editor']) && selectedIds.size > 0 && (
         <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 flex items-center justify-between">
           <p className="text-sm font-medium text-purple-900">
             {selectedIds.size} öğe seçildi
@@ -297,7 +297,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
         <div className="overflow-x-auto">
           <table className="w-full table-fixed">
             <colgroup>
-              {hasRole(['admin']) && <col className="w-12" />} {/* Checkbox */}
+              {hasRole(['admin', 'editor']) && <col className="w-12" />} {/* Checkbox */}
               <col className="w-28" /> {/* Production Month */}
               <col className="w-32" /> {/* Date */}
               <col className="w-36" /> {/* IWASKU */}
@@ -306,11 +306,11 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
               <col className="w-24" /> {/* Quantity */}
               <col className="w-24" /> {/* Priority */}
               <col className="w-32" /> {/* Status */}
-              {hasRole(['admin']) && <col className="w-32" />} {/* Actions */}
+              {hasRole(['admin', 'editor']) && <col className="w-32" />} {/* Actions */}
             </colgroup>
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {hasRole(['admin']) && (
+                {hasRole(['admin', 'editor']) && (
                   <th className="px-4 py-3 text-center">
                     <button
                       onClick={handleSelectAll}
@@ -349,7 +349,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Durum
                 </th>
-                {hasRole(['admin']) && (
+                {hasRole(['admin', 'editor']) && (
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     İşlem
                   </th>
@@ -359,7 +359,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
             <tbody className="divide-y divide-gray-200">
               {requests.map((request) => (
                 <tr key={request.id} className={`transition-colors ${selectedIds.has(request.id) ? 'bg-purple-50' : 'hover:bg-gray-50'}`}>
-                  {hasRole(['admin']) && (
+                  {hasRole(['admin', 'editor']) && (
                     <td className="px-4 py-3 text-center">
                       <button
                         onClick={() => handleToggleSelect(request.id)}
@@ -429,7 +429,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                     </span>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-right">
-                    {hasRole(['admin']) && (
+                    {hasRole(['admin', 'editor']) && (
                       <button
                         onClick={() => handleDelete(request.id)}
                         disabled={deleting === request.id}

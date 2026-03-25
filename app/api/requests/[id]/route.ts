@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { createLogger } from '@/lib/logger';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-import { requireRole } from '@/lib/auth/verify';
+import { verifyAuth } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
 
 const logger = createLogger('Request API');
@@ -17,16 +17,20 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Rate limiting: 100 requests per minute for write operations
     const rateLimitResult = await rateLimiters.write.check(request, 'delete-request');
     if (!rateLimitResult.success) {
       return rateLimitExceededResponse(rateLimitResult);
     }
 
-    // Authentication & Authorization: Only admins can delete
-    const authResult = await requireRole(request, ['admin']);
-    if (authResult instanceof NextResponse) {
-      return authResult; // Return error response
+    // Authentication: admin or editor
+    const auth = await verifyAuth(request);
+    if (!auth.success || !auth.user) {
+      return NextResponse.json({ success: false, error: auth.error }, { status: 401 });
+    }
+
+    const { role } = auth.user;
+    if (role === 'viewer') {
+      return NextResponse.json({ success: false, error: 'Yetersiz yetki' }, { status: 403 });
     }
 
     const { id } = await params;
@@ -38,18 +42,27 @@ export async function DELETE(
       );
     }
 
-    // Fetch request info before deleting (for audit log)
+    // Fetch request info before deleting (for audit log + ownership check)
     const existingRequest = await prisma.productionRequest.findUnique({
       where: { id },
-      select: { iwasku: true, productName: true, quantity: true, productionMonth: true, marketplaceId: true },
+      select: { iwasku: true, productName: true, quantity: true, productionMonth: true, marketplaceId: true, enteredById: true },
     });
+
+    if (!existingRequest) {
+      return NextResponse.json({ success: false, error: 'Talep bulunamadı' }, { status: 404 });
+    }
+
+    // Editors can only delete their own requests
+    if (role === 'editor' && existingRequest.enteredById !== auth.user.id) {
+      return NextResponse.json({ success: false, error: 'Sadece kendi girdiğiniz talepleri silebilirsiniz' }, { status: 403 });
+    }
 
     // Delete the production request
     await prisma.productionRequest.delete({
       where: { id },
     });
 
-    const { user } = authResult;
+    const user = auth.user;
     await logAction({
       userId: user.id,
       userName: user.name,
