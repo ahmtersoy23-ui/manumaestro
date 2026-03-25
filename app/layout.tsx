@@ -19,10 +19,7 @@ export const metadata: Metadata = {
   title: "ManuMaestro - Üretim Talep Yönetimi",
   description: "Üretim Mükemmelliğini Yönetin",
   icons: {
-    icon: [
-      { url: '/icon.svg', type: 'image/svg+xml' },
-      { url: '/favicon.ico', sizes: 'any' }
-    ],
+    icon: { url: '/icon.svg', type: 'image/svg+xml' },
     apple: '/logo.svg',
   },
 };
