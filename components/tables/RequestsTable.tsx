@@ -211,7 +211,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
 
       // Handle authorization errors
       if (res.status === 403) {
-        alert('⛔ Bu işlem için yetkiniz yok. Sadece admin kullanıcılar silme işlemi yapabilir.');
+        alert('⛔ Bu işlem için yetkiniz yok. Sadece kendi girdiğiniz talepleri silebilirsiniz.');
         return;
       }
 
