@@ -36,7 +36,7 @@ export async function GET(
 
     // Pagination parameters
     const rawPage = parseInt(searchParams.get('page') || '1');
-    const rawLimit = parseInt(searchParams.get('limit') || '50');
+    const rawLimit = parseInt(searchParams.get('limit') || '30');
     const page = Math.max(rawPage, 1);
     const limit = Math.min(Math.max(rawLimit, 1), 200);
     const skip = (page - 1) * limit;

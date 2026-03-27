@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Package, Save, Calendar, Store, Download } from 'lucide-react';
+import { ArrowLeft, Package, Save, Calendar, Store, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatMonthValue, parseMonthValue } from '@/lib/monthUtils';
 import { createLogger } from '@/lib/logger';
 import { ProductMarketplaceModal } from '@/components/modals/ProductMarketplaceModal';
@@ -91,19 +91,32 @@ export default function ManufacturerCategoryPage() {
   const [saving, setSaving] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<GroupedRequest | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const PAGE_SIZE = 30;
 
   const monthDate = parseMonthValue(month);
   const monthLabel = monthDate.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
+
+  // Reset to page 1 when category or month changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [category, month]);
 
   useEffect(() => {
     async function fetchRequests() {
       setLoading(true);
       try {
-        const res = await fetch(`/api/manufacturer/category/${encodeURIComponent(category)}?month=${month}`);
+        const res = await fetch(`/api/manufacturer/category/${encodeURIComponent(category)}?month=${month}&page=${currentPage}&limit=${PAGE_SIZE}`);
         const data = await res.json();
 
         if (data.success) {
           setRequests(data.data);
+          if (data.pagination) {
+            setTotalPages(data.pagination.totalPages);
+            setTotalItems(data.pagination.total);
+          }
 
           // Group by IWASKU
           const grouped = data.data.reduce((acc: GroupedRequest[], request: Request) => {
@@ -151,7 +164,7 @@ export default function ManufacturerCategoryPage() {
     }
 
     fetchRequests();
-  }, [category, month]);
+  }, [category, month, currentPage]);
 
   const updateEditValue = (
     iwasku: string,
@@ -475,6 +488,36 @@ export default function ManufacturerCategoryPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 px-4 py-3">
+          <p className="text-sm text-gray-600">
+            Toplam <span className="font-medium">{totalItems}</span> talep
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Önceki
+            </button>
+            <span className="text-sm text-gray-700">
+              <span className="font-medium">{currentPage}</span> / {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Sonraki
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}
