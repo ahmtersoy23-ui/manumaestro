@@ -46,11 +46,15 @@ export async function GET(request: NextRequest) {
       ? statusParam.split(',').filter(Boolean)
       : undefined;
 
+    // Optional marketplace filter
+    const marketplaceParam = searchParams.get('marketplace');
+
     // Single query: fetch all request data needed for both stats and summary
     const requests = await prisma.productionRequest.findMany({
       where: {
         productionMonth: month,
         ...(statusFilter && { status: { in: statusFilter as never[] } }),
+        ...(marketplaceParam && { marketplaceId: marketplaceParam }),
       },
       select: {
         iwasku: true,
@@ -59,6 +63,7 @@ export async function GET(request: NextRequest) {
         productSize: true,
         quantity: true,
         producedQuantity: true,
+        status: true,
         marketplace: {
           select: {
             id: true,
@@ -173,10 +178,12 @@ export async function GET(request: NextRequest) {
       const existing = marketplaceMap.get(request.marketplace.id);
       const requestTotalDesi = (request.productSize || 0) * request.quantity;
 
+      const isCompleted = request.status === 'COMPLETED';
       if (existing) {
         existing.totalQuantity += request.quantity;
         existing.totalDesi += requestTotalDesi;
         existing.requestCount += 1;
+        if (isCompleted) { existing.completedCount += 1; existing.completedQty += request.quantity; existing.completedDesi += requestTotalDesi; }
       } else {
         marketplaceMap.set(request.marketplace.id, {
           marketplaceId: request.marketplace.id,
@@ -184,6 +191,9 @@ export async function GET(request: NextRequest) {
           totalQuantity: request.quantity,
           totalDesi: requestTotalDesi,
           requestCount: 1,
+          completedCount: isCompleted ? 1 : 0,
+          completedQty: isCompleted ? request.quantity : 0,
+          completedDesi: isCompleted ? requestTotalDesi : 0,
         });
       }
     });

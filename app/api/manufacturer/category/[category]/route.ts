@@ -51,9 +51,16 @@ export async function GET(
     // Default to current month if not provided
     const productionMonth = monthParam || formatMonthValue(new Date());
 
+    // Optional status filter (comma-separated)
+    const statusParam = searchParams.get('statuses');
+    const statusFilter = statusParam
+      ? statusParam.split(',').filter(Boolean)
+      : undefined;
+
     const where = {
       productCategory: decodeURIComponent(category),
       productionMonth,
+      ...(statusFilter && { status: { in: statusFilter as never[] } }),
     };
 
     // Fetch requests for this category and production month

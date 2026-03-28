@@ -275,9 +275,9 @@ export default function WarehouseStockPage() {
       return sortDir === 'asc' ? cmp : -cmp;
     });
 
-  // Snapshot month options
-  const snapshotMonths = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(); d.setMonth(d.getMonth() - i);
+  // Snapshot month options: next 2 months + current + last 6
+  const snapshotMonths = Array.from({ length: 9 }, (_, i) => {
+    const d = new Date(); d.setMonth(d.getMonth() + 2 - i);
     const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0');
     return `${y}-${m}`;
   });
@@ -560,7 +560,7 @@ export default function WarehouseStockPage() {
               <option value="" className="text-gray-500">Ay seçin...</option>
               {snapshotMonths.map(m => <option key={m} value={m}>{new Date(m + '-01').toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}</option>)}
             </select>
-            <p className="text-xs text-gray-500">Kilitli aylar için otomatik snapshot oluşturulur</p>
+            <p className="text-xs text-gray-500">Snapshot alınan aylar için veri görüntülenir</p>
           </div>
 
           {snapshotLoading && <div className="p-8 text-center text-sm text-gray-400">Yükleniyor...</div>}

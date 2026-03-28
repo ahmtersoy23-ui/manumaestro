@@ -15,6 +15,14 @@ import { ProductMarketplaceModal } from '@/components/modals/ProductMarketplaceM
 
 const logger = createLogger('ManufacturerCategoryPage');
 
+const STATUS_OPTIONS = [
+  { value: 'REQUESTED', label: 'Talep Edildi', color: 'bg-slate-100 text-slate-700 border-slate-300' },
+  { value: 'IN_PRODUCTION', label: 'Üretimde', color: 'bg-blue-100 text-blue-700 border-blue-300' },
+  { value: 'PARTIALLY_PRODUCED', label: 'Kısmen', color: 'bg-amber-100 text-amber-700 border-amber-300' },
+  { value: 'COMPLETED', label: 'Tamamlandı', color: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
+  { value: 'CANCELLED', label: 'İptal', color: 'bg-red-100 text-red-700 border-red-300' },
+] as const;
+
 const PRIORITY_ORDER = { HIGH: 3, MEDIUM: 2, LOW: 1 } as const;
 
 function getHighestPriority(requests: { priority: string }[]): 'HIGH' | 'MEDIUM' | 'LOW' {
@@ -94,21 +102,24 @@ export default function ManufacturerCategoryPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set());
   const PAGE_SIZE = 30;
 
   const monthDate = parseMonthValue(month);
   const monthLabel = monthDate.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
 
-  // Reset to page 1 when category or month changes
+  // Reset to page 1 when category, month, or filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [category, month]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category, month, Array.from(selectedStatuses).join()]);
 
   useEffect(() => {
     async function fetchRequests() {
       setLoading(true);
       try {
-        const res = await fetch(`/api/manufacturer/category/${encodeURIComponent(category)}?month=${month}&page=${currentPage}&limit=${PAGE_SIZE}`);
+        const statusQuery = selectedStatuses.size > 0 ? `&statuses=${Array.from(selectedStatuses).join(',')}` : '';
+        const res = await fetch(`/api/manufacturer/category/${encodeURIComponent(category)}?month=${month}&page=${currentPage}&limit=${PAGE_SIZE}${statusQuery}`);
         const data = await res.json();
 
         if (data.success) {
@@ -164,7 +175,8 @@ export default function ManufacturerCategoryPage() {
     }
 
     fetchRequests();
-  }, [category, month, currentPage]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category, month, currentPage, Array.from(selectedStatuses).join()]);
 
   const updateEditValue = (
     iwasku: string,
@@ -334,6 +346,41 @@ export default function ManufacturerCategoryPage() {
           <Download className={`w-4 h-4 ${exporting ? 'animate-bounce' : ''}`} />
           {exporting ? 'İndiriliyor...' : 'Excel İndir'}
         </button>
+      </div>
+
+      {/* Status Filter */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {STATUS_OPTIONS.map((opt) => {
+          const isActive = selectedStatuses.has(opt.value);
+          return (
+            <button
+              key={opt.value}
+              onClick={() => {
+                setSelectedStatuses(prev => {
+                  const next = new Set(prev);
+                  if (next.has(opt.value)) next.delete(opt.value);
+                  else next.add(opt.value);
+                  return next;
+                });
+              }}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
+                isActive
+                  ? opt.color
+                  : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+        {selectedStatuses.size > 0 && (
+          <button
+            onClick={() => setSelectedStatuses(new Set())}
+            className="px-2 py-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            Temizle
+          </button>
+        )}
       </div>
 
       {/* Requests Table */}

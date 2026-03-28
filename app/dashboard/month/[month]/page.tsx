@@ -15,13 +15,6 @@ import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('MonthDetailPage');
 
-const STATUS_OPTIONS = [
-  { value: 'REQUESTED', label: 'Talep Edildi', color: 'bg-slate-100 text-slate-700 border-slate-300' },
-  { value: 'IN_PRODUCTION', label: 'Üretimde', color: 'bg-blue-100 text-blue-700 border-blue-300' },
-  { value: 'PARTIALLY_PRODUCED', label: 'Kısmen', color: 'bg-amber-100 text-amber-700 border-amber-300' },
-  { value: 'COMPLETED', label: 'Tamamlandı', color: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
-  { value: 'CANCELLED', label: 'İptal', color: 'bg-red-100 text-red-700 border-red-300' },
-] as const;
 import { AddMarketplaceModal } from '@/components/modals/AddMarketplaceModal';
 
 // Production group classification
@@ -58,6 +51,9 @@ interface MarketplaceSummary {
   totalQuantity: number;
   totalDesi: number;
   requestCount: number;
+  completedCount: number;
+  completedQty: number;
+  completedDesi: number;
 }
 
 interface Marketplace {
@@ -97,7 +93,7 @@ export default function MonthDetailPage() {
   const [allMarketplaces, setAllMarketplaces] = useState<Marketplace[]>([]);
   const [monthStats, setMonthStats] = useState({ totalRequests: 0, totalQuantity: 0, totalDesi: 0, itemsWithoutSize: 0 });
   const [viewMode, setViewMode] = useState<'quantity' | 'desi'>('quantity');
-  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set());
+  const [selectedMarketplace, setSelectedMarketplace] = useState<string>('');
   const [showMissingItems, setShowMissingItems] = useState(false);
   const [missingDesiItems, setMissingDesiItems] = useState<MissingDesiItem[]>([]);
   const [showAddMarketplaceModal, setShowAddMarketplaceModal] = useState(false);
@@ -154,7 +150,7 @@ export default function MonthDetailPage() {
         // Fetch marketplaces and monthly summary in parallel
         const [mpRes, res] = await Promise.all([
           fetch('/api/marketplaces'),
-          fetch(`/api/requests/monthly?month=${month}${selectedStatuses.size > 0 ? `&statuses=${Array.from(selectedStatuses).join(',')}` : ''}`),
+          fetch(`/api/requests/monthly?month=${month}${selectedMarketplace ? `&marketplace=${selectedMarketplace}` : ''}`),
         ]);
         const [mpData, data] = await Promise.all([mpRes.json(), res.json()]);
 
@@ -204,8 +200,7 @@ export default function MonthDetailPage() {
     }
 
     fetchData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [month, refreshMarketplaces, Array.from(selectedStatuses).join()]);
+  }, [month, refreshMarketplaces, selectedMarketplace]);
 
   // Fetch snapshot data
   useEffect(() => {
@@ -348,14 +343,14 @@ export default function MonthDetailPage() {
           const totalStock = hasStock ? Array.from(categoryStockMap.values()).reduce((s, c) => ({ coveredQty: s.coveredQty + c.coveredQty, coveredDesi: s.coveredDesi + c.coveredDesi, netQty: s.netQty + c.netQty, netDesi: s.netDesi + c.netDesi }), { coveredQty: 0, coveredDesi: 0, netQty: 0, netDesi: 0 }) : null;
           return (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-white rounded-xl p-5 border-2 border-slate-200 text-center">
-                <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-2">Toplam Talep</p>
+              <div className="bg-white rounded-xl p-5 border-2 border-slate-300 text-center">
+                <p className="text-slate-900 text-xs font-bold uppercase tracking-wider mb-2">Toplam Talep</p>
                 <p className="text-4xl font-black text-slate-900 tabular-nums">{monthStats.totalRequests}</p>
               </div>
-              <div className="bg-white rounded-xl p-5 border-2 border-slate-200 text-center">
+              <div className="bg-white rounded-xl p-5 border-2 border-slate-300 text-center">
                 {hasStock && totalStock ? (
                   <>
-                    <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-2">Net İhtiyaç</p>
+                    <p className="text-slate-900 text-xs font-bold uppercase tracking-wider mb-2">Net İhtiyaç</p>
                     <p className="text-4xl font-black text-slate-900 tabular-nums">
                       {viewMode === 'quantity' ? totalStock.netQty.toLocaleString('tr-TR') : Math.round(totalStock.netDesi).toLocaleString('tr-TR')}
                       <span className="text-lg font-normal text-slate-400 ml-1.5">{viewMode === 'quantity' ? 'adet' : 'desi'}</span>
@@ -366,7 +361,7 @@ export default function MonthDetailPage() {
                   </>
                 ) : (
                   <>
-                    <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-2">Toplam {viewMode === 'quantity' ? 'Miktar' : 'Desi'}</p>
+                    <p className="text-slate-900 text-xs font-bold uppercase tracking-wider mb-2">Toplam {viewMode === 'quantity' ? 'Miktar' : 'Desi'}</p>
                     <p className="text-4xl font-black text-slate-900 tabular-nums">
                       {viewMode === 'quantity' ? monthStats.totalQuantity.toLocaleString('tr-TR') : Math.round(monthStats.totalDesi).toLocaleString('tr-TR')}
                     </p>
@@ -499,39 +494,33 @@ export default function MonthDetailPage() {
               Kategoriye Göre Üretim
             </h2>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {STATUS_OPTIONS.map((opt) => {
-              const isActive = selectedStatuses.has(opt.value);
-              return (
+          {allMarketplaces.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                onClick={() => setSelectedMarketplace('')}
+                className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-all ${
+                  !selectedMarketplace
+                    ? 'bg-slate-800 text-white border-slate-800'
+                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                Tümü
+              </button>
+              {allMarketplaces.map((mp) => (
                 <button
-                  key={opt.value}
-                  onClick={() => {
-                    setSelectedStatuses(prev => {
-                      const next = new Set(prev);
-                      if (next.has(opt.value)) next.delete(opt.value);
-                      else next.add(opt.value);
-                      return next;
-                    });
-                  }}
+                  key={mp.id}
+                  onClick={() => setSelectedMarketplace(selectedMarketplace === mp.id ? '' : mp.id)}
                   className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-all ${
-                    isActive
-                      ? opt.color
-                      : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'
+                    selectedMarketplace === mp.id
+                      ? 'bg-slate-800 text-white border-slate-800'
+                      : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
                   }`}
                 >
-                  {opt.label}
+                  {mp.name}
                 </button>
-              );
-            })}
-            {selectedStatuses.size > 0 && (
-              <button
-                onClick={() => setSelectedStatuses(new Set())}
-                className="px-2 py-1 text-xs text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                Temizle
-              </button>
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {categories.length === 0 ? (
@@ -683,7 +672,11 @@ export default function MonthDetailPage() {
             const requestCount = summary?.requestCount || 0;
             const totalQuantity = summary?.totalQuantity || 0;
             const totalDesi = summary?.totalDesi || 0;
+            const completedCount = summary?.completedCount || 0;
+            const completedQty = summary?.completedQty || 0;
+            const completedDesi = summary?.completedDesi || 0;
             const displayValue = viewMode === 'quantity' ? totalQuantity : Math.round(totalDesi);
+            const completionPct = requestCount > 0 ? Math.round((completedCount / requestCount) * 100) : 0;
 
             // Get slug from code
             const slug = marketplaceSlugMap[mp.code] || mp.code.toLowerCase().replace('_', '-');
@@ -717,7 +710,7 @@ export default function MonthDetailPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-100">
+                <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-gray-100">
                   <div>
                     <p className="text-xs text-gray-600 mb-1">Talep</p>
                     <p className={`text-xl font-bold ${requestCount > 0 ? 'text-gray-900' : 'text-gray-400'}`}>
@@ -729,6 +722,17 @@ export default function MonthDetailPage() {
                     <p className={`text-xl font-bold ${displayValue > 0 ? 'text-purple-600' : 'text-gray-400'}`}>
                       {displayValue}
                     </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1">Tamamlandı</p>
+                    <p className={`text-xl font-bold ${completionPct > 0 ? 'text-emerald-600' : 'text-gray-400'}`}>
+                      {completionPct}%
+                    </p>
+                    {completedCount > 0 && (
+                      <p className="text-[10px] text-gray-400 mt-0.5">
+                        {viewMode === 'quantity' ? `${completedQty} adet` : `${Math.round(completedDesi)} desi`}
+                      </p>
+                    )}
                   </div>
                 </div>
               </Link>
