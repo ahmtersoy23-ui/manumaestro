@@ -116,47 +116,6 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Overall Production Summary */}
-      {overallSummary.totalRequests > 0 && (
-        <div className="bg-gradient-to-r from-purple-600 to-purple-700 rounded-xl p-6 text-white">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Genel Üretim Özeti</h2>
-            {overallSummary.itemsWithoutSize > 0 && (
-              <div className="bg-yellow-500/20 px-3 py-1 rounded-full text-sm">
-                ⚠️ {overallSummary.itemsWithoutSize} üründe desi bilgisi eksik
-              </div>
-            )}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-white/10 rounded-lg p-4">
-              <p className="text-purple-100 text-sm mb-1">Toplam Talep</p>
-              <p className="text-3xl font-bold">{overallSummary.totalRequests}</p>
-            </div>
-            <div className="bg-white/10 rounded-lg p-4">
-              <p className="text-purple-100 text-sm mb-1">Talep Edilen</p>
-              <p className="text-2xl font-bold">{overallSummary.totalQuantity} adet</p>
-              <p className="text-2xl font-bold mt-1">{Math.round(overallSummary.totalDesi)} desi</p>
-            </div>
-            <div className="bg-white/10 rounded-lg p-4">
-              <p className="text-purple-100 text-sm mb-1">Üretilen</p>
-              <p className="text-2xl font-bold">{overallSummary.totalProduced} adet</p>
-              <p className="text-2xl font-bold mt-1">{Math.round(overallSummary.totalProducedDesi)} desi</p>
-            </div>
-            <div className="bg-white/10 rounded-lg p-4">
-              <p className="text-purple-100 text-sm mb-1">Tamamlanma Oranı</p>
-              <p className="text-2xl font-bold">{completionRate}% (adet)</p>
-              <p className="text-2xl font-bold mt-1">{desiCompletionRate}% (desi)</p>
-              <div className="w-full bg-white/20 rounded-full h-2 mt-2">
-                <div
-                  className="bg-white h-2 rounded-full transition-all"
-                  style={{ width: `${Math.min(completionRate, 100)}%` }}
-                ></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Active Months */}
       <div>
         <h2 className="text-xl font-semibold text-gray-900 mb-4">

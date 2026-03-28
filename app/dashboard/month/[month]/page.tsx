@@ -273,34 +273,34 @@ export default function MonthDetailPage() {
       </Link>
 
       {/* Month Header */}
-      <div className="bg-gradient-to-r from-purple-600 to-purple-700 rounded-xl p-4 md:p-8 text-white">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6">
           <div className="flex items-center gap-3">
-            <Calendar className="w-6 h-6 md:w-8 md:h-8" />
-            <h1 className="text-2xl md:text-3xl font-bold">{monthLabel}</h1>
+            <Calendar className="w-6 h-6 md:w-8 md:h-8 text-gray-700" />
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{monthLabel}</h1>
             {isLocked && (
-              <span className="px-3 py-1 bg-white/20 rounded-full text-sm">
+              <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm border border-gray-200">
                 Sadece Görüntüle
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
             <button
               onClick={() => setViewMode('quantity')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                 viewMode === 'quantity'
-                  ? 'bg-white text-purple-700'
-                  : 'bg-white/20 text-white hover:bg-white/30'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               Adet
             </button>
             <button
               onClick={() => setViewMode('desi')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                 viewMode === 'desi'
-                  ? 'bg-white text-purple-700'
-                  : 'bg-white/20 text-white hover:bg-white/30'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               Desi
@@ -309,20 +309,20 @@ export default function MonthDetailPage() {
         </div>
 
         {monthStats.itemsWithoutSize > 0 && (
-          <div className="mb-4">
+          <div className="mb-6">
             <button
               onClick={() => setShowMissingItems(!showMissingItems)}
-              className="w-full bg-yellow-500/20 px-4 py-2 rounded-lg text-sm hover:bg-yellow-500/30 transition-colors flex items-center justify-between"
+              className="w-full bg-amber-50 border border-amber-200 px-4 py-2 rounded-lg text-sm text-amber-800 hover:bg-amber-100 transition-colors flex items-center justify-between"
             >
-              <span>⚠️ {monthStats.itemsWithoutSize} üründe desi bilgisi eksik</span>
+              <span>{monthStats.itemsWithoutSize} üründe desi bilgisi eksik</span>
               <span>{showMissingItems ? '▼' : '▶'}</span>
             </button>
             {showMissingItems && (
-              <div className="mt-2 bg-yellow-500/10 px-4 py-3 rounded-lg text-sm space-y-2">
+              <div className="mt-2 bg-amber-50 border border-amber-200 px-4 py-3 rounded-lg text-sm space-y-2">
                 {missingDesiItems.map((item, index) => (
-                  <div key={index} className="py-1 border-b border-yellow-500/20 last:border-0">
-                    <div className="font-medium text-white">{item.productName}</div>
-                    <div className="text-xs text-white/80 mt-0.5">{item.productCategory}</div>
+                  <div key={index} className="py-1 border-b border-amber-200 last:border-0">
+                    <div className="font-medium text-gray-900">{item.productName}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">{item.productCategory}</div>
                   </div>
                 ))}
               </div>
@@ -330,22 +330,40 @@ export default function MonthDetailPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-          <div className="bg-white/10 rounded-lg p-4">
-            <p className="text-purple-100 text-sm mb-1">Toplam Talep</p>
-            <p className="text-4xl font-bold">{monthStats.totalRequests}</p>
-          </div>
-          <div className="bg-white/10 rounded-lg p-4">
-            <p className="text-purple-100 text-sm mb-1">
-              Toplam {viewMode === 'quantity' ? 'Miktar' : 'Desi'}
-            </p>
-            <p className="text-4xl font-bold">
-              {viewMode === 'quantity'
-                ? monthStats.totalQuantity
-                : Math.round(monthStats.totalDesi)}
-            </p>
-          </div>
-        </div>
+        {/* Summary cards */}
+        {(() => {
+          const hasStock = categoryStockMap.size > 0;
+          const totalStock = hasStock ? Array.from(categoryStockMap.values()).reduce((s, c) => ({ coveredQty: s.coveredQty + c.coveredQty, coveredDesi: s.coveredDesi + c.coveredDesi, netQty: s.netQty + c.netQty, netDesi: s.netDesi + c.netDesi }), { coveredQty: 0, coveredDesi: 0, netQty: 0, netDesi: 0 }) : null;
+          return (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                <p className="text-gray-500 text-sm mb-1">Toplam Talep</p>
+                <p className="text-3xl font-bold text-gray-900">{monthStats.totalRequests}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                {hasStock && totalStock ? (
+                  <>
+                    <p className="text-gray-500 text-sm mb-1">Net İhtiyaç</p>
+                    <p className="text-3xl font-bold text-gray-900">
+                      {viewMode === 'quantity' ? totalStock.netQty : Math.round(totalStock.netDesi)}
+                      <span className="text-base font-normal text-gray-500 ml-1">{viewMode === 'quantity' ? 'adet' : 'desi'}</span>
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Talep: {viewMode === 'quantity' ? monthStats.totalQuantity : Math.round(monthStats.totalDesi)} · Depo: {viewMode === 'quantity' ? totalStock.coveredQty : Math.round(totalStock.coveredDesi)}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-gray-500 text-sm mb-1">Toplam {viewMode === 'quantity' ? 'Miktar' : 'Desi'}</p>
+                    <p className="text-3xl font-bold text-gray-900">
+                      {viewMode === 'quantity' ? monthStats.totalQuantity : Math.round(monthStats.totalDesi)}
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Production group breakdown */}
         {categories.length > 0 && (
@@ -355,7 +373,6 @@ export default function MonthDetailPage() {
               const totalQty = groupCats.reduce((s, c) => s + c.totalQuantity, 0);
               const totalDesi = groupCats.reduce((s, c) => s + c.totalDesi, 0);
               if (totalQty === 0 && totalDesi === 0) return null;
-              // Aggregate snapshot stock for this group
               const groupStock = groupCats.reduce((acc, c) => {
                 const cs = categoryStockMap.get(c.productCategory);
                 if (cs) { acc.coveredQty += cs.coveredQty; acc.coveredDesi += cs.coveredDesi; acc.netQty += cs.netQty; acc.netDesi += cs.netDesi; }
@@ -363,23 +380,23 @@ export default function MonthDetailPage() {
               }, { coveredQty: 0, coveredDesi: 0, netQty: 0, netDesi: 0 });
               const hasStock = categoryStockMap.size > 0;
               const groupColorMap = {
-                orange: 'bg-amber-600 border-amber-400',
-                blue: 'bg-blue-600 border-blue-400',
-                emerald: 'bg-emerald-600 border-emerald-400',
+                orange: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', label: 'text-amber-600', sub: 'text-amber-400' },
+                blue: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', label: 'text-blue-600', sub: 'text-blue-400' },
+                emerald: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', label: 'text-emerald-600', sub: 'text-emerald-400' },
               };
-              const boxColor = groupColorMap[group.color as keyof typeof groupColorMap];
+              const gc = groupColorMap[group.color as keyof typeof groupColorMap];
               const displayQty = hasStock ? groupStock.netQty : totalQty;
               const displayDesi = hasStock ? Math.round(groupStock.netDesi) : Math.round(totalDesi);
               return (
-                <div key={group.key} className={`${boxColor} border rounded-lg p-3 text-center`}>
-                  <p className="text-xs mb-1 text-white/80">{group.label}</p>
-                  <p className="text-2xl font-bold text-white">
+                <div key={group.key} className={`${gc.bg} ${gc.border} border rounded-lg p-3 text-center`}>
+                  <p className={`text-xs mb-1 ${gc.label}`}>{group.label}</p>
+                  <p className={`text-2xl font-bold ${gc.text}`}>
                     {viewMode === 'quantity' ? displayQty : displayDesi}
                   </p>
-                  <p className="text-xs text-white/70 mb-1">{hasStock ? (viewMode === 'quantity' ? 'adet net ihtiyaç' : 'desi net ihtiyaç') : (viewMode === 'quantity' ? 'adet talep' : 'desi talep')}</p>
+                  <p className={`text-xs ${gc.sub} mb-1`}>{hasStock ? 'net ihtiyaç' : (viewMode === 'quantity' ? 'adet' : 'desi')}</p>
                   {hasStock && (
-                    <div className="border-t border-white/20 pt-1 mt-1 space-y-0.5">
-                      <p className="text-[10px] text-white/60">
+                    <div className={`border-t ${gc.border} pt-1 mt-1`}>
+                      <p className={`text-[10px] ${gc.sub}`}>
                         Talep: {viewMode === 'quantity' ? totalQty : Math.round(totalDesi)} · Depo: {viewMode === 'quantity' ? groupStock.coveredQty : Math.round(groupStock.coveredDesi)}
                       </p>
                     </div>
