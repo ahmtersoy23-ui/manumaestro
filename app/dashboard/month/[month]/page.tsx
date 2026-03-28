@@ -314,15 +314,15 @@ export default function MonthDetailPage() {
           <div className="mb-6">
             <button
               onClick={() => setShowMissingItems(!showMissingItems)}
-              className="w-full bg-orange-50/80 border border-orange-200/60 px-4 py-2 rounded-lg text-sm text-orange-700 hover:bg-orange-50 transition-colors flex items-center justify-between"
+              className="w-full bg-blue-50 border border-blue-200 px-4 py-2 rounded-lg text-sm text-blue-700 hover:bg-blue-100 transition-colors flex items-center justify-between"
             >
               <span>{monthStats.itemsWithoutSize} üründe desi bilgisi eksik</span>
-              <span className="text-orange-400">{showMissingItems ? '▼' : '▶'}</span>
+              <span className="text-blue-400">{showMissingItems ? '▼' : '▶'}</span>
             </button>
             {showMissingItems && (
-              <div className="mt-2 bg-orange-50/50 border border-orange-200/40 px-4 py-3 rounded-lg text-sm space-y-2">
+              <div className="mt-2 bg-blue-50/70 border border-blue-200 px-4 py-3 rounded-lg text-sm space-y-2">
                 {missingDesiItems.map((item, index) => (
-                  <div key={index} className="py-1 border-b border-orange-100 last:border-0">
+                  <div key={index} className="py-1 border-b border-blue-100 last:border-0">
                     <div className="font-medium text-slate-800">{item.productName}</div>
                     <div className="text-xs text-slate-400 mt-0.5">{item.productCategory}</div>
                   </div>
@@ -338,14 +338,14 @@ export default function MonthDetailPage() {
           const totalStock = hasStock ? Array.from(categoryStockMap.values()).reduce((s, c) => ({ coveredQty: s.coveredQty + c.coveredQty, coveredDesi: s.coveredDesi + c.coveredDesi, netQty: s.netQty + c.netQty, netDesi: s.netDesi + c.netDesi }), { coveredQty: 0, coveredDesi: 0, netQty: 0, netDesi: 0 }) : null;
           return (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-                <p className="text-slate-400 text-xs font-medium uppercase tracking-wider mb-2">Toplam Talep</p>
+              <div className="bg-white rounded-xl p-5 border border-slate-200 text-center">
+                <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">Toplam Talep</p>
                 <p className="text-4xl font-bold text-slate-900 tabular-nums">{monthStats.totalRequests}</p>
               </div>
-              <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+              <div className="bg-white rounded-xl p-5 border border-slate-200 text-center">
                 {hasStock && totalStock ? (
                   <>
-                    <p className="text-slate-400 text-xs font-medium uppercase tracking-wider mb-2">Net İhtiyaç</p>
+                    <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">Net İhtiyaç</p>
                     <p className="text-4xl font-bold text-slate-900 tabular-nums">
                       {viewMode === 'quantity' ? totalStock.netQty.toLocaleString('tr-TR') : Math.round(totalStock.netDesi).toLocaleString('tr-TR')}
                       <span className="text-lg font-normal text-slate-400 ml-1.5">{viewMode === 'quantity' ? 'adet' : 'desi'}</span>
@@ -356,7 +356,7 @@ export default function MonthDetailPage() {
                   </>
                 ) : (
                   <>
-                    <p className="text-slate-400 text-xs font-medium uppercase tracking-wider mb-2">Toplam {viewMode === 'quantity' ? 'Miktar' : 'Desi'}</p>
+                    <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">Toplam {viewMode === 'quantity' ? 'Miktar' : 'Desi'}</p>
                     <p className="text-4xl font-bold text-slate-900 tabular-nums">
                       {viewMode === 'quantity' ? monthStats.totalQuantity.toLocaleString('tr-TR') : Math.round(monthStats.totalDesi).toLocaleString('tr-TR')}
                     </p>
@@ -382,7 +382,7 @@ export default function MonthDetailPage() {
               }, { coveredQty: 0, coveredDesi: 0, netQty: 0, netDesi: 0 });
               const hasStock = categoryStockMap.size > 0;
               const groupColorMap = {
-                orange: { bg: 'bg-amber-50', border: 'border-amber-300', text: 'text-amber-800', label: 'text-amber-600', sub: 'text-amber-500' },
+                orange: { bg: 'bg-rose-50', border: 'border-rose-300', text: 'text-rose-800', label: 'text-rose-600', sub: 'text-rose-500' },
                 blue: { bg: 'bg-sky-50', border: 'border-sky-300', text: 'text-sky-800', label: 'text-sky-600', sub: 'text-sky-500' },
                 emerald: { bg: 'bg-teal-50', border: 'border-teal-300', text: 'text-teal-800', label: 'text-teal-600', sub: 'text-teal-500' },
               };
@@ -504,7 +504,7 @@ export default function MonthDetailPage() {
               if (groupCats.length === 0) return null;
               const GroupIcon = group.icon;
               const colorMap = {
-                orange: { bg: 'bg-orange-100', hoverBg: 'group-hover:bg-orange-200', text: 'text-orange-600', border: 'hover:border-orange-500', value: 'text-orange-600' },
+                orange: { bg: 'bg-rose-100', hoverBg: 'group-hover:bg-rose-200', text: 'text-rose-600', border: 'hover:border-rose-500', value: 'text-rose-600' },
                 blue: { bg: 'bg-blue-100', hoverBg: 'group-hover:bg-blue-200', text: 'text-blue-600', border: 'hover:border-blue-500', value: 'text-blue-600' },
                 emerald: { bg: 'bg-emerald-100', hoverBg: 'group-hover:bg-emerald-200', text: 'text-emerald-600', border: 'hover:border-emerald-500', value: 'text-emerald-600' },
               };
