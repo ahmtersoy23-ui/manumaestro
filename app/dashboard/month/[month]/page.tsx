@@ -8,13 +8,31 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Calendar, Package, ShoppingCart, Factory, ArrowLeft, Plus, ChevronDown, ChevronUp, Warehouse, Pencil } from 'lucide-react';
+import { Calendar, Package, ShoppingCart, Factory, ArrowLeft, Plus, ChevronDown, ChevronUp, Warehouse, Pencil, Hammer, Sofa, ShoppingBag } from 'lucide-react';
 import { parseMonthValue, isMonthLocked } from '@/lib/monthUtils';
 import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('MonthDetailPage');
 import { AddMarketplaceModal } from '@/components/modals/AddMarketplaceModal';
+
+// Production group classification
+const HAZIR_ALIM_CATEGORIES = ['Alsat', 'Tekstil'];
+const MOBILYA_CATEGORIES = ['Mobilya'];
+
+type ProductionGroup = 'fabrika' | 'mobilya' | 'hazirAlim';
+
+function getProductionGroup(categoryName: string): ProductionGroup {
+  if (HAZIR_ALIM_CATEGORIES.includes(categoryName)) return 'hazirAlim';
+  if (MOBILYA_CATEGORIES.includes(categoryName)) return 'mobilya';
+  return 'fabrika';
+}
+
+const PRODUCTION_GROUPS = [
+  { key: 'fabrika' as const, label: 'IWA Fabrika', icon: Hammer, color: 'orange' },
+  { key: 'mobilya' as const, label: 'CİTİ Mobilya', icon: Sofa, color: 'blue' },
+  { key: 'hazirAlim' as const, label: 'Hazır Alım', icon: ShoppingBag, color: 'emerald' },
+];
 
 interface CategorySummary {
   productCategory: string;
@@ -271,6 +289,27 @@ export default function MonthDetailPage() {
             </p>
           </div>
         </div>
+
+        {/* Production group breakdown */}
+        {categories.length > 0 && (
+          <div className="grid grid-cols-3 gap-3 mt-4">
+            {PRODUCTION_GROUPS.map((group) => {
+              const groupCats = categories.filter(c => getProductionGroup(c.productCategory) === group.key);
+              const totalQty = groupCats.reduce((s, c) => s + c.totalQuantity, 0);
+              const totalDesi = groupCats.reduce((s, c) => s + c.totalDesi, 0);
+              if (totalQty === 0 && totalDesi === 0) return null;
+              return (
+                <div key={group.key} className="bg-white/10 rounded-lg p-3 text-center">
+                  <p className="text-purple-200 text-xs mb-1">{group.label}</p>
+                  <p className="text-2xl font-bold">
+                    {viewMode === 'quantity' ? totalQty : Math.round(totalDesi)}
+                  </p>
+                  <p className="text-purple-200 text-xs">{viewMode === 'quantity' ? 'adet' : 'desi'}</p>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Snapshot Panel - only for locked months with data */}
@@ -340,88 +379,107 @@ export default function MonthDetailPage() {
             <p className="text-gray-600">Bu ay için üretim talebi bulunmuyor</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {categories.map((category) => (
-              <Link
-                key={category.productCategory}
-                href={`/dashboard/manufacturer/${encodeURIComponent(category.productCategory)}?month=${month}`}
-                className="block p-6 bg-white rounded-xl border-2 border-gray-200 hover:border-orange-500 hover:shadow-lg transition-all group"
-              >
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-orange-100 rounded-lg group-hover:bg-orange-200 transition-colors">
-                    <Package className="w-6 h-6 text-orange-600" />
+          <div className="space-y-8">
+            {PRODUCTION_GROUPS.map((group) => {
+              const groupCats = categories.filter(c => getProductionGroup(c.productCategory) === group.key);
+              if (groupCats.length === 0) return null;
+              const GroupIcon = group.icon;
+              const colorMap = {
+                orange: { bg: 'bg-orange-100', hoverBg: 'group-hover:bg-orange-200', text: 'text-orange-600', border: 'hover:border-orange-500', value: 'text-orange-600' },
+                blue: { bg: 'bg-blue-100', hoverBg: 'group-hover:bg-blue-200', text: 'text-blue-600', border: 'hover:border-blue-500', value: 'text-blue-600' },
+                emerald: { bg: 'bg-emerald-100', hoverBg: 'group-hover:bg-emerald-200', text: 'text-emerald-600', border: 'hover:border-emerald-500', value: 'text-emerald-600' },
+              };
+              const colors = colorMap[group.color as keyof typeof colorMap];
+              return (
+                <div key={group.key}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <GroupIcon className={`w-5 h-5 ${colors.text}`} />
+                    <h3 className="text-lg font-semibold text-gray-800">{group.label}</h3>
+                    <span className="text-sm text-gray-500">
+                      ({groupCats.length} kategori)
+                    </span>
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    {category.productCategory}
-                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {groupCats.map((category) => (
+                      <Link
+                        key={category.productCategory}
+                        href={`/dashboard/manufacturer/${encodeURIComponent(category.productCategory)}?month=${month}`}
+                        className={`block p-6 bg-white rounded-xl border-2 border-gray-200 ${colors.border} hover:shadow-lg transition-all group`}
+                      >
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className={`p-2 ${colors.bg} rounded-lg ${colors.hoverBg} transition-colors`}>
+                            <Package className={`w-6 h-6 ${colors.text}`} />
+                          </div>
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            {category.productCategory}
+                          </h3>
+                        </div>
+
+                        <div className="space-y-3 mt-4 pt-4 border-t border-gray-100">
+                          <div className="flex justify-between items-center">
+                            <p className="text-xs text-gray-600">Ürün</p>
+                            <p className="text-sm font-bold text-gray-900">{category.requestCount}</p>
+                          </div>
+
+                          {viewMode === 'desi' && category.itemsWithoutSize > 0 && (
+                            <div className="text-xs text-yellow-600 bg-yellow-50 px-2 py-1 rounded">
+                              {category.itemsWithoutSize} üründe desi eksik
+                            </div>
+                          )}
+
+                          <div className="flex justify-between items-center">
+                            <p className="text-xs text-gray-600">Talep Edilen</p>
+                            <p className={`text-sm font-bold ${colors.value}`}>
+                              {viewMode === 'quantity'
+                                ? `${category.totalQuantity} adet`
+                                : `${Math.round(category.totalDesi)} desi`}
+                            </p>
+                          </div>
+
+                          <div className="flex justify-between items-center">
+                            <p className="text-xs text-gray-600">Üretilen</p>
+                            <p className="text-sm font-bold text-green-600">
+                              {viewMode === 'quantity'
+                                ? `${Math.round(category.totalProduced)} adet`
+                                : `${Math.round(category.producedDesi)} desi`}
+                            </p>
+                          </div>
+
+                          <div>
+                            <div className="flex justify-between items-center mb-1">
+                              <p className="text-xs text-gray-600">İlerleme</p>
+                              <p className="text-xs font-semibold text-gray-900">
+                                {viewMode === 'quantity'
+                                  ? (category.totalQuantity > 0
+                                      ? Math.round((category.totalProduced / category.totalQuantity) * 100)
+                                      : 0)
+                                  : (category.totalDesi > 0
+                                      ? Math.round((category.producedDesi / category.totalDesi) * 100)
+                                      : 0)}%
+                              </p>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div
+                                className="bg-gradient-to-r from-orange-500 to-green-500 h-2 rounded-full transition-all"
+                                style={{
+                                  width: `${viewMode === 'quantity'
+                                    ? (category.totalQuantity > 0
+                                        ? Math.min((category.totalProduced / category.totalQuantity) * 100, 100)
+                                        : 0)
+                                    : (category.totalDesi > 0
+                                        ? Math.min((category.producedDesi / category.totalDesi) * 100, 100)
+                                        : 0)}%`
+                                }}
+                              ></div>
+                            </div>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
                 </div>
-
-                <div className="space-y-3 mt-4 pt-4 border-t border-gray-100">
-                  {/* Items count */}
-                  <div className="flex justify-between items-center">
-                    <p className="text-xs text-gray-600">Ürün</p>
-                    <p className="text-sm font-bold text-gray-900">{category.requestCount}</p>
-                  </div>
-
-                  {/* Warning for missing desi */}
-                  {viewMode === 'desi' && category.itemsWithoutSize > 0 && (
-                    <div className="text-xs text-yellow-600 bg-yellow-50 px-2 py-1 rounded">
-                      ⚠️ {category.itemsWithoutSize} üründe desi eksik
-                    </div>
-                  )}
-
-                  {/* Requested */}
-                  <div className="flex justify-between items-center">
-                    <p className="text-xs text-gray-600">Talep Edilen</p>
-                    <p className="text-sm font-bold text-orange-600">
-                      {viewMode === 'quantity'
-                        ? `${category.totalQuantity} adet`
-                        : `${Math.round(category.totalDesi)} desi`}
-                    </p>
-                  </div>
-
-                  {/* Produced */}
-                  <div className="flex justify-between items-center">
-                    <p className="text-xs text-gray-600">Üretilen</p>
-                    <p className="text-sm font-bold text-green-600">
-                      {viewMode === 'quantity'
-                        ? `${Math.round(category.totalProduced)} adet`
-                        : `${Math.round(category.producedDesi)} desi`}
-                    </p>
-                  </div>
-
-                  {/* Progress bar */}
-                  <div>
-                    <div className="flex justify-between items-center mb-1">
-                      <p className="text-xs text-gray-600">İlerleme</p>
-                      <p className="text-xs font-semibold text-gray-900">
-                        {viewMode === 'quantity'
-                          ? (category.totalQuantity > 0
-                              ? Math.round((category.totalProduced / category.totalQuantity) * 100)
-                              : 0)
-                          : (category.totalDesi > 0
-                              ? Math.round((category.producedDesi / category.totalDesi) * 100)
-                              : 0)}%
-                      </p>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-gradient-to-r from-orange-500 to-green-500 h-2 rounded-full transition-all"
-                        style={{
-                          width: `${viewMode === 'quantity'
-                            ? (category.totalQuantity > 0
-                                ? Math.min((category.totalProduced / category.totalQuantity) * 100, 100)
-                                : 0)
-                            : (category.totalDesi > 0
-                                ? Math.min((category.producedDesi / category.totalDesi) * 100, 100)
-                                : 0)}%`
-                        }}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
