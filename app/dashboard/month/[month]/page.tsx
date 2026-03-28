@@ -273,34 +273,36 @@ export default function MonthDetailPage() {
       </Link>
 
       {/* Month Header */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-8">
+      <div className="bg-gradient-to-b from-slate-50 to-white rounded-2xl border border-slate-200/60 shadow-sm p-5 md:p-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6">
           <div className="flex items-center gap-3">
-            <Calendar className="w-6 h-6 md:w-8 md:h-8 text-gray-700" />
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{monthLabel}</h1>
-            {isLocked && (
-              <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm border border-gray-200">
-                Sadece Görüntüle
-              </span>
-            )}
+            <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
+              <Calendar className="w-5 h-5 text-slate-600" />
+            </div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">{monthLabel}</h1>
+              {isLocked && (
+                <span className="text-xs text-slate-400">Sadece Görüntüle</span>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+          <div className="flex items-center gap-1 bg-slate-100/80 rounded-lg p-1">
             <button
               onClick={() => setViewMode('quantity')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
                 viewMode === 'quantity'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               Adet
             </button>
             <button
               onClick={() => setViewMode('desi')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
                 viewMode === 'desi'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               Desi
@@ -312,17 +314,17 @@ export default function MonthDetailPage() {
           <div className="mb-6">
             <button
               onClick={() => setShowMissingItems(!showMissingItems)}
-              className="w-full bg-amber-50 border border-amber-200 px-4 py-2 rounded-lg text-sm text-amber-800 hover:bg-amber-100 transition-colors flex items-center justify-between"
+              className="w-full bg-orange-50/80 border border-orange-200/60 px-4 py-2 rounded-lg text-sm text-orange-700 hover:bg-orange-50 transition-colors flex items-center justify-between"
             >
               <span>{monthStats.itemsWithoutSize} üründe desi bilgisi eksik</span>
-              <span>{showMissingItems ? '▼' : '▶'}</span>
+              <span className="text-orange-400">{showMissingItems ? '▼' : '▶'}</span>
             </button>
             {showMissingItems && (
-              <div className="mt-2 bg-amber-50 border border-amber-200 px-4 py-3 rounded-lg text-sm space-y-2">
+              <div className="mt-2 bg-orange-50/50 border border-orange-200/40 px-4 py-3 rounded-lg text-sm space-y-2">
                 {missingDesiItems.map((item, index) => (
-                  <div key={index} className="py-1 border-b border-amber-200 last:border-0">
-                    <div className="font-medium text-gray-900">{item.productName}</div>
-                    <div className="text-xs text-gray-500 mt-0.5">{item.productCategory}</div>
+                  <div key={index} className="py-1 border-b border-orange-100 last:border-0">
+                    <div className="font-medium text-slate-800">{item.productName}</div>
+                    <div className="text-xs text-slate-400 mt-0.5">{item.productCategory}</div>
                   </div>
                 ))}
               </div>
@@ -336,27 +338,27 @@ export default function MonthDetailPage() {
           const totalStock = hasStock ? Array.from(categoryStockMap.values()).reduce((s, c) => ({ coveredQty: s.coveredQty + c.coveredQty, coveredDesi: s.coveredDesi + c.coveredDesi, netQty: s.netQty + c.netQty, netDesi: s.netDesi + c.netDesi }), { coveredQty: 0, coveredDesi: 0, netQty: 0, netDesi: 0 }) : null;
           return (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
-                <p className="text-gray-500 text-sm mb-1">Toplam Talep</p>
-                <p className="text-3xl font-bold text-gray-900">{monthStats.totalRequests}</p>
+              <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                <p className="text-slate-400 text-xs font-medium uppercase tracking-wider mb-2">Toplam Talep</p>
+                <p className="text-4xl font-bold text-slate-900 tabular-nums">{monthStats.totalRequests}</p>
               </div>
-              <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+              <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                 {hasStock && totalStock ? (
                   <>
-                    <p className="text-gray-500 text-sm mb-1">Net İhtiyaç</p>
-                    <p className="text-3xl font-bold text-gray-900">
-                      {viewMode === 'quantity' ? totalStock.netQty : Math.round(totalStock.netDesi)}
-                      <span className="text-base font-normal text-gray-500 ml-1">{viewMode === 'quantity' ? 'adet' : 'desi'}</span>
+                    <p className="text-slate-400 text-xs font-medium uppercase tracking-wider mb-2">Net İhtiyaç</p>
+                    <p className="text-4xl font-bold text-slate-900 tabular-nums">
+                      {viewMode === 'quantity' ? totalStock.netQty.toLocaleString('tr-TR') : Math.round(totalStock.netDesi).toLocaleString('tr-TR')}
+                      <span className="text-lg font-normal text-slate-400 ml-1.5">{viewMode === 'quantity' ? 'adet' : 'desi'}</span>
                     </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      Talep: {viewMode === 'quantity' ? monthStats.totalQuantity : Math.round(monthStats.totalDesi)} · Depo: {viewMode === 'quantity' ? totalStock.coveredQty : Math.round(totalStock.coveredDesi)}
+                    <p className="text-xs text-slate-400 mt-2">
+                      Talep {viewMode === 'quantity' ? monthStats.totalQuantity.toLocaleString('tr-TR') : Math.round(monthStats.totalDesi).toLocaleString('tr-TR')} · Depo {viewMode === 'quantity' ? totalStock.coveredQty.toLocaleString('tr-TR') : Math.round(totalStock.coveredDesi).toLocaleString('tr-TR')}
                     </p>
                   </>
                 ) : (
                   <>
-                    <p className="text-gray-500 text-sm mb-1">Toplam {viewMode === 'quantity' ? 'Miktar' : 'Desi'}</p>
-                    <p className="text-3xl font-bold text-gray-900">
-                      {viewMode === 'quantity' ? monthStats.totalQuantity : Math.round(monthStats.totalDesi)}
+                    <p className="text-slate-400 text-xs font-medium uppercase tracking-wider mb-2">Toplam {viewMode === 'quantity' ? 'Miktar' : 'Desi'}</p>
+                    <p className="text-4xl font-bold text-slate-900 tabular-nums">
+                      {viewMode === 'quantity' ? monthStats.totalQuantity.toLocaleString('tr-TR') : Math.round(monthStats.totalDesi).toLocaleString('tr-TR')}
                     </p>
                   </>
                 )}
@@ -380,26 +382,24 @@ export default function MonthDetailPage() {
               }, { coveredQty: 0, coveredDesi: 0, netQty: 0, netDesi: 0 });
               const hasStock = categoryStockMap.size > 0;
               const groupColorMap = {
-                orange: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', label: 'text-amber-600', sub: 'text-amber-400' },
-                blue: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', label: 'text-blue-600', sub: 'text-blue-400' },
-                emerald: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', label: 'text-emerald-600', sub: 'text-emerald-400' },
+                orange: { bg: 'bg-amber-50/60', border: 'border-amber-200/50', text: 'text-amber-700', label: 'text-amber-500', sub: 'text-amber-400/80' },
+                blue: { bg: 'bg-sky-50/60', border: 'border-sky-200/50', text: 'text-sky-700', label: 'text-sky-500', sub: 'text-sky-400/80' },
+                emerald: { bg: 'bg-teal-50/60', border: 'border-teal-200/50', text: 'text-teal-700', label: 'text-teal-500', sub: 'text-teal-400/80' },
               };
               const gc = groupColorMap[group.color as keyof typeof groupColorMap];
               const displayQty = hasStock ? groupStock.netQty : totalQty;
               const displayDesi = hasStock ? Math.round(groupStock.netDesi) : Math.round(totalDesi);
               return (
-                <div key={group.key} className={`${gc.bg} ${gc.border} border rounded-lg p-3 text-center`}>
-                  <p className={`text-xs mb-1 ${gc.label}`}>{group.label}</p>
-                  <p className={`text-2xl font-bold ${gc.text}`}>
-                    {viewMode === 'quantity' ? displayQty : displayDesi}
+                <div key={group.key} className={`${gc.bg} ${gc.border} border rounded-xl p-4 text-center`}>
+                  <p className={`text-[11px] font-medium uppercase tracking-wider mb-1.5 ${gc.label}`}>{group.label}</p>
+                  <p className={`text-2xl font-bold tabular-nums ${gc.text}`}>
+                    {viewMode === 'quantity' ? displayQty.toLocaleString('tr-TR') : displayDesi.toLocaleString('tr-TR')}
                   </p>
-                  <p className={`text-xs ${gc.sub} mb-1`}>{hasStock ? 'net ihtiyaç' : (viewMode === 'quantity' ? 'adet' : 'desi')}</p>
+                  <p className={`text-[11px] ${gc.sub} mt-0.5`}>{hasStock ? 'net ihtiyaç' : (viewMode === 'quantity' ? 'adet' : 'desi')}</p>
                   {hasStock && (
-                    <div className={`border-t ${gc.border} pt-1 mt-1`}>
-                      <p className={`text-[10px] ${gc.sub}`}>
-                        Talep: {viewMode === 'quantity' ? totalQty : Math.round(totalDesi)} · Depo: {viewMode === 'quantity' ? groupStock.coveredQty : Math.round(groupStock.coveredDesi)}
-                      </p>
-                    </div>
+                    <p className={`text-[10px] ${gc.sub} mt-2 pt-2 border-t ${gc.border}`}>
+                      Talep {viewMode === 'quantity' ? totalQty.toLocaleString('tr-TR') : Math.round(totalDesi).toLocaleString('tr-TR')} · Depo {viewMode === 'quantity' ? groupStock.coveredQty.toLocaleString('tr-TR') : Math.round(groupStock.coveredDesi).toLocaleString('tr-TR')}
+                    </p>
                   )}
                 </div>
               );
