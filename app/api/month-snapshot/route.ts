@@ -1,6 +1,7 @@
 /**
  * Month Snapshot API
  * GET: Read snapshot for a locked month (auto-generates if missing)
+ * POST: Manually trigger snapshot generation (admin only, any month)
  * Snapshot captures current warehouse "mevcut" at month boundary.
  */
 
@@ -66,17 +67,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'month parametresi gerekli' }, { status: 400 });
     }
 
-    if (!isMonthLocked(month)) {
-      return NextResponse.json({
-        success: true,
-        data: { month, locked: false, snapshots: [] },
-      });
-    }
+    const locked = isMonthLocked(month);
 
-    // Lazy trigger: generate if missing
-    const existingCount = await prisma.monthSnapshot.count({ where: { month } });
-    if (existingCount === 0) {
-      await generateSnapshot(month);
+    // Lazy trigger: generate if missing (only for locked months)
+    if (locked) {
+      const existingCount = await prisma.monthSnapshot.count({ where: { month } });
+      if (existingCount === 0) {
+        await generateSnapshot(month);
+      }
     }
 
     // Fetch snapshots
@@ -118,7 +116,7 @@ export async function GET(request: NextRequest) {
       success: true,
       data: {
         month,
-        locked: true,
+        locked,
         snapshotCount: snapshots.length,
         summary: { totalRequested, totalStock, totalNet },
         snapshots: enriched,
@@ -126,5 +124,38 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     return errorResponse(error, 'Snapshot verisi getirilemedi');
+  }
+}
+
+/**
+ * POST: Manually trigger snapshot generation (admin only)
+ * Forces regeneration even if snapshots already exist (upsert)
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const auth = await verifyAuth(request);
+    if (!auth.success || !auth.user) {
+      return NextResponse.json({ success: false, error: auth.error }, { status: 401 });
+    }
+    if (auth.user.role !== 'admin') {
+      return NextResponse.json({ success: false, error: 'Yalnızca admin kullanabilir' }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const month = body.month;
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+      return NextResponse.json({ success: false, error: 'Geçerli month parametresi gerekli (YYYY-MM)' }, { status: 400 });
+    }
+
+    await generateSnapshot(month);
+
+    const count = await prisma.monthSnapshot.count({ where: { month } });
+
+    return NextResponse.json({
+      success: true,
+      data: { month, snapshotCount: count, message: `${count} ürün için snapshot alındı` },
+    });
+  } catch (error) {
+    return errorResponse(error, 'Snapshot oluşturulamadı');
   }
 }

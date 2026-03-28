@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Calendar, Package, ShoppingCart, Factory, ArrowLeft, Plus, ChevronDown, ChevronUp, Warehouse, Pencil, Hammer, Sofa, ShoppingBag } from 'lucide-react';
+import { Calendar, Package, ShoppingCart, Factory, ArrowLeft, Plus, ChevronDown, ChevronUp, Warehouse, Pencil, Hammer, Sofa, ShoppingBag, Camera } from 'lucide-react';
 import { parseMonthValue, isMonthLocked } from '@/lib/monthUtils';
 import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
@@ -109,6 +109,7 @@ export default function MonthDetailPage() {
     snapshots: SnapshotItem[];
   } | null>(null);
   const [snapshotOpen, setSnapshotOpen] = useState(false);
+  const [snapshotGenerating, setSnapshotGenerating] = useState(false);
 
   const monthDate = parseMonthValue(month);
   const monthLabel = monthDate.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
@@ -173,25 +174,58 @@ export default function MonthDetailPage() {
     fetchData();
   }, [month, refreshMarketplaces]);
 
-  // Fetch snapshot for locked months
+  // Fetch snapshot data
   useEffect(() => {
-    if (!isLocked) return;
     async function fetchSnapshot() {
       try {
         const res = await fetch(`/api/month-snapshot?month=${month}`);
         const data = await res.json();
-        if (data.success && data.data.locked && data.data.snapshots.length > 0) {
+        if (data.success && data.data.snapshots?.length > 0) {
           setSnapshotData({
             summary: data.data.summary,
             snapshots: data.data.snapshots,
           });
+        } else {
+          setSnapshotData(null);
         }
       } catch (error) {
         logger.error('Failed to fetch snapshot:', error);
       }
     }
     fetchSnapshot();
-  }, [month, isLocked]);
+  }, [month]);
+
+  const handleGenerateSnapshot = async () => {
+    if (!confirm(`${month} ayı için depo snapshot'ı alınsın mı? Mevcut snapshot varsa güncellenecek.`)) return;
+    setSnapshotGenerating(true);
+    try {
+      const res = await fetch('/api/month-snapshot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ month }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`${data.data.message}`);
+        // Refresh snapshot data
+        const snapRes = await fetch(`/api/month-snapshot?month=${month}`);
+        const snapData = await snapRes.json();
+        if (snapData.success && snapData.data.snapshots.length > 0) {
+          setSnapshotData({
+            summary: snapData.data.summary,
+            snapshots: snapData.data.snapshots,
+          });
+        }
+      } else {
+        alert(data.error || 'Snapshot alınamadı');
+      }
+    } catch (error) {
+      logger.error('Snapshot generation failed:', error);
+      alert('Snapshot alınamadı');
+    } finally {
+      setSnapshotGenerating(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -298,13 +332,19 @@ export default function MonthDetailPage() {
               const totalQty = groupCats.reduce((s, c) => s + c.totalQuantity, 0);
               const totalDesi = groupCats.reduce((s, c) => s + c.totalDesi, 0);
               if (totalQty === 0 && totalDesi === 0) return null;
+              const groupColorMap = {
+                orange: 'bg-orange-500/30 text-orange-100',
+                blue: 'bg-blue-500/30 text-blue-100',
+                emerald: 'bg-emerald-500/30 text-emerald-100',
+              };
+              const boxColor = groupColorMap[group.color as keyof typeof groupColorMap];
               return (
-                <div key={group.key} className="bg-white/10 rounded-lg p-3 text-center">
-                  <p className="text-purple-200 text-xs mb-1">{group.label}</p>
-                  <p className="text-2xl font-bold">
+                <div key={group.key} className={`${boxColor} rounded-lg p-3 text-center`}>
+                  <p className="text-xs mb-1 opacity-80">{group.label}</p>
+                  <p className="text-2xl font-bold text-white">
                     {viewMode === 'quantity' ? totalQty : Math.round(totalDesi)}
                   </p>
-                  <p className="text-purple-200 text-xs">{viewMode === 'quantity' ? 'adet' : 'desi'}</p>
+                  <p className="text-xs opacity-80">{viewMode === 'quantity' ? 'adet' : 'desi'}</p>
                 </div>
               );
             })}
@@ -312,7 +352,18 @@ export default function MonthDetailPage() {
         )}
       </div>
 
-      {/* Snapshot Panel - only for locked months with data */}
+      {/* Snapshot: Admin trigger + data panel */}
+      {role === 'admin' && !snapshotData && (
+        <button
+          onClick={handleGenerateSnapshot}
+          disabled={snapshotGenerating}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-50 border-2 border-dashed border-emerald-300 rounded-xl text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-50"
+        >
+          <Camera className={`w-5 h-5 ${snapshotGenerating ? 'animate-pulse' : ''}`} />
+          {snapshotGenerating ? 'Snapshot alınıyor...' : 'Depo Snapshot Al'}
+        </button>
+      )}
+
       {snapshotData && (
         <div className="bg-white rounded-xl border border-emerald-200 overflow-hidden">
           <button
@@ -328,7 +379,19 @@ export default function MonthDetailPage() {
                 </p>
               </div>
             </div>
-            {snapshotOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+            <div className="flex items-center gap-2">
+              {role === 'admin' && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleGenerateSnapshot(); }}
+                  disabled={snapshotGenerating}
+                  className="px-3 py-1 text-xs font-medium text-emerald-700 bg-emerald-100 border border-emerald-200 rounded-lg hover:bg-emerald-200 transition-colors disabled:opacity-50"
+                  title="Snapshot'ı güncelle"
+                >
+                  <Camera className={`w-3.5 h-3.5 ${snapshotGenerating ? 'animate-pulse' : ''}`} />
+                </button>
+              )}
+              {snapshotOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+            </div>
           </button>
           {snapshotOpen && (
             <div className="overflow-x-auto">
