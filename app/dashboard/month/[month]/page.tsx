@@ -103,6 +103,7 @@ export default function MonthDetailPage() {
     totalRequested: number;
     warehouseStock: number;
     netProduction: number;
+    desi: number | null;
   }
   const [snapshotData, setSnapshotData] = useState<{
     summary: { totalRequested: number; totalStock: number; totalNet: number };
@@ -110,6 +111,28 @@ export default function MonthDetailPage() {
   } | null>(null);
   const [snapshotOpen, setSnapshotOpen] = useState(false);
   const [snapshotGenerating, setSnapshotGenerating] = useState(false);
+
+  // Derive per-category stock info from snapshot
+  interface CategoryStock {
+    coveredQty: number;   // min(stock, requested) per product, summed
+    coveredDesi: number;
+    netQty: number;       // max(0, requested - stock) per product, summed
+    netDesi: number;
+  }
+  const categoryStockMap = new Map<string, CategoryStock>();
+  if (snapshotData) {
+    for (const s of snapshotData.snapshots) {
+      const existing = categoryStockMap.get(s.productCategory) || { coveredQty: 0, coveredDesi: 0, netQty: 0, netDesi: 0 };
+      const covered = Math.min(s.warehouseStock, s.totalRequested);
+      const net = Math.max(0, s.totalRequested - s.warehouseStock);
+      const desiPerUnit = s.desi || 0;
+      existing.coveredQty += covered;
+      existing.coveredDesi += covered * desiPerUnit;
+      existing.netQty += net;
+      existing.netDesi += net * desiPerUnit;
+      categoryStockMap.set(s.productCategory, existing);
+    }
+  }
 
   const monthDate = parseMonthValue(month);
   const monthLabel = monthDate.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
@@ -332,19 +355,35 @@ export default function MonthDetailPage() {
               const totalQty = groupCats.reduce((s, c) => s + c.totalQuantity, 0);
               const totalDesi = groupCats.reduce((s, c) => s + c.totalDesi, 0);
               if (totalQty === 0 && totalDesi === 0) return null;
+              // Aggregate snapshot stock for this group
+              const groupStock = groupCats.reduce((acc, c) => {
+                const cs = categoryStockMap.get(c.productCategory);
+                if (cs) { acc.coveredQty += cs.coveredQty; acc.coveredDesi += cs.coveredDesi; acc.netQty += cs.netQty; acc.netDesi += cs.netDesi; }
+                return acc;
+              }, { coveredQty: 0, coveredDesi: 0, netQty: 0, netDesi: 0 });
+              const hasStock = categoryStockMap.size > 0;
               const groupColorMap = {
-                orange: 'bg-orange-500/30 text-orange-100',
-                blue: 'bg-blue-500/30 text-blue-100',
-                emerald: 'bg-emerald-500/30 text-emerald-100',
+                orange: 'bg-orange-600 border-orange-400',
+                blue: 'bg-blue-600 border-blue-400',
+                emerald: 'bg-emerald-600 border-emerald-400',
               };
               const boxColor = groupColorMap[group.color as keyof typeof groupColorMap];
               return (
-                <div key={group.key} className={`${boxColor} rounded-lg p-3 text-center`}>
-                  <p className="text-xs mb-1 opacity-80">{group.label}</p>
+                <div key={group.key} className={`${boxColor} border rounded-lg p-3 text-center`}>
+                  <p className="text-xs mb-1 text-white/80">{group.label}</p>
                   <p className="text-2xl font-bold text-white">
                     {viewMode === 'quantity' ? totalQty : Math.round(totalDesi)}
                   </p>
-                  <p className="text-xs opacity-80">{viewMode === 'quantity' ? 'adet' : 'desi'}</p>
+                  <p className="text-xs text-white/70 mb-1">{viewMode === 'quantity' ? 'adet talep' : 'desi talep'}</p>
+                  {hasStock && (
+                    <div className="border-t border-white/20 pt-1 mt-1">
+                      <p className="text-xs text-white/70">
+                        Net: <span className="font-semibold text-white">
+                          {viewMode === 'quantity' ? groupStock.netQty : Math.round(groupStock.netDesi)}
+                        </span> {viewMode === 'quantity' ? 'adet' : 'desi'}
+                      </p>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -463,7 +502,9 @@ export default function MonthDetailPage() {
                     </span>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {groupCats.map((category) => (
+                    {groupCats.map((category) => {
+                      const catStock = categoryStockMap.get(category.productCategory);
+                      return (
                       <Link
                         key={category.productCategory}
                         href={`/dashboard/manufacturer/${encodeURIComponent(category.productCategory)}?month=${month}`}
@@ -498,6 +539,27 @@ export default function MonthDetailPage() {
                                 : `${Math.round(category.totalDesi)} desi`}
                             </p>
                           </div>
+
+                          {catStock && (
+                            <>
+                              <div className="flex justify-between items-center">
+                                <p className="text-xs text-gray-600">Depoda Bulunan</p>
+                                <p className="text-sm font-bold text-emerald-600">
+                                  {viewMode === 'quantity'
+                                    ? `${catStock.coveredQty} adet`
+                                    : `${Math.round(catStock.coveredDesi)} desi`}
+                                </p>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <p className="text-xs text-gray-600">Net İhtiyaç</p>
+                                <p className={`text-sm font-bold ${catStock.netQty > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                  {viewMode === 'quantity'
+                                    ? (catStock.netQty > 0 ? `${catStock.netQty} adet` : 'Yeterli')
+                                    : (catStock.netDesi > 0 ? `${Math.round(catStock.netDesi)} desi` : 'Yeterli')}
+                                </p>
+                              </div>
+                            </>
+                          )}
 
                           <div className="flex justify-between items-center">
                             <p className="text-xs text-gray-600">Üretilen</p>
@@ -538,7 +600,8 @@ export default function MonthDetailPage() {
                           </div>
                         </div>
                       </Link>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               );
