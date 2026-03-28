@@ -296,10 +296,10 @@ export default function MonthDetailPage() {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-1 bg-slate-100/80 rounded-lg p-1">
+          <div className="flex items-center gap-1 bg-slate-200 rounded-lg p-1">
             <button
               onClick={() => setViewMode('quantity')}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+              className={`px-5 py-2 rounded-md text-sm font-semibold transition-all ${
                 viewMode === 'quantity'
                   ? 'bg-white text-slate-900 shadow-sm'
                   : 'text-slate-500 hover:text-slate-700'
@@ -309,7 +309,7 @@ export default function MonthDetailPage() {
             </button>
             <button
               onClick={() => setViewMode('desi')}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+              className={`px-5 py-2 rounded-md text-sm font-semibold transition-all ${
                 viewMode === 'desi'
                   ? 'bg-white text-slate-900 shadow-sm'
                   : 'text-slate-500 hover:text-slate-700'
@@ -348,15 +348,15 @@ export default function MonthDetailPage() {
           const totalStock = hasStock ? Array.from(categoryStockMap.values()).reduce((s, c) => ({ coveredQty: s.coveredQty + c.coveredQty, coveredDesi: s.coveredDesi + c.coveredDesi, netQty: s.netQty + c.netQty, netDesi: s.netDesi + c.netDesi }), { coveredQty: 0, coveredDesi: 0, netQty: 0, netDesi: 0 }) : null;
           return (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-white rounded-xl p-5 border border-slate-200 text-center">
-                <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">Toplam Talep</p>
-                <p className="text-4xl font-bold text-slate-900 tabular-nums">{monthStats.totalRequests}</p>
+              <div className="bg-white rounded-xl p-5 border-2 border-slate-200 text-center">
+                <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-2">Toplam Talep</p>
+                <p className="text-4xl font-black text-slate-900 tabular-nums">{monthStats.totalRequests}</p>
               </div>
-              <div className="bg-white rounded-xl p-5 border border-slate-200 text-center">
+              <div className="bg-white rounded-xl p-5 border-2 border-slate-200 text-center">
                 {hasStock && totalStock ? (
                   <>
-                    <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">Net İhtiyaç</p>
-                    <p className="text-4xl font-bold text-slate-900 tabular-nums">
+                    <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-2">Net İhtiyaç</p>
+                    <p className="text-4xl font-black text-slate-900 tabular-nums">
                       {viewMode === 'quantity' ? totalStock.netQty.toLocaleString('tr-TR') : Math.round(totalStock.netDesi).toLocaleString('tr-TR')}
                       <span className="text-lg font-normal text-slate-400 ml-1.5">{viewMode === 'quantity' ? 'adet' : 'desi'}</span>
                     </p>
@@ -366,8 +366,8 @@ export default function MonthDetailPage() {
                   </>
                 ) : (
                   <>
-                    <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-2">Toplam {viewMode === 'quantity' ? 'Miktar' : 'Desi'}</p>
-                    <p className="text-4xl font-bold text-slate-900 tabular-nums">
+                    <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-2">Toplam {viewMode === 'quantity' ? 'Miktar' : 'Desi'}</p>
+                    <p className="text-4xl font-black text-slate-900 tabular-nums">
                       {viewMode === 'quantity' ? monthStats.totalQuantity.toLocaleString('tr-TR') : Math.round(monthStats.totalDesi).toLocaleString('tr-TR')}
                     </p>
                   </>
@@ -401,8 +401,8 @@ export default function MonthDetailPage() {
               const displayDesi = hasStock ? Math.round(groupStock.netDesi) : Math.round(totalDesi);
               return (
                 <div key={group.key} className={`${gc.bg} ${gc.border} border rounded-xl p-4 text-center`}>
-                  <p className={`text-[11px] font-medium uppercase tracking-wider mb-1.5 ${gc.label}`}>{group.label}</p>
-                  <p className={`text-2xl font-bold tabular-nums ${gc.text}`}>
+                  <p className={`text-[11px] font-bold uppercase tracking-wider mb-1.5 ${gc.text}`}>{group.label}</p>
+                  <p className={`text-2xl font-black tabular-nums ${gc.text}`}>
                     {viewMode === 'quantity' ? displayQty.toLocaleString('tr-TR') : displayDesi.toLocaleString('tr-TR')}
                   </p>
                   <p className={`text-[11px] ${gc.sub} mt-0.5`}>{hasStock ? 'net ihtiyaç' : (viewMode === 'quantity' ? 'adet' : 'desi')}</p>
