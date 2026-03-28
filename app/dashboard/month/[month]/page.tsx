@@ -363,24 +363,24 @@ export default function MonthDetailPage() {
               }, { coveredQty: 0, coveredDesi: 0, netQty: 0, netDesi: 0 });
               const hasStock = categoryStockMap.size > 0;
               const groupColorMap = {
-                orange: 'bg-orange-600 border-orange-400',
+                orange: 'bg-amber-600 border-amber-400',
                 blue: 'bg-blue-600 border-blue-400',
                 emerald: 'bg-emerald-600 border-emerald-400',
               };
               const boxColor = groupColorMap[group.color as keyof typeof groupColorMap];
+              const displayQty = hasStock ? groupStock.netQty : totalQty;
+              const displayDesi = hasStock ? Math.round(groupStock.netDesi) : Math.round(totalDesi);
               return (
                 <div key={group.key} className={`${boxColor} border rounded-lg p-3 text-center`}>
                   <p className="text-xs mb-1 text-white/80">{group.label}</p>
                   <p className="text-2xl font-bold text-white">
-                    {viewMode === 'quantity' ? totalQty : Math.round(totalDesi)}
+                    {viewMode === 'quantity' ? displayQty : displayDesi}
                   </p>
-                  <p className="text-xs text-white/70 mb-1">{viewMode === 'quantity' ? 'adet talep' : 'desi talep'}</p>
+                  <p className="text-xs text-white/70 mb-1">{hasStock ? (viewMode === 'quantity' ? 'adet net ihtiyaç' : 'desi net ihtiyaç') : (viewMode === 'quantity' ? 'adet talep' : 'desi talep')}</p>
                   {hasStock && (
-                    <div className="border-t border-white/20 pt-1 mt-1">
-                      <p className="text-xs text-white/70">
-                        Net: <span className="font-semibold text-white">
-                          {viewMode === 'quantity' ? groupStock.netQty : Math.round(groupStock.netDesi)}
-                        </span> {viewMode === 'quantity' ? 'adet' : 'desi'}
+                    <div className="border-t border-white/20 pt-1 mt-1 space-y-0.5">
+                      <p className="text-[10px] text-white/60">
+                        Talep: {viewMode === 'quantity' ? totalQty : Math.round(totalDesi)} · Depo: {viewMode === 'quantity' ? groupStock.coveredQty : Math.round(groupStock.coveredDesi)}
                       </p>
                     </div>
                   )}
@@ -570,34 +570,29 @@ export default function MonthDetailPage() {
                             </p>
                           </div>
 
-                          <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <p className="text-xs text-gray-600">İlerleme</p>
-                              <p className="text-xs font-semibold text-gray-900">
-                                {viewMode === 'quantity'
-                                  ? (category.totalQuantity > 0
-                                      ? Math.round((category.totalProduced / category.totalQuantity) * 100)
-                                      : 0)
-                                  : (category.totalDesi > 0
-                                      ? Math.round((category.producedDesi / category.totalDesi) * 100)
-                                      : 0)}%
-                              </p>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
-                              <div
-                                className="bg-gradient-to-r from-orange-500 to-green-500 h-2 rounded-full transition-all"
-                                style={{
-                                  width: `${viewMode === 'quantity'
-                                    ? (category.totalQuantity > 0
-                                        ? Math.min((category.totalProduced / category.totalQuantity) * 100, 100)
-                                        : 0)
-                                    : (category.totalDesi > 0
-                                        ? Math.min((category.producedDesi / category.totalDesi) * 100, 100)
-                                        : 0)}%`
-                                }}
-                              ></div>
-                            </div>
-                          </div>
+                          {(() => {
+                            // Progress = üretilen / net ihtiyaç (snapshot varsa), yoksa üretilen / talep
+                            const baseQty = catStock ? catStock.netQty : category.totalQuantity;
+                            const baseDesi = catStock ? catStock.netDesi : category.totalDesi;
+                            const pctQty = baseQty > 0 ? Math.round((category.totalProduced / baseQty) * 100) : 0;
+                            const pctDesi = baseDesi > 0 ? Math.round((category.producedDesi / baseDesi) * 100) : 0;
+                            const pct = viewMode === 'quantity' ? pctQty : pctDesi;
+                            const barPct = Math.min(pct, 100);
+                            return (
+                              <div>
+                                <div className="flex justify-between items-center mb-1">
+                                  <p className="text-xs text-gray-600">İlerleme {catStock ? '(net)' : ''}</p>
+                                  <p className="text-xs font-semibold text-gray-900">{pct}%</p>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                  <div
+                                    className="bg-gradient-to-r from-orange-500 to-green-500 h-2 rounded-full transition-all"
+                                    style={{ width: `${barPct}%` }}
+                                  ></div>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </Link>
                       );

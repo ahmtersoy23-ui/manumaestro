@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db/prisma';
+import { prisma, queryProductDb } from '@/lib/db/prisma';
 import { successResponse, errorResponse } from '@/lib/api/response';
 import { ValidationError } from '@/lib/api/errors';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
@@ -61,6 +61,22 @@ export async function GET(request: NextRequest) {
         },
       },
     });
+
+    // Enrich missing productSize from pricelab products table
+    const missingSkus = [...new Set(requests.filter(r => !r.productSize).map(r => r.iwasku))];
+    if (missingSkus.length > 0) {
+      const placeholders = missingSkus.map((_, i) => `$${i + 1}`).join(',');
+      const products = await queryProductDb(
+        `SELECT product_sku, COALESCE(manual_size, size) as size FROM products WHERE product_sku IN (${placeholders}) AND COALESCE(manual_size, size) IS NOT NULL`,
+        missingSkus
+      );
+      const sizeMap = new Map(products.map((p: { product_sku: string; size: number }) => [p.product_sku, p.size]));
+      for (const r of requests) {
+        if (!r.productSize && sizeMap.has(r.iwasku)) {
+          (r as { productSize: number | null }).productSize = sizeMap.get(r.iwasku)!;
+        }
+      }
+    }
 
     // Compute aggregate stats in memory from the single query result
     const stats = {
