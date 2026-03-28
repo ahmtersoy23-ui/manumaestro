@@ -14,6 +14,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('MonthDetailPage');
+
+const STATUS_OPTIONS = [
+  { value: 'REQUESTED', label: 'Talep Edildi', color: 'bg-slate-100 text-slate-700 border-slate-300' },
+  { value: 'IN_PRODUCTION', label: 'Üretimde', color: 'bg-blue-100 text-blue-700 border-blue-300' },
+  { value: 'PARTIALLY_PRODUCED', label: 'Kısmen', color: 'bg-amber-100 text-amber-700 border-amber-300' },
+  { value: 'COMPLETED', label: 'Tamamlandı', color: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
+  { value: 'CANCELLED', label: 'İptal', color: 'bg-red-100 text-red-700 border-red-300' },
+] as const;
 import { AddMarketplaceModal } from '@/components/modals/AddMarketplaceModal';
 
 // Production group classification
@@ -89,6 +97,7 @@ export default function MonthDetailPage() {
   const [allMarketplaces, setAllMarketplaces] = useState<Marketplace[]>([]);
   const [monthStats, setMonthStats] = useState({ totalRequests: 0, totalQuantity: 0, totalDesi: 0, itemsWithoutSize: 0 });
   const [viewMode, setViewMode] = useState<'quantity' | 'desi'>('quantity');
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set());
   const [showMissingItems, setShowMissingItems] = useState(false);
   const [missingDesiItems, setMissingDesiItems] = useState<MissingDesiItem[]>([]);
   const [showAddMarketplaceModal, setShowAddMarketplaceModal] = useState(false);
@@ -145,7 +154,7 @@ export default function MonthDetailPage() {
         // Fetch marketplaces and monthly summary in parallel
         const [mpRes, res] = await Promise.all([
           fetch('/api/marketplaces'),
-          fetch(`/api/requests/monthly?month=${month}`),
+          fetch(`/api/requests/monthly?month=${month}${selectedStatuses.size > 0 ? `&statuses=${Array.from(selectedStatuses).join(',')}` : ''}`),
         ]);
         const [mpData, data] = await Promise.all([mpRes.json(), res.json()]);
 
@@ -195,7 +204,8 @@ export default function MonthDetailPage() {
     }
 
     fetchData();
-  }, [month, refreshMarketplaces]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [month, refreshMarketplaces, Array.from(selectedStatuses).join()]);
 
   // Fetch snapshot data
   useEffect(() => {
@@ -482,15 +492,47 @@ export default function MonthDetailPage() {
 
       {/* Categories Section - Production Tracking */}
       <div>
-        <div className="flex items-center gap-3 mb-4">
-          <Factory className="w-6 h-6 text-gray-700" />
-          <h2 className="text-2xl font-semibold text-gray-900">
-            Kategoriye Göre Üretim
-          </h2>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-3">
+            <Factory className="w-6 h-6 text-gray-700" />
+            <h2 className="text-2xl font-semibold text-gray-900">
+              Kategoriye Göre Üretim
+            </h2>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {STATUS_OPTIONS.map((opt) => {
+              const isActive = selectedStatuses.has(opt.value);
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => {
+                    setSelectedStatuses(prev => {
+                      const next = new Set(prev);
+                      if (next.has(opt.value)) next.delete(opt.value);
+                      else next.add(opt.value);
+                      return next;
+                    });
+                  }}
+                  className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-all ${
+                    isActive
+                      ? opt.color
+                      : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+            {selectedStatuses.size > 0 && (
+              <button
+                onClick={() => setSelectedStatuses(new Set())}
+                className="px-2 py-1 text-xs text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                Temizle
+              </button>
+            )}
+          </div>
         </div>
-        <p className="text-gray-600 mb-6">
-          Üretim ilerlemesini takip edin ve üretilen miktarları girin
-        </p>
 
         {categories.length === 0 ? (
           <div className="bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 p-12 text-center">

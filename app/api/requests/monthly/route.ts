@@ -40,11 +40,17 @@ export async function GET(request: NextRequest) {
       throw new ValidationError('Geçersiz ay formatı. Beklenen: YYYY-MM');
     }
 
+    // Optional status filter (comma-separated)
+    const statusParam = searchParams.get('statuses');
+    const statusFilter = statusParam
+      ? statusParam.split(',').filter(Boolean)
+      : undefined;
+
     // Single query: fetch all request data needed for both stats and summary
-    // This replaces the previous two separate queries (aggregate + findMany)
     const requests = await prisma.productionRequest.findMany({
       where: {
         productionMonth: month,
+        ...(statusFilter && { status: { in: statusFilter as never[] } }),
       },
       select: {
         iwasku: true,
