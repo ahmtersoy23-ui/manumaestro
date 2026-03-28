@@ -93,7 +93,6 @@ export default function MonthDetailPage() {
   const [allMarketplaces, setAllMarketplaces] = useState<Marketplace[]>([]);
   const [monthStats, setMonthStats] = useState({ totalRequests: 0, totalQuantity: 0, totalDesi: 0, itemsWithoutSize: 0 });
   const [viewMode, setViewMode] = useState<'quantity' | 'desi'>('quantity');
-  const [selectedMarketplace, setSelectedMarketplace] = useState<string>('');
   const [showMissingItems, setShowMissingItems] = useState(false);
   const [missingDesiItems, setMissingDesiItems] = useState<MissingDesiItem[]>([]);
   const [showAddMarketplaceModal, setShowAddMarketplaceModal] = useState(false);
@@ -150,7 +149,7 @@ export default function MonthDetailPage() {
         // Fetch marketplaces and monthly summary in parallel
         const [mpRes, res] = await Promise.all([
           fetch('/api/marketplaces'),
-          fetch(`/api/requests/monthly?month=${month}${selectedMarketplace ? `&marketplace=${selectedMarketplace}` : ''}`),
+          fetch(`/api/requests/monthly?month=${month}`),
         ]);
         const [mpData, data] = await Promise.all([mpRes.json(), res.json()]);
 
@@ -188,6 +187,9 @@ export default function MonthDetailPage() {
             totalQuantity: item.totalQuantity || 0,
             totalDesi: item.totalDesi || 0,
             requestCount: item.requestCount || 0,
+            completedCount: item.completedCount || 0,
+            completedQty: item.completedQty || 0,
+            completedDesi: item.completedDesi || 0,
           }));
 
           setMarketplaces(marketplaceSummary);
@@ -200,7 +202,7 @@ export default function MonthDetailPage() {
     }
 
     fetchData();
-  }, [month, refreshMarketplaces, selectedMarketplace]);
+  }, [month, refreshMarketplaces]);
 
   // Fetch snapshot data
   useEffect(() => {
@@ -487,40 +489,11 @@ export default function MonthDetailPage() {
 
       {/* Categories Section - Production Tracking */}
       <div>
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
-          <div className="flex items-center gap-3">
-            <Factory className="w-6 h-6 text-gray-700" />
-            <h2 className="text-2xl font-semibold text-gray-900">
-              Kategoriye Göre Üretim
-            </h2>
-          </div>
-          {allMarketplaces.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <button
-                onClick={() => setSelectedMarketplace('')}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-all ${
-                  !selectedMarketplace
-                    ? 'bg-slate-800 text-white border-slate-800'
-                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                Tümü
-              </button>
-              {allMarketplaces.map((mp) => (
-                <button
-                  key={mp.id}
-                  onClick={() => setSelectedMarketplace(selectedMarketplace === mp.id ? '' : mp.id)}
-                  className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-all ${
-                    selectedMarketplace === mp.id
-                      ? 'bg-slate-800 text-white border-slate-800'
-                      : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  {mp.name}
-                </button>
-              ))}
-            </div>
-          )}
+        <div className="flex items-center gap-3 mb-4">
+          <Factory className="w-6 h-6 text-gray-700" />
+          <h2 className="text-2xl font-semibold text-gray-900">
+            Kategoriye Göre Üretim
+          </h2>
         </div>
 
         {categories.length === 0 ? (

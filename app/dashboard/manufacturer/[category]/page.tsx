@@ -103,6 +103,8 @@ export default function ManufacturerCategoryPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set());
+  const [selectedMarketplace, setSelectedMarketplace] = useState<string>('');
+  const [availableMarketplaces, setAvailableMarketplaces] = useState<{id: string; name: string}[]>([]);
   const PAGE_SIZE = 30;
 
   const monthDate = parseMonthValue(month);
@@ -119,7 +121,8 @@ export default function ManufacturerCategoryPage() {
       setLoading(true);
       try {
         const statusQuery = selectedStatuses.size > 0 ? `&statuses=${Array.from(selectedStatuses).join(',')}` : '';
-        const res = await fetch(`/api/manufacturer/category/${encodeURIComponent(category)}?month=${month}&page=${currentPage}&limit=${PAGE_SIZE}${statusQuery}`);
+        const mpQuery = selectedMarketplace ? `&marketplace=${selectedMarketplace}` : '';
+        const res = await fetch(`/api/manufacturer/category/${encodeURIComponent(category)}?month=${month}&page=${currentPage}&limit=${PAGE_SIZE}${statusQuery}${mpQuery}`);
         const data = await res.json();
 
         if (data.success) {
@@ -127,6 +130,9 @@ export default function ManufacturerCategoryPage() {
           if (data.pagination) {
             setTotalPages(data.pagination.totalPages);
             setTotalItems(data.pagination.total);
+          }
+          if (data.availableMarketplaces) {
+            setAvailableMarketplaces(data.availableMarketplaces);
           }
 
           // Group by IWASKU
@@ -176,7 +182,7 @@ export default function ManufacturerCategoryPage() {
 
     fetchRequests();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category, month, currentPage, Array.from(selectedStatuses).join()]);
+  }, [category, month, currentPage, Array.from(selectedStatuses).join(), selectedMarketplace]);
 
   const updateEditValue = (
     iwasku: string,
@@ -348,38 +354,71 @@ export default function ManufacturerCategoryPage() {
         </button>
       </div>
 
-      {/* Status Filter */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        {STATUS_OPTIONS.map((opt) => {
-          const isActive = selectedStatuses.has(opt.value);
-          return (
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        {/* Status filter */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-slate-500 mr-1">Durum:</span>
+          {STATUS_OPTIONS.map((opt) => {
+            const isActive = selectedStatuses.has(opt.value);
+            return (
+              <button
+                key={opt.value}
+                onClick={() => {
+                  setSelectedStatuses(prev => {
+                    const next = new Set(prev);
+                    if (next.has(opt.value)) next.delete(opt.value);
+                    else next.add(opt.value);
+                    return next;
+                  });
+                }}
+                className={`px-2.5 py-1 text-xs font-medium rounded-lg border transition-all ${
+                  isActive
+                    ? opt.color
+                    : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+          {selectedStatuses.size > 0 && (
             <button
-              key={opt.value}
-              onClick={() => {
-                setSelectedStatuses(prev => {
-                  const next = new Set(prev);
-                  if (next.has(opt.value)) next.delete(opt.value);
-                  else next.add(opt.value);
-                  return next;
-                });
-              }}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
-                isActive
-                  ? opt.color
+              onClick={() => setSelectedStatuses(new Set())}
+              className="px-2 py-1 text-xs text-slate-400 hover:text-slate-600"
+            >
+              Temizle
+            </button>
+          )}
+        </div>
+        {/* Marketplace filter */}
+        {availableMarketplaces.length > 1 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs text-slate-500 mr-1">Pazar Yeri:</span>
+            <button
+              onClick={() => setSelectedMarketplace('')}
+              className={`px-2.5 py-1 text-xs font-medium rounded-lg border transition-all ${
+                !selectedMarketplace
+                  ? 'bg-purple-100 text-purple-700 border-purple-300'
                   : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'
               }`}
             >
-              {opt.label}
+              Tümü
             </button>
-          );
-        })}
-        {selectedStatuses.size > 0 && (
-          <button
-            onClick={() => setSelectedStatuses(new Set())}
-            className="px-2 py-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            Temizle
-          </button>
+            {availableMarketplaces.map((mp) => (
+              <button
+                key={mp.id}
+                onClick={() => setSelectedMarketplace(selectedMarketplace === mp.id ? '' : mp.id)}
+                className={`px-2.5 py-1 text-xs font-medium rounded-lg border transition-all ${
+                  selectedMarketplace === mp.id
+                    ? 'bg-purple-100 text-purple-700 border-purple-300'
+                    : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                {mp.name}
+              </button>
+            ))}
+          </div>
         )}
       </div>
 

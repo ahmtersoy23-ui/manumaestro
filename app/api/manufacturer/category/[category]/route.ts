@@ -57,11 +57,27 @@ export async function GET(
       ? statusParam.split(',').filter(Boolean)
       : undefined;
 
+    // Optional marketplace filter
+    const marketplaceParam = searchParams.get('marketplace');
+
     const where = {
       productCategory: decodeURIComponent(category),
       productionMonth,
       ...(statusFilter && { status: { in: statusFilter as never[] } }),
+      ...(marketplaceParam && { marketplaceId: marketplaceParam }),
     };
+
+    // Get distinct marketplaces for this category/month (unfiltered, for filter options)
+    const baseWhere = { productCategory: decodeURIComponent(category), productionMonth };
+    const distinctMarketplaces = await prisma.productionRequest.findMany({
+      where: baseWhere,
+      select: { marketplace: { select: { id: true, name: true } } },
+      distinct: ['marketplaceId'],
+    });
+    const availableMarketplaces = distinctMarketplaces.map(r => ({
+      id: r.marketplace.id,
+      name: r.marketplace.name,
+    }));
 
     // Fetch requests for this category and production month
     const [requests, total] = await Promise.all([
@@ -123,6 +139,7 @@ export async function GET(
         total,
         totalPages,
       },
+      availableMarketplaces,
     });
   } catch (error) {
     return errorResponse(error, 'Talepler getirilemedi');
