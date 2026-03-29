@@ -227,17 +227,26 @@ export async function GET(request: NextRequest) {
         productCategory: r.productCategory,
       }));
 
+    // Per-IWASKU summary for live demand (used with snapshot stock)
+    const iwaskuSummary = Array.from(productMap.values()).map(p => ({
+      iwasku: p.iwasku,
+      category: p.productCategory,
+      totalQty: p.totalRequestedQty,
+      desi: p.productSize || 0,
+    }));
+
     return successResponse(
       {
         totalRequests: stats._count.id || 0,
         totalQuantity: stats._sum.quantity || 0,
-        totalProduced, // Use calculated value from unique products
+        totalProduced,
         totalDesi,
         totalProducedDesi,
         itemsWithoutSize,
         missingDesiItems,
         summary,
         marketplaceSummary,
+        iwaskuSummary,
       },
       {
         debug: {

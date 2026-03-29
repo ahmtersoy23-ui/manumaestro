@@ -93,6 +93,7 @@ export default function MonthDetailPage() {
   const [allMarketplaces, setAllMarketplaces] = useState<Marketplace[]>([]);
   const [monthStats, setMonthStats] = useState({ totalRequests: 0, totalQuantity: 0, totalDesi: 0, itemsWithoutSize: 0 });
   const [viewMode, setViewMode] = useState<'quantity' | 'desi'>('quantity');
+  const [iwaskuSummary, setIwaskuSummary] = useState<{iwasku: string; category: string; totalQty: number; desi: number}[]>([]);
   const [showMissingItems, setShowMissingItems] = useState(false);
   const [missingDesiItems, setMissingDesiItems] = useState<MissingDesiItem[]>([]);
   const [showAddMarketplaceModal, setShowAddMarketplaceModal] = useState(false);
@@ -116,25 +117,38 @@ export default function MonthDetailPage() {
   const [snapshotOpen, setSnapshotOpen] = useState(false);
   const [snapshotGenerating, setSnapshotGenerating] = useState(false);
 
-  // Derive per-category stock info from snapshot
+  // Derive per-category stock info: FIXED stock from snapshot + LIVE demand from API
   interface CategoryStock {
-    coveredQty: number;   // min(stock, requested) per product, summed
+    coveredQty: number;   // min(stock, demand) per product, summed
     coveredDesi: number;
-    netQty: number;       // max(0, requested - stock) per product, summed
+    netQty: number;       // max(0, demand - stock) per product, summed
     netDesi: number;
   }
   const categoryStockMap = new Map<string, CategoryStock>();
-  if (snapshotData) {
+  if (snapshotData && iwaskuSummary.length > 0) {
+    // Build fixed stock map from snapshot
+    const stockMap = new Map<string, number>();
     for (const s of snapshotData.snapshots) {
-      const existing = categoryStockMap.get(s.productCategory) || { coveredQty: 0, coveredDesi: 0, netQty: 0, netDesi: 0 };
-      const covered = Math.min(s.warehouseStock, s.totalRequested);
-      const net = Math.max(0, s.totalRequested - s.warehouseStock);
-      const desiPerUnit = s.desi || 0;
+      stockMap.set(s.iwasku, s.warehouseStock);
+    }
+    // Build desi map from snapshot (more complete than API)
+    const desiMap = new Map<string, number>();
+    for (const s of snapshotData.snapshots) {
+      if (s.desi) desiMap.set(s.iwasku, s.desi);
+    }
+    // Compute using LIVE demand + FIXED stock
+    for (const item of iwaskuSummary) {
+      const existing = categoryStockMap.get(item.category) || { coveredQty: 0, coveredDesi: 0, netQty: 0, netDesi: 0 };
+      const stock = stockMap.get(item.iwasku) || 0;
+      const demand = item.totalQty;
+      const covered = Math.min(stock, demand);
+      const net = Math.max(0, demand - stock);
+      const desiPerUnit = desiMap.get(item.iwasku) || item.desi || 0;
       existing.coveredQty += covered;
       existing.coveredDesi += covered * desiPerUnit;
       existing.netQty += net;
       existing.netDesi += net * desiPerUnit;
-      categoryStockMap.set(s.productCategory, existing);
+      categoryStockMap.set(item.category, existing);
     }
   }
 
@@ -166,6 +180,7 @@ export default function MonthDetailPage() {
           });
 
           setMissingDesiItems(data.data.missingDesiItems || []);
+          setIwaskuSummary(data.data.iwaskuSummary || []);
 
           // API now returns already grouped by category (simplified)
           const categories: CategorySummary[] = (data.data.summary || []).map((item: CategorySummary) => ({
