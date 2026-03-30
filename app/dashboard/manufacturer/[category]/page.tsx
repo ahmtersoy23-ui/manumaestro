@@ -547,17 +547,27 @@ export default function ManufacturerCategoryPage() {
                         )}
                       </div>
                     </td>                    <td className="px-4 py-3 whitespace-nowrap">
-                      <select
-                        value={editValues[group.iwasku]?.status || group.requests[0].status}
-                        onChange={(e) => updateEditValue(group.iwasku, 'status', e.target.value)}
-                        className="text-sm text-gray-900 border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                      >
-                        {statusOptions.map((option) => (
-                          <option key={option.value} value={option.value} className="text-gray-900">
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                      {(() => {
+                        const produced = editValues[group.iwasku]?.producedQuantity || 0;
+                        const canComplete = produced >= group.netNeed;
+                        return (
+                          <select
+                            value={editValues[group.iwasku]?.status || group.requests[0].status}
+                            onChange={(e) => updateEditValue(group.iwasku, 'status', e.target.value)}
+                            className="text-sm text-gray-900 border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                          >
+                            {statusOptions.map((option) => (
+                              <option
+                                key={option.value}
+                                value={option.value}
+                                disabled={option.value === 'COMPLETED' && !canComplete}
+                              >
+                                {option.label}{option.value === 'COMPLETED' && !canComplete ? ' (üretim yetersiz)' : ''}
+                              </option>
+                            ))}
+                          </select>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3">
                       <textarea
