@@ -1,6 +1,7 @@
 /**
  * Get Requests by Category API
  * Fetches production requests for a specific category and month
+ * Groups by IWASKU, paginated by unique product count, sorted A-Z
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -15,13 +16,11 @@ export async function GET(
   { params }: { params: Promise<{ category: string }> }
 ) {
   try {
-    // Rate limiting: 200 requests per minute for read operations
     const rateLimitResult = await rateLimiters.read.check(request, 'category-requests');
     if (!rateLimitResult.success) {
       return rateLimitExceededResponse(rateLimitResult);
     }
 
-    // Authentication: Require any authenticated user
     const auth = await verifyAuth(request);
     if (!auth.success || !auth.user) {
       return NextResponse.json(
@@ -33,80 +32,74 @@ export async function GET(
     const { category } = await params;
     const searchParams = request.nextUrl.searchParams;
     const monthParam = searchParams.get('month');
+    const searchQuery = searchParams.get('search')?.trim() || '';
 
-    // Pagination parameters
     const rawPage = parseInt(searchParams.get('page') || '1');
     const rawLimit = parseInt(searchParams.get('limit') || '30');
     const page = Math.max(rawPage, 1);
     const limit = Math.min(Math.max(rawLimit, 1), 200);
-    const skip = (page - 1) * limit;
 
     if (!category) {
-      return NextResponse.json(
-        { error: 'Kategori gereklidir' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Kategori gereklidir' }, { status: 400 });
     }
 
-    // Default to current month if not provided
     const productionMonth = monthParam || formatMonthValue(new Date());
+    const decodedCategory = decodeURIComponent(category);
 
-    // Optional status filter (comma-separated)
+    // Optional filters
     const statusParam = searchParams.get('statuses');
-    const statusFilter = statusParam
-      ? statusParam.split(',').filter(Boolean)
-      : undefined;
-
-    // Optional marketplace filter
+    const statusFilter = statusParam ? statusParam.split(',').filter(Boolean) : undefined;
     const marketplaceParam = searchParams.get('marketplace');
 
-    const where = {
-      productCategory: decodeURIComponent(category),
-      productionMonth,
+    // Base where for all queries (category + month)
+    const baseWhere = { productCategory: decodedCategory, productionMonth };
+
+    // Filtered where (includes status/marketplace)
+    const filteredWhere = {
+      ...baseWhere,
       ...(statusFilter && { status: { in: statusFilter as never[] } }),
       ...(marketplaceParam && { marketplaceId: marketplaceParam }),
+      ...(searchQuery && {
+        OR: [
+          { iwasku: { contains: searchQuery, mode: 'insensitive' as const } },
+          { productName: { contains: searchQuery, mode: 'insensitive' as const } },
+        ],
+      }),
     };
 
-    // Get distinct marketplaces for this category/month (unfiltered, for filter options)
-    const baseWhere = { productCategory: decodeURIComponent(category), productionMonth };
-    const distinctMarketplaces = await prisma.productionRequest.findMany({
-      where: baseWhere,
-      select: { marketplace: { select: { id: true, name: true } } },
-      distinct: ['marketplaceId'],
+    // 1. Get distinct IWASKUs sorted A-Z (with filters + search)
+    const distinctProducts = await prisma.productionRequest.findMany({
+      where: filteredWhere,
+      select: { iwasku: true },
+      distinct: ['iwasku'],
+      orderBy: { iwasku: 'asc' },
     });
-    const availableMarketplaces = distinctMarketplaces.map(r => ({
-      id: r.marketplace.id,
-      name: r.marketplace.name,
-    }));
 
-    // Fetch requests for this category and production month
-    const [requests, total] = await Promise.all([
-      prisma.productionRequest.findMany({
-        where,
-        include: {
-          marketplace: {
-            select: {
-              name: true,
-              colorTag: true,
-            },
+    const allIwaskus = distinctProducts.map(r => r.iwasku);
+    const totalProducts = allIwaskus.length;
+    const totalPages = Math.ceil(totalProducts / limit);
+
+    // 2. Page slice of IWASKUs
+    const pageIwaskus = allIwaskus.slice((page - 1) * limit, page * limit);
+
+    // 3. Fetch ALL requests for the page's IWASKUs (no skip/take — need all for grouping)
+    const requests = pageIwaskus.length > 0
+      ? await prisma.productionRequest.findMany({
+          where: {
+            ...filteredWhere,
+            iwasku: { in: pageIwaskus },
           },
-        },
-        orderBy: {
-          requestDate: 'desc',
-        },
-        skip,
-        take: limit,
-      }),
-      prisma.productionRequest.count({ where }),
-    ]);
+          include: {
+            marketplace: { select: { name: true, colorTag: true } },
+          },
+          orderBy: { iwasku: 'asc' },
+        })
+      : [];
 
-    const totalPages = Math.ceil(total / limit);
-
-    // Fetch snapshot stock for this month (point-in-time at month close)
-    const iwaskus = [...new Set(requests.map(r => r.iwasku))];
-    const snapshots = iwaskus.length > 0
+    // 4. Snapshot stock (fixed)
+    const snapshots = pageIwaskus.length > 0
       ? await prisma.monthSnapshot.findMany({
-          where: { month: productionMonth, iwasku: { in: iwaskus } },
+          where: { month: productionMonth, iwasku: { in: pageIwaskus } },
         })
       : [];
     const stockMap = new Map<string, number>();
@@ -114,6 +107,7 @@ export async function GET(
       stockMap.set(s.iwasku, s.warehouseStock);
     }
 
+    // 5. Format
     const formattedRequests = requests.map((r) => ({
       id: r.id,
       iwasku: r.iwasku,
@@ -130,13 +124,24 @@ export async function GET(
       warehouseStock: stockMap.get(r.iwasku) ?? null,
     }));
 
+    // 6. Available marketplaces (unfiltered, for filter UI)
+    const distinctMarketplaces = await prisma.productionRequest.findMany({
+      where: baseWhere,
+      select: { marketplace: { select: { id: true, name: true } } },
+      distinct: ['marketplaceId'],
+    });
+    const availableMarketplaces = distinctMarketplaces.map(r => ({
+      id: r.marketplace.id,
+      name: r.marketplace.name,
+    }));
+
     return NextResponse.json({
       success: true,
       data: formattedRequests,
       pagination: {
         page,
         limit,
-        total,
+        total: totalProducts,
         totalPages,
       },
       availableMarketplaces,

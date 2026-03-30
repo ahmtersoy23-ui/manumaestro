@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Package, Save, Calendar, Store, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Package, Save, Calendar, Store, Download, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { formatMonthValue, parseMonthValue } from '@/lib/monthUtils';
 import { createLogger } from '@/lib/logger';
 import { ProductMarketplaceModal } from '@/components/modals/ProductMarketplaceModal';
@@ -105,7 +105,15 @@ export default function ManufacturerCategoryPage() {
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set());
   const [selectedMarketplace, setSelectedMarketplace] = useState<string>('');
   const [availableMarketplaces, setAvailableMarketplaces] = useState<{id: string; name: string}[]>([]);
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const PAGE_SIZE = 30;
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => setSearchQuery(searchInput), 400);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   const monthDate = parseMonthValue(month);
   const monthLabel = monthDate.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
@@ -114,7 +122,7 @@ export default function ManufacturerCategoryPage() {
   useEffect(() => {
     setCurrentPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category, month, Array.from(selectedStatuses).join()]);
+  }, [category, month, Array.from(selectedStatuses).join(), selectedMarketplace, searchQuery]);
 
   useEffect(() => {
     async function fetchRequests() {
@@ -122,7 +130,8 @@ export default function ManufacturerCategoryPage() {
       try {
         const statusQuery = selectedStatuses.size > 0 ? `&statuses=${Array.from(selectedStatuses).join(',')}` : '';
         const mpQuery = selectedMarketplace ? `&marketplace=${selectedMarketplace}` : '';
-        const res = await fetch(`/api/manufacturer/category/${encodeURIComponent(category)}?month=${month}&page=${currentPage}&limit=${PAGE_SIZE}${statusQuery}${mpQuery}`);
+        const searchQ = searchQuery ? `&search=${encodeURIComponent(searchQuery)}` : '';
+        const res = await fetch(`/api/manufacturer/category/${encodeURIComponent(category)}?month=${month}&page=${currentPage}&limit=${PAGE_SIZE}${statusQuery}${mpQuery}${searchQ}`);
         const data = await res.json();
 
         if (data.success) {
@@ -182,7 +191,7 @@ export default function ManufacturerCategoryPage() {
 
     fetchRequests();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category, month, currentPage, Array.from(selectedStatuses).join(), selectedMarketplace]);
+  }, [category, month, currentPage, Array.from(selectedStatuses).join(), selectedMarketplace, searchQuery]);
 
   const updateEditValue = (
     iwasku: string,
@@ -354,7 +363,17 @@ export default function ManufacturerCategoryPage() {
         </button>
       </div>
 
-      {/* Filters */}
+      {/* Search + Filters */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <input
+          type="text"
+          placeholder="IWASKU veya ürün adı ile ara..."
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent placeholder:text-slate-400"
+        />
+      </div>
       <div className="flex flex-col sm:flex-row gap-3">
         {/* Status filter */}
         <div className="flex flex-wrap items-center gap-1.5">

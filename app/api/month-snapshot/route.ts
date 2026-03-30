@@ -12,6 +12,7 @@ import { verifyAuth } from '@/lib/auth/verify';
 import { isMonthLocked } from '@/lib/monthUtils';
 import { errorResponse } from '@/lib/api/response';
 import { createLogger } from '@/lib/logger';
+import { autoCompleteFromSnapshot } from '@/lib/autoComplete';
 
 const logger = createLogger('MonthSnapshot');
 
@@ -53,28 +54,7 @@ async function generateSnapshot(month: string): Promise<void> {
   await prisma.$transaction(upsertOps);
 
   // 4. Auto-complete requests where stock covers full demand
-  const coveredIwaskus = requests
-    .filter(r => {
-      const totalRequested = r._sum.quantity || 0;
-      const warehouseStock = stockMap.get(r.iwasku) || 0;
-      return warehouseStock >= totalRequested;
-    })
-    .map(r => r.iwasku);
-
-  if (coveredIwaskus.length > 0) {
-    const updated = await prisma.productionRequest.updateMany({
-      where: {
-        productionMonth: month,
-        iwasku: { in: coveredIwaskus },
-        status: 'REQUESTED',
-      },
-      data: {
-        status: 'COMPLETED',
-        manufacturerNotes: 'Stoktan karşılandı',
-      },
-    });
-    logger.info(`Auto-completed ${updated.count} requests (stock sufficient) for ${month}`);
-  }
+  await autoCompleteFromSnapshot(month);
 
   logger.info(`Snapshot generated for ${month}: ${requests.length} products`);
 }
