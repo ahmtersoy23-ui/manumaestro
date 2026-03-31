@@ -64,7 +64,7 @@ export async function PATCH(
     // Fetch the request to get quantity and category
     const existingRequest = await prisma.productionRequest.findUnique({
       where: { id },
-      select: { quantity: true, productCategory: true },
+      select: { iwasku: true, productName: true, quantity: true, productCategory: true },
     });
 
     if (!existingRequest) {
@@ -133,8 +133,8 @@ export async function PATCH(
       action: 'UPDATE_PRODUCTION',
       entityType: 'ProductionRequest',
       entityId: id,
-      description: `Üretim güncellendi: ${existingRequest.productCategory} — durum: ${updated.status}, üretilen: ${updated.producedQuantity ?? '-'}`,
-      metadata: { ...updateData, requestId: id, productCategory: existingRequest.productCategory },
+      description: `Üretim güncellendi: ${existingRequest.iwasku} ${existingRequest.productName} (${existingRequest.productCategory}) — durum: ${updated.status}, üretilen: ${updated.producedQuantity ?? '-'}`,
+      metadata: { ...updateData, requestId: id, iwasku: existingRequest.iwasku, productName: existingRequest.productName, productCategory: existingRequest.productCategory },
     });
 
     return NextResponse.json({
