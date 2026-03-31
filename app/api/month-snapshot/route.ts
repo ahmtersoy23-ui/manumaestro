@@ -13,6 +13,7 @@ import { isMonthLocked } from '@/lib/monthUtils';
 import { errorResponse } from '@/lib/api/response';
 import { createLogger } from '@/lib/logger';
 import { autoCompleteFromSnapshot } from '@/lib/autoComplete';
+import { waterfallComplete } from '@/lib/waterfallComplete';
 
 const logger = createLogger('MonthSnapshot');
 
@@ -55,6 +56,12 @@ async function generateSnapshot(month: string): Promise<void> {
 
   // 4. Auto-complete requests where stock covers full demand
   await autoCompleteFromSnapshot(month);
+
+  // 5. Waterfall completion: check all iwaskus with priorities
+  const iwaskus = requests.map(r => r.iwasku);
+  for (const iwasku of iwaskus) {
+    await waterfallComplete(iwasku, month);
+  }
 
   logger.info(`Snapshot generated for ${month}: ${requests.length} products`);
 }
