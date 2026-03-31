@@ -216,6 +216,13 @@ export default function ManufacturerCategoryPage() {
       const values = editValues[iwasku];
       const totalProducedQuantity = values.producedQuantity;
 
+      // Validate: COMPLETED requires üretilen >= net ihtiyaç
+      if (values.status === 'COMPLETED' && group.netNeed > 0 && totalProducedQuantity < group.netNeed) {
+        alert(`Tamamlandı olarak kaydetmek için üretilen miktar (${totalProducedQuantity}) net ihtiyacı (${group.netNeed}) karşılamalıdır.`);
+        setSaving(null);
+        return;
+      }
+
       // Distribute total produced quantity proportionally across marketplace requests
       // Example: If A requested 50, B requested 100 (total 150), and 120 were produced:
       // A gets (50/150) * 120 = 40, B gets (100/150) * 120 = 80
@@ -547,27 +554,17 @@ export default function ManufacturerCategoryPage() {
                         )}
                       </div>
                     </td>                    <td className="px-4 py-3 whitespace-nowrap">
-                      {(() => {
-                        const produced = editValues[group.iwasku]?.producedQuantity || 0;
-                        const canComplete = produced >= group.netNeed;
-                        return (
-                          <select
-                            value={editValues[group.iwasku]?.status || group.requests[0].status}
-                            onChange={(e) => updateEditValue(group.iwasku, 'status', e.target.value)}
-                            className="text-sm text-gray-900 border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                          >
-                            {statusOptions.map((option) => (
-                              <option
-                                key={option.value}
-                                value={option.value}
-                                disabled={option.value === 'COMPLETED' && !canComplete}
-                              >
-                                {option.label}{option.value === 'COMPLETED' && !canComplete ? ' (üretim yetersiz)' : ''}
-                              </option>
-                            ))}
-                          </select>
-                        );
-                      })()}
+                      <select
+                        value={editValues[group.iwasku]?.status || group.requests[0].status}
+                        onChange={(e) => updateEditValue(group.iwasku, 'status', e.target.value)}
+                        className="text-sm text-gray-900 border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      >
+                        {statusOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
                     </td>
                     <td className="px-4 py-3">
                       <textarea
