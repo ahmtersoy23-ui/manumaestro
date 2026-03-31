@@ -223,58 +223,57 @@ export default function ManufacturerCategoryPage() {
         return;
       }
 
-      // Distribute total produced quantity proportionally across marketplace requests
-      // Example: If A requested 50, B requested 100 (total 150), and 120 were produced:
-      // A gets (50/150) * 120 = 40, B gets (100/150) * 120 = 80
-      const updatePromises = group.requests.map(request => {
-        const proportion = group.totalQuantity > 0
-          ? request.quantity / group.totalQuantity
-          : 0;
-        const proportionalProducedQty = Math.round(totalProducedQuantity * proportion);
-
-        return fetch(`/api/manufacturer/requests/${request.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            status: values.status,
-            manufacturerNotes: values.manufacturerNotes,
-            producedQuantity: proportionalProducedQty,
-          }),
-        });
+      // Save total produced to first request — waterfall handles marketplace completion
+      // Status and notes also go to first request only; waterfall sets per-marketplace status
+      const firstRequest = group.requests[0];
+      const response = await fetch(`/api/manufacturer/requests/${firstRequest.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          producedQuantity: totalProducedQuantity,
+          manufacturerNotes: values.manufacturerNotes,
+          ...(values.status !== 'COMPLETED' ? { status: values.status } : {}),
+        }),
       });
 
-      const responses = await Promise.all(updatePromises);
-      const allSuccess = responses.every(r => r.ok);
+      // Clear producedQuantity on other requests (cleanup old distribution)
+      if (group.requests.length > 1) {
+        await Promise.all(
+          group.requests.slice(1).map(request =>
+            fetch(`/api/manufacturer/requests/${request.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                producedQuantity: 0,
+                manufacturerNotes: values.manufacturerNotes,
+                ...(values.status !== 'COMPLETED' ? { status: values.status } : {}),
+              }),
+            })
+          )
+        );
+      }
+
+      const allSuccess = response.ok;
 
       if (allSuccess) {
-        // Parse all responses to get each request's updated data
-        const responsesData = await Promise.all(
-          responses.map(r => r.json())
+        // Refetch to get waterfall-updated statuses
+        const refetchRes = await fetch(
+          `/api/manufacturer/category/${encodeURIComponent(category)}?month=${month}&search=${iwasku}&limit=200`
         );
+        const refetchData = await refetchRes.json();
 
-        // Create a map of requestId -> updated data
-        const updatedDataMap = new Map(
-          responsesData.map(data => [data.data.id, data.data])
-        );
+        if (refetchData.success) {
+          // Update local state with fresh data from server (includes waterfall changes)
+          const freshRequests = refetchData.data as typeof requests;
+          setRequests((prev) =>
+            prev.map((r) => {
+              const fresh = freshRequests.find((f: typeof r) => f.id === r.id);
+              return fresh ? { ...r, ...fresh } : r;
+            })
+          );
+        }
 
-        // Update local state for all requests with their individual backend responses
-        setRequests((prev) =>
-          prev.map((r) => {
-            const updated = updatedDataMap.get(r.id);
-            return updated
-              ? {
-                  ...r,
-                  producedQuantity: updated.producedQuantity,
-                  manufacturerNotes: updated.manufacturerNotes,
-                  status: updated.status,
-                }
-              : r;
-          })
-        );
-
-        // Calculate total produced for this group (sum of all requests)
-        const totalProduced = Array.from(updatedDataMap.values())
-          .reduce((sum, data) => sum + (data.producedQuantity || 0), 0);
+        const totalProduced = totalProducedQuantity;
 
         // Update editValues to reflect the aggregate values
         setEditValues(prevValues => ({
