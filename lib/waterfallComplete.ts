@@ -20,11 +20,13 @@ const logger = createLogger('WaterfallComplete');
  * Run waterfall completion for a specific iwasku + month.
  * Called after producedQuantity is updated in manufacturer panel.
  *
+ * Available = warehouse stock (mevcut) + total produced
+ * Waterfall allocates this available qty to marketplaces in priority order.
+ *
  * @returns number of requests changed
  */
 export async function waterfallComplete(iwasku: string, month: string): Promise<number> {
-  // 1. Get total produced for this iwasku in this month
-  //    Sum of producedQuantity across ALL requests for this iwasku/month
+  // 1. Get all requests for this iwasku in this month
   const allRequests = await prisma.productionRequest.findMany({
     where: { iwasku, productionMonth: month },
     select: {
@@ -39,11 +41,26 @@ export async function waterfallComplete(iwasku: string, month: string): Promise<
 
   if (allRequests.length === 0) return 0;
 
-  // Total produced = MAX of producedQuantity (stored on first request by manufacturer panel)
-  // Other requests have 0 or old values; the first request holds the true total
+  // 2. Get warehouse stock (mevcut)
+  const wp = await prisma.warehouseProduct.findUnique({
+    where: { iwasku },
+    include: { weeklyEntries: true },
+  });
+
+  let warehouseStock = 0;
+  if (wp) {
+    const weeklyProd = wp.weeklyEntries.filter(e => e.type === 'PRODUCTION').reduce((s, e) => s + e.quantity, 0);
+    const weeklyShip = wp.weeklyEntries.filter(e => e.type === 'SHIPMENT').reduce((s, e) => s + e.quantity, 0);
+    warehouseStock = wp.eskiStok + wp.ilaveStok + weeklyProd - wp.cikis - weeklyShip;
+  }
+
+  // 3. Total produced from manufacturer panel (MAX — stored on first request)
   const totalProduced = Math.max(
     ...allRequests.map(r => r.producedQuantity ?? 0)
   );
+
+  // 4. Available = stock + produced
+  const totalAvailable = warehouseStock + totalProduced;
 
   // 2. Get marketplace priorities for this month
   const priorities = await prisma.marketplacePriority.findMany({
@@ -65,33 +82,35 @@ export async function waterfallComplete(iwasku: string, month: string): Promise<
     return pa - pb;
   });
 
-  // 4. Waterfall: allocate produced quantity in priority order
-  let remaining = totalProduced;
+  // 5. Waterfall: allocate available quantity in priority order
+  let remaining = totalAvailable;
   let changed = 0;
 
   for (const req of sorted) {
+    // Skip requests already completed by snapshot auto-complete (stoktan karşılandı)
+    if (req.status === 'COMPLETED' && req.manufacturerNotes === 'Stoktan karşılandı') {
+      remaining -= req.quantity;
+      continue;
+    }
+
     if (remaining >= req.quantity) {
       // This marketplace's demand is fully covered
       remaining -= req.quantity;
 
-      if (req.status !== 'COMPLETED' || req.manufacturerNotes !== 'Öncelik tamamlandı') {
-        // Only update if not already marked by us
-        if (req.status === 'REQUESTED' || req.status === 'PARTIALLY_PRODUCED' ||
-            (req.status === 'COMPLETED' && req.manufacturerNotes !== 'Öncelik tamamlandı')) {
-          await prisma.productionRequest.update({
-            where: { id: req.id },
-            data: {
-              status: 'COMPLETED',
-              manufacturerNotes: 'Öncelik tamamlandı',
-            },
-          });
-          changed++;
-        }
+      if (req.status !== 'COMPLETED') {
+        await prisma.productionRequest.update({
+          where: { id: req.id },
+          data: {
+            status: 'COMPLETED',
+            manufacturerNotes: 'Öncelik tamamlandı',
+          },
+        });
+        changed++;
       }
     } else {
-      // Not enough produced for this marketplace
+      // Not enough for this marketplace
       if (req.status === 'COMPLETED' && req.manufacturerNotes === 'Öncelik tamamlandı') {
-        // Was previously auto-completed, revert
+        // Was previously waterfall-completed, revert
         await prisma.productionRequest.update({
           where: { id: req.id },
           data: {
@@ -105,7 +124,7 @@ export async function waterfallComplete(iwasku: string, month: string): Promise<
   }
 
   if (changed > 0) {
-    logger.info(`Waterfall: ${iwasku} (${month}) — ${totalProduced} üretilen, ${changed} talep güncellendi`);
+    logger.info(`Waterfall: ${iwasku} (${month}) — stok:${warehouseStock} + üretilen:${totalProduced} = ${totalAvailable}, ${changed} talep güncellendi`);
   }
 
   return changed;
