@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Bell, User, LogOut, FileText, Shield, Menu, X, Warehouse } from 'lucide-react';
+import { Bell, User, LogOut, FileText, Shield, Menu, X, Warehouse, CalendarRange, Ship } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 export function Header() {
@@ -62,6 +62,22 @@ export function Header() {
 
             {role === 'admin' && (
               <>
+                <Link
+                  href="/dashboard/seasonal"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                  title="Sezon Planlaması"
+                >
+                  <CalendarRange className="w-4 h-4" />
+                  <span className="hidden lg:inline">Sezon</span>
+                </Link>
+                <Link
+                  href="/dashboard/shipments"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                  title="Sevkiyat"
+                >
+                  <Ship className="w-4 h-4" />
+                  <span className="hidden lg:inline">Sevkiyat</span>
+                </Link>
                 <Link
                   href="/dashboard/admin/permissions"
                   className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
@@ -148,6 +164,22 @@ export function Header() {
 
             {role === 'admin' && (
               <>
+                <Link
+                  href="/dashboard/seasonal"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
+                >
+                  <CalendarRange className="w-4 h-4" />
+                  Sezon Planlaması
+                </Link>
+                <Link
+                  href="/dashboard/shipments"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
+                >
+                  <Ship className="w-4 h-4" />
+                  Sevkiyat
+                </Link>
                 <Link
                   href="/dashboard/admin/permissions"
                   onClick={() => setMenuOpen(false)}
