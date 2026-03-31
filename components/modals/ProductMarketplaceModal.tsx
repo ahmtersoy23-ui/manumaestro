@@ -5,7 +5,7 @@
 
 'use client';
 
-import { X, ShoppingBag } from 'lucide-react';
+import { X, ShoppingBag, CheckCircle2 } from 'lucide-react';
 
 const PRIORITY_STYLE: Record<string, string> = {
   HIGH: 'bg-red-100 text-red-700 border-red-200',
@@ -24,6 +24,8 @@ interface MarketplaceRequest {
   quantity: number;
   colorTag?: string | null;
   priority?: string;
+  status?: string;
+  manufacturerNotes?: string | null;
 }
 
 interface ProductMarketplaceModalProps {
@@ -79,13 +81,17 @@ export function ProductMarketplaceModal({
               <div key={i}>
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2">
-                    {req.colorTag && (
+                    {req.status === 'COMPLETED' ? (
+                      <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+                    ) : req.colorTag ? (
                       <span
                         className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                         style={{ backgroundColor: req.colorTag }}
                       />
-                    )}
-                    <span className="text-sm text-gray-900">{req.marketplaceName}</span>
+                    ) : null}
+                    <span className={`text-sm ${req.status === 'COMPLETED' ? 'text-green-700 font-medium' : 'text-gray-900'}`}>
+                      {req.marketplaceName}
+                    </span>
                     {req.priority && (
                       <span className={`text-xs px-1.5 py-0.5 rounded border ${PRIORITY_STYLE[req.priority]}`}>
                         {PRIORITY_LABEL[req.priority]}
@@ -93,7 +99,7 @@ export function ProductMarketplaceModal({
                     )}
                   </div>
                   <div className="flex items-center gap-2 text-sm">
-                    <span className="font-semibold text-gray-900">{req.quantity}</span>
+                    <span className={`font-semibold ${req.status === 'COMPLETED' ? 'text-green-600' : 'text-gray-900'}`}>{req.quantity}</span>
                     <span className="text-gray-400 w-10 text-right">{pct}%</span>
                   </div>
                 </div>

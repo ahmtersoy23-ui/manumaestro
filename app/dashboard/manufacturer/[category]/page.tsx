@@ -648,11 +648,13 @@ export default function ManufacturerCategoryPage() {
             if (PRIORITY_ORDER[pri] > PRIORITY_ORDER[existing.priority as 'HIGH' | 'MEDIUM' | 'LOW']) {
               existing.priority = pri;
             }
+            // If any request for this marketplace is not COMPLETED, overall is not completed
+            if (r.status !== 'COMPLETED') existing.status = r.status;
           } else {
-            acc.push({ marketplaceName: r.marketplaceName, quantity: r.quantity, colorTag: r.marketplaceColorTag, priority: pri });
+            acc.push({ marketplaceName: r.marketplaceName, quantity: r.quantity, colorTag: r.marketplaceColorTag, priority: pri, status: r.status, manufacturerNotes: r.manufacturerNotes });
           }
           return acc;
-        }, [] as Array<{ marketplaceName: string; quantity: number; colorTag?: string | null; priority: string }>) || []}
+        }, [] as Array<{ marketplaceName: string; quantity: number; colorTag?: string | null; priority: string; status?: string; manufacturerNotes?: string | null }>) || []}
       />
     </div>
   );
