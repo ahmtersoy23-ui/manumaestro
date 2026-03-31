@@ -18,7 +18,9 @@ interface WeeklyEntry { id: string; weekStart: string; quantity: number; }
 interface StockProduct {
   id: string; iwasku: string; productName: string; productCategory: string;
   desi: number | null; eskiStok: number; ilaveStok: number; cikis: number;
-  uretilen: number; haftalikCikis: number; toplamCikis: number; mevcut: number; toplamDesi: number | null;
+  uretilen: number; haftalikCikis: number; toplamCikis: number; mevcut: number;
+  reserved: number; atp: number;
+  toplamDesi: number | null;
   weeklyEntries: WeeklyEntry[];
   shipmentEntries: WeeklyEntry[];
 }
@@ -69,7 +71,7 @@ function formatWeekLabel(dateStr: string): { range: string; month: string } {
   };
 }
 
-type SortKey = 'iwasku' | 'productName' | 'productCategory' | 'desi' | 'eskiStok' | 'uretilen' | 'ilaveStok' | 'toplamCikis' | 'mevcut' | 'toplamDesi';
+type SortKey = 'iwasku' | 'productName' | 'productCategory' | 'desi' | 'eskiStok' | 'uretilen' | 'ilaveStok' | 'toplamCikis' | 'mevcut' | 'reserved' | 'atp' | 'toplamDesi';
 
 export default function WarehouseStockPage() {
   const { role } = useAuth();
@@ -233,7 +235,7 @@ export default function WarehouseStockPage() {
       p.weeklyEntries.forEach(w => { row[`Üretim ${w.weekStart.split('T')[0]}`] = w.quantity; });
       row['Üretilen'] = p.uretilen; row['İlave'] = p.ilaveStok;
       p.shipmentEntries.forEach(w => { row[`Çıkış ${w.weekStart.split('T')[0]}`] = w.quantity; });
-      row['Çıkış'] = p.toplamCikis; row['Mevcut'] = p.mevcut; row['Toplam Desi'] = p.toplamDesi;
+      row['Çıkış'] = p.toplamCikis; row['Mevcut'] = p.mevcut; row['Ayrılmış'] = p.reserved; row['ATP'] = p.atp; row['Toplam Desi'] = p.toplamDesi;
       return row;
     });
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -491,6 +493,8 @@ export default function WarehouseStockPage() {
                       })}
                       <SortHeader label="Çıkış" sortField="toplamCikis" className="text-right font-semibold text-red-700 bg-red-50 min-w-[45px]" />
                       <SortHeader label="Mevcut" sortField="mevcut" className="text-right font-bold text-purple-700 bg-purple-50 min-w-[55px]" />
+                      <SortHeader label="Ayrılmış" sortField="reserved" className="text-right font-semibold text-orange-600 bg-orange-50 min-w-[55px]" />
+                      <SortHeader label="ATP" sortField="atp" className="text-right font-bold text-emerald-700 bg-emerald-50 min-w-[55px]" />
                       <SortHeader label="T.Desi" sortField="toplamDesi" className="text-right font-semibold text-gray-500 min-w-[55px]" />
                     </tr>
                   </thead>
@@ -538,6 +542,8 @@ export default function WarehouseStockPage() {
                           ))}
                           <td className="px-2 py-1 text-right font-medium text-red-700 bg-red-50/30">{p.toplamCikis || '-'}</td>
                           <td className="px-2 py-1 text-right font-bold text-purple-700 bg-purple-50/30">{p.mevcut}</td>
+                          <td className="px-2 py-1 text-right text-orange-600 bg-orange-50/30">{p.reserved > 0 ? p.reserved : '-'}</td>
+                          <td className="px-2 py-1 text-right font-bold text-emerald-700 bg-emerald-50/30">{p.atp}</td>
                           <td className="px-2 py-1 text-right text-gray-400">{p.toplamDesi ?? '-'}</td>
                         </tr>
                       );
