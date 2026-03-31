@@ -58,6 +58,26 @@ export async function GET(request: NextRequest) {
     // Get ATP data (seasonal reserves)
     const atpMap = await getATPMap(iwaskus);
 
+    // Get active seasonal pool info per iwasku (for toggle default)
+    const activeReserves = await prisma.stockReserve.findMany({
+      where: {
+        iwasku: { in: iwaskus },
+        status: { in: ['PLANNED', 'PRODUCING', 'STOCKED'] },
+        pool: { poolType: 'SEASONAL', status: 'ACTIVE' },
+      },
+      select: {
+        iwasku: true, targetQuantity: true, producedQuantity: true,
+        pool: { select: { id: true, name: true } },
+      },
+    });
+    const seasonPoolMap = new Map<string, { poolId: string; poolName: string; target: number; produced: number }>();
+    for (const r of activeReserves) {
+      seasonPoolMap.set(r.iwasku, {
+        poolId: r.pool.id, poolName: r.pool.name,
+        target: r.targetQuantity, produced: r.producedQuantity,
+      });
+    }
+
     // Enrich with product details and calculated fields
     const data = products.map(p => {
       const productionEntries = p.weeklyEntries.filter(w => w.type === 'PRODUCTION');
@@ -84,6 +104,7 @@ export async function GET(request: NextRequest) {
         mevcut,
         reserved: atpMap.get(p.iwasku)?.reserved ?? 0,
         atp: atpMap.get(p.iwasku)?.atp ?? mevcut,
+        _seasonPool: seasonPoolMap.get(p.iwasku) ?? null,
         toplamDesi: desi ? Math.round(mevcut * desi * 100) / 100 : null,
         weeklyEntries: productionEntries.map(w => ({
           id: w.id,

@@ -16,6 +16,7 @@ import { createLogger } from '@/lib/logger';
 const logger = createLogger('MonthDetailPage');
 
 import { AddMarketplaceModal } from '@/components/modals/AddMarketplaceModal';
+import { MarketplacePriority as MarketplacePriorityComponent } from '@/components/seasonal/MarketplacePriority';
 
 // Production group classification
 const HAZIR_ALIM_CATEGORIES = ['Alsat', 'Tekstil'];
@@ -747,6 +748,19 @@ export default function MonthDetailPage() {
           </button>
         </div>
       </div>
+
+      {/* Marketplace Priority — Admin only */}
+      {role === 'admin' && (
+        <div>
+          <div className="flex items-center gap-3 mb-4">
+            <Factory className="w-6 h-6 text-purple-700" />
+            <h2 className="text-2xl font-semibold text-gray-900">Öncelik Sıralaması</h2>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <MarketplacePriorityComponent month={month} />
+          </div>
+        </div>
+      )}
 
       {/* Add / Edit Marketplace Modal */}
       <AddMarketplaceModal

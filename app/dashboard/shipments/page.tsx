@@ -159,18 +159,25 @@ export default function ShipmentsPage() {
         ))}
       </div>
 
-      {/* Create Shipment */}
-      <div className="flex gap-2">
-        <button
-          onClick={() => setShowCreate(!showCreate)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
-        >
-          <Plus className="w-4 h-4" />
-          Yeni Sevkiyat ({activeTab})
-        </button>
-      </div>
+      {/* Create Shipment — only for US (other destinations managed by warehouse team directly) */}
+      {activeTab === 'US' && (
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowCreate(!showCreate)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+          >
+            <Plus className="w-4 h-4" />
+            Yeni Sevkiyat (US)
+          </button>
+        </div>
+      )}
+      {activeTab !== 'US' && (
+        <div className="bg-gray-50 border rounded-lg px-4 py-3 text-sm text-gray-500">
+          {tabLabels[activeTab]} sevkiyatları depo ekibinin düzenine göre yönetilir.
+        </div>
+      )}
 
-      {showCreate && (
+      {showCreate && activeTab === 'US' && (
         <form onSubmit={handleCreate} className="bg-white border border-blue-200 rounded-xl p-5 space-y-4">
           <h3 className="font-semibold text-gray-900">Yeni Sevkiyat — {tabLabels[activeTab]}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

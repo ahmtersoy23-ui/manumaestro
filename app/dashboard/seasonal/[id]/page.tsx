@@ -12,8 +12,9 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   ArrowLeft, Upload, Package, TrendingUp, Truck, AlertCircle,
-  Loader2, CheckCircle2, XCircle, BarChart3, Calendar,
+  Loader2, CheckCircle2, XCircle, BarChart3, Calendar, FileSpreadsheet,
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 interface Reserve {
   id: string;
@@ -118,15 +119,13 @@ export default function PoolDetailPage() {
   }
   const monthSummary = [...monthMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 
-  const handleImport = async () => {
-    if (!importJson.trim()) return;
+  const handleImport = async (payload: Record<string, unknown>) => {
     setImporting(true);
     try {
-      const parsed = JSON.parse(importJson);
       const res = await fetch(`/api/stock-pools/${id}/import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(parsed),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (data.success) {
@@ -136,11 +135,68 @@ export default function PoolDetailPage() {
       } else {
         alert(data.error || 'Aktarım başarısız');
       }
-    } catch (err) {
-      alert('JSON formatı hatalı');
+    } catch {
+      alert('Aktarım hatası');
     } finally {
       setImporting(false);
     }
+  };
+
+  const handleJsonImport = () => {
+    if (!importJson.trim()) return;
+    try {
+      handleImport(JSON.parse(importJson));
+    } catch {
+      alert('JSON formatı hatalı');
+    }
+  };
+
+  const handleExcelImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const wb = XLSX.read(evt.target?.result, { type: 'binary' });
+        const ws = wb.Sheets[wb.SheetNames[0]!]!;
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+
+        // Map Excel columns to import format
+        // Expected: IWASKU, Ürün Adı, Kategori, Desi/Un, Q4'26 or Q1'27 columns
+        const items = rows.map(row => {
+          const iwasku = String(row['IWASKU'] || row['iwasku'] || '');
+          // Try various column names for quantity
+          const qty = Number(row['Q4\'26\nAğır.+15%'] || row['Q1\'27\nAğır.+15%'] ||
+            row['quantity'] || row['Quantity'] || row['6ay Un'] || 0);
+          const desi = Number(row['Desi/Un'] || row['desi'] || row['Desi'] || 0);
+          const category = String(row['Kategori'] || row['Category'] || row['category'] || '');
+          return { iwasku, quantity: Math.round(qty), desi, category };
+        }).filter(i => i.iwasku && i.quantity > 0);
+
+        if (items.length === 0) {
+          alert('Excel\'de geçerli veri bulunamadı. IWASKU ve quantity/miktar kolonları gerekli.');
+          return;
+        }
+
+        // Default months (Apr-Nov 2026)
+        const defaultMonths = [
+          { month: '2026-04', workingDays: 21, desiPerDay: 500 },
+          { month: '2026-05', workingDays: 16, desiPerDay: 500 },
+          { month: '2026-06', workingDays: 22, desiPerDay: 500 },
+          { month: '2026-07', workingDays: 22, desiPerDay: 400 },
+          { month: '2026-08', workingDays: 21, desiPerDay: 400 },
+          { month: '2026-09', workingDays: 22, desiPerDay: 450 },
+          { month: '2026-10', workingDays: 21, desiPerDay: 500 },
+          { month: '2026-11', workingDays: 20, desiPerDay: 500 },
+        ];
+
+        handleImport({ items, months: defaultMonths, autoAllocate: true });
+      } catch {
+        alert('Excel dosyası okunamadı');
+      }
+    };
+    reader.readAsBinaryString(file);
+    e.target.value = ''; // Reset file input
   };
 
   const handleStatusChange = async (newStatus: string) => {
@@ -239,23 +295,40 @@ export default function PoolDetailPage() {
               <details className="group">
                 <summary className="flex items-center gap-2 cursor-pointer text-sm font-medium text-purple-600 hover:text-purple-700">
                   <Upload className="w-4 h-4" />
-                  Talep Aktarımı (JSON)
+                  Talep Aktarımı
                 </summary>
-                <div className="mt-3 space-y-2">
-                  <textarea
-                    value={importJson}
-                    onChange={e => setImportJson(e.target.value)}
-                    placeholder='{"items": [{"iwasku": "CA041...", "quantity": 50, "desi": 2.0, "category": "CFW Ahşap Harita", "destination": "US"}], "months": [{"month": "2026-04", "workingDays": 21, "desiPerDay": 500}], "autoAllocate": true}'
-                    rows={4}
-                    className="w-full px-3 py-2 border rounded-lg text-xs font-mono focus:ring-2 focus:ring-purple-500"
-                  />
-                  <button
-                    onClick={handleImport} disabled={importing}
-                    className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
-                  >
-                    {importing && <Loader2 className="w-4 h-4 animate-spin" />}
-                    Aktar
-                  </button>
+                <div className="mt-3 space-y-4">
+                  {/* Excel Upload */}
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 cursor-pointer">
+                      <FileSpreadsheet className="w-4 h-4" />
+                      Excel Yükle (.xlsx)
+                      <input type="file" accept=".xlsx,.xls" onChange={handleExcelImport} className="hidden" />
+                    </label>
+                    <span className="text-xs text-gray-500">sezon-talep-tahmini.xlsx formatında (IWASKU, quantity, Desi/Un, Kategori)</span>
+                    {importing && <Loader2 className="w-4 h-4 animate-spin text-purple-500" />}
+                  </div>
+
+                  {/* JSON fallback */}
+                  <details className="text-xs">
+                    <summary className="text-gray-400 cursor-pointer hover:text-gray-600">veya JSON ile aktar</summary>
+                    <div className="mt-2 space-y-2">
+                      <textarea
+                        value={importJson}
+                        onChange={e => setImportJson(e.target.value)}
+                        placeholder='{"items": [...], "months": [...], "autoAllocate": true}'
+                        rows={3}
+                        className="w-full px-3 py-2 border rounded-lg text-xs font-mono focus:ring-2 focus:ring-purple-500"
+                      />
+                      <button
+                        onClick={handleJsonImport} disabled={importing}
+                        className="px-3 py-1.5 bg-purple-600 text-white text-xs rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
+                      >
+                        {importing && <Loader2 className="w-3 h-3 animate-spin" />}
+                        JSON Aktar
+                      </button>
+                    </div>
+                  </details>
                 </div>
               </details>
             </div>

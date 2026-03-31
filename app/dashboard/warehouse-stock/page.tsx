@@ -23,6 +23,7 @@ interface StockProduct {
   toplamDesi: number | null;
   weeklyEntries: WeeklyEntry[];
   shipmentEntries: WeeklyEntry[];
+  _seasonPool?: { poolId: string; poolName: string; target: number; produced: number } | null;
 }
 interface SnapshotItem {
   iwasku: string; productName: string; productCategory: string;
@@ -153,12 +154,12 @@ export default function WarehouseStockPage() {
   };
 
   // Update weekly (production or shipment)
-  const updateWeekly = async (iwasku: string, weekStart: string, quantity: number, type: 'PRODUCTION' | 'SHIPMENT' = 'PRODUCTION') => {
+  const updateWeekly = async (iwasku: string, weekStart: string, quantity: number, type: 'PRODUCTION' | 'SHIPMENT' = 'PRODUCTION', poolId?: string) => {
     setSaving(`${iwasku}-${type}-${weekStart}`);
     try {
       await fetch('/api/admin/warehouse-stock/weekly', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ iwasku, weekStart, quantity, type }),
+        body: JSON.stringify({ iwasku, weekStart, quantity, type, ...(poolId ? { poolId } : {}) }),
       });
       setProducts(prev => prev.map(p => {
         if (p.iwasku !== iwasku) return p;
@@ -505,7 +506,14 @@ export default function WarehouseStockPage() {
                       const isSaving = saving?.startsWith(p.iwasku);
                       return (
                         <tr key={p.iwasku} className={`border-b border-gray-100 hover:bg-gray-50/70 ${isSaving ? 'opacity-60' : ''}`}>
-                          <td className="px-2 py-1 font-mono text-blue-600 text-[11px] sticky left-0 bg-white z-10">{p.iwasku}</td>
+                          <td className="px-2 py-1 font-mono text-blue-600 text-[11px] sticky left-0 bg-white z-10">
+                            {p.iwasku}
+                            {p._seasonPool && (
+                              <span className="ml-1 px-1 py-0.5 bg-purple-100 text-purple-600 text-[9px] font-medium rounded" title={`${p._seasonPool.poolName}: ${p._seasonPool.produced}/${p._seasonPool.target}`}>
+                                SZN
+                              </span>
+                            )}
+                          </td>
                           <td className="px-2 py-1 text-gray-900 min-w-[250px] max-w-[350px]">
                             <span className="line-clamp-2 whitespace-normal leading-tight">{p.productName}</span>
                           </td>
@@ -516,13 +524,13 @@ export default function WarehouseStockPage() {
                           <td className="px-2 py-1 text-right bg-amber-50/30">
                             <span className="text-amber-700 font-medium">{p.eskiStok || '-'}</span>
                           </td>
-                          {/* Üretilen haftalık (yeşil) */}
+                          {/* Üretilen haftalık (yeşil, sezon ürünlerinde mor border) */}
                           {weekStarts.map(ws => (
-                            <td key={`prod-${ws}`} className="px-0.5 py-1 text-center bg-emerald-50/10">
+                            <td key={`prod-${ws}`} className={`px-0.5 py-1 text-center ${p._seasonPool ? 'bg-purple-50/20' : 'bg-emerald-50/10'}`}>
                               <EditableCell
                                 value={prodMap.get(ws) || 0}
-                                onSave={v => updateWeekly(p.iwasku, ws, v, 'PRODUCTION')}
-                                className="text-emerald-600"
+                                onSave={v => updateWeekly(p.iwasku, ws, v, 'PRODUCTION', p._seasonPool?.poolId)}
+                                className={p._seasonPool ? 'text-purple-600' : 'text-emerald-600'}
                               />
                             </td>
                           ))}
