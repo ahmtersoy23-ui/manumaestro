@@ -19,6 +19,8 @@ interface AggregatedProduct {
   productName: string;
   marketplaces: string;
   totalRequestedQty: number;
+  warehouseStock: number | null;
+  netNeed: number | null;
   producedQty: number;
   productSize: number;
   totalDesi: number;
@@ -77,6 +79,18 @@ export async function GET(request: NextRequest) {
       ],
     });
 
+    // Fetch snapshot stock for this month (fixed values)
+    const productionMonth = month || requests[0]?.productionMonth;
+    const snapshots = productionMonth
+      ? await prisma.monthSnapshot.findMany({
+          where: { month: productionMonth },
+        })
+      : [];
+    const stockMap = new Map<string, number>();
+    for (const s of snapshots) {
+      stockMap.set(s.iwasku, s.warehouseStock);
+    }
+
     // Aggregate by IWASKU (same pattern as manufacturer export)
     const aggregatedData = new Map<string, AggregatedProduct>();
 
@@ -85,14 +99,24 @@ export async function GET(request: NextRequest) {
       const existing = aggregatedData.get(key);
 
       if (existing) {
-        existing.marketplaces += `, ${r.marketplace.name}`;
+        if (!existing.marketplaces.includes(r.marketplace.name)) {
+          existing.marketplaces += `, ${r.marketplace.name}`;
+        }
         existing.totalRequestedQty += r.quantity;
+        existing.totalDesi += (r.productSize || 0) * r.quantity;
+        // Recalculate net need with updated total
+        const stock = stockMap.get(r.iwasku);
+        existing.warehouseStock = stock ?? null;
+        existing.netNeed = stock != null ? Math.max(0, existing.totalRequestedQty - stock) : null;
       } else {
+        const stock = stockMap.get(r.iwasku);
         aggregatedData.set(key, {
           iwasku: r.iwasku,
           productName: r.productName,
           marketplaces: r.marketplace.name,
           totalRequestedQty: r.quantity,
+          warehouseStock: stock ?? null,
+          netNeed: stock != null ? Math.max(0, r.quantity - stock) : null,
           producedQty: r.producedQuantity || 0,
           productSize: r.productSize || 0,
           totalDesi: (r.productSize || 0) * r.quantity,
@@ -111,6 +135,8 @@ export async function GET(request: NextRequest) {
       { header: 'Ürün Adı', key: 'productName', width: 35 },
       { header: 'Pazaryerleri', key: 'marketplaces', width: 25 },
       { header: 'Talep Edilen', key: 'totalRequestedQty', width: 15 },
+      { header: 'Depo Stok', key: 'warehouseStock', width: 12 },
+      { header: 'Net İhtiyaç', key: 'netNeed', width: 12 },
       { header: 'Üretilen', key: 'producedQty', width: 15 },
       { header: 'Desi (Birim)', key: 'productSize', width: 12 },
       { header: 'Toplam Desi', key: 'totalDesi', width: 12 },
