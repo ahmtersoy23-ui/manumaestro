@@ -169,7 +169,7 @@ function distributeToMonths(
   }
 
   // Distribute remaining units by largest remainder
-  let distributed = rawAllocations.reduce((s, a) => s + a.floored, 0);
+  const distributed = rawAllocations.reduce((s, a) => s + a.floored, 0);
   const remaining = targetQty - distributed;
 
   // Sort by remainder descending for distribution
