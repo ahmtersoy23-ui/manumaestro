@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { UserRole } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { createLogger } from '@/lib/logger';
+import { logAction } from '@/lib/auditLog';
 
 const logger = createLogger('Auth Verify');
 const SSO_VERIFY_URL = process.env.SSO_URL
@@ -163,7 +164,20 @@ export async function checkMarketplacePermission(
 ): Promise<{ allowed: boolean; reason?: string }> {
   if (userRole === 'admin') return { allowed: true };
 
+  const logDenied = (reason: string) => {
+    logAction({
+      userId,
+      userName: '',
+      userEmail: '',
+      action: 'ACCESS_DENIED',
+      entityType: 'MarketplacePermission',
+      description: `Pazar yeri erişimi reddedildi: ${marketplaceId} (${mode}) — ${reason}`,
+      metadata: { marketplaceId, mode, userRole, reason },
+    }).catch(() => {});
+  };
+
   if (userRole === 'viewer' && mode === 'edit') {
+    logDenied('viewer rolü ile düzenleme');
     return { allowed: false, reason: 'Görüntüleme yetkisine sahipsiniz, düzenleme yapamazsınız' };
   }
 
@@ -173,14 +187,17 @@ export async function checkMarketplacePermission(
   });
 
   if (!perm) {
+    logDenied('pazar yeri izni yok');
     return { allowed: false, reason: 'Bu pazar yerine erişim izniniz yok' };
   }
 
   if (mode === 'view' && !perm.canView) {
+    logDenied('görüntüleme izni yok');
     return { allowed: false, reason: 'Bu pazar yerini görüntüleme izniniz yok' };
   }
 
   if (mode === 'edit' && !perm.canEdit) {
+    logDenied('düzenleme izni yok');
     return { allowed: false, reason: 'Bu pazar yerini düzenleme izniniz yok' };
   }
 
@@ -199,7 +216,20 @@ export async function checkCategoryPermission(
 ): Promise<{ allowed: boolean; reason?: string }> {
   if (userRole === 'admin') return { allowed: true };
 
+  const logDenied = (reason: string) => {
+    logAction({
+      userId,
+      userName: '',
+      userEmail: '',
+      action: 'ACCESS_DENIED',
+      entityType: 'CategoryPermission',
+      description: `Kategori erişimi reddedildi: ${category} (${mode}) — ${reason}`,
+      metadata: { category, mode, userRole, reason },
+    }).catch(() => {});
+  };
+
   if (userRole === 'viewer' && mode === 'edit') {
+    logDenied('viewer rolü ile düzenleme');
     return { allowed: false, reason: 'Görüntüleme yetkisine sahipsiniz, düzenleme yapamazsınız' };
   }
 
@@ -209,14 +239,17 @@ export async function checkCategoryPermission(
   });
 
   if (!perm) {
+    logDenied('kategori izni yok');
     return { allowed: false, reason: 'Bu kategoriye erişim izniniz yok' };
   }
 
   if (mode === 'view' && !perm.canView) {
+    logDenied('görüntüleme izni yok');
     return { allowed: false, reason: 'Bu kategoriyi görüntüleme izniniz yok' };
   }
 
   if (mode === 'edit' && !perm.canEdit) {
+    logDenied('düzenleme izni yok');
     return { allowed: false, reason: 'Bu kategoriyi düzenleme izniniz yok' };
   }
 
@@ -275,6 +308,16 @@ export async function requireRole(
 
   // Check if user has required role
   if (!requiredRoles.includes(authResult.user.role)) {
+    const endpoint = request.nextUrl.pathname;
+    logAction({
+      userId: authResult.user.id,
+      userName: authResult.user.name,
+      userEmail: authResult.user.email,
+      action: 'ACCESS_DENIED',
+      entityType: 'Auth',
+      description: `Erişim reddedildi: ${endpoint} — rol: ${authResult.user.role}, gereken: ${requiredRoles.join('/')}`,
+      metadata: { endpoint, method: request.method, userRole: authResult.user.role, requiredRoles },
+    }).catch(() => {});
     return NextResponse.json(
       {
         success: false,

@@ -237,6 +237,7 @@ enum AuditAction {
   EXPORT_DATA
   MONTH_CLOSE
   UPDATE_STOCK
+  ACCESS_DENIED
 }
 
 // ============================================
