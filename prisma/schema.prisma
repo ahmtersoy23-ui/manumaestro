@@ -63,6 +63,8 @@ model Marketplace {
   createdBy         User?               @relation("CreatedBy", fields: [createdById], references: [id])
   permissions       UserMarketplacePermission[]
   requests          ProductionRequest[]
+  priorities        MarketplacePriority[]
+  shippingRoute     ShippingRoute?
 
   @@index([isActive, name])
   @@index([createdById])
@@ -297,4 +299,179 @@ model MonthSnapshot {
   @@unique([month, iwasku])
   @@index([month])
   @@map("month_snapshots")
+}
+
+// ============================================
+// SEASONAL STOCK MANAGEMENT
+// ============================================
+
+model StockPool {
+  id              String     @id @default(uuid())
+  name            String     // "Sezon Q4 2026", "Sezon Q1 2027"
+  code            String     @unique // "SZN-Q4-2026", "SZN-Q1-2027"
+  poolType        PoolType
+  targetQuarter   String?    // "Q4-2026", "Q1-2027"
+  status          PoolStatus @default(ACTIVE)
+
+  productionStart DateTime?
+  targetShipDate  DateTime?
+
+  totalTargetDesi  Float?
+  totalTargetUnits Int?
+
+  notes           String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  reserves        StockReserve[]
+
+  @@index([status])
+  @@map("stock_pools")
+}
+
+model StockReserve {
+  id               String        @id @default(uuid())
+  poolId           String
+  iwasku           String
+  targetQuantity   Int
+  targetDesi       Float?
+  producedQuantity Int           @default(0)
+  shippedQuantity  Int           @default(0)
+  status           ReserveStatus @default(PLANNED)
+  destination      String?       // "US", "EU", "UK", "NL", "AU", "ZA"
+
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  pool             StockPool     @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  allocations      MonthlyAllocation[]
+
+  @@unique([poolId, iwasku])
+  @@index([iwasku])
+  @@index([status])
+  @@map("stock_reserves")
+}
+
+model MonthlyAllocation {
+  id          String   @id @default(uuid())
+  reserveId   String
+  month       String   // "2026-04", "2026-05"
+  plannedQty  Int
+  plannedDesi Float?
+  actualQty   Int      @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  reserve     StockReserve @relation(fields: [reserveId], references: [id], onDelete: Cascade)
+
+  @@unique([reserveId, month])
+  @@index([month])
+  @@map("monthly_allocations")
+}
+
+enum PoolType {
+  SEASONAL
+  ROUTINE
+}
+
+enum PoolStatus {
+  ACTIVE
+  RELEASING
+  COMPLETED
+  CANCELLED
+}
+
+enum ReserveStatus {
+  PLANNED
+  PRODUCING
+  STOCKED
+  RELEASING
+  SHIPPED
+  CANCELLED
+}
+
+// ============================================
+// MARKETPLACE PRIORITY (Waterfall Completion)
+// ============================================
+
+model MarketplacePriority {
+  id            String      @id @default(uuid())
+  month         String      // "2026-04"
+  marketplaceId String
+  priority      Int         // 1 = en yüksek
+
+  createdAt     DateTime    @default(now())
+
+  marketplace   Marketplace @relation(fields: [marketplaceId], references: [id], onDelete: Cascade)
+
+  @@unique([month, marketplaceId])
+  @@index([month])
+  @@map("marketplace_priorities")
+}
+
+// ============================================
+// SHIPPING MANAGEMENT
+// ============================================
+
+model ShippingRoute {
+  id              String      @id @default(uuid())
+  marketplaceId   String      @unique
+  destinationTab  String      // "US", "UK", "EU", "NL", "AU", "ZA"
+  shippingMethod  String      // "sea", "road", "air"
+  leadTimeDays    Int?
+  notes           String?
+
+  marketplace     Marketplace @relation(fields: [marketplaceId], references: [id], onDelete: Cascade)
+
+  @@map("shipping_routes")
+}
+
+model Shipment {
+  id              String         @id @default(uuid())
+  name            String         // "US-2026-08-01", "EU-TIR-2026-10-05"
+  destinationTab  String         // "US", "UK", "EU", "NL", "AU", "ZA"
+  shippingMethod  String         // "sea", "road", "air"
+
+  plannedDate     DateTime
+  actualDate      DateTime?
+  etaDate         DateTime?
+
+  status          ShipmentStatus @default(PLANNING)
+
+  notes           String?
+  createdById     String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  items           ShipmentItem[]
+
+  @@index([destinationTab])
+  @@index([status])
+  @@map("shipments")
+}
+
+model ShipmentItem {
+  id            String    @id @default(uuid())
+  shipmentId    String
+  iwasku        String
+  quantity      Int
+  desi          Float?
+  marketplaceId String?
+  reserveId     String?
+
+  createdAt     DateTime  @default(now())
+
+  shipment      Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId])
+  @@index([iwasku])
+  @@map("shipment_items")
+}
+
+enum ShipmentStatus {
+  PLANNING
+  LOADING
+  IN_TRANSIT
+  DELIVERED
 }

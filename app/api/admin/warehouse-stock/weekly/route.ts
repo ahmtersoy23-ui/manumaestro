@@ -15,6 +15,7 @@ const WeeklyEntrySchema = z.object({
   weekStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD (Monday)
   quantity: z.number().int().min(0),
   type: z.enum(['PRODUCTION', 'SHIPMENT']).default('PRODUCTION'),
+  poolId: z.string().uuid().optional(), // Seasonal pool — if set, updates reserve.producedQuantity
 });
 
 export async function POST(request: NextRequest) {
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { iwasku, weekStart, quantity, type } = validation.data;
+    const { iwasku, weekStart, quantity, type, poolId } = validation.data;
     const weekDate = new Date(weekStart);
 
     // Ensure product exists in warehouse
@@ -70,8 +71,28 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // If seasonal pool specified, update reserve.producedQuantity
+    if (poolId && type === 'PRODUCTION' && quantity > 0) {
+      const reserve = await prisma.stockReserve.findFirst({
+        where: { poolId, iwasku },
+      });
+      if (reserve) {
+        const diff = quantity - (existing?.quantity ?? 0);
+        if (diff !== 0) {
+          await prisma.stockReserve.update({
+            where: { id: reserve.id },
+            data: {
+              producedQuantity: { increment: diff },
+              status: 'STOCKED',
+            },
+          });
+        }
+      }
+    }
+
     const oldQty = existing?.quantity ?? 0;
     const typeLabel = type === 'PRODUCTION' ? 'Üretim' : 'Çıkış';
+    const poolLabel = poolId ? ' [SEZON]' : '';
     await logAction({
       userId: auth.user.id,
       userName: auth.user.name,
@@ -79,8 +100,8 @@ export async function POST(request: NextRequest) {
       action: 'UPDATE_STOCK',
       entityType: 'WarehouseWeekly',
       entityId: iwasku,
-      description: `${iwasku} — ${typeLabel} (${weekStart}): ${oldQty} → ${quantity}`,
-      metadata: { iwasku, weekStart, type, oldQty, newQty: quantity },
+      description: `${iwasku} — ${typeLabel}${poolLabel} (${weekStart}): ${oldQty} → ${quantity}`,
+      metadata: { iwasku, weekStart, type, oldQty, newQty: quantity, poolId },
     });
 
     return NextResponse.json({ success: true, data: entry });

@@ -1,0 +1,163 @@
+/**
+ * Shipment Detail API
+ * GET: Shipment detail with items
+ * PATCH: Update shipment (status, dates)
+ * POST: Add items to shipment / Dispatch (send)
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db/prisma';
+import { requireRole } from '@/lib/auth/verify';
+import { logAction } from '@/lib/auditLog';
+import { z } from 'zod';
+
+type Params = { params: Promise<{ id: string }> };
+
+// --- GET: Detail ---
+export async function GET(request: NextRequest, { params }: Params) {
+  const authResult = await requireRole(request, ['admin']);
+  if (authResult instanceof NextResponse) return authResult;
+
+  const { id } = await params;
+
+  const shipment = await prisma.shipment.findUnique({
+    where: { id },
+    include: {
+      items: { orderBy: { iwasku: 'asc' } },
+    },
+  });
+
+  if (!shipment) {
+    return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadı' }, { status: 404 });
+  }
+
+  return NextResponse.json({ success: true, data: shipment });
+}
+
+// --- PATCH: Update status/dates ---
+const UpdateShipmentSchema = z.object({
+  status: z.enum(['PLANNING', 'LOADING', 'IN_TRANSIT', 'DELIVERED']).optional(),
+  plannedDate: z.string().datetime().optional(),
+  actualDate: z.string().datetime().optional(),
+  etaDate: z.string().datetime().optional(),
+  notes: z.string().optional(),
+});
+
+export async function PATCH(request: NextRequest, { params }: Params) {
+  const authResult = await requireRole(request, ['admin']);
+  if (authResult instanceof NextResponse) return authResult;
+  const { user } = authResult;
+  const { id } = await params;
+
+  const body = await request.json();
+  const validation = UpdateShipmentSchema.safeParse(body);
+  if (!validation.success) {
+    return NextResponse.json(
+      { success: false, error: 'Doğrulama hatası', details: validation.error.flatten().fieldErrors },
+      { status: 400 }
+    );
+  }
+
+  const data = validation.data;
+  const shipment = await prisma.shipment.findUnique({
+    where: { id },
+    include: { items: true },
+  });
+
+  if (!shipment) {
+    return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadı' }, { status: 404 });
+  }
+
+  // If dispatching (IN_TRANSIT), process warehouse cikis + reserve shipping
+  if (data.status === 'IN_TRANSIT' && shipment.status !== 'IN_TRANSIT') {
+    await prisma.$transaction(async (tx) => {
+      for (const item of shipment.items) {
+        // Update warehouse cikis
+        await tx.warehouseProduct.updateMany({
+          where: { iwasku: item.iwasku },
+          data: { cikis: { increment: item.quantity } },
+        });
+
+        // Update reserve shippedQuantity if linked
+        if (item.reserveId) {
+          await tx.stockReserve.update({
+            where: { id: item.reserveId },
+            data: {
+              shippedQuantity: { increment: item.quantity },
+              status: 'SHIPPED', // Will be checked if fully shipped
+            },
+          });
+        }
+      }
+    });
+  }
+
+  const updated = await prisma.shipment.update({
+    where: { id },
+    data: {
+      ...(data.status ? { status: data.status } : {}),
+      ...(data.plannedDate ? { plannedDate: new Date(data.plannedDate) } : {}),
+      ...(data.actualDate ? { actualDate: new Date(data.actualDate) } : {}),
+      ...(data.etaDate ? { etaDate: new Date(data.etaDate) } : {}),
+      ...(data.notes !== undefined ? { notes: data.notes } : {}),
+    },
+  });
+
+  await logAction({
+    userId: user.id, userName: user.name, userEmail: user.email,
+    action: 'UPDATE_REQUEST', entityType: 'Shipment', entityId: id,
+    description: `Sevkiyat güncellendi: ${updated.name} → ${data.status ?? 'bilgi güncellemesi'}`,
+  });
+
+  return NextResponse.json({ success: true, data: updated });
+}
+
+// --- POST: Add items to shipment ---
+const AddItemSchema = z.object({
+  items: z.array(z.object({
+    iwasku: z.string(),
+    quantity: z.number().int().positive(),
+    desi: z.number().optional(),
+    marketplaceId: z.string().optional(),
+    reserveId: z.string().optional(),
+  })).min(1),
+});
+
+export async function POST(request: NextRequest, { params }: Params) {
+  const authResult = await requireRole(request, ['admin']);
+  if (authResult instanceof NextResponse) return authResult;
+  const { user } = authResult;
+  const { id } = await params;
+
+  const shipment = await prisma.shipment.findUnique({ where: { id } });
+  if (!shipment) {
+    return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadı' }, { status: 404 });
+  }
+  if (shipment.status === 'IN_TRANSIT' || shipment.status === 'DELIVERED') {
+    return NextResponse.json({ success: false, error: 'Gönderilmiş sevkiyata ürün eklenemez' }, { status: 400 });
+  }
+
+  const body = await request.json();
+  const validation = AddItemSchema.safeParse(body);
+  if (!validation.success) {
+    return NextResponse.json(
+      { success: false, error: 'Doğrulama hatası', details: validation.error.flatten().fieldErrors },
+      { status: 400 }
+    );
+  }
+
+  const created = await prisma.shipmentItem.createMany({
+    data: validation.data.items.map(item => ({
+      shipmentId: id,
+      ...item,
+    })),
+  });
+
+  await logAction({
+    userId: user.id, userName: user.name, userEmail: user.email,
+    action: 'UPDATE_REQUEST', entityType: 'Shipment', entityId: id,
+    description: `Sevkiyata ${created.count} ürün eklendi: ${shipment.name}`,
+  });
+
+  return NextResponse.json({ success: true, data: { added: created.count } });
+}

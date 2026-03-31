@@ -1,0 +1,222 @@
+/**
+ * Stock Pool Import API
+ * POST: Import reserves from Excel + auto-allocate to months
+ *
+ * Expected Excel format (sezon-talep-tahmini.xlsx):
+ *   IWASKU | Ürün Adı | Kategori | Cost | Desi/Un | ... | Q4'26 Ağır.+15% | Q1'27 Ağır.+15% | ...
+ *
+ * Or simplified format:
+ *   iwasku | quantity | desi | category | destination
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db/prisma';
+import { queryProductDb } from '@/lib/db/prisma';
+import { requireRole } from '@/lib/auth/verify';
+import { logAction } from '@/lib/auditLog';
+import { allocateReserves, type ReserveInput, type MonthCapacity } from '@/lib/seasonal';
+import { z } from 'zod';
+
+const ImportItemSchema = z.object({
+  iwasku: z.string().min(1),
+  quantity: z.number().int().positive(),
+  desi: z.number().min(0).optional(),
+  category: z.string().optional(),
+  destination: z.string().optional(),
+  revenue: z.number().optional(),
+});
+
+const ImportSchema = z.object({
+  items: z.array(ImportItemSchema).min(1).max(5000),
+  months: z.array(z.object({
+    month: z.string().regex(/^\d{4}-\d{2}$/),
+    workingDays: z.number().int().positive(),
+    desiPerDay: z.number().positive(),
+  })).min(1),
+  autoAllocate: z.boolean().default(true),
+});
+
+type Params = { params: Promise<{ id: string }> };
+
+export async function POST(request: NextRequest, { params }: Params) {
+  const authResult = await requireRole(request, ['admin']);
+  if (authResult instanceof NextResponse) return authResult;
+  const { user } = authResult;
+  const { id } = await params;
+
+  // Verify pool exists and is active
+  const pool = await prisma.stockPool.findUnique({ where: { id } });
+  if (!pool) {
+    return NextResponse.json({ success: false, error: 'Havuz bulunamadı' }, { status: 404 });
+  }
+  if (pool.status !== 'ACTIVE') {
+    return NextResponse.json({ success: false, error: 'Sadece aktif havuzlara aktarım yapılabilir' }, { status: 400 });
+  }
+
+  const body = await request.json();
+  const validation = ImportSchema.safeParse(body);
+  if (!validation.success) {
+    return NextResponse.json(
+      { success: false, error: 'Doğrulama hatası', details: validation.error.flatten().fieldErrors },
+      { status: 400 }
+    );
+  }
+
+  const { items, months, autoAllocate } = validation.data;
+
+  // Enrich items with product data from pricelab_db if desi/category missing
+  const iwaskusNeedingEnrichment = items.filter(i => !i.desi || !i.category).map(i => i.iwasku);
+  const productDataMap = new Map<string, { desi: number; category: string }>();
+
+  if (iwaskusNeedingEnrichment.length > 0) {
+    try {
+      const placeholders = iwaskusNeedingEnrichment.map((_, i) => `$${i + 1}`).join(',');
+      const rows = await queryProductDb(
+        `SELECT DISTINCT ON (iwasku) iwasku, size AS desi, category
+         FROM sku_master WHERE iwasku IN (${placeholders}) AND size > 0
+         ORDER BY iwasku, updated_at DESC`,
+        iwaskusNeedingEnrichment
+      );
+      for (const row of rows) {
+        productDataMap.set(row.iwasku, {
+          desi: parseFloat(row.desi) || 0,
+          category: row.category || '',
+        });
+      }
+    } catch {
+      // Continue without enrichment — desi will be 0
+    }
+  }
+
+  // Merge items by iwasku (same product from different channels)
+  const mergedMap = new Map<string, {
+    quantity: number; desi: number; category: string;
+    destination?: string; revenue: number;
+  }>();
+
+  for (const item of items) {
+    const existing = mergedMap.get(item.iwasku);
+    const enriched = productDataMap.get(item.iwasku);
+
+    if (existing) {
+      existing.quantity += item.quantity;
+      existing.revenue += item.revenue ?? 0;
+      // Keep first destination (or could combine)
+    } else {
+      mergedMap.set(item.iwasku, {
+        quantity: item.quantity,
+        desi: item.desi ?? enriched?.desi ?? 0,
+        category: item.category ?? enriched?.category ?? '',
+        destination: item.destination,
+        revenue: item.revenue ?? 0,
+      });
+    }
+  }
+
+  // Create reserves in transaction
+  const reserveInputs: ReserveInput[] = [];
+  const createdReserves = await prisma.$transaction(async (tx) => {
+    const results = [];
+
+    for (const [iwasku, data] of mergedMap) {
+      const reserve = await tx.stockReserve.upsert({
+        where: { poolId_iwasku: { poolId: id, iwasku } },
+        create: {
+          poolId: id,
+          iwasku,
+          targetQuantity: data.quantity,
+          targetDesi: data.quantity * data.desi,
+          destination: data.destination,
+        },
+        update: {
+          targetQuantity: data.quantity,
+          targetDesi: data.quantity * data.desi,
+          destination: data.destination,
+        },
+      });
+
+      results.push(reserve);
+      reserveInputs.push({
+        iwasku,
+        targetQuantity: data.quantity,
+        desiPerUnit: data.desi,
+        category: data.category,
+        destination: data.destination,
+        revenue: data.revenue,
+      });
+    }
+
+    return results;
+  });
+
+  // Auto-allocate to months
+  let allocations: { iwasku: string; month: string; plannedQty: number; plannedDesi: number }[] = [];
+
+  if (autoAllocate && months.length > 0) {
+    const monthCapacities: MonthCapacity[] = months.map(m => ({
+      month: m.month,
+      workingDays: m.workingDays,
+      desiPerDay: m.desiPerDay,
+      totalDesi: m.workingDays * m.desiPerDay,
+      weight: 0, // Will be calculated
+    }));
+
+    allocations = allocateReserves(reserveInputs, monthCapacities);
+
+    // Save allocations
+    const reserveMap = new Map(createdReserves.map(r => [r.iwasku, r.id]));
+
+    await prisma.$transaction(async (tx) => {
+      // Delete existing allocations for this pool
+      const reserveIds = createdReserves.map(r => r.id);
+      await tx.monthlyAllocation.deleteMany({
+        where: { reserveId: { in: reserveIds } },
+      });
+
+      // Create new allocations
+      for (const alloc of allocations) {
+        const reserveId = reserveMap.get(alloc.iwasku);
+        if (!reserveId) continue;
+
+        await tx.monthlyAllocation.create({
+          data: {
+            reserveId,
+            month: alloc.month,
+            plannedQty: alloc.plannedQty,
+            plannedDesi: alloc.plannedDesi,
+          },
+        });
+      }
+    });
+  }
+
+  // Update pool totals
+  const totalUnits = [...mergedMap.values()].reduce((s, d) => s + d.quantity, 0);
+  const totalDesi = [...mergedMap.values()].reduce((s, d) => s + d.quantity * d.desi, 0);
+
+  await prisma.stockPool.update({
+    where: { id },
+    data: {
+      totalTargetUnits: totalUnits,
+      totalTargetDesi: Math.round(totalDesi),
+    },
+  });
+
+  await logAction({
+    userId: user.id, userName: user.name, userEmail: user.email,
+    action: 'BULK_UPLOAD', entityType: 'StockPool', entityId: id,
+    description: `Sezon planı aktarıldı: ${mergedMap.size} ürün, ${totalUnits} ünite, ${Math.round(totalDesi)} desi`,
+    metadata: { productCount: mergedMap.size, totalUnits, totalDesi: Math.round(totalDesi) },
+  });
+
+  return NextResponse.json({
+    success: true,
+    data: {
+      reservesCreated: createdReserves.length,
+      totalUnits,
+      totalDesi: Math.round(totalDesi),
+      allocationsCreated: allocations.length,
+      monthSummary: autoAllocate ? (await import('@/lib/seasonal')).summarizeByMonth(allocations) : [],
+    },
+  }, { status: 201 });
+}

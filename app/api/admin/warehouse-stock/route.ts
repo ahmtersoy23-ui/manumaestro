@@ -11,6 +11,7 @@ import { queryProductDb } from '@/lib/db/prisma';
 import { verifyAuth, checkStockPermission } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
 import { errorResponse } from '@/lib/api/response';
+import { getATPMap } from '@/lib/db/atp';
 import { z } from 'zod';
 
 export async function GET(request: NextRequest) {
@@ -54,6 +55,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Get ATP data (seasonal reserves)
+    const atpMap = await getATPMap(iwaskus);
+
     // Enrich with product details and calculated fields
     const data = products.map(p => {
       const productionEntries = p.weeklyEntries.filter(w => w.type === 'PRODUCTION');
@@ -78,6 +82,8 @@ export async function GET(request: NextRequest) {
         haftalikCikis,
         toplamCikis,
         mevcut,
+        reserved: atpMap.get(p.iwasku)?.reserved ?? 0,
+        atp: atpMap.get(p.iwasku)?.atp ?? mevcut,
         toplamDesi: desi ? Math.round(mevcut * desi * 100) / 100 : null,
         weeklyEntries: productionEntries.map(w => ({
           id: w.id,
