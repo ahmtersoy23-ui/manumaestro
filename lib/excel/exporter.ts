@@ -43,7 +43,7 @@ export async function createExcelWorkbook<T extends Record<string, any>>(
   // Create worksheet
   const worksheet = workbook.addWorksheet(options.sheetName, {
     properties: { tabColor: { argb: '9C27B0' } },
-    views: [{ state: 'frozen', xSplit: 0, ySplit: 1 }], // Freeze header row
+    views: [{ state: 'frozen', xSplit: 0, ySplit: options.title ? 2 : 1 }], // Freeze title+header rows
   });
 
   // Configure columns
@@ -76,8 +76,16 @@ export async function createExcelWorkbook<T extends Record<string, any>>(
     // Merge title across all columns
     worksheet.mergeCells(1, 1, 1, options.columns.length);
 
-    // Move header to row 2
-    worksheet.spliceRows(2, 0, [options.columns.map((c) => c.header)]);
+    // Re-style the header row (now row 2 after title insert)
+    const movedHeaderRow = worksheet.getRow(2);
+    movedHeaderRow.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+    movedHeaderRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF6B21A8' },
+    };
+    movedHeaderRow.alignment = { vertical: 'middle', horizontal: 'center' };
+    movedHeaderRow.height = 25;
   }
 
   // Add data rows in batches (memory-efficient)
