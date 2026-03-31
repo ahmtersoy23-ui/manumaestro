@@ -67,6 +67,8 @@ const statusLabels = {
   CANCELLED: 'İptal Edildi',
 };
 
+const PAGE_SIZE = 30;
+
 export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, archiveMode = false }: RequestsTableProps) {
   const { role, hasRole } = useAuth();
   const [requests, setRequests] = useState<Request[]>([]);
@@ -74,6 +76,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
   const [deleting, setDeleting] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     async function fetchRequests() {
@@ -81,11 +84,13 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
       try {
         const archiveParam = archiveMode ? '&archiveMode=true' : '';
         const monthParam = month && !archiveMode ? `&month=${month}` : '';
-        const res = await fetch(`/api/requests?marketplaceId=${marketplaceId}&limit=100${archiveParam}${monthParam}`);
+        const res = await fetch(`/api/requests?marketplaceId=${marketplaceId}&limit=5000${archiveParam}${monthParam}`);
         const data = await res.json();
 
         if (data.success) {
-          setRequests(data.data);
+          // Sort A-Z by iwasku
+          const sorted = [...data.data].sort((a: Request, b: Request) => a.iwasku.localeCompare(b.iwasku));
+          setRequests(sorted);
         }
       } catch (error) {
         logger.error('Failed to fetch requests:', error);
@@ -95,8 +100,13 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
     }
 
     fetchRequests();
-    setSelectedIds(new Set()); // Clear selection on refresh
+    setSelectedIds(new Set());
+    setPage(1);
   }, [marketplaceId, month, refreshTrigger, archiveMode]);
+
+  // Pagination
+  const totalPages = Math.ceil(requests.length / PAGE_SIZE);
+  const paginatedRequests = requests.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const handleToggleSelect = (id: string) => {
     const newSelected = new Set(selectedIds);
@@ -357,7 +367,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {requests.map((request) => (
+              {paginatedRequests.map((request) => (
                 <tr key={request.id} className={`transition-colors ${selectedIds.has(request.id) ? 'bg-purple-50' : 'hover:bg-gray-50'}`}>
                   {hasRole(['admin', 'editor']) && (
                     <td className="px-4 py-3 text-center">
@@ -400,7 +410,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="text-sm text-gray-900 truncate" title={request.productName}>
+                    <div className="text-xs text-gray-900 leading-tight line-clamp-2 whitespace-normal" title={request.productName}>
                       {request.productName}
                     </div>
                   </td>
@@ -451,6 +461,45 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
+            <p className="text-xs text-gray-500">
+              {requests.length} talepten {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, requests.length)} gösteriliyor
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-3 py-1 text-sm border rounded-lg disabled:opacity-30 hover:bg-gray-100"
+              >
+                ‹ Önceki
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+                .map((p, idx, arr) => (
+                  <span key={p}>
+                    {idx > 0 && arr[idx - 1] !== p - 1 && <span className="px-1 text-gray-400">…</span>}
+                    <button
+                      onClick={() => setPage(p)}
+                      className={`px-3 py-1 text-sm rounded-lg ${page === p ? 'bg-purple-600 text-white' : 'border hover:bg-gray-100'}`}
+                    >
+                      {p}
+                    </button>
+                  </span>
+                ))
+              }
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="px-3 py-1 text-sm border rounded-lg disabled:opacity-30 hover:bg-gray-100"
+              >
+                Sonraki ›
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

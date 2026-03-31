@@ -87,30 +87,12 @@ export async function PATCH(
     // Prepare update data
     const updateData: Prisma.ProductionRequestUpdateInput = {};
 
-    // Handle status change first to check for auto-complete
     if (status !== undefined) {
       updateData.status = status;
+    }
 
-      // Auto-set producedQuantity to quantity when status is COMPLETED
-      // Only if producedQuantity is not explicitly provided OR is 0/null/empty
-      if (status === 'COMPLETED') {
-        if (producedQuantity === undefined || producedQuantity === null || producedQuantity === 0) {
-          updateData.producedQuantity = existingRequest.quantity;
-        } else {
-          // User provided a specific value, use that
-          updateData.producedQuantity = producedQuantity;
-        }
-      } else {
-        // Not completed, just update producedQuantity if provided
-        if (producedQuantity !== undefined) {
-          updateData.producedQuantity = producedQuantity;
-        }
-      }
-    } else {
-      // No status change, just update producedQuantity if provided
-      if (producedQuantity !== undefined) {
-        updateData.producedQuantity = producedQuantity;
-      }
+    if (producedQuantity !== undefined) {
+      updateData.producedQuantity = producedQuantity;
     }
 
     if (manufacturerNotes !== undefined) {

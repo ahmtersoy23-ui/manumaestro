@@ -39,10 +39,10 @@ export async function waterfallComplete(iwasku: string, month: string): Promise<
 
   if (allRequests.length === 0) return 0;
 
-  // Total produced = max producedQuantity across requests (they share the same production)
-  // In manufacturer panel, producedQuantity is set on the "representative" request
-  const totalProduced = Math.max(
-    ...allRequests.map(r => r.producedQuantity ?? 0)
+  // Total produced = SUM of producedQuantity across all requests for this iwasku
+  // Manufacturer panel distributes produced qty across marketplace requests
+  const totalProduced = allRequests.reduce(
+    (sum, r) => sum + (r.producedQuantity ?? 0), 0
   );
 
   // 2. Get marketplace priorities for this month
