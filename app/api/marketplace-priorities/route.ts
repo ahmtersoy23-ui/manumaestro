@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireRole } from '@/lib/auth/verify';
+import { waterfallComplete } from '@/lib/waterfallComplete';
 import { z } from 'zod';
 
 const SetPrioritiesSchema = z.object({
@@ -61,5 +62,20 @@ export async function POST(request: NextRequest) {
     }
   });
 
-  return NextResponse.json({ success: true, data: { month, count: priorities.length } });
+  // Trigger waterfall for all iwaskus in this month
+  const distinctIwaskus = await prisma.productionRequest.findMany({
+    where: { productionMonth: month },
+    select: { iwasku: true },
+    distinct: ['iwasku'],
+  });
+
+  let waterfallChanged = 0;
+  for (const { iwasku } of distinctIwaskus) {
+    waterfallChanged += await waterfallComplete(iwasku, month);
+  }
+
+  return NextResponse.json({
+    success: true,
+    data: { month, count: priorities.length, waterfallChanged },
+  });
 }
