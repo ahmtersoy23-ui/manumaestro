@@ -169,13 +169,13 @@ export default function ManufacturerCategoryPage() {
 
           setGroupedRequests(grouped);
 
-          // Initialize edit values using first request of each group
+          // Initialize edit values using SUM of all requests in each group
           const initialValues: EditValues = {};
           grouped.forEach((group: GroupedRequest) => {
+            const totalProduced = group.requests.reduce((sum, r) => sum + (r.producedQuantity || 0), 0);
             const firstRequest = group.requests[0];
-            // Use the group's IWASKU as the key for editing
             initialValues[group.iwasku] = {
-              producedQuantity: firstRequest.producedQuantity || 0,
+              producedQuantity: totalProduced,
               manufacturerNotes: firstRequest.manufacturerNotes || '',
               status: firstRequest.status,
             };
