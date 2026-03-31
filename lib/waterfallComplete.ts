@@ -41,18 +41,11 @@ export async function waterfallComplete(iwasku: string, month: string): Promise<
 
   if (allRequests.length === 0) return 0;
 
-  // 2. Get warehouse stock (mevcut)
-  const wp = await prisma.warehouseProduct.findUnique({
-    where: { iwasku },
-    include: { weeklyEntries: true },
+  // 2. Get snapshot stock (frozen at month boundary, not live stock)
+  const snapshot = await prisma.monthSnapshot.findUnique({
+    where: { month_iwasku: { month, iwasku } },
   });
-
-  let warehouseStock = 0;
-  if (wp) {
-    const weeklyProd = wp.weeklyEntries.filter(e => e.type === 'PRODUCTION').reduce((s, e) => s + e.quantity, 0);
-    const weeklyShip = wp.weeklyEntries.filter(e => e.type === 'SHIPMENT').reduce((s, e) => s + e.quantity, 0);
-    warehouseStock = wp.eskiStok + wp.ilaveStok + weeklyProd - wp.cikis - weeklyShip;
-  }
+  const warehouseStock = snapshot?.warehouseStock ?? 0;
 
   // 3. Total produced from manufacturer panel (MAX — stored on first request)
   const totalProduced = Math.max(
@@ -83,16 +76,11 @@ export async function waterfallComplete(iwasku: string, month: string): Promise<
   });
 
   // 5. Waterfall: allocate available quantity in priority order
+  //    Takes over ALL auto-completion (replaces old snapshot-based auto-complete)
   let remaining = totalAvailable;
   let changed = 0;
 
   for (const req of sorted) {
-    // Skip requests already completed by snapshot auto-complete (stoktan karşılandı)
-    if (req.status === 'COMPLETED' && req.manufacturerNotes === 'Stoktan karşılandı') {
-      remaining -= req.quantity;
-      continue;
-    }
-
     if (remaining >= req.quantity) {
       // This marketplace's demand is fully covered
       remaining -= req.quantity;
@@ -106,11 +94,17 @@ export async function waterfallComplete(iwasku: string, month: string): Promise<
           },
         });
         changed++;
+      } else if (req.status === 'COMPLETED' && req.manufacturerNotes === 'Stoktan karşılandı') {
+        // Re-label: was snapshot-completed, now waterfall owns it
+        await prisma.productionRequest.update({
+          where: { id: req.id },
+          data: { manufacturerNotes: 'Öncelik tamamlandı' },
+        });
       }
     } else {
-      // Not enough for this marketplace
-      if (req.status === 'COMPLETED' && req.manufacturerNotes === 'Öncelik tamamlandı') {
-        // Was previously waterfall-completed, revert
+      // Not enough for this marketplace — revert if previously auto-completed
+      if (req.status === 'COMPLETED' &&
+          (req.manufacturerNotes === 'Öncelik tamamlandı' || req.manufacturerNotes === 'Stoktan karşılandı')) {
         await prisma.productionRequest.update({
           where: { id: req.id },
           data: {
