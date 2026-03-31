@@ -11,6 +11,7 @@ import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLi
 import { requireRole, checkCategoryPermission } from '@/lib/auth/verify';
 import { errorResponse } from '@/lib/api/response';
 import { logAction } from '@/lib/auditLog';
+import { waterfallComplete } from '@/lib/waterfallComplete';
 
 export async function PATCH(
   request: NextRequest,
@@ -61,10 +62,10 @@ export async function PATCH(
 
     const { producedQuantity, manufacturerNotes, status, workflowStage } = bodyValidation.data;
 
-    // Fetch the request to get quantity and category
+    // Fetch the request to get quantity, category, and month
     const existingRequest = await prisma.productionRequest.findUnique({
       where: { id },
-      select: { iwasku: true, productName: true, quantity: true, productCategory: true },
+      select: { iwasku: true, productName: true, quantity: true, productCategory: true, productionMonth: true },
     });
 
     if (!existingRequest) {
@@ -136,6 +137,11 @@ export async function PATCH(
       description: `Üretim güncellendi: ${existingRequest.iwasku} ${existingRequest.productName} (${existingRequest.productCategory}) — durum: ${updated.status}, üretilen: ${updated.producedQuantity ?? '-'}`,
       metadata: { ...updateData, requestId: id, iwasku: existingRequest.iwasku, productName: existingRequest.productName, productCategory: existingRequest.productCategory },
     });
+
+    // Waterfall completion: auto-complete marketplace requests by priority
+    if (producedQuantity !== undefined) {
+      await waterfallComplete(existingRequest.iwasku, existingRequest.productionMonth);
+    }
 
     return NextResponse.json({
       success: true,
