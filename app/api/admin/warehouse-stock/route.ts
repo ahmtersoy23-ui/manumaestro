@@ -90,20 +90,20 @@ export async function GET(request: NextRequest) {
           select: {
             iwasku: true,
             quantity: true,
-            marketplace: { select: { code: true } },
+            marketplace: { select: { code: true, name: true } },
           },
         })
       : [];
 
     // Build demand map: iwasku -> [{code, qty}]
-    const demandMap = new Map<string, { code: string; qty: number }[]>();
+    const demandMap = new Map<string, { name: string; qty: number }[]>();
     for (const d of monthDemands) {
       const list = demandMap.get(d.iwasku) ?? [];
-      const existing = list.find(x => x.code === d.marketplace.code);
+      const existing = list.find(x => x.name === d.marketplace.name);
       if (existing) {
         existing.qty += d.quantity;
       } else {
-        list.push({ code: d.marketplace.code, qty: d.quantity });
+        list.push({ name: d.marketplace.name, qty: d.quantity });
       }
       demandMap.set(d.iwasku, list);
     }

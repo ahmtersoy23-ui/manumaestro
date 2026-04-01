@@ -24,7 +24,7 @@ interface StockProduct {
   weeklyEntries: WeeklyEntry[];
   shipmentEntries: WeeklyEntry[];
   _seasonPool?: { poolId: string; poolName: string; target: number; produced: number } | null;
-  _monthDemands?: { code: string; qty: number }[];
+  _monthDemands?: { name: string; qty: number }[];
 }
 interface SnapshotItem {
   iwasku: string; productName: string; productCategory: string;
@@ -575,9 +575,17 @@ export default function WarehouseStockPage() {
                             {(p._monthDemands && p._monthDemands.length > 0) ? (
                               <div className="flex flex-wrap gap-0.5">
                                 {p._monthDemands.map((d, i) => {
-                                  const short = d.code.replace('AMZN_', '').replace('WF_', 'WF').replace('WM_', 'WM').replace('ETSY_', 'ET').replace('TAKE', 'TK').replace('KAUF', 'KF').replace('BOL', 'BL').substring(0, 4);
+                                  // Name-based abbreviations
+                                  const abbr: Record<string, string> = {
+                                    'Amazon US': 'US', 'Amazon EU': 'EU', 'Amazon UK': 'UK',
+                                    'Amazon AU': 'AU', 'Amazon CA': 'CA', 'Amazon Citi': 'Citi',
+                                    'Takealot': 'TK', 'Kaufland': 'KF', 'Bol': 'BOL',
+                                    'Wayfair US': 'WF-US', 'Wayfair UK': 'WF-UK',
+                                    'Walmart': 'WM', 'Etsy': 'ET', 'Ebay': 'EB',
+                                  };
+                                  const short = abbr[d.name] ?? d.name.substring(0, 4);
                                   return (
-                                    <span key={i} className="text-[9px] text-indigo-700 bg-indigo-100 px-1 rounded" title={`${d.code}: ${d.qty}`}>
+                                    <span key={i} className="text-[9px] text-indigo-700 bg-indigo-100 px-1 rounded" title={`${d.name}: ${d.qty}`}>
                                       {short}_{d.qty}
                                     </span>
                                   );
