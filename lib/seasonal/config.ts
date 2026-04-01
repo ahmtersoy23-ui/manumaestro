@@ -5,6 +5,7 @@
 // Prevents micro-batches that are inefficient for production lines
 export const MIN_BATCH = 15;
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function getMinBatchSize(_desiPerUnit?: number): number {
   return MIN_BATCH;
 }

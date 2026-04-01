@@ -45,7 +45,7 @@ export async function GET(request: NextRequest, { params }: Params) {
 
   // Enrich reserves with product names from pricelab_db
   const iwaskus = pool.reserves.map(r => r.iwasku);
-  let productMap: Record<string, { name: string }> = {};
+  const productMap: Record<string, { name: string }> = {};
   if (iwaskus.length > 0) {
     try {
       const ph = iwaskus.map((_, i) => `$${i + 1}`).join(',');
