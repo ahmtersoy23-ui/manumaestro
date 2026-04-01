@@ -489,8 +489,12 @@ export default function ManufacturerCategoryPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {groupedRequests.map((group) => (
-                  <tr key={group.iwasku} className="hover:bg-gray-50">
+                {groupedRequests.map((group) => {
+                  const totalProducedQty = group.requests.reduce((s, r) => Math.max(s, r.producedQuantity ?? 0), 0);
+                  const available = (group.warehouseStock ?? 0) + totalProducedQty;
+                  const isFulfilled = available >= group.totalQuantity;
+                  return (
+                  <tr key={group.iwasku} className={isFulfilled ? 'bg-green-50/60 hover:bg-green-100/60' : 'hover:bg-gray-50'}>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {(() => {
                         const uniqueMarketplaceCount = new Set(group.requests.map(r => r.marketplaceName)).size;
@@ -596,7 +600,8 @@ export default function ManufacturerCategoryPage() {
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
