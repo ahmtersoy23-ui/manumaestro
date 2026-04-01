@@ -510,8 +510,8 @@ export default function WarehouseStockPage() {
                       })}
                       <SortHeader label="Çıkış" sortField="toplamCikis" className="text-right font-semibold text-red-700 bg-red-50 min-w-[45px]" />
                       <SortHeader label="Mevcut" sortField="mevcut" className="text-right font-bold text-purple-700 bg-purple-50 min-w-[55px]" />
-                      <th className="px-2 py-2 text-left font-semibold text-indigo-600 bg-indigo-50 min-w-[100px] relative group/tip">
-                        Talep
+                      <th className="px-2 py-2 text-left font-semibold text-indigo-600 bg-indigo-50 min-w-[120px] relative group/tip">
+                        Aylık Talep
                         <span className="ml-1 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-indigo-200 text-indigo-700 text-[8px] font-bold cursor-help">?</span>
                         <div className="absolute left-0 top-full mt-1 bg-gray-900 text-white text-[10px] rounded-lg p-3 w-48 z-50 hidden group-hover/tip:block shadow-xl">
                           <p className="font-semibold mb-1.5">Kısaltmalar</p>
@@ -595,7 +595,7 @@ export default function WarehouseStockPage() {
                           <td className="px-2 py-1 text-right font-bold text-purple-700 bg-purple-50/30">{p.mevcut}</td>
                           <td className="px-1 py-1 bg-indigo-50/20">
                             {(p._monthDemands && p._monthDemands.length > 0) ? (
-                              <div className="flex flex-wrap gap-0.5">
+                              <div className="grid grid-cols-3 gap-0.5">
                                 {p._monthDemands.map((d, i) => {
                                   // Name-based abbreviations
                                   const abbr: Record<string, string> = {

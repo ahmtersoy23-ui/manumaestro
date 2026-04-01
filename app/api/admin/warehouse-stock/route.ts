@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get warehouse products with their weekly entries (capped at 5000 for safety)
-    const products = await prisma.warehouseProduct.findMany({
+    let products = await prisma.warehouseProduct.findMany({
       take: 5000,
       include: {
         weeklyEntries: {
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Fetch product details from pricelab_db
-    const iwaskus = products.map(p => p.iwasku);
+    let iwaskus = products.map(p => p.iwasku);
     let productMap: Record<string, { name: string; category: string; desi: number | null }> = {};
 
     if (iwaskus.length > 0) {
@@ -79,8 +79,46 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Get current month marketplace demands per iwasku
+    // Auto-create warehouse rows for products that have demands but no warehouse entry
     const currentMonth = formatMonthValue(new Date());
+    const demandsWithoutStock = await prisma.productionRequest.findMany({
+      where: {
+        productionMonth: currentMonth,
+        iwasku: { notIn: iwaskus },
+      },
+      select: { iwasku: true },
+      distinct: ['iwasku'],
+    });
+
+    if (demandsWithoutStock.length > 0) {
+      await prisma.warehouseProduct.createMany({
+        data: demandsWithoutStock.map(d => ({ iwasku: d.iwasku })),
+        skipDuplicates: true,
+      });
+
+      // Refetch everything with new rows included
+      products = await prisma.warehouseProduct.findMany({
+        take: 5000,
+        include: { weeklyEntries: { orderBy: { weekStart: 'asc' } } },
+        orderBy: { iwasku: 'asc' },
+      });
+      iwaskus = products.map(p => p.iwasku);
+
+      // Refresh product details for new iwaskus
+      const newIwaskus = demandsWithoutStock.map(d => d.iwasku);
+      if (newIwaskus.length > 0) {
+        const ph = newIwaskus.map((_, i) => `$${i + 1}`).join(',');
+        const extra = await queryProductDb(
+          `SELECT product_sku, name, category, COALESCE(manual_size, size) as size FROM products WHERE product_sku IN (${ph})`,
+          newIwaskus
+        );
+        for (const p of extra as { product_sku: string; name: string; category: string; size: number | null }[]) {
+          productMap[p.product_sku] = { name: p.name, category: p.category, desi: p.size };
+        }
+      }
+    }
+
+    // Get current month marketplace demands per iwasku
     const monthDemands = iwaskus.length > 0
       ? await prisma.productionRequest.findMany({
           where: {
