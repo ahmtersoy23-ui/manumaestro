@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
+import { queryProductDb } from '@/lib/db/prisma';
 import { requireRole } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
 import { z } from 'zod';
@@ -42,7 +43,28 @@ export async function GET(request: NextRequest, { params }: Params) {
     return NextResponse.json({ success: false, error: 'Havuz bulunamadı' }, { status: 404 });
   }
 
-  return NextResponse.json({ success: true, data: pool });
+  // Enrich reserves with product names from pricelab_db
+  const iwaskus = pool.reserves.map(r => r.iwasku);
+  let productMap: Record<string, { name: string }> = {};
+  if (iwaskus.length > 0) {
+    try {
+      const ph = iwaskus.map((_, i) => `$${i + 1}`).join(',');
+      const rows = await queryProductDb(
+        `SELECT product_sku, name FROM products WHERE product_sku IN (${ph})`,
+        iwaskus
+      );
+      for (const row of rows as { product_sku: string; name: string }[]) {
+        productMap[row.product_sku] = { name: row.name };
+      }
+    } catch { /* continue without names */ }
+  }
+
+  const enrichedReserves = pool.reserves.map(r => ({
+    ...r,
+    productName: productMap[r.iwasku]?.name ?? null,
+  }));
+
+  return NextResponse.json({ success: true, data: { ...pool, reserves: enrichedReserves } });
 }
 
 export async function PATCH(request: NextRequest, { params }: Params) {

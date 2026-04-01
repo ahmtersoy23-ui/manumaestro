@@ -20,12 +20,15 @@ import * as XLSX from 'xlsx';
 interface Reserve {
   id: string;
   iwasku: string;
+  productName: string | null;
+  category: string | null;
   targetQuantity: number;
   targetDesi: number | null;
   producedQuantity: number;
   shippedQuantity: number;
   status: string;
   destination: string | null;
+  marketplaceSplit: Record<string, number> | null;
   allocations: { month: string; plannedQty: number; plannedDesi: number | null; actualQty: number }[];
 }
 
@@ -64,11 +67,12 @@ const statusColors: Record<string, string> = {
   CANCELLED: 'bg-red-100 text-red-600',
 };
 
-// Default production months (from haftalik-is-gunleri-2026.xlsx)
+// Production months from haftalik-is-gunleri-2026.xlsx
+// Haz: 20g normal + 5g tatil = 480avg, Eyl: 10g tatil + 10g normal = 450avg
 const DEFAULT_MONTHS = [
-  { month: '2026-04', workingDays: 18, desiPerDay: 500 },
+  { month: '2026-04', workingDays: 23, desiPerDay: 500 },
   { month: '2026-05', workingDays: 16, desiPerDay: 500 },
-  { month: '2026-06', workingDays: 25, desiPerDay: 500 },
+  { month: '2026-06', workingDays: 25, desiPerDay: 480 },
   { month: '2026-07', workingDays: 19, desiPerDay: 400 },
   { month: '2026-08', workingDays: 25, desiPerDay: 400 },
   { month: '2026-09', workingDays: 20, desiPerDay: 450 },
@@ -438,35 +442,58 @@ export default function PoolDetailPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    <th className="text-left px-4 py-3 font-medium text-gray-500">IWASKU</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-500">Ürün</th>
+                    <th className="text-left px-3 py-3 font-medium text-gray-500">Kategori</th>
                     <th className="text-center px-3 py-3 font-medium text-gray-500">Hedef</th>
                     <th className="text-center px-3 py-3 font-medium text-gray-500">Üretilen</th>
                     <th className="text-center px-3 py-3 font-medium text-gray-500">Sevk</th>
                     <th className="text-center px-3 py-3 font-medium text-gray-500">Desi</th>
-                    <th className="text-center px-3 py-3 font-medium text-gray-500">Pazar</th>
+                    <th className="text-left px-3 py-3 font-medium text-gray-500">Pazar</th>
                     <th className="text-center px-3 py-3 font-medium text-gray-500">Durum</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {pool.reserves.map(r => (
-                    <tr key={r.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-mono text-xs">{r.iwasku}</td>
-                      <td className="text-center px-3 py-3">{r.targetQuantity}</td>
-                      <td className="text-center px-3 py-3">
-                        <span className={r.producedQuantity >= r.targetQuantity ? 'text-green-600 font-medium' : ''}>
-                          {r.producedQuantity}
-                        </span>
-                      </td>
-                      <td className="text-center px-3 py-3">{r.shippedQuantity}</td>
-                      <td className="text-center px-3 py-3 text-gray-500">{r.targetDesi ? Math.round(r.targetDesi) : '—'}</td>
-                      <td className="text-center px-3 py-3 text-xs text-gray-500">{r.destination ?? '—'}</td>
-                      <td className="text-center px-3 py-3">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[r.status] ?? ''}`}>
-                          {r.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {pool.reserves.map(r => {
+                    const split = r.marketplaceSplit ?? {};
+                    const splitEntries = Object.entries(split).filter(([, q]) => q > 0).sort((a, b) => b[1] - a[1]);
+                    return (
+                      <tr key={r.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 max-w-[280px]">
+                          <p className="font-mono text-xs text-gray-900">{r.iwasku}</p>
+                          {r.productName && (
+                            <p className="text-xs text-gray-500 truncate mt-0.5" title={r.productName}>{r.productName}</p>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 text-xs text-gray-600 max-w-[150px] truncate" title={r.category ?? ''}>
+                          {r.category ?? '—'}
+                        </td>
+                        <td className="text-center px-3 py-3 font-medium">{r.targetQuantity}</td>
+                        <td className="text-center px-3 py-3">
+                          <span className={r.producedQuantity >= r.targetQuantity ? 'text-green-600 font-medium' : ''}>
+                            {r.producedQuantity}
+                          </span>
+                        </td>
+                        <td className="text-center px-3 py-3">{r.shippedQuantity}</td>
+                        <td className="text-center px-3 py-3 text-gray-500">{r.targetDesi ? Math.round(r.targetDesi) : '—'}</td>
+                        <td className="px-3 py-3">
+                          {splitEntries.length > 0 ? (
+                            <div className="flex flex-wrap gap-0.5">
+                              {splitEntries.map(([code, qty]) => (
+                                <span key={code} className="text-[10px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">
+                                  {code}:{qty}
+                                </span>
+                              ))}
+                            </div>
+                          ) : <span className="text-xs text-gray-300">—</span>}
+                        </td>
+                        <td className="text-center px-3 py-3">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[r.status] ?? ''}`}>
+                            {r.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
