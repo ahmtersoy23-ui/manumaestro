@@ -11,8 +11,8 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  ArrowLeft, Upload, Package, TrendingUp, Truck, AlertCircle,
-  Loader2, CheckCircle2, XCircle, BarChart3, Calendar, FileSpreadsheet,
+  Home, Upload, Package, TrendingUp, Truck, AlertCircle,
+  Loader2, CheckCircle2, XCircle, BarChart3, Calendar, FileSpreadsheet, CalendarRange,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -235,17 +235,20 @@ export default function PoolDetailPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <button onClick={() => router.push('/dashboard/seasonal')} className="p-2 hover:bg-gray-100 rounded-lg">
-            <ArrowLeft className="w-5 h-5 text-gray-500" />
-          </button>
+          <Link href="/dashboard" className="p-2 hover:bg-gray-100 rounded-lg" title="Ana Sayfa">
+            <Home className="w-5 h-5 text-gray-400" />
+          </Link>
+          <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+            <CalendarRange className="w-5 h-5 text-purple-600" />
+          </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-gray-900">{pool.name}</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Sezon Planlaması</h1>
               <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[pool.status] ?? ''}`}>
                 {pool.status}
               </span>
             </div>
-            <p className="text-sm text-gray-500 font-mono">{pool.code}</p>
+            <p className="text-sm text-gray-500">Sezonsal üretim havuzu ve stok yönetimi</p>
           </div>
         </div>
         <div className="flex gap-2">
