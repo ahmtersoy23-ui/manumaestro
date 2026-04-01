@@ -310,6 +310,22 @@ export default function PoolDetailPage() {
     else alert(data.error);
   };
 
+  const handleDeleteAndRestart = async () => {
+    if (!confirm('Havuz silinip yeni boş havuz oluşturulacak. Emin misiniz?')) return;
+    try {
+      const delRes = await fetch(`/api/stock-pools/${id}`, { method: 'DELETE' });
+      const delData = await delRes.json();
+      if (delData.success) {
+        // Redirect to /dashboard/seasonal which will auto-create a new pool
+        router.replace('/dashboard/seasonal');
+      } else {
+        alert(delData.error || 'Silme başarısız');
+      }
+    } catch {
+      alert('Bağlantı hatası');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -342,6 +358,12 @@ export default function PoolDetailPage() {
             <button onClick={() => handleStatusChange('CANCELLED')}
               className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-600 text-sm rounded-lg hover:bg-red-100">
               <XCircle className="w-4 h-4" /> İptal
+            </button>
+          )}
+          {pool.status === 'CANCELLED' && (
+            <button onClick={handleDeleteAndRestart}
+              className="flex items-center gap-2 px-3 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700">
+              <Package className="w-4 h-4" /> Sil ve Yeniden Başla
             </button>
           )}
         </div>
