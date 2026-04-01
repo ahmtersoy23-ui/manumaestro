@@ -1,6 +1,6 @@
 /**
  * Stock Pool Detail Page
- * Shows reserves, monthly allocations, import functionality, progress
+ * Shows reserves, monthly allocation preview/approve, import functionality
  * Admin only
  */
 
@@ -12,7 +12,8 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Home, Upload, Package, TrendingUp, Truck, AlertCircle,
-  Loader2, CheckCircle2, XCircle, BarChart3, Calendar, FileSpreadsheet, CalendarRange,
+  Loader2, CheckCircle2, XCircle, BarChart3, Calendar, FileSpreadsheet,
+  CalendarRange, Eye, ThumbsUp,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -40,6 +41,20 @@ interface PoolDetail {
   reserves: Reserve[];
 }
 
+interface AllocationPreview {
+  month: string;
+  totalQty: number;
+  totalDesi: number;
+  productCount: number;
+}
+
+interface MonthQuota {
+  month: string;
+  workingDays: number;
+  desiPerDay: number;
+  quotaDesi: number;
+}
+
 const statusColors: Record<string, string> = {
   PLANNED: 'bg-gray-100 text-gray-600',
   PRODUCING: 'bg-yellow-100 text-yellow-700',
@@ -47,6 +62,23 @@ const statusColors: Record<string, string> = {
   RELEASING: 'bg-blue-100 text-blue-700',
   SHIPPED: 'bg-purple-100 text-purple-700',
   CANCELLED: 'bg-red-100 text-red-600',
+};
+
+// Default production months (from haftalik-is-gunleri-2026.xlsx)
+const DEFAULT_MONTHS = [
+  { month: '2026-04', workingDays: 18, desiPerDay: 500 },
+  { month: '2026-05', workingDays: 16, desiPerDay: 500 },
+  { month: '2026-06', workingDays: 25, desiPerDay: 500 },
+  { month: '2026-07', workingDays: 19, desiPerDay: 400 },
+  { month: '2026-08', workingDays: 25, desiPerDay: 400 },
+  { month: '2026-09', workingDays: 20, desiPerDay: 450 },
+  { month: '2026-10', workingDays: 19, desiPerDay: 500 },
+  { month: '2026-11', workingDays: 20, desiPerDay: 500 },
+];
+
+const MONTH_LABELS: Record<string, string> = {
+  '2026-04': 'Nisan', '2026-05': 'Mayıs', '2026-06': 'Haziran', '2026-07': 'Temmuz',
+  '2026-08': 'Ağustos', '2026-09': 'Eylül', '2026-10': 'Ekim', '2026-11': 'Kasım',
 };
 
 export default function PoolDetailPage() {
@@ -58,6 +90,12 @@ export default function PoolDetailPage() {
   const [tab, setTab] = useState<'reserves' | 'allocations'>('reserves');
   const [importing, setImporting] = useState(false);
   const [importJson, setImportJson] = useState('');
+
+  // Allocation preview state
+  const [preview, setPreview] = useState<AllocationPreview[] | null>(null);
+  const [previewQuotas, setPreviewQuotas] = useState<MonthQuota[] | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [approving, setApproving] = useState(false);
 
   const fetchPool = useCallback(async () => {
     try {
@@ -94,7 +132,7 @@ export default function PoolDetailPage() {
       <div className="text-center py-12">
         <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-3" />
         <p className="text-gray-600">Havuz bulunamadı</p>
-        <Link href="/dashboard/seasonal" className="text-purple-600 text-sm mt-2 inline-block">Geri dön</Link>
+        <Link href="/dashboard" className="text-purple-600 text-sm mt-2 inline-block">Ana sayfaya dön</Link>
       </div>
     );
   }
@@ -106,7 +144,7 @@ export default function PoolDetailPage() {
   const prodPct = totalTarget > 0 ? Math.round(totalProduced / totalTarget * 100) : 0;
   const shipPct = totalTarget > 0 ? Math.round(totalShipped / totalTarget * 100) : 0;
 
-  // Monthly allocation summary
+  // Saved monthly allocation summary (from DB)
   const monthMap = new Map<string, { planned: number; actual: number; desi: number }>();
   for (const r of pool.reserves) {
     for (const a of r.allocations) {
@@ -117,21 +155,25 @@ export default function PoolDetailPage() {
       monthMap.set(a.month, m);
     }
   }
-  const monthSummary = [...monthMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const savedAllocations = [...monthMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const hasAllocations = savedAllocations.length > 0;
 
   const handleImport = async (payload: Record<string, unknown>) => {
     setImporting(true);
     try {
+      // Always import without auto-allocate — user must approve separately
       const res = await fetch(`/api/stock-pools/${id}/import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, autoAllocate: false }),
       });
       const data = await res.json();
       if (data.success) {
-        alert(`${data.data.reservesCreated} ürün aktarıldı, ${data.data.allocationsCreated} dağılım oluşturuldu`);
+        alert(`${data.data.reservesCreated} ürün aktarıldı. Aylık Dağılım sekmesinden dağılımı önizleyip onaylayabilirsiniz.`);
         setImportJson('');
+        setPreview(null); // Clear any old preview
         fetchPool();
+        setTab('allocations'); // Switch to allocations tab
       } else {
         alert(data.error || 'Aktarım başarısız');
       }
@@ -151,7 +193,7 @@ export default function PoolDetailPage() {
     }
   };
 
-  // Marketplace sheets to parse (sheet name → marketplace code)
+  // Marketplace sheets to parse
   const MARKETPLACE_SHEETS = ['US', 'EU', 'UK', 'CA', 'AU'];
 
   const handleExcelImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -163,12 +205,11 @@ export default function PoolDetailPage() {
         const wb = XLSX.read(evt.target?.result, { type: 'binary' });
         const items: { iwasku: string; quantity: number; desi: number; category: string; marketplace: string }[] = [];
 
-        // Parse each marketplace sheet
         for (const sheetName of wb.SheetNames) {
           const marketplace = MARKETPLACE_SHEETS.find(
             m => sheetName.toUpperCase().startsWith(m)
           );
-          if (!marketplace) continue; // Skip non-marketplace sheets (e.g. "Ülke Özet", "Yöntem")
+          if (!marketplace) continue;
 
           const ws = wb.Sheets[sheetName]!;
           const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
@@ -177,7 +218,6 @@ export default function PoolDetailPage() {
             const iwasku = String(row['iwasku'] || row['IWASKU'] || '');
             if (!iwasku) continue;
 
-            // Quantity: q4 26 + q1 27 (or fallbacks)
             const q4 = Number(row['q4 26'] || row['Q4 26'] || row["Q4'26\nAğır.+15%"] || row['quantity'] || 0);
             const q1 = Number(row['q1 27'] || row['Q1 27'] || row["Q1'27\nAğır.+15%"] || 0);
             const quantity = Math.round(q4 + q1);
@@ -195,27 +235,63 @@ export default function PoolDetailPage() {
           return;
         }
 
-        // Default months (Apr-Nov 2026)
-        const defaultMonths = [
-          { month: '2026-04', workingDays: 18, desiPerDay: 500 },
-          { month: '2026-05', workingDays: 16, desiPerDay: 500 },
-          { month: '2026-06', workingDays: 25, desiPerDay: 500 },
-          { month: '2026-07', workingDays: 19, desiPerDay: 400 },
-          { month: '2026-08', workingDays: 25, desiPerDay: 400 },
-          { month: '2026-09', workingDays: 20, desiPerDay: 450 },
-          { month: '2026-10', workingDays: 19, desiPerDay: 500 },
-          { month: '2026-11', workingDays: 20, desiPerDay: 500 },
-        ];
-
         const marketplaceCount = new Set(items.map(i => i.marketplace)).size;
         alert(`${items.length} satır okundu (${marketplaceCount} marketplace). Aktarılıyor...`);
-        handleImport({ items, months: defaultMonths, autoAllocate: true });
+        handleImport({ items, months: DEFAULT_MONTHS });
       } catch {
         alert('Excel dosyası okunamadı');
       }
     };
     reader.readAsBinaryString(file);
-    e.target.value = ''; // Reset file input
+    e.target.value = '';
+  };
+
+  // Preview allocation (without saving)
+  const handlePreview = async () => {
+    setPreviewing(true);
+    try {
+      const res = await fetch(`/api/stock-pools/${id}/allocate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ months: DEFAULT_MONTHS, approve: false }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPreview(data.data.summary);
+        setPreviewQuotas(data.data.monthQuotas);
+      } else {
+        alert(data.error || 'Önizleme başarısız');
+      }
+    } catch {
+      alert('Bağlantı hatası');
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
+  // Approve and save allocation
+  const handleApprove = async () => {
+    if (!confirm('Aylık dağılım onaylansın mı? Mevcut dağılım varsa üzerine yazılacak.')) return;
+    setApproving(true);
+    try {
+      const res = await fetch(`/api/stock-pools/${id}/allocate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ months: DEFAULT_MONTHS, approve: true }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('Dağılım onaylandı ve kaydedildi.');
+        setPreview(null);
+        fetchPool();
+      } else {
+        alert(data.error || 'Onay başarısız');
+      }
+    } catch {
+      alert('Bağlantı hatası');
+    } finally {
+      setApproving(false);
+    }
   };
 
   const handleStatusChange = async (newStatus: string) => {
@@ -305,6 +381,9 @@ export default function PoolDetailPage() {
         >
           <Calendar className="w-4 h-4 inline mr-1" />
           Aylık Dağılım
+          {!hasAllocations && pool.reserves.length > 0 && (
+            <span className="ml-1.5 w-2 h-2 bg-orange-400 rounded-full inline-block" title="Onay bekliyor" />
+          )}
         </button>
       </div>
 
@@ -320,7 +399,6 @@ export default function PoolDetailPage() {
                   Talep Aktarımı
                 </summary>
                 <div className="mt-3 space-y-4">
-                  {/* Excel Upload */}
                   <div className="flex items-center gap-3">
                     <label className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 cursor-pointer">
                       <FileSpreadsheet className="w-4 h-4" />
@@ -330,15 +408,13 @@ export default function PoolDetailPage() {
                     <span className="text-xs text-gray-500">Sheet başına ülke (US/EU/UK/CA/AU), kolonlar: iwasku, kategori, desi, q4 26, q1 27</span>
                     {importing && <Loader2 className="w-4 h-4 animate-spin text-purple-500" />}
                   </div>
-
-                  {/* JSON fallback */}
                   <details className="text-xs">
                     <summary className="text-gray-400 cursor-pointer hover:text-gray-600">veya JSON ile aktar</summary>
                     <div className="mt-2 space-y-2">
                       <textarea
                         value={importJson}
                         onChange={e => setImportJson(e.target.value)}
-                        placeholder='{"items": [...], "months": [...], "autoAllocate": true}'
+                        placeholder='{"items": [...], "months": [...]}'
                         rows={3}
                         className="w-full px-3 py-2 border rounded-lg text-xs font-mono focus:ring-2 focus:ring-purple-500"
                       />
@@ -372,28 +448,25 @@ export default function PoolDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {pool.reserves.map(r => {
-                    const pct = r.targetQuantity > 0 ? Math.round(r.producedQuantity / r.targetQuantity * 100) : 0;
-                    return (
-                      <tr key={r.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 font-mono text-xs">{r.iwasku}</td>
-                        <td className="text-center px-3 py-3">{r.targetQuantity}</td>
-                        <td className="text-center px-3 py-3">
-                          <span className={r.producedQuantity >= r.targetQuantity ? 'text-green-600 font-medium' : ''}>
-                            {r.producedQuantity}
-                          </span>
-                        </td>
-                        <td className="text-center px-3 py-3">{r.shippedQuantity}</td>
-                        <td className="text-center px-3 py-3 text-gray-500">{r.targetDesi ? Math.round(r.targetDesi) : '—'}</td>
-                        <td className="text-center px-3 py-3 text-xs text-gray-500">{r.destination ?? '—'}</td>
-                        <td className="text-center px-3 py-3">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[r.status] ?? ''}`}>
-                            {r.status}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {pool.reserves.map(r => (
+                    <tr key={r.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-mono text-xs">{r.iwasku}</td>
+                      <td className="text-center px-3 py-3">{r.targetQuantity}</td>
+                      <td className="text-center px-3 py-3">
+                        <span className={r.producedQuantity >= r.targetQuantity ? 'text-green-600 font-medium' : ''}>
+                          {r.producedQuantity}
+                        </span>
+                      </td>
+                      <td className="text-center px-3 py-3">{r.shippedQuantity}</td>
+                      <td className="text-center px-3 py-3 text-gray-500">{r.targetDesi ? Math.round(r.targetDesi) : '—'}</td>
+                      <td className="text-center px-3 py-3 text-xs text-gray-500">{r.destination ?? '—'}</td>
+                      <td className="text-center px-3 py-3">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[r.status] ?? ''}`}>
+                          {r.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -409,47 +482,177 @@ export default function PoolDetailPage() {
 
       {/* Allocations Tab */}
       {tab === 'allocations' && (
-        <div className="bg-white border rounded-xl overflow-hidden">
-          {monthSummary.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="text-left px-4 py-3 font-medium text-gray-500">Ay</th>
-                    <th className="text-center px-3 py-3 font-medium text-gray-500">Planlanan Ünite</th>
-                    <th className="text-center px-3 py-3 font-medium text-gray-500">Gerçekleşen</th>
-                    <th className="text-center px-3 py-3 font-medium text-gray-500">Planlanan Desi</th>
-                    <th className="text-center px-3 py-3 font-medium text-gray-500">İlerleme</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {monthSummary.map(([month, data]) => {
-                    const pct = data.planned > 0 ? Math.round(data.actual / data.planned * 100) : 0;
-                    return (
-                      <tr key={month} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 font-medium">{month}</td>
-                        <td className="text-center px-3 py-3">{data.planned.toLocaleString('tr-TR')}</td>
-                        <td className="text-center px-3 py-3">{data.actual.toLocaleString('tr-TR')}</td>
-                        <td className="text-center px-3 py-3 text-gray-500">{Math.round(data.desi).toLocaleString('tr-TR')}</td>
-                        <td className="px-3 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-green-500 rounded-full" style={{ width: `${Math.min(100, pct)}%` }} />
+        <div className="space-y-4">
+          {/* Saved Allocations */}
+          {hasAllocations && (
+            <div className="bg-white border rounded-xl overflow-hidden">
+              <div className="px-4 py-3 border-b bg-green-50 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-600" />
+                <span className="text-sm font-medium text-green-700">Onaylı Dağılım</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th className="text-left px-4 py-3 font-medium text-gray-500">Ay</th>
+                      <th className="text-center px-3 py-3 font-medium text-gray-500">Planlanan Ünite</th>
+                      <th className="text-center px-3 py-3 font-medium text-gray-500">Gerçekleşen</th>
+                      <th className="text-center px-3 py-3 font-medium text-gray-500">Planlanan Desi</th>
+                      <th className="text-center px-3 py-3 font-medium text-gray-500">İlerleme</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {savedAllocations.map(([month, data]) => {
+                      const pct = data.planned > 0 ? Math.round(data.actual / data.planned * 100) : 0;
+                      return (
+                        <tr key={month} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 font-medium">{MONTH_LABELS[month] ?? month}</td>
+                          <td className="text-center px-3 py-3">{data.planned.toLocaleString('tr-TR')}</td>
+                          <td className="text-center px-3 py-3">{data.actual.toLocaleString('tr-TR')}</td>
+                          <td className="text-center px-3 py-3 text-gray-500">{Math.round(data.desi).toLocaleString('tr-TR')}</td>
+                          <td className="px-3 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-green-500 rounded-full" style={{ width: `${Math.min(100, pct)}%` }} />
+                              </div>
+                              <span className="text-xs text-gray-500 w-10 text-right">{pct}%</span>
                             </div>
-                            <span className="text-xs text-gray-500 w-10 text-right">{pct}%</span>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          ) : (
-            <div className="text-center py-12">
+          )}
+
+          {/* Preview / Calculate Section */}
+          {pool.status === 'ACTIVE' && pool.reserves.length > 0 && (
+            <div className="bg-white border border-purple-200 rounded-xl overflow-hidden">
+              <div className="px-4 py-3 border-b bg-purple-50 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Eye className="w-4 h-4 text-purple-600" />
+                  <span className="text-sm font-medium text-purple-700">
+                    {preview ? 'Dağılım Önizleme' : 'Dağılımı Hesapla'}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handlePreview}
+                    disabled={previewing}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 text-white text-xs rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                  >
+                    {previewing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
+                    {preview ? 'Yeniden Hesapla' : 'Önizle'}
+                  </button>
+                  {preview && (
+                    <button
+                      onClick={handleApprove}
+                      disabled={approving}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 disabled:opacity-50"
+                    >
+                      {approving ? <Loader2 className="w-3 h-3 animate-spin" /> : <ThumbsUp className="w-3 h-3" />}
+                      Onayla
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {preview && previewQuotas ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 border-b">
+                      <tr>
+                        <th className="text-left px-4 py-3 font-medium text-gray-500">Ay</th>
+                        <th className="text-center px-3 py-3 font-medium text-blue-600 bg-blue-50">Kota Desi</th>
+                        <th className="text-center px-3 py-3 font-medium text-purple-600 bg-purple-50">Planlanan Desi</th>
+                        <th className="text-center px-3 py-3 font-medium text-gray-500">Kota Kullanımı</th>
+                        <th className="text-center px-3 py-3 font-medium text-gray-500">Ünite</th>
+                        <th className="text-center px-3 py-3 font-medium text-gray-500">Ürün Sayısı</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {previewQuotas.map(q => {
+                        const alloc = preview.find(p => p.month === q.month);
+                        const allocDesi = alloc?.totalDesi ?? 0;
+                        const usagePct = q.quotaDesi > 0 ? Math.round(allocDesi / q.quotaDesi * 100) : 0;
+                        return (
+                          <tr key={q.month} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 font-medium">
+                              {MONTH_LABELS[q.month] ?? q.month}
+                              <span className="text-xs text-gray-400 ml-2">{q.workingDays}gün × {q.desiPerDay}</span>
+                            </td>
+                            <td className="text-center px-3 py-3 font-medium text-blue-700 bg-blue-50/50">
+                              {q.quotaDesi.toLocaleString('tr-TR')}
+                            </td>
+                            <td className="text-center px-3 py-3 font-medium text-purple-700 bg-purple-50/50">
+                              {alloc ? Math.round(allocDesi).toLocaleString('tr-TR') : '—'}
+                            </td>
+                            <td className="px-3 py-3">
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full ${usagePct > 100 ? 'bg-red-500' : usagePct > 80 ? 'bg-yellow-500' : 'bg-green-500'}`}
+                                    style={{ width: `${Math.min(100, usagePct)}%` }}
+                                  />
+                                </div>
+                                <span className={`text-xs w-10 text-right font-medium ${usagePct > 100 ? 'text-red-600' : 'text-gray-500'}`}>
+                                  {usagePct}%
+                                </span>
+                              </div>
+                            </td>
+                            <td className="text-center px-3 py-3">{alloc?.totalQty.toLocaleString('tr-TR') ?? '—'}</td>
+                            <td className="text-center px-3 py-3 text-gray-500">{alloc?.productCount ?? '—'}</td>
+                          </tr>
+                        );
+                      })}
+                      {/* Totals row */}
+                      <tr className="bg-gray-50 font-medium">
+                        <td className="px-4 py-3">Toplam</td>
+                        <td className="text-center px-3 py-3 text-blue-700">
+                          {previewQuotas.reduce((s, q) => s + q.quotaDesi, 0).toLocaleString('tr-TR')}
+                        </td>
+                        <td className="text-center px-3 py-3 text-purple-700">
+                          {Math.round(preview.reduce((s, p) => s + p.totalDesi, 0)).toLocaleString('tr-TR')}
+                        </td>
+                        <td className="px-3 py-3">
+                          {(() => {
+                            const totalQuota = previewQuotas.reduce((s, q) => s + q.quotaDesi, 0);
+                            const totalAlloc = preview.reduce((s, p) => s + p.totalDesi, 0);
+                            const pct = totalQuota > 0 ? Math.round(totalAlloc / totalQuota * 100) : 0;
+                            return <span className="text-xs text-gray-500 ml-auto block text-right">{pct}%</span>;
+                          })()}
+                        </td>
+                        <td className="text-center px-3 py-3">
+                          {preview.reduce((s, p) => s + p.totalQty, 0).toLocaleString('tr-TR')}
+                        </td>
+                        <td className="text-center px-3 py-3 text-gray-500">—</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Calendar className="w-10 h-10 text-purple-200 mx-auto mb-3" />
+                  <p className="text-gray-500 text-sm">Dağılımı görmek için &quot;Önizle&quot; butonuna tıklayın</p>
+                  <p className="text-gray-400 text-xs mt-1">Aylık kotalar ve planlanan desi karşılaştırmalı gösterilir</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* No reserves yet */}
+          {pool.reserves.length === 0 && !hasAllocations && (
+            <div className="bg-white border rounded-xl text-center py-12">
               <Calendar className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500">Aylık dağılım henüz oluşturulmadı</p>
-              <p className="text-gray-400 text-sm mt-1">Ürün aktarımı yapıldığında otomatik oluşturulur</p>
+              <p className="text-gray-500">Önce ürün aktarımı yapın</p>
+              <button
+                onClick={() => setTab('reserves')}
+                className="text-purple-600 text-sm mt-2 hover:underline"
+              >
+                Ürünler sekmesine git
+              </button>
             </div>
           )}
         </div>
