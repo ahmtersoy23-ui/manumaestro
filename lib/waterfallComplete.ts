@@ -75,13 +75,15 @@ export async function waterfallComplete(iwasku: string, month: string): Promise<
     return pa - pb;
   });
 
-  // 5. Waterfall: allocate available quantity in priority order
-  //    Takes over ALL auto-completion (replaces old snapshot-based auto-complete)
+  // 5. Waterfall: allocate available quantity STRICTLY in priority order
+  //    Once a marketplace can't be fulfilled, STOP — don't skip to lower priorities
+  //    This ensures priority order is respected: if #2 can't be done, #3-#14 don't get done either
   let remaining = totalAvailable;
   let changed = 0;
+  let blocked = false; // Once true, no more completions
 
   for (const req of sorted) {
-    if (remaining >= req.quantity) {
+    if (!blocked && remaining >= req.quantity) {
       // This marketplace's demand is fully covered
       remaining -= req.quantity;
 
@@ -94,15 +96,16 @@ export async function waterfallComplete(iwasku: string, month: string): Promise<
           },
         });
         changed++;
-      } else if (req.status === 'COMPLETED' && req.manufacturerNotes === 'Stoktan karşılandı') {
-        // Re-label: was snapshot-completed, now waterfall owns it
+      } else if (req.manufacturerNotes === 'Stoktan karşılandı') {
         await prisma.productionRequest.update({
           where: { id: req.id },
           data: { manufacturerNotes: 'Öncelik tamamlandı' },
         });
       }
     } else {
-      // Not enough for this marketplace — revert if previously auto-completed
+      // Can't fulfill this priority — block all lower priorities too
+      blocked = true;
+
       if (req.status === 'COMPLETED' &&
           (req.manufacturerNotes === 'Öncelik tamamlandı' || req.manufacturerNotes === 'Stoktan karşılandı')) {
         await prisma.productionRequest.update({
