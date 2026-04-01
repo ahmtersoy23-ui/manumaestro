@@ -2,11 +2,11 @@
  * Stock Pool Import API
  * POST: Import reserves from Excel + auto-allocate to months
  *
- * Expected Excel format (sezon-talep-tahmini.xlsx):
- *   IWASKU | Ürün Adı | Kategori | Cost | Desi/Un | ... | Q4'26 Ağır.+15% | Q1'27 Ağır.+15% | ...
+ * Excel format (per-marketplace sheets: US, EU, UK, CA, AU):
+ *   iwasku | kategori | desi | q4 26 | q1 27
  *
- * Or simplified format:
- *   iwasku | quantity | desi | category | destination
+ * Frontend merges all sheets and sends:
+ *   { iwasku, quantity, desi?, category?, marketplace? }[]
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -22,8 +22,7 @@ const ImportItemSchema = z.object({
   quantity: z.number().int().positive(),
   desi: z.number().min(0).optional(),
   category: z.string().optional(),
-  destination: z.string().optional(),
-  revenue: z.number().optional(),
+  marketplace: z.string().optional(), // "US", "EU", "UK", "CA", "AU"
 });
 
 const ImportSchema = z.object({
@@ -88,10 +87,10 @@ export async function POST(request: NextRequest, { params }: Params) {
     }
   }
 
-  // Merge items by iwasku (same product from different channels)
+  // Merge items by iwasku (same product from different marketplace sheets)
   const mergedMap = new Map<string, {
     quantity: number; desi: number; category: string;
-    destination?: string; revenue: number;
+    marketplaceSplit: Record<string, number>;
   }>();
 
   for (const item of items) {
@@ -100,15 +99,20 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     if (existing) {
       existing.quantity += item.quantity;
-      existing.revenue += item.revenue ?? 0;
-      // Keep first destination (or could combine)
+      if (item.marketplace) {
+        existing.marketplaceSplit[item.marketplace] =
+          (existing.marketplaceSplit[item.marketplace] ?? 0) + item.quantity;
+      }
     } else {
+      const split: Record<string, number> = {};
+      if (item.marketplace) {
+        split[item.marketplace] = item.quantity;
+      }
       mergedMap.set(item.iwasku, {
         quantity: item.quantity,
         desi: item.desi ?? enriched?.desi ?? 0,
         category: item.category ?? enriched?.category ?? '',
-        destination: item.destination,
-        revenue: item.revenue ?? 0,
+        marketplaceSplit: split,
       });
     }
   }
@@ -119,6 +123,10 @@ export async function POST(request: NextRequest, { params }: Params) {
     const results = [];
 
     for (const [iwasku, data] of mergedMap) {
+      const splitJson = Object.keys(data.marketplaceSplit).length > 0
+        ? data.marketplaceSplit
+        : undefined;
+
       const reserve = await tx.stockReserve.upsert({
         where: { poolId_iwasku: { poolId: id, iwasku } },
         create: {
@@ -126,12 +134,14 @@ export async function POST(request: NextRequest, { params }: Params) {
           iwasku,
           targetQuantity: data.quantity,
           targetDesi: data.quantity * data.desi,
-          destination: data.destination,
+          category: data.category || null,
+          marketplaceSplit: splitJson ?? undefined,
         },
         update: {
           targetQuantity: data.quantity,
           targetDesi: data.quantity * data.desi,
-          destination: data.destination,
+          category: data.category || null,
+          marketplaceSplit: splitJson ?? undefined,
         },
       });
 
@@ -141,8 +151,7 @@ export async function POST(request: NextRequest, { params }: Params) {
         targetQuantity: data.quantity,
         desiPerUnit: data.desi,
         category: data.category,
-        destination: data.destination,
-        revenue: data.revenue,
+        marketplaceSplit: data.marketplaceSplit,
       });
     }
 

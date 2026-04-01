@@ -25,6 +25,7 @@ interface StockProduct {
   shipmentEntries: WeeklyEntry[];
   _seasonPool?: { poolId: string; poolName: string; target: number; produced: number } | null;
   _monthDemands?: { name: string; qty: number }[];
+  _seasonDemands?: { code: string; qty: number }[];
 }
 interface SnapshotItem {
   iwasku: string; productName: string; productCategory: string;
@@ -533,6 +534,9 @@ export default function WarehouseStockPage() {
                           </div>
                         </div>
                       </th>
+                      <th className="px-2 py-2 text-left font-semibold text-purple-600 bg-purple-50 min-w-[100px]">
+                        SZN Talep
+                      </th>
                       <SortHeader label="Ayrılmış" sortField="reserved" className="text-right font-semibold text-orange-600 bg-orange-50 min-w-[55px]" />
                       <SortHeader label="ATP" sortField="atp" className="text-right font-bold text-emerald-700 bg-emerald-50 min-w-[55px]" />
                       <SortHeader label="T.Desi" sortField="toplamDesi" className="text-right font-semibold text-gray-500 min-w-[55px]" />
@@ -612,6 +616,20 @@ export default function WarehouseStockPage() {
                                     </span>
                                   );
                                 })}
+                              </div>
+                            ) : <span className="text-[9px] text-gray-300">—</span>}
+                          </td>
+                          <td className="px-1 py-1 bg-purple-50/20">
+                            {(p._seasonDemands && p._seasonDemands.length > 0) ? (
+                              <div className="grid grid-cols-3 gap-0.5">
+                                {p._seasonDemands.map((d, i) => (
+                                  <span key={i} className="text-[9px] text-purple-700 bg-purple-100 px-1 rounded" title={`${d.code}: ${d.qty}`}>
+                                    {d.code}_{d.qty}
+                                  </span>
+                                ))}
+                                <span className="text-[9px] text-purple-900 font-bold px-1 col-span-3">
+                                  Σ{p._seasonDemands.reduce((s, d) => s + d.qty, 0)}
+                                </span>
                               </div>
                             ) : <span className="text-[9px] text-gray-300">—</span>}
                           </td>

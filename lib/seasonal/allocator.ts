@@ -3,19 +3,17 @@
  *
  * Distributes total seasonal demand across months, respecting:
  * 1. Monthly capacity weights (working days × desi/day)
- * 2. Category balance (each category gets proportional share)
- * 3. ABC classification (A=monthly, B=bimonthly, C=quarterly)
- * 4. Minimum batch sizes (desi-based tiers)
- * 5. Lead time prioritization (AU first, EU/UK last)
+ * 2. Category independence (each category = separate production line)
+ * 3. Lead time weight shifting (AU/US → early months, EU/UK → late months)
+ * 4. Minimum batch size (15 units per product per month)
+ * 5. Proportional distribution across products (risk mitigation)
  * 6. Largest remainder rounding
  */
 
 import {
   getMinBatchSize,
-  getABCClass,
-  ABC_FREQUENCY,
-  getLeadTimePriority,
-  type ABCClass,
+  getLeadTimeFactor,
+  LEAD_TIME_SHIFT_STRENGTH,
 } from './config';
 
 // ============================================
@@ -27,9 +25,7 @@ export interface ReserveInput {
   targetQuantity: number;
   desiPerUnit: number;
   category: string;
-  destination?: string;
-  /** Revenue for ABC classification (higher = A class) */
-  revenue?: number;
+  marketplaceSplit?: Record<string, number>;
 }
 
 export interface MonthCapacity {
@@ -60,167 +56,111 @@ export function calculateMonthWeights(months: MonthCapacity[]): MonthCapacity[] 
 }
 
 // ============================================
-// STEP 2-3: ABC classification
+// STEP 2: Lead time weight adjustment
 // ============================================
 
-function classifyABC(reserves: ReserveInput[]): Map<string, ABCClass> {
-  // Sort by revenue descending
-  const sorted = [...reserves]
-    .filter(r => (r.revenue ?? 0) > 0)
-    .sort((a, b) => (b.revenue ?? 0) - (a.revenue ?? 0));
+/**
+ * Shifts month weights based on lead time factor.
+ * High lead time (AU) → earlier months get more weight.
+ * Low lead time (EU) → later months get more weight.
+ */
+function adjustWeightsForLeadTime(
+  baseWeights: number[],
+  leadFactor: number,
+  strength: number,
+): number[] {
+  const n = baseWeights.length;
+  if (n <= 1) return [...baseWeights];
 
-  const totalRevenue = sorted.reduce((sum, r) => sum + (r.revenue ?? 0), 0);
-  if (totalRevenue === 0) {
-    // No revenue data — treat all as B
-    return new Map(reserves.map(r => [r.iwasku, 'B' as ABCClass]));
-  }
+  const adjusted = baseWeights.map((w, i) => {
+    const monthPosition = i / (n - 1); // 0.0 (first) → 1.0 (last)
+    // leadFactor=1.0 (AU) → early months boosted, late reduced
+    // leadFactor=0.0 (EU) → late months boosted, early reduced
+    const earlyBias = (1 - monthPosition) * leadFactor;
+    const lateBias = monthPosition * (1 - leadFactor);
+    const shift = 1 + strength * (earlyBias - lateBias);
+    return w * Math.max(0.01, shift);
+  });
 
-  const result = new Map<string, ABCClass>();
-  let cumulative = 0;
-
-  for (const r of sorted) {
-    cumulative += (r.revenue ?? 0);
-    result.set(r.iwasku, getABCClass(cumulative / totalRevenue));
-  }
-
-  // Products without revenue data → C class
-  for (const r of reserves) {
-    if (!result.has(r.iwasku)) {
-      result.set(r.iwasku, 'C');
-    }
-  }
-
-  return result;
+  // Normalize so weights sum to 1.0
+  const total = adjusted.reduce((s, w) => s + w, 0);
+  return total > 0 ? adjusted.map(w => w / total) : baseWeights;
 }
 
 // ============================================
-// STEP 4: Determine production months per product
-// ============================================
-
-function getProductionMonths(
-  abcClass: ABCClass,
-  allMonths: string[],
-  destination?: string,
-): string[] {
-  const frequency = ABC_FREQUENCY[abcClass];
-  const leadPriority = destination ? getLeadTimePriority(destination) : 0.5;
-
-  if (frequency === 1) {
-    // A class: every month
-    return [...allMonths];
-  }
-
-  // B/C: select months at intervals
-  // For high lead-time destinations, prefer earlier months
-  const selected: string[] = [];
-  const startOffset = leadPriority > 0.5 ? 0 : frequency === 2 ? 1 : 2;
-
-  for (let i = startOffset; i < allMonths.length; i += frequency) {
-    selected.push(allMonths[i]!);
-  }
-
-  // Ensure at least one month
-  if (selected.length === 0 && allMonths.length > 0) {
-    selected.push(allMonths[0]!);
-  }
-
-  return selected;
-}
-
-// ============================================
-// STEP 5-6: Proportional distribution + rounding
+// STEP 3: Proportional distribution + rounding
 // ============================================
 
 function distributeToMonths(
   targetQty: number,
-  desiPerUnit: number,
-  productionMonths: string[],
-  monthWeights: Map<string, number>,
+  allMonths: string[],
+  adjustedWeights: number[],
   minBatch: number,
 ): { month: string; qty: number }[] {
-  if (productionMonths.length === 0 || targetQty <= 0) return [];
+  if (allMonths.length === 0 || targetQty <= 0) return [];
 
-  // Calculate weights for selected months only
-  const selectedWeights = productionMonths.map(m => monthWeights.get(m) ?? 0);
-  const totalWeight = selectedWeights.reduce((s, w) => s + w, 0);
+  // Special case: total below minimum → all in highest-weight month, no rounding up
+  if (targetQty < minBatch) {
+    const bestIdx = adjustedWeights.indexOf(Math.max(...adjustedWeights));
+    return [{ month: allMonths[bestIdx]!, qty: targetQty }];
+  }
 
-  if (totalWeight === 0) {
-    // Equal distribution fallback
-    const perMonth = Math.floor(targetQty / productionMonths.length);
-    const remainder = targetQty - perMonth * productionMonths.length;
-    return productionMonths.map((m, i) => ({
-      month: m,
-      qty: perMonth + (i < remainder ? 1 : 0),
+  // Iterative min-batch enforcement:
+  // Distribute proportionally, then remove months below min batch, repeat
+  let activeMonths = allMonths.map((m, i) => ({ month: m, weight: adjustedWeights[i]! }));
+
+  for (let iteration = 0; iteration < allMonths.length; iteration++) {
+    const totalWeight = activeMonths.reduce((s, m) => s + m.weight, 0);
+    if (totalWeight === 0 || activeMonths.length === 0) break;
+
+    // Proportional allocation with largest remainder
+    const rawAllocations = activeMonths.map(m => ({
+      month: m.month,
+      raw: targetQty * (m.weight / totalWeight),
+      floored: 0,
+      remainder: 0,
     }));
-  }
 
-  // Proportional allocation with largest remainder method
-  const rawAllocations = productionMonths.map((m, i) => ({
-    month: m,
-    raw: (targetQty * (selectedWeights[i]! / totalWeight)),
-    floored: 0,
-    remainder: 0,
-  }));
+    for (const a of rawAllocations) {
+      a.floored = Math.floor(a.raw);
+      a.remainder = a.raw - a.floored;
+    }
 
-  // Floor all values
-  for (const a of rawAllocations) {
-    a.floored = Math.floor(a.raw);
-    a.remainder = a.raw - a.floored;
-  }
+    // Distribute remaining units by largest remainder
+    const distributed = rawAllocations.reduce((s, a) => s + a.floored, 0);
+    const remaining = targetQty - distributed;
+    const byRemainder = [...rawAllocations].sort((a, b) => b.remainder - a.remainder);
+    for (let i = 0; i < remaining && i < byRemainder.length; i++) {
+      byRemainder[i]!.floored += 1;
+    }
 
-  // Distribute remaining units by largest remainder
-  const distributed = rawAllocations.reduce((s, a) => s + a.floored, 0);
-  const remaining = targetQty - distributed;
+    // Check min batch — find months below threshold
+    const belowMin = rawAllocations.filter(a => a.floored > 0 && a.floored < minBatch);
 
-  // Sort by remainder descending for distribution
-  const byRemainder = [...rawAllocations].sort((a, b) => b.remainder - a.remainder);
-  for (let i = 0; i < remaining && i < byRemainder.length; i++) {
-    byRemainder[i]!.floored += 1;
-  }
+    if (belowMin.length === 0) {
+      // All months meet minimum — done
+      return rawAllocations
+        .map(a => ({ month: a.month, qty: a.floored }))
+        .filter(r => r.qty > 0);
+    }
 
-  // Apply minimum batch rule
-  // If a month's allocation is below minimum, redistribute to other months
-  const result: { month: string; qty: number }[] = [];
-  let redistributeQty = 0;
-  const validMonths: typeof rawAllocations = [];
+    // Remove below-min months and retry
+    const belowMonths = new Set(belowMin.map(a => a.month));
+    activeMonths = activeMonths.filter(m => !belowMonths.has(m.month));
 
-  for (const a of rawAllocations) {
-    if (a.floored > 0 && a.floored < minBatch) {
-      // Below minimum — don't produce this month
-      redistributeQty += a.floored;
-    } else {
-      validMonths.push(a);
-      result.push({ month: a.month, qty: a.floored });
+    // If only one month left (or none), put everything there
+    if (activeMonths.length <= 1) {
+      if (activeMonths.length === 1) {
+        return [{ month: activeMonths[0]!.month, qty: targetQty }];
+      }
+      // Fallback: first month
+      return [{ month: allMonths[0]!, qty: targetQty }];
     }
   }
 
-  // Redistribute collected quantities to valid months (proportionally)
-  if (redistributeQty > 0 && validMonths.length > 0) {
-    const validTotal = validMonths.reduce((s, a) => s + a.floored, 0);
-    let leftover = redistributeQty;
-
-    for (let i = 0; i < result.length && leftover > 0; i++) {
-      const share = validTotal > 0
-        ? Math.round(redistributeQty * (result[i]!.qty / validTotal))
-        : Math.round(redistributeQty / result.length);
-      const add = Math.min(share, leftover);
-      result[i]!.qty += add;
-      leftover -= add;
-    }
-
-    // Any remaining goes to the first month
-    if (leftover > 0 && result.length > 0) {
-      result[0]!.qty += leftover;
-    }
-  }
-
-  // If total qty is below minimum for a single batch, put it all in one month
-  if (targetQty > 0 && targetQty < minBatch && result.length === 0) {
-    // Round up to minimum
-    return [{ month: productionMonths[0]!, qty: minBatch }];
-  }
-
-  return result.filter(r => r.qty > 0);
+  // Fallback: shouldn't reach here, but put all in highest-weight month
+  const bestIdx = adjustedWeights.indexOf(Math.max(...adjustedWeights));
+  return [{ month: allMonths[bestIdx]!, qty: targetQty }];
 }
 
 // ============================================
@@ -232,39 +172,53 @@ export function allocateReserves(
   months: MonthCapacity[],
 ): AllocationResult[] {
   const weightedMonths = calculateMonthWeights(months);
-  const monthWeightMap = new Map(weightedMonths.map(m => [m.month, m.weight]));
+  const baseWeights = weightedMonths.map(m => m.weight);
   const allMonthCodes = weightedMonths.map(m => m.month);
-  const abcMap = classifyABC(reserves);
+
+  // Group reserves by category (each category = independent production line)
+  const byCategory = new Map<string, ReserveInput[]>();
+  for (const reserve of reserves) {
+    const cat = reserve.category || '_uncategorized';
+    const group = byCategory.get(cat) ?? [];
+    group.push(reserve);
+    byCategory.set(cat, group);
+  }
 
   const results: AllocationResult[] = [];
 
-  for (const reserve of reserves) {
-    const abcClass = abcMap.get(reserve.iwasku) ?? 'B';
-    const minBatch = getMinBatchSize(reserve.desiPerUnit);
+  // Process each category independently
+  for (const [, categoryReserves] of Array.from(byCategory)) {
+    for (const reserve of categoryReserves) {
+      const minBatch = getMinBatchSize(reserve.desiPerUnit);
 
-    // Determine which months this product will be produced
-    const prodMonths = getProductionMonths(
-      abcClass,
-      allMonthCodes,
-      reserve.destination,
-    );
+      // Calculate lead time factor from marketplace split
+      const leadFactor = reserve.marketplaceSplit
+        ? getLeadTimeFactor(reserve.marketplaceSplit)
+        : 0.3; // default: slightly toward early months
 
-    // Distribute target quantity across those months
-    const monthlyQtys = distributeToMonths(
-      reserve.targetQuantity,
-      reserve.desiPerUnit,
-      prodMonths,
-      monthWeightMap,
-      minBatch,
-    );
+      // Adjust month weights for this product's lead time
+      const adjusted = adjustWeightsForLeadTime(
+        baseWeights,
+        leadFactor,
+        LEAD_TIME_SHIFT_STRENGTH,
+      );
 
-    for (const mq of monthlyQtys) {
-      results.push({
-        iwasku: reserve.iwasku,
-        month: mq.month,
-        plannedQty: mq.qty,
-        plannedDesi: Math.round(mq.qty * reserve.desiPerUnit * 10) / 10,
-      });
+      // Distribute target quantity across months
+      const monthlyQtys = distributeToMonths(
+        reserve.targetQuantity,
+        allMonthCodes,
+        adjusted,
+        minBatch,
+      );
+
+      for (const mq of monthlyQtys) {
+        results.push({
+          iwasku: reserve.iwasku,
+          month: mq.month,
+          plannedQty: mq.qty,
+          plannedDesi: Math.round(mq.qty * reserve.desiPerUnit * 10) / 10,
+        });
+      }
     }
   }
 
@@ -288,7 +242,7 @@ export function summarizeByMonth(
     map.set(a.month, existing);
   }
 
-  return [...map.entries()]
+  return Array.from(map.entries())
     .map(([month, data]) => ({
       month,
       totalQty: data.totalQty,

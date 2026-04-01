@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     // Get ATP data (seasonal reserves)
     const atpMap = await getATPMap(iwaskus);
 
-    // Get active seasonal pool info per iwasku (for toggle default)
+    // Get active seasonal pool info per iwasku (for toggle default + season demands)
     const activeReserves = await prisma.stockReserve.findMany({
       where: {
         iwasku: { in: iwaskus },
@@ -68,15 +68,28 @@ export async function GET(request: NextRequest) {
       },
       select: {
         iwasku: true, targetQuantity: true, producedQuantity: true,
+        marketplaceSplit: true,
         pool: { select: { id: true, name: true } },
       },
     });
     const seasonPoolMap = new Map<string, { poolId: string; poolName: string; target: number; produced: number }>();
+    const seasonDemandsMap = new Map<string, { code: string; qty: number }[]>();
     for (const r of activeReserves) {
       seasonPoolMap.set(r.iwasku, {
         poolId: r.pool.id, poolName: r.pool.name,
         target: r.targetQuantity, produced: r.producedQuantity,
       });
+      // Build marketplace demands from marketplaceSplit JSON
+      if (r.marketplaceSplit && typeof r.marketplaceSplit === 'object') {
+        const split = r.marketplaceSplit as Record<string, number>;
+        const demands = Object.entries(split)
+          .filter(([, qty]) => qty > 0)
+          .map(([code, qty]) => ({ code, qty }))
+          .sort((a, b) => b.qty - a.qty);
+        if (demands.length > 0) {
+          seasonDemandsMap.set(r.iwasku, demands);
+        }
+      }
     }
 
     // Auto-create warehouse rows for products that have demands but no warehouse entry
@@ -174,6 +187,7 @@ export async function GET(request: NextRequest) {
         atp: atpMap.get(p.iwasku)?.atp ?? mevcut,
         _seasonPool: seasonPoolMap.get(p.iwasku) ?? null,
         _monthDemands: demandMap.get(p.iwasku) ?? [],
+        _seasonDemands: seasonDemandsMap.get(p.iwasku) ?? [],
         toplamDesi: desi ? Math.round(mevcut * desi * 100) / 100 : null,
         weeklyEntries: productionEntries.map(w => ({
           id: w.id,

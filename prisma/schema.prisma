@@ -339,6 +339,8 @@ model StockReserve {
   shippedQuantity  Int           @default(0)
   status           ReserveStatus @default(PLANNED)
   destination      String?       // "US", "EU", "UK", "NL", "AU", "ZA"
+  category         String?       // Kategori cache (allocator için)
+  marketplaceSplit  Json?         // {"US": 120, "EU": 80, "UK": 45}
 
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt

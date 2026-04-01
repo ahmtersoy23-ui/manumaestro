@@ -151,6 +151,9 @@ export default function PoolDetailPage() {
     }
   };
 
+  // Marketplace sheets to parse (sheet name → marketplace code)
+  const MARKETPLACE_SHEETS = ['US', 'EU', 'UK', 'CA', 'AU'];
+
   const handleExcelImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -158,38 +161,54 @@ export default function PoolDetailPage() {
     reader.onload = (evt) => {
       try {
         const wb = XLSX.read(evt.target?.result, { type: 'binary' });
-        const ws = wb.Sheets[wb.SheetNames[0]!]!;
-        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+        const items: { iwasku: string; quantity: number; desi: number; category: string; marketplace: string }[] = [];
 
-        // Map Excel columns to import format
-        // Expected: IWASKU, Ürün Adı, Kategori, Desi/Un, Q4'26 or Q1'27 columns
-        const items = rows.map(row => {
-          const iwasku = String(row['IWASKU'] || row['iwasku'] || '');
-          // Try various column names for quantity
-          const qty = Number(row['Q4\'26\nAğır.+15%'] || row['Q1\'27\nAğır.+15%'] ||
-            row['quantity'] || row['Quantity'] || row['6ay Un'] || 0);
-          const desi = Number(row['Desi/Un'] || row['desi'] || row['Desi'] || 0);
-          const category = String(row['Kategori'] || row['Category'] || row['category'] || '');
-          return { iwasku, quantity: Math.round(qty), desi, category };
-        }).filter(i => i.iwasku && i.quantity > 0);
+        // Parse each marketplace sheet
+        for (const sheetName of wb.SheetNames) {
+          const marketplace = MARKETPLACE_SHEETS.find(
+            m => sheetName.toUpperCase().startsWith(m)
+          );
+          if (!marketplace) continue; // Skip non-marketplace sheets (e.g. "Ülke Özet", "Yöntem")
+
+          const ws = wb.Sheets[sheetName]!;
+          const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+
+          for (const row of rows) {
+            const iwasku = String(row['iwasku'] || row['IWASKU'] || '');
+            if (!iwasku) continue;
+
+            // Quantity: q4 26 + q1 27 (or fallbacks)
+            const q4 = Number(row['q4 26'] || row['Q4 26'] || row["Q4'26\nAğır.+15%"] || row['quantity'] || 0);
+            const q1 = Number(row['q1 27'] || row['Q1 27'] || row["Q1'27\nAğır.+15%"] || 0);
+            const quantity = Math.round(q4 + q1);
+            if (quantity <= 0) continue;
+
+            const desi = Number(row['desi'] || row['Desi'] || row['Desi/Un'] || 0);
+            const category = String(row['kategori'] || row['Kategori'] || row['category'] || '');
+
+            items.push({ iwasku, quantity, desi, category, marketplace });
+          }
+        }
 
         if (items.length === 0) {
-          alert('Excel\'de geçerli veri bulunamadı. IWASKU ve quantity/miktar kolonları gerekli.');
+          alert('Excel\'de geçerli veri bulunamadı.\nBeklenen format: Sheet adı = US/EU/UK/CA/AU\nKolonlar: iwasku, kategori, desi, q4 26, q1 27');
           return;
         }
 
         // Default months (Apr-Nov 2026)
         const defaultMonths = [
-          { month: '2026-04', workingDays: 21, desiPerDay: 500 },
+          { month: '2026-04', workingDays: 18, desiPerDay: 500 },
           { month: '2026-05', workingDays: 16, desiPerDay: 500 },
-          { month: '2026-06', workingDays: 22, desiPerDay: 500 },
-          { month: '2026-07', workingDays: 22, desiPerDay: 400 },
-          { month: '2026-08', workingDays: 21, desiPerDay: 400 },
-          { month: '2026-09', workingDays: 22, desiPerDay: 450 },
-          { month: '2026-10', workingDays: 21, desiPerDay: 500 },
+          { month: '2026-06', workingDays: 25, desiPerDay: 500 },
+          { month: '2026-07', workingDays: 19, desiPerDay: 400 },
+          { month: '2026-08', workingDays: 25, desiPerDay: 400 },
+          { month: '2026-09', workingDays: 20, desiPerDay: 450 },
+          { month: '2026-10', workingDays: 19, desiPerDay: 500 },
           { month: '2026-11', workingDays: 20, desiPerDay: 500 },
         ];
 
+        const marketplaceCount = new Set(items.map(i => i.marketplace)).size;
+        alert(`${items.length} satır okundu (${marketplaceCount} marketplace). Aktarılıyor...`);
         handleImport({ items, months: defaultMonths, autoAllocate: true });
       } catch {
         alert('Excel dosyası okunamadı');
@@ -305,7 +324,7 @@ export default function PoolDetailPage() {
                       Excel Yükle (.xlsx)
                       <input type="file" accept=".xlsx,.xls" onChange={handleExcelImport} className="hidden" />
                     </label>
-                    <span className="text-xs text-gray-500">sezon-talep-tahmini.xlsx formatında (IWASKU, quantity, Desi/Un, Kategori)</span>
+                    <span className="text-xs text-gray-500">Sheet başına ülke (US/EU/UK/CA/AU), kolonlar: iwasku, kategori, desi, q4 26, q1 27</span>
                     {importing && <Loader2 className="w-4 h-4 animate-spin text-purple-500" />}
                   </div>
 
