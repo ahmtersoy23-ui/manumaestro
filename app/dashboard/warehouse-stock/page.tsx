@@ -24,6 +24,7 @@ interface StockProduct {
   weeklyEntries: WeeklyEntry[];
   shipmentEntries: WeeklyEntry[];
   _seasonPool?: { poolId: string; poolName: string; target: number; produced: number } | null;
+  _monthDemands?: { code: string; qty: number }[];
 }
 interface SnapshotItem {
   iwasku: string; productName: string; productCategory: string;
@@ -88,6 +89,7 @@ export default function WarehouseStockPage() {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('iwasku');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [showExtraCols, setShowExtraCols] = useState(false); // Başlangıç + İlave collapsed
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ imported: number; warnings: string[] } | null>(null);
 
@@ -458,6 +460,16 @@ export default function WarehouseStockPage() {
             </div>
           )}
 
+          {/* Column toggle */}
+          <div className="flex items-center gap-2 mb-2">
+            <button
+              onClick={() => setShowExtraCols(!showExtraCols)}
+              className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${showExtraCols ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-gray-50 border-gray-200 text-gray-500 hover:border-gray-300'}`}
+            >
+              {showExtraCols ? '▼ Başlangıç / İlave gizle' : '▶ Başlangıç / İlave göster'}
+            </button>
+          </div>
+
           {/* Spreadsheet Table */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             {loading ? (
@@ -471,7 +483,9 @@ export default function WarehouseStockPage() {
                       <SortHeader label="Ürün Adı" sortField="productName" className="text-left font-semibold text-gray-700 min-w-[250px]" />
                       <SortHeader label="Kategori" sortField="productCategory" className="text-left font-semibold text-gray-500 min-w-[80px] max-w-[120px]" />
                       <SortHeader label="Desi" sortField="desi" className="text-right font-semibold text-gray-500 min-w-[40px]" />
-                      <SortHeader label="Başlangıç" sortField="eskiStok" className="text-right font-semibold text-amber-700 bg-amber-50 min-w-[55px]" />
+                      {showExtraCols && (
+                        <SortHeader label="Başlangıç" sortField="eskiStok" className="text-right font-semibold text-amber-700 bg-amber-50 min-w-[55px]" />
+                      )}
                       {weekStarts.map(ws => {
                         const wl = formatWeekLabel(ws);
                         return (
@@ -482,7 +496,9 @@ export default function WarehouseStockPage() {
                         );
                       })}
                       <SortHeader label="Üretilen" sortField="uretilen" className="text-right font-semibold text-emerald-700 bg-emerald-50 min-w-[50px]" />
-                      <SortHeader label="İlave" sortField="ilaveStok" className="text-right font-semibold text-blue-700 bg-blue-50 min-w-[45px]" />
+                      {showExtraCols && (
+                        <SortHeader label="İlave" sortField="ilaveStok" className="text-right font-semibold text-blue-700 bg-blue-50 min-w-[45px]" />
+                      )}
                       {weekStarts.map(ws => {
                         const wl = formatWeekLabel(ws);
                         return (
@@ -494,6 +510,7 @@ export default function WarehouseStockPage() {
                       })}
                       <SortHeader label="Çıkış" sortField="toplamCikis" className="text-right font-semibold text-red-700 bg-red-50 min-w-[45px]" />
                       <SortHeader label="Mevcut" sortField="mevcut" className="text-right font-bold text-purple-700 bg-purple-50 min-w-[55px]" />
+                      <th className="px-2 py-2 text-left font-semibold text-indigo-600 bg-indigo-50 min-w-[100px]">Talep</th>
                       <SortHeader label="Ayrılmış" sortField="reserved" className="text-right font-semibold text-orange-600 bg-orange-50 min-w-[55px]" />
                       <SortHeader label="ATP" sortField="atp" className="text-right font-bold text-emerald-700 bg-emerald-50 min-w-[55px]" />
                       <SortHeader label="T.Desi" sortField="toplamDesi" className="text-right font-semibold text-gray-500 min-w-[55px]" />
@@ -521,9 +538,11 @@ export default function WarehouseStockPage() {
                             <span className="line-clamp-2 whitespace-normal leading-tight">{p.productCategory}</span>
                           </td>
                           <td className="px-2 py-1 text-right text-gray-400">{p.desi || '-'}</td>
+                          {showExtraCols && (
                           <td className="px-2 py-1 text-right bg-amber-50/30">
-                            <span className="text-amber-700 font-medium">{p.eskiStok || '-'}</span>
+                            <EditableCell value={p.eskiStok} onSave={v => updateField(p.iwasku, 'eskiStok', v)} className="text-amber-700" />
                           </td>
+                          )}
                           {/* Üretilen haftalık (yeşil, sezon ürünlerinde mor border) */}
                           {weekStarts.map(ws => (
                             <td key={`prod-${ws}`} className={`px-0.5 py-1 text-center ${p._seasonPool ? 'bg-purple-50/20' : 'bg-emerald-50/10'}`}>
@@ -535,9 +554,11 @@ export default function WarehouseStockPage() {
                             </td>
                           ))}
                           <td className="px-2 py-1 text-right font-medium text-emerald-700 bg-emerald-50/30">{p.uretilen || '-'}</td>
+                          {showExtraCols && (
                           <td className="px-2 py-1 text-right bg-blue-50/30">
                             <EditableCell value={p.ilaveStok} onSave={v => updateField(p.iwasku, 'ilaveStok', v)} className="text-blue-700" />
                           </td>
+                          )}
                           {/* Çıkış haftalık (kırmızı) */}
                           {weekStarts.map(ws => (
                             <td key={`ship-${ws}`} className="px-0.5 py-1 text-center bg-red-50/10">
@@ -550,6 +571,20 @@ export default function WarehouseStockPage() {
                           ))}
                           <td className="px-2 py-1 text-right font-medium text-red-700 bg-red-50/30">{p.toplamCikis || '-'}</td>
                           <td className="px-2 py-1 text-right font-bold text-purple-700 bg-purple-50/30">{p.mevcut}</td>
+                          <td className="px-1 py-1 bg-indigo-50/20">
+                            {(p._monthDemands && p._monthDemands.length > 0) ? (
+                              <div className="flex flex-wrap gap-0.5">
+                                {p._monthDemands.map((d, i) => {
+                                  const short = d.code.replace('AMZN_', '').replace('WF_', 'WF').replace('WM_', 'WM').replace('ETSY_', 'ET').replace('TAKE', 'TK').replace('KAUF', 'KF').replace('BOL', 'BL').substring(0, 4);
+                                  return (
+                                    <span key={i} className="text-[9px] text-indigo-700 bg-indigo-100 px-1 rounded" title={`${d.code}: ${d.qty}`}>
+                                      {short}_{d.qty}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            ) : <span className="text-[9px] text-gray-300">—</span>}
+                          </td>
                           <td className="px-2 py-1 text-right text-orange-600 bg-orange-50/30">{p.reserved > 0 ? p.reserved : '-'}</td>
                           <td className="px-2 py-1 text-right font-bold text-emerald-700 bg-emerald-50/30">{p.atp}</td>
                           <td className="px-2 py-1 text-right text-gray-400">{p.toplamDesi ?? '-'}</td>

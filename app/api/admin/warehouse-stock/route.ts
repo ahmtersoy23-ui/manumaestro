@@ -12,6 +12,7 @@ import { verifyAuth, checkStockPermission } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
 import { errorResponse } from '@/lib/api/response';
 import { getATPMap } from '@/lib/db/atp';
+import { formatMonthValue } from '@/lib/monthUtils';
 import { z } from 'zod';
 
 export async function GET(request: NextRequest) {
@@ -78,6 +79,35 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Get current month marketplace demands per iwasku
+    const currentMonth = formatMonthValue(new Date());
+    const monthDemands = iwaskus.length > 0
+      ? await prisma.productionRequest.findMany({
+          where: {
+            productionMonth: currentMonth,
+            iwasku: { in: iwaskus },
+          },
+          select: {
+            iwasku: true,
+            quantity: true,
+            marketplace: { select: { code: true } },
+          },
+        })
+      : [];
+
+    // Build demand map: iwasku -> [{code, qty}]
+    const demandMap = new Map<string, { code: string; qty: number }[]>();
+    for (const d of monthDemands) {
+      const list = demandMap.get(d.iwasku) ?? [];
+      const existing = list.find(x => x.code === d.marketplace.code);
+      if (existing) {
+        existing.qty += d.quantity;
+      } else {
+        list.push({ code: d.marketplace.code, qty: d.quantity });
+      }
+      demandMap.set(d.iwasku, list);
+    }
+
     // Enrich with product details and calculated fields
     const data = products.map(p => {
       const productionEntries = p.weeklyEntries.filter(w => w.type === 'PRODUCTION');
@@ -105,6 +135,7 @@ export async function GET(request: NextRequest) {
         reserved: atpMap.get(p.iwasku)?.reserved ?? 0,
         atp: atpMap.get(p.iwasku)?.atp ?? mevcut,
         _seasonPool: seasonPoolMap.get(p.iwasku) ?? null,
+        _monthDemands: demandMap.get(p.iwasku) ?? [],
         toplamDesi: desi ? Math.round(mevcut * desi * 100) / 100 : null,
         weeklyEntries: productionEntries.map(w => ({
           id: w.id,
