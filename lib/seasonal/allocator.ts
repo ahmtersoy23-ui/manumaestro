@@ -1,13 +1,15 @@
 /**
- * Seasonal demand allocation algorithm — capacity-aware
+ * Seasonal demand allocation algorithm
  *
- * Distributes total seasonal demand across months, respecting:
- * 1. Monthly capacity quotas (each month has a desi limit)
- * 2. Category independence (each category = separate production line)
- * 3. Lead time weight shifting (AU/US → early months, EU/UK → late months)
- * 4. Minimum batch size (15 units per product per month)
- * 5. Proportional distribution across products (risk mitigation)
- * 6. Capacity balancing (no month exceeds its quota disproportionately)
+ * Rolling share: her ay için pay = ay_kotası / kalan_kapasite
+ * Bu sayede toplam talep < toplam kapasite olsa bile her ay orantılı dolar.
+ *
+ * Kurallar:
+ * 1. Kategori bazlı bağımsız dağıtım (her kategori = ayrı üretim bandı)
+ * 2. Her kategoride tüm aylar aynı % ilerlemeli (eşit dağılım)
+ * 3. Ürünler büyükten küçüğe, min 15 batch
+ * 4. Lead time yumuşak kaydırma (AU/US erken, EU/UK geç)
+ * 5. Ay kapasitesini aşma
  */
 
 import {
@@ -56,7 +58,55 @@ export function calculateMonthWeights(months: MonthCapacity[]): MonthCapacity[] 
 }
 
 // ============================================
-// STEP 2: Lead time weight adjustment
+// STEP 2: Rolling month shares
+// ============================================
+
+/**
+ * Calculate rolling month shares:
+ *   share[0] = quota[0] / totalCapacity
+ *   share[1] = quota[1] / (totalCapacity - quota[0])
+ *   share[2] = quota[2] / (totalCapacity - quota[0] - quota[1])
+ *   ...
+ *
+ * Each share tells: "what fraction of REMAINING demand goes to this month"
+ * Multiplied cumulatively, this distributes total demand across months
+ * proportionally to their quotas, regardless of demand/capacity ratio.
+ */
+function calculateRollingShares(months: MonthCapacity[]): number[] {
+  const shares: number[] = [];
+  let remainingCapacity = months.reduce((s, m) => s + m.totalDesi, 0);
+
+  for (const m of months) {
+    const share = remainingCapacity > 0 ? m.totalDesi / remainingCapacity : 0;
+    shares.push(share);
+    remainingCapacity -= m.totalDesi;
+  }
+
+  return shares;
+}
+
+/**
+ * Convert rolling shares to flat month weights (what % of total goes to each month).
+ * rolling: [0.148, 0.121, 0.207, ...]
+ * flat:    [0.148, 0.103, 0.155, ...] (multiply through remaining fractions)
+ */
+function rollingToFlat(rollingShares: number[]): number[] {
+  const flat: number[] = [];
+  let remaining = 1.0;
+
+  for (const share of rollingShares) {
+    const monthPortion = remaining * share;
+    flat.push(monthPortion);
+    remaining -= monthPortion;
+  }
+
+  // Normalize (handle floating point drift)
+  const sum = flat.reduce((s, w) => s + w, 0);
+  return sum > 0 ? flat.map(w => w / sum) : flat;
+}
+
+// ============================================
+// STEP 3: Lead time weight adjustment (mild)
 // ============================================
 
 function adjustWeightsForLeadTime(
@@ -68,7 +118,7 @@ function adjustWeightsForLeadTime(
   if (n <= 1) return [...baseWeights];
 
   const adjusted = baseWeights.map((w, i) => {
-    const monthPosition = i / (n - 1); // 0.0 (first) → 1.0 (last)
+    const monthPosition = i / (n - 1);
     const earlyBias = (1 - monthPosition) * leadFactor;
     const lateBias = monthPosition * (1 - leadFactor);
     const shift = 1 + strength * (earlyBias - lateBias);
@@ -80,106 +130,84 @@ function adjustWeightsForLeadTime(
 }
 
 // ============================================
-// STEP 3: Capacity-aware weight adjustment
+// STEP 4: Distribute single product with min 15
 // ============================================
 
 /**
- * Adjusts month weights based on remaining capacity.
- * Months that are nearly full get lower weight,
- * months with lots of remaining capacity get higher weight.
+ * Distribute a product across months, enforcing min 15 batch.
+ * Key fix: remove only the SMALLEST below-min month per iteration
+ * (not all at once, which causes cascading collapse to 1 month).
  */
-function adjustWeightsForCapacity(
-  weights: number[],
-  remainingCapacity: number[],
-  totalCapacity: number[],
-): number[] {
-  const adjusted = weights.map((w, i) => {
-    const remaining = remainingCapacity[i]!;
-    const total = totalCapacity[i]!;
-    if (total <= 0) return 0;
-    // Scale weight by how much capacity remains (0 = full, 1 = empty)
-    const capacityRatio = Math.max(0, remaining / total);
-    // Smooth scaling: full months get near-zero weight, empty months keep full weight
-    return w * capacityRatio;
-  });
-
-  const sum = adjusted.reduce((s, w) => s + w, 0);
-  return sum > 0 ? adjusted.map(w => w / sum) : weights;
-}
-
-// ============================================
-// STEP 4: Distribute single product to months
-// ============================================
-
 function distributeProduct(
   targetQty: number,
-  desiPerUnit: number,
   allMonths: string[],
-  adjustedWeights: number[],
+  weights: number[],
   minBatch: number,
 ): { month: string; qty: number }[] {
   if (allMonths.length === 0 || targetQty <= 0) return [];
 
-  // Special case: total below minimum → all in highest-weight month
+  // Total below min → all in best month, no rounding up
   if (targetQty < minBatch) {
-    const bestIdx = adjustedWeights.indexOf(Math.max(...adjustedWeights));
+    const bestIdx = weights.indexOf(Math.max(...weights));
     return [{ month: allMonths[bestIdx]!, qty: targetQty }];
   }
 
-  // Iterative min-batch enforcement
-  let activeMonths = allMonths.map((m, i) => ({ month: m, weight: adjustedWeights[i]! }));
+  let activeIndices = allMonths.map((_, i) => i);
 
   for (let iteration = 0; iteration < allMonths.length; iteration++) {
-    const totalWeight = activeMonths.reduce((s, m) => s + m.weight, 0);
-    if (totalWeight === 0 || activeMonths.length === 0) break;
+    // Calculate weights for active months only
+    const activeWeights = activeIndices.map(i => weights[i]!);
+    const totalWeight = activeWeights.reduce((s, w) => s + w, 0);
+    if (totalWeight === 0 || activeIndices.length === 0) break;
 
     // Proportional allocation with largest remainder
-    const rawAllocations = activeMonths.map(m => ({
-      month: m.month,
-      raw: targetQty * (m.weight / totalWeight),
-      floored: 0,
+    const allocations = activeIndices.map((monthIdx, j) => ({
+      monthIdx,
+      month: allMonths[monthIdx]!,
+      raw: targetQty * (activeWeights[j]! / totalWeight),
+      qty: 0,
       remainder: 0,
     }));
 
-    for (const a of rawAllocations) {
-      a.floored = Math.floor(a.raw);
-      a.remainder = a.raw - a.floored;
+    for (const a of allocations) {
+      a.qty = Math.floor(a.raw);
+      a.remainder = a.raw - a.qty;
     }
 
-    const distributed = rawAllocations.reduce((s, a) => s + a.floored, 0);
-    const remaining = targetQty - distributed;
-    const byRemainder = [...rawAllocations].sort((a, b) => b.remainder - a.remainder);
+    // Distribute remaining units by largest remainder
+    const distributed = allocations.reduce((s, a) => s + a.qty, 0);
+    let remaining = targetQty - distributed;
+    const byRemainder = [...allocations].sort((a, b) => b.remainder - a.remainder);
     for (let i = 0; i < remaining && i < byRemainder.length; i++) {
-      byRemainder[i]!.floored += 1;
+      byRemainder[i]!.qty += 1;
     }
 
-    // Check min batch
-    const belowMin = rawAllocations.filter(a => a.floored > 0 && a.floored < minBatch);
+    // Find months below min batch
+    const belowMin = allocations.filter(a => a.qty > 0 && a.qty < minBatch);
 
     if (belowMin.length === 0) {
-      return rawAllocations
-        .map(a => ({ month: a.month, qty: a.floored }))
-        .filter(r => r.qty > 0);
+      // All meet minimum → done
+      return allocations.filter(a => a.qty > 0).map(a => ({ month: a.month, qty: a.qty }));
     }
 
-    // Remove below-min months and retry
-    const belowMonths = new Set(belowMin.map(a => a.month));
-    activeMonths = activeMonths.filter(m => !belowMonths.has(m.month));
+    // Remove only the SMALLEST below-min month (one at a time)
+    const smallest = belowMin.reduce((min, a) => a.qty < min.qty ? a : min, belowMin[0]!);
+    activeIndices = activeIndices.filter(i => i !== smallest.monthIdx);
 
-    if (activeMonths.length <= 1) {
-      if (activeMonths.length === 1) {
-        return [{ month: activeMonths[0]!.month, qty: targetQty }];
-      }
-      return [{ month: allMonths[0]!, qty: targetQty }];
+    if (activeIndices.length === 0) {
+      // No months left — put all in best month
+      const bestIdx = weights.indexOf(Math.max(...weights));
+      return [{ month: allMonths[bestIdx]!, qty: targetQty }];
     }
   }
 
-  const bestIdx = adjustedWeights.indexOf(Math.max(...adjustedWeights));
+  // Fallback
+  const bestIdx = weights.indexOf(Math.max(...weights));
   return [{ month: allMonths[bestIdx]!, qty: targetQty }];
 }
 
 // ============================================
-// MAIN: Capacity-aware allocation
+// MAIN: Allocate all reserves across months
 // ============================================
 
 export function allocateReserves(
@@ -187,10 +215,11 @@ export function allocateReserves(
   months: MonthCapacity[],
 ): AllocationResult[] {
   const weightedMonths = calculateMonthWeights(months);
-  const baseWeights = weightedMonths.map(m => m.weight);
   const allMonthCodes = weightedMonths.map(m => m.month);
-  const totalCapacity = weightedMonths.map(m => m.totalDesi);
-  const remainingCapacity = [...totalCapacity];
+
+  // Rolling shares → flat weights
+  const rollingShares = calculateRollingShares(weightedMonths);
+  const flatWeights = rollingToFlat(rollingShares);
 
   // Group reserves by category
   const byCategory = new Map<string, ReserveInput[]>();
@@ -204,7 +233,7 @@ export function allocateReserves(
   const results: AllocationResult[] = [];
 
   for (const [, categoryReserves] of Array.from(byCategory)) {
-    // Sort by total desi descending — large products first for stable allocation
+    // Sort by total desi descending — large products first
     const sorted = [...categoryReserves].sort(
       (a, b) => (b.targetQuantity * b.desiPerUnit) - (a.targetQuantity * a.desiPerUnit)
     );
@@ -212,49 +241,32 @@ export function allocateReserves(
     for (const reserve of sorted) {
       const minBatch = getMinBatchSize(reserve.desiPerUnit);
 
-      // Lead time factor from marketplace split
+      // Mild lead time adjustment on top of flat weights
       const leadFactor = reserve.marketplaceSplit
         ? getLeadTimeFactor(reserve.marketplaceSplit)
         : 0.3;
 
-      // Base weights adjusted for lead time
-      const leadAdjusted = adjustWeightsForLeadTime(
-        baseWeights,
+      const adjusted = adjustWeightsForLeadTime(
+        flatWeights,
         leadFactor,
         LEAD_TIME_SHIFT_STRENGTH,
       );
 
-      // Further adjust for remaining capacity — avoids overloading months
-      const capacityAdjusted = adjustWeightsForCapacity(
-        leadAdjusted,
-        remainingCapacity,
-        totalCapacity,
-      );
-
-      // Distribute this product
+      // Distribute with min 15 enforcement (one-at-a-time removal)
       const monthlyQtys = distributeProduct(
         reserve.targetQuantity,
-        reserve.desiPerUnit,
         allMonthCodes,
-        capacityAdjusted,
+        adjusted,
         minBatch,
       );
 
-      // Record results and deduct from remaining capacity
       for (const mq of monthlyQtys) {
-        const allocDesi = mq.qty * reserve.desiPerUnit;
         results.push({
           iwasku: reserve.iwasku,
           month: mq.month,
           plannedQty: mq.qty,
-          plannedDesi: Math.round(allocDesi * 10) / 10,
+          plannedDesi: Math.round(mq.qty * reserve.desiPerUnit * 10) / 10,
         });
-
-        // Deduct from remaining capacity
-        const monthIdx = allMonthCodes.indexOf(mq.month);
-        if (monthIdx >= 0) {
-          remainingCapacity[monthIdx] = Math.max(0, remainingCapacity[monthIdx]! - allocDesi);
-        }
       }
     }
   }
