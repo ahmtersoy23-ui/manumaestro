@@ -135,6 +135,16 @@ async function main() {
       colorTag: '#0080FF',
       isCustom: false,
     },
+
+    // Seasonal production marketplace
+    {
+      name: 'Sezon',
+      code: 'SEZON',
+      marketplaceType: MarketplaceType.CUSTOM,
+      region: 'TR',
+      colorTag: '#8B5CF6',
+      isCustom: true,
+    },
   ];
 
   let createdCount = 0;

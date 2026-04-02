@@ -1,14 +1,25 @@
 /**
- * Seasonal demand allocation — Waterfall Fill
+ * Seasonal demand allocation — Phase-Based Waterfall Fill
  *
- * Ayları sırayla doldurur: Nisan→Kasım. Her ay kotasına kadar dolar.
- * Talep bitince kalan aylar boş kalır. Yeni listeler gelince yeniden hesaplanır.
+ * Faz 1 (Nisan-Mayıs) — strict:
+ *   share = monthQuota / catRemainingDesi
+ *   idealQty = remaining × share
+ *   - idealQty ≥ 15         → ata
+ *   - idealQty < 15 && desi ≥ 7  → skip (büyük ürün, ileriki aya)
+ *   - idealQty < 15 && desi < 7  → 15'e tamamla
+ *   Ay kotasına ulaşınca DUR
  *
- * Her kategoride aynı oranda ilerleme (eşit dağılım).
- * Ürünler büyükten küçüğe, min 15 batch.
+ * Faz 2 (Haziran-Temmuz) — relaxed:
+ *   Aynı ama desi≥7 skip kuralı yok; tüm ürünler idealQty<15 → 15'e tamamlanır
+ *
+ * Faz 3 (Ağustos+) — remaining:
+ *   Kalan talebi direkt ata, kota hesabı yok
+ *
+ * Sıralama: Weighted lead time DESC (AU/CA önce), sonra toplam desi DESC.
+ * Kategoriler bağımsız üretim hatlarında işlenir.
  */
 
-import { getMinBatchSize } from './config';
+import { getMinBatchSize, getPhase, getWeightedLeadTime, type AllocPhase } from './config';
 
 // ============================================
 // TYPES
@@ -50,19 +61,21 @@ export function calculateMonthWeights(months: MonthCapacity[]): MonthCapacity[] 
 }
 
 // ============================================
-// MAIN: Waterfall allocation
+// MAIN: Phase-based Waterfall allocation
 // ============================================
 
 export function allocateReserves(
   reserves: ReserveInput[],
   months: MonthCapacity[],
 ): AllocationResult[] {
+  if (reserves.length === 0 || months.length === 0) return [];
+
   const totalDemandDesi = reserves.reduce(
     (s, r) => s + r.targetQuantity * r.desiPerUnit, 0
   );
-  if (totalDemandDesi <= 0 || months.length === 0) return [];
+  if (totalDemandDesi <= 0) return [];
 
-  // Group by category
+  // Group by category (independent production lines)
   const byCategory = new Map<string, ReserveInput[]>();
   for (const reserve of reserves) {
     const cat = reserve.category || '_uncategorized';
@@ -71,62 +84,53 @@ export function allocateReserves(
     byCategory.set(cat, group);
   }
 
-  // Calculate each category's share of total demand
+  // Category desi totals for quota partitioning
   const catDesiMap = new Map<string, number>();
   for (const [cat, catReserves] of Array.from(byCategory)) {
-    const catDesi = catReserves.reduce((s, r) => s + r.targetQuantity * r.desiPerUnit, 0);
-    catDesiMap.set(cat, catDesi);
+    catDesiMap.set(cat, catReserves.reduce((s, r) => s + r.targetQuantity * r.desiPerUnit, 0));
   }
 
   const results: AllocationResult[] = [];
 
-  // Process each category independently (each has its own production line)
+  // Last 2 months are the 'remaining' overflow buffer (dynamic, not calendar-based)
+  const remainingMonthSet = new Set(
+    months.length >= 2
+      ? months.slice(-2).map(m => m.month)
+      : months.map(m => m.month)
+  );
+
   for (const [cat, catReserves] of Array.from(byCategory)) {
     const catTotalDesi = catDesiMap.get(cat)!;
     const catShare = catTotalDesi / totalDemandDesi;
 
-    // Sort by desi descending — large products first for stable allocation
-    const sorted = [...catReserves].sort(
-      (a, b) => (b.targetQuantity * b.desiPerUnit) - (a.targetQuantity * a.desiPerUnit)
-    );
+    // Sort: weighted lead time DESC (AU/CA first), then total desi DESC
+    const sorted = [...catReserves].sort((a, b) => {
+      const ltA = getWeightedLeadTime(a.marketplaceSplit ?? {});
+      const ltB = getWeightedLeadTime(b.marketplaceSplit ?? {});
+      if (ltB !== ltA) return ltB - ltA;
+      return (b.targetQuantity * b.desiPerUnit) - (a.targetQuantity * a.desiPerUnit);
+    });
 
     // Track remaining qty per product
     const remaining = new Map<string, number>();
     for (const r of sorted) remaining.set(r.iwasku, r.targetQuantity);
 
-    let catRemainingDesi = catTotalDesi;
-
-    // Waterfall: fill months in order
     for (const month of months) {
+      const catRemainingDesi = sorted.reduce(
+        (s, r) => s + (remaining.get(r.iwasku) ?? 0) * r.desiPerUnit, 0
+      );
       if (catRemainingDesi <= 0) break;
 
-      // This category's quota for this month
-      const monthCatQuota = month.totalDesi * catShare;
+      // 'remaining' = son 2 ay (dinamik); diğerleri takvim bazlı strict/relaxed
+      const phase: AllocPhase = remainingMonthSet.has(month.month)
+        ? 'remaining'
+        : getPhase(month.month);
 
-      // Share of remaining to allocate this month
-      const share = Math.min(1, monthCatQuota / catRemainingDesi);
-
-      let monthAllocDesi = 0;
-
-      for (const reserve of sorted) {
-        const remQty = remaining.get(reserve.iwasku)!;
-        if (remQty <= 0) continue;
-
-        const minBatch = getMinBatchSize(reserve.desiPerUnit);
-        const idealQty = Math.round(remQty * share);
-
-        if (idealQty >= minBatch) {
-          // Normal allocation
-          results.push({
-            iwasku: reserve.iwasku,
-            month: month.month,
-            plannedQty: idealQty,
-            plannedDesi: Math.round(idealQty * reserve.desiPerUnit * 10) / 10,
-          });
-          remaining.set(reserve.iwasku, remQty - idealQty);
-          monthAllocDesi += idealQty * reserve.desiPerUnit;
-        } else if (remQty <= minBatch) {
-          // Remaining is small — dump all here
+      if (phase === 'remaining') {
+        // Faz 3: dump all remaining into this month (no quota check)
+        for (const reserve of sorted) {
+          const remQty = remaining.get(reserve.iwasku)!;
+          if (remQty <= 0) continue;
           results.push({
             iwasku: reserve.iwasku,
             month: month.month,
@@ -134,25 +138,90 @@ export function allocateReserves(
             plannedDesi: Math.round(remQty * reserve.desiPerUnit * 10) / 10,
           });
           remaining.set(reserve.iwasku, 0);
-          monthAllocDesi += remQty * reserve.desiPerUnit;
         }
-        // else: skip — will be allocated in a later month where share is higher
+        break; // All demand consumed
       }
 
-      catRemainingDesi -= monthAllocDesi;
+      // Faz 1 & 2: quota-based fill
+      const monthCatQuota = month.totalDesi * catShare;
+      const share = Math.min(1, monthCatQuota / catRemainingDesi);
+      const minBatch = getMinBatchSize();
+
+      let monthAllocDesi = 0;
+
+      for (const reserve of sorted) {
+        const remQty = remaining.get(reserve.iwasku)!;
+        if (remQty <= 0) continue;
+
+        // Stop if quota exceeded
+        if (monthAllocDesi >= monthCatQuota) break;
+
+        const idealQty = Math.round(remQty * share);
+        const desi = reserve.desiPerUnit;
+
+        let allocQty: number | null = null;
+
+        if (idealQty >= minBatch) {
+          allocQty = idealQty;
+        } else if (phase === 'strict' && desi >= 7) {
+          // Faz 1: büyük ürün, idealQty küçük → skip (ileriki aya)
+          allocQty = null;
+        } else {
+          // Faz 1 küçük ürün veya Faz 2: 15'e tamamla (eğer remaining ≥ 15 ise)
+          if (remQty >= minBatch) {
+            allocQty = minBatch;
+          } else {
+            // Remaining itself is below 15 → dump all (will finish this product)
+            allocQty = remQty;
+          }
+        }
+
+        if (allocQty === null || allocQty <= 0) continue;
+
+        // Cap at remaining
+        allocQty = Math.min(allocQty, remQty);
+
+        // Cap at remaining quota headroom
+        const quotaHeadroom = monthCatQuota - monthAllocDesi;
+        const maxByQuota = Math.floor(quotaHeadroom / desi);
+        if (maxByQuota < minBatch && remQty > minBatch) {
+          // Not enough quota left for even a min batch of this product — skip
+          continue;
+        }
+        allocQty = Math.min(allocQty, Math.max(maxByQuota, allocQty <= minBatch ? allocQty : 0));
+        if (allocQty <= 0) continue;
+
+        results.push({
+          iwasku: reserve.iwasku,
+          month: month.month,
+          plannedQty: allocQty,
+          plannedDesi: Math.round(allocQty * desi * 10) / 10,
+        });
+        remaining.set(reserve.iwasku, remQty - allocQty);
+        monthAllocDesi += allocQty * desi;
+      }
     }
 
-    // Safety: any remaining goes to last month
+    // Safety: any unallocated demand goes to last month
     const lastMonth = months[months.length - 1]!;
     for (const reserve of sorted) {
       const remQty = remaining.get(reserve.iwasku)!;
       if (remQty > 0) {
-        results.push({
-          iwasku: reserve.iwasku,
-          month: lastMonth.month,
-          plannedQty: remQty,
-          plannedDesi: Math.round(remQty * reserve.desiPerUnit * 10) / 10,
-        });
+        // Merge with existing entry for this product+month if present
+        const existing = results.find(
+          r => r.iwasku === reserve.iwasku && r.month === lastMonth.month
+        );
+        if (existing) {
+          existing.plannedQty += remQty;
+          existing.plannedDesi = Math.round(existing.plannedQty * reserve.desiPerUnit * 10) / 10;
+        } else {
+          results.push({
+            iwasku: reserve.iwasku,
+            month: lastMonth.month,
+            plannedQty: remQty,
+            plannedDesi: Math.round(remQty * reserve.desiPerUnit * 10) / 10,
+          });
+        }
         remaining.set(reserve.iwasku, 0);
       }
     }

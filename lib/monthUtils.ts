@@ -76,13 +76,20 @@ export function getActiveMonths(): Array<{ value: string; label: string; locked:
 
 /**
  * Get list of available months for creating new requests (dropdown)
- * Only unlocked months from active months
+ * Normal users: only unlocked (future) months.
+ * Admin: all active months regardless of lock status.
+ * @param adminBypass - if true, return all months including locked ones
  * @returns Array of month objects with value and label
  */
-export function getAvailableMonthsForEntry(): Array<{ value: string; label: string }> {
-  // Get active months and filter out locked ones
-  const activeMonths = getActiveMonths();
+export function getAvailableMonthsForEntry(adminBypass = false): Array<{ value: string; label: string }> {
+  if (adminBypass) {
+    // Admin: include all months (locked + unlocked), broader range
+    return getAllMonthsForViewing(6)
+      .reverse() // chronological order
+      .map(month => ({ value: month.value, label: month.label }));
+  }
 
+  const activeMonths = getActiveMonths();
   return activeMonths
     .filter(month => !month.locked)
     .map(month => ({

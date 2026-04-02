@@ -72,3 +72,23 @@ export function getLeadTimeFactor(marketplaceSplit: Record<string, number>): num
   const wlt = getWeightedLeadTime(marketplaceSplit);
   return Math.min(1, Math.max(0, wlt / MAX_LEAD_TIME));
 }
+
+// ============================================
+// ALLOCATION PHASES
+// ============================================
+
+export type AllocPhase = 'strict' | 'relaxed' | 'remaining';
+
+/**
+ * Determine phase for a given month (YYYY-MM format).
+ * strict   → Nisan-Mayıs (4-5):   idealQty<15 && desi≥7 → skip (büyük ürün)
+ * relaxed  → Haziran+ (6+):        desi≥7 skip kuralı yok, kota bazlı devam
+ *
+ * NOT: 'remaining' fazı bu fonksiyondan dönmez.
+ * Allocator, verilen ayların son 2'sini dinamik olarak 'remaining' olarak işler.
+ */
+export function getPhase(month: string): Exclude<AllocPhase, 'remaining'> {
+  const m = parseInt(month.slice(5, 7), 10); // "2026-04" → 4
+  if (m <= 5) return 'strict';
+  return 'relaxed';
+}

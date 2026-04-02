@@ -122,23 +122,10 @@ export async function DELETE(request: NextRequest, { params }: Params) {
   const { user } = authResult;
   const { id } = await params;
 
-  const pool = await prisma.stockPool.findUnique({
-    where: { id },
-    include: {
-      reserves: { select: { producedQuantity: true } },
-    },
-  });
+  const pool = await prisma.stockPool.findUnique({ where: { id } });
 
   if (!pool) {
     return NextResponse.json({ success: false, error: 'Havuz bulunamadı' }, { status: 404 });
-  }
-
-  const hasProduction = pool.reserves.some(r => r.producedQuantity > 0);
-  if (hasProduction) {
-    return NextResponse.json(
-      { success: false, error: 'Üretimi başlamış havuz silinemez. İptal edin.' },
-      { status: 400 }
-    );
   }
 
   // Delete cascade: reserves + allocations

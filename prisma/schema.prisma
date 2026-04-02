@@ -361,6 +361,7 @@ model MonthlyAllocation {
   plannedQty  Int
   plannedDesi Float?
   actualQty   Int      @default(0)
+  locked      Boolean  @default(false) // true = production started, allocation frozen
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

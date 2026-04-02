@@ -155,7 +155,7 @@ export default function MonthDetailPage() {
 
   const monthDate = parseMonthValue(month);
   const monthLabel = monthDate.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
-  const isLocked = isMonthLocked(month);
+  const isLocked = role === 'admin' ? false : isMonthLocked(month);
 
   useEffect(() => {
     async function fetchData() {

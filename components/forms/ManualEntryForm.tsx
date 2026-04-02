@@ -8,6 +8,7 @@
 import { useState, useEffect } from 'react';
 import { Search, Plus, Check, Calendar, AlertCircle } from 'lucide-react';
 import { getAvailableMonthsForEntry, formatMonthDisplay, getCurrentMonth } from '@/lib/monthUtils';
+import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('ManualEntryForm');
@@ -25,6 +26,7 @@ interface Product {
 }
 
 export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: ManualEntryFormProps) {
+  const { role } = useAuth();
   const [iwasku, setIwasku] = useState('');
   const [quantity, setQuantity] = useState('');
   const [productName, setProductName] = useState('');
@@ -39,7 +41,7 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
   const [showDropdown, setShowDropdown] = useState(false);
   const [monthError, setMonthError] = useState('');
 
-  const availableMonths = getAvailableMonthsForEntry();
+  const availableMonths = getAvailableMonthsForEntry(role === 'admin');
   const today = new Date();
   const dayOfMonth = today.getDate();
   const currentMonth = getCurrentMonth();

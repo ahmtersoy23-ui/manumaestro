@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react';
 import { Upload, Download, FileSpreadsheet, X, Calendar, AlertCircle, Check } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { getAvailableMonthsForEntry, formatMonthDisplay, getCurrentMonth } from '@/lib/monthUtils';
+import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('ExcelUpload');
@@ -32,13 +33,14 @@ const PRIORITY_MAP: Record<string, 'HIGH' | 'MEDIUM' | 'LOW'> = {
 };
 
 export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps) {
+  const { role } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [productionMonth, setProductionMonth] = useState('');
   const [monthError, setMonthError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  const availableMonths = getAvailableMonthsForEntry();
+  const availableMonths = getAvailableMonthsForEntry(role === 'admin');
 
   // Auto-select first available month on mount
   useEffect(() => {

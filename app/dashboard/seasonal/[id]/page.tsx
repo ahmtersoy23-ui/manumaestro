@@ -13,7 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   Home, Upload, Package, TrendingUp, Truck, AlertCircle,
   Loader2, CheckCircle2, XCircle, BarChart3, Calendar, FileSpreadsheet,
-  CalendarRange, Eye, ThumbsUp,
+  CalendarRange, Eye, ThumbsUp, Lock, Send, Edit2, X,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -29,7 +29,7 @@ interface Reserve {
   status: string;
   destination: string | null;
   marketplaceSplit: Record<string, number> | null;
-  allocations: { month: string; plannedQty: number; plannedDesi: number | null; actualQty: number }[];
+  allocations: { month: string; plannedQty: number; plannedDesi: number | null; actualQty: number; locked: boolean }[];
 }
 
 interface PoolDetail {
@@ -56,6 +56,7 @@ interface MonthQuota {
   workingDays: number;
   desiPerDay: number;
   quotaDesi: number;
+  locked?: boolean;
 }
 
 const statusColors: Record<string, string> = {
@@ -100,6 +101,15 @@ export default function PoolDetailPage() {
   const [previewQuotas, setPreviewQuotas] = useState<MonthQuota[] | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [lockedMonths, setLockedMonths] = useState<string[]>([]);
+
+  // Release (Ay Planına Aktar) state
+  const [releasing, setReleasing] = useState(false);
+
+  // Inline reserve editing state
+  const [editingReserveId, setEditingReserveId] = useState<string | null>(null);
+  const [editQty, setEditQty] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const fetchPool = useCallback(async () => {
     try {
@@ -149,13 +159,14 @@ export default function PoolDetailPage() {
   const shipPct = totalTarget > 0 ? Math.round(totalShipped / totalTarget * 100) : 0;
 
   // Saved monthly allocation summary (from DB)
-  const monthMap = new Map<string, { planned: number; actual: number; desi: number }>();
+  const monthMap = new Map<string, { planned: number; actual: number; desi: number; locked: boolean }>();
   for (const r of pool.reserves) {
     for (const a of r.allocations) {
-      const m = monthMap.get(a.month) ?? { planned: 0, actual: 0, desi: 0 };
+      const m = monthMap.get(a.month) ?? { planned: 0, actual: 0, desi: 0, locked: false };
       m.planned += a.plannedQty;
       m.actual += a.actualQty;
       m.desi += a.plannedDesi ?? 0;
+      if (a.locked) m.locked = true;
       monthMap.set(a.month, m);
     }
   }
@@ -263,6 +274,7 @@ export default function PoolDetailPage() {
       if (data.success) {
         setPreview(data.data.summary);
         setPreviewQuotas(data.data.monthQuotas);
+        setLockedMonths(data.data.lockedMonths ?? []);
       } else {
         alert(data.error || 'Önizleme başarısız');
       }
@@ -326,6 +338,50 @@ export default function PoolDetailPage() {
     }
   };
 
+  const handleRelease = async () => {
+    if (!confirm('Onaylı dağılım ay planına aktarılsın mı? Kilitli aylar korunur, açık aylar yeniden oluşturulur.')) return;
+    setReleasing(true);
+    try {
+      const res = await fetch(`/api/stock-pools/${id}/release`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        alert(`${data.data.created} üretim isteği oluşturuldu. Ay planında "Sezon" olarak görünür.`);
+      } else {
+        alert(data.error || 'Aktarım başarısız');
+      }
+    } catch {
+      alert('Bağlantı hatası');
+    } finally {
+      setReleasing(false);
+    }
+  };
+
+  const handleSaveEdit = async (reserveId: string) => {
+    const qty = parseInt(editQty, 10);
+    if (isNaN(qty) || qty < 0) { alert('Geçersiz miktar'); return; }
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`/api/stock-pools/${id}/reserves/${reserveId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetQuantity: qty }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setEditingReserveId(null);
+        setEditQty('');
+        setPreview(null); // Clear preview — needs recalculation
+        fetchPool();
+      } else {
+        alert(data.error || 'Güncelleme başarısız');
+      }
+    } catch {
+      alert('Bağlantı hatası');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -360,12 +416,10 @@ export default function PoolDetailPage() {
               <XCircle className="w-4 h-4" /> İptal
             </button>
           )}
-          {pool.status === 'CANCELLED' && (
-            <button onClick={handleDeleteAndRestart}
-              className="flex items-center gap-2 px-3 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700">
-              <Package className="w-4 h-4" /> Sil ve Yeniden Başla
-            </button>
-          )}
+          <button onClick={handleDeleteAndRestart}
+            className="flex items-center gap-2 px-3 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700">
+            <Package className="w-4 h-4" /> Sil ve Yeniden Başla
+          </button>
         </div>
       </div>
 
@@ -472,6 +526,7 @@ export default function PoolDetailPage() {
                     <th className="text-center px-3 py-3 font-medium text-gray-500">Desi</th>
                     <th className="text-left px-3 py-3 font-medium text-gray-500">Pazar</th>
                     <th className="text-center px-3 py-3 font-medium text-gray-500">Durum</th>
+                    {pool.status === 'ACTIVE' && <th className="px-3 py-3" />}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -513,6 +568,46 @@ export default function PoolDetailPage() {
                             {r.status}
                           </span>
                         </td>
+                        {pool.status === 'ACTIVE' && (
+                          <td className="px-3 py-3 text-right">
+                            {editingReserveId === r.id ? (
+                              <div className="flex items-center gap-1 justify-end">
+                                <input
+                                  type="number"
+                                  value={editQty}
+                                  onChange={e => setEditQty(e.target.value)}
+                                  min={r.producedQuantity}
+                                  className="w-20 px-2 py-1 border rounded text-xs text-center focus:ring-1 focus:ring-purple-500"
+                                  onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(r.id); if (e.key === 'Escape') setEditingReserveId(null); }}
+                                  autoFocus
+                                />
+                                <button
+                                  onClick={() => handleSaveEdit(r.id)}
+                                  disabled={savingEdit}
+                                  className="p-1 text-green-600 hover:bg-green-50 rounded"
+                                  title="Kaydet"
+                                >
+                                  {savingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                                </button>
+                                <button
+                                  onClick={() => setEditingReserveId(null)}
+                                  className="p-1 text-gray-400 hover:bg-gray-50 rounded"
+                                  title="İptal"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => { setEditingReserveId(r.id); setEditQty(String(r.targetQuantity)); }}
+                                className="p-1 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded"
+                                title="Hedefi düzenle"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -535,9 +630,25 @@ export default function PoolDetailPage() {
           {/* Saved Allocations */}
           {hasAllocations && (
             <div className="bg-white border rounded-xl overflow-hidden">
-              <div className="px-4 py-3 border-b bg-green-50 flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-green-600" />
-                <span className="text-sm font-medium text-green-700">Onaylı Dağılım</span>
+              <div className="px-4 py-3 border-b bg-green-50 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-600" />
+                  <span className="text-sm font-medium text-green-700">Onaylı Dağılım</span>
+                  {savedAllocations.some(([, d]) => d.locked) && (
+                    <span className="flex items-center gap-1 text-xs text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
+                      <Lock className="w-3 h-3" /> Kilitli aylar var
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={handleRelease}
+                  disabled={releasing}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 text-white text-xs rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                  title="Onaylı dağılımı ay planına ProductionRequest olarak aktar"
+                >
+                  {releasing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                  Ay Planına Aktar
+                </button>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -554,8 +665,11 @@ export default function PoolDetailPage() {
                     {savedAllocations.map(([month, data]) => {
                       const pct = data.planned > 0 ? Math.round(data.actual / data.planned * 100) : 0;
                       return (
-                        <tr key={month} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 font-medium">{MONTH_LABELS[month] ?? month}</td>
+                        <tr key={month} className={`hover:bg-gray-50 ${data.locked ? 'bg-orange-50/40' : ''}`}>
+                          <td className="px-4 py-3 font-medium flex items-center gap-1.5">
+                            {data.locked && <span title="Üretimi başlamış — kilitli"><Lock className="w-3 h-3 text-orange-400 shrink-0" /></span>}
+                            {MONTH_LABELS[month] ?? month}
+                          </td>
                           <td className="text-center px-3 py-3">{data.planned.toLocaleString('tr-TR')}</td>
                           <td className="text-center px-3 py-3">{data.actual.toLocaleString('tr-TR')}</td>
                           <td className="text-center px-3 py-3 text-gray-500">{Math.round(data.desi).toLocaleString('tr-TR')}</td>
@@ -623,14 +737,18 @@ export default function PoolDetailPage() {
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {previewQuotas.map(q => {
+                        const isLocked = q.locked || lockedMonths.includes(q.month);
                         const alloc = preview.find(p => p.month === q.month);
                         const allocDesi = alloc?.totalDesi ?? 0;
                         const usagePct = q.quotaDesi > 0 ? Math.round(allocDesi / q.quotaDesi * 100) : 0;
                         return (
-                          <tr key={q.month} className="hover:bg-gray-50">
+                          <tr key={q.month} className={`hover:bg-gray-50 ${isLocked ? 'bg-orange-50/40' : ''}`}>
                             <td className="px-4 py-3 font-medium">
-                              {MONTH_LABELS[q.month] ?? q.month}
-                              <span className="text-xs text-gray-400 ml-2">{q.workingDays}gün × {q.desiPerDay}</span>
+                              <span className="flex items-center gap-1.5">
+                                {isLocked && <span title="Kilitli — üretimi başlamış"><Lock className="w-3 h-3 text-orange-400 shrink-0" /></span>}
+                                {MONTH_LABELS[q.month] ?? q.month}
+                              </span>
+                              <span className="text-xs text-gray-400 ml-5">{q.workingDays}gün × {q.desiPerDay}</span>
                             </td>
                             <td className="text-center px-3 py-3 font-medium text-blue-700 bg-blue-50/50">
                               {q.quotaDesi.toLocaleString('tr-TR')}
