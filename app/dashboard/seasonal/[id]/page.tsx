@@ -94,6 +94,7 @@ export default function PoolDetailPage() {
   const [pool, setPool] = useState<PoolDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'reserves' | 'allocations' | 'production'>('reserves');
+  const [statUnit, setStatUnit] = useState<'unit' | 'desi'>('unit');
   const [importing, setImporting] = useState(false);
   const [importJson, setImportJson] = useState('');
 
@@ -154,15 +155,29 @@ export default function PoolDetailPage() {
     );
   }
 
+  // Ünite bazlı
   const totalInitial = pool.reserves.reduce((s, r) => s + r.initialStock, 0);
   const totalTarget = pool.reserves.reduce((s, r) => s + r.targetQuantity, 0);
   const totalProduced = pool.reserves.reduce((s, r) => s + r.producedQuantity, 0);
   const totalShipped = pool.reserves.reduce((s, r) => s + r.shippedQuantity, 0);
-  const totalDesi = pool.reserves.reduce((s, r) => s + (r.targetDesi ?? 0), 0);
-  const totalDemand = totalInitial + totalTarget; // Orijinal toplam talep
-  const totalFulfilled = totalInitial + totalProduced; // Başlangıç + yeni üretim
-  const prodPct = totalDemand > 0 ? Math.round(totalFulfilled / totalDemand * 100) : 0;
-  const shipPct = totalDemand > 0 ? Math.round(totalShipped / totalDemand * 100) : 0;
+  const totalDemand = totalInitial + totalTarget;
+  const totalFulfilled = totalInitial + totalProduced;
+
+  // Desi bazlı (her ürünün desiPerUnit'i ile çarpılmış)
+  const desiOf = (r: Reserve) => r.targetDesi && r.targetQuantity > 0 ? r.targetDesi / r.targetQuantity : 0;
+  const totalInitialDesi = Math.round(pool.reserves.reduce((s, r) => s + r.initialStock * desiOf(r), 0));
+  const totalTargetDesi = Math.round(pool.reserves.reduce((s, r) => s + (r.targetDesi ?? 0), 0));
+  const totalProducedDesi = Math.round(pool.reserves.reduce((s, r) => s + r.producedQuantity * desiOf(r), 0));
+  const totalShippedDesi = Math.round(pool.reserves.reduce((s, r) => s + r.shippedQuantity * desiOf(r), 0));
+  const totalDemandDesi = totalInitialDesi + totalTargetDesi;
+  const totalFulfilledDesi = totalInitialDesi + totalProducedDesi;
+
+  // Toggle bazlı değerler
+  const s = statUnit === 'desi'
+    ? { demand: totalDemandDesi, initial: totalInitialDesi, remaining: totalTargetDesi, fulfilled: totalFulfilledDesi, shipped: totalShippedDesi, suffix: ' desi' }
+    : { demand: totalDemand, initial: totalInitial, remaining: totalTarget, fulfilled: totalFulfilled, shipped: totalShipped, suffix: '' };
+  const prodPct = s.demand > 0 ? Math.round(s.fulfilled / s.demand * 100) : 0;
+  const shipPct = s.demand > 0 ? Math.round(s.shipped / s.demand * 100) : 0;
 
   // Saved monthly allocation summary (from DB)
   const monthMap = new Map<string, { planned: number; actual: number; desi: number; locked: boolean }>();
@@ -448,31 +463,41 @@ export default function PoolDetailPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <div className="bg-white border rounded-xl p-4 text-center">
-          <Package className="w-5 h-5 text-purple-400 mx-auto mb-1" />
-          <p className="text-2xl font-bold text-gray-900">{totalDemand.toLocaleString('tr-TR')}</p>
-          <p className="text-xs text-gray-500">Toplam Talep</p>
+      <div className="space-y-2">
+        <div className="flex justify-end">
+          <button
+            onClick={() => setStatUnit(statUnit === 'unit' ? 'desi' : 'unit')}
+            className="text-xs px-2.5 py-1 rounded-md border bg-white text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            {statUnit === 'unit' ? 'Adet' : 'Desi'} gösteriliyor — <span className="font-medium text-purple-600">{statUnit === 'unit' ? 'Desi' : 'Adet'}</span>
+          </button>
         </div>
-        <div className="bg-white border rounded-xl p-4 text-center">
-          <Warehouse className="w-5 h-5 text-orange-400 mx-auto mb-1" />
-          <p className="text-2xl font-bold text-orange-600">{totalInitial.toLocaleString('tr-TR')}</p>
-          <p className="text-xs text-gray-500">Başlangıç</p>
-        </div>
-        <div className="bg-white border rounded-xl p-4 text-center">
-          <BarChart3 className="w-5 h-5 text-gray-400 mx-auto mb-1" />
-          <p className="text-2xl font-bold text-gray-900">{totalTarget.toLocaleString('tr-TR')}</p>
-          <p className="text-xs text-gray-500">Kalan Üretim</p>
-        </div>
-        <div className="bg-white border rounded-xl p-4 text-center">
-          <TrendingUp className="w-5 h-5 text-green-400 mx-auto mb-1" />
-          <p className="text-2xl font-bold text-green-600">{prodPct}%</p>
-          <p className="text-xs text-gray-500">{totalFulfilled.toLocaleString('tr-TR')} / {totalDemand.toLocaleString('tr-TR')}</p>
-        </div>
-        <div className="bg-white border rounded-xl p-4 text-center">
-          <Truck className="w-5 h-5 text-blue-400 mx-auto mb-1" />
-          <p className="text-2xl font-bold text-blue-600">{shipPct}%</p>
-          <p className="text-xs text-gray-500">Sevkiyat</p>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className="bg-white border rounded-xl p-4 text-center">
+            <Package className="w-5 h-5 text-purple-400 mx-auto mb-1" />
+            <p className="text-2xl font-bold text-gray-900">{s.demand.toLocaleString('tr-TR')}</p>
+            <p className="text-xs text-gray-500">Toplam Talep</p>
+          </div>
+          <div className="bg-white border rounded-xl p-4 text-center">
+            <Warehouse className="w-5 h-5 text-orange-400 mx-auto mb-1" />
+            <p className="text-2xl font-bold text-orange-600">{s.initial.toLocaleString('tr-TR')}</p>
+            <p className="text-xs text-gray-500">Başlangıç</p>
+          </div>
+          <div className="bg-white border rounded-xl p-4 text-center">
+            <BarChart3 className="w-5 h-5 text-gray-400 mx-auto mb-1" />
+            <p className="text-2xl font-bold text-gray-900">{s.remaining.toLocaleString('tr-TR')}</p>
+            <p className="text-xs text-gray-500">Kalan Üretim</p>
+          </div>
+          <div className="bg-white border rounded-xl p-4 text-center">
+            <TrendingUp className="w-5 h-5 text-green-400 mx-auto mb-1" />
+            <p className="text-2xl font-bold text-green-600">{prodPct}%</p>
+            <p className="text-xs text-gray-500">{s.fulfilled.toLocaleString('tr-TR')} / {s.demand.toLocaleString('tr-TR')}</p>
+          </div>
+          <div className="bg-white border rounded-xl p-4 text-center">
+            <Truck className="w-5 h-5 text-blue-400 mx-auto mb-1" />
+            <p className="text-2xl font-bold text-blue-600">{shipPct}%</p>
+            <p className="text-xs text-gray-500">Sevkiyat</p>
+          </div>
         </div>
       </div>
 
