@@ -13,7 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   Home, Upload, Package, TrendingUp, Truck, AlertCircle,
   Loader2, CheckCircle2, XCircle, BarChart3, Calendar, FileSpreadsheet,
-  CalendarRange, Eye, ThumbsUp, Lock, Send, Edit2, X,
+  CalendarRange, Eye, ThumbsUp, Lock, Send, Edit2, X, Warehouse,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -110,6 +110,12 @@ export default function PoolDetailPage() {
   const [editingReserveId, setEditingReserveId] = useState<string | null>(null);
   const [editQty, setEditQty] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // Depo stok eşleştirme state
+  type StockMatch = { iwasku: string; productName: string; mevcut: number; target: number; produced: number; applyQty: number };
+  const [stockMatches, setStockMatches] = useState<StockMatch[] | null>(null);
+  const [loadingStock, setLoadingStock] = useState(false);
+  const [applyingStock, setApplyingStock] = useState(false);
 
   const fetchPool = useCallback(async () => {
     try {
@@ -338,6 +344,70 @@ export default function PoolDetailPage() {
     }
   };
 
+  const handleLoadStockMatches = async () => {
+    if (!pool) return;
+    setLoadingStock(true);
+    try {
+      const res = await fetch('/api/admin/warehouse-stock');
+      const data = await res.json();
+      if (!data.success) { alert(data.error || 'Depo verisi alınamadı'); return; }
+
+      const poolIwaskus = new Set(pool.reserves.map(r => r.iwasku));
+      const matches: StockMatch[] = [];
+
+      for (const item of data.data) {
+        if (!poolIwaskus.has(item.iwasku)) continue;
+        const reserve = pool.reserves.find(r => r.iwasku === item.iwasku);
+        if (!reserve) continue;
+        const remainingTarget = Math.max(0, reserve.targetQuantity - reserve.producedQuantity);
+        const available = Math.max(0, item.mevcut);
+        if (available <= 0 || remainingTarget <= 0) continue;
+        const applyQty = Math.min(available, remainingTarget);
+        matches.push({
+          iwasku: item.iwasku,
+          productName: item.productName,
+          mevcut: item.mevcut,
+          target: reserve.targetQuantity,
+          produced: reserve.producedQuantity,
+          applyQty,
+        });
+      }
+      setStockMatches(matches);
+    } catch {
+      alert('Bağlantı hatası');
+    } finally {
+      setLoadingStock(false);
+    }
+  };
+
+  const handleApplyStock = async () => {
+    if (!stockMatches || stockMatches.length === 0) return;
+    const items = stockMatches.filter(m => m.applyQty > 0).map(m => ({ iwasku: m.iwasku, quantity: m.applyQty }));
+    if (items.length === 0) { alert('Uygulanacak stok yok'); return; }
+    if (!confirm(`${items.length} ürün için toplam ${items.reduce((s, i) => s + i.quantity, 0)} adet depo stoku uygulanacak. Devam?`)) return;
+    setApplyingStock(true);
+    try {
+      const res = await fetch(`/api/stock-pools/${id}/mark-stock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`${data.data.applied} adet stok uygulandı. Talepten düşüldü.`);
+        setStockMatches(null);
+        setPreview(null);
+        fetchPool();
+      } else {
+        alert(data.error || 'Uygulama başarısız');
+      }
+    } catch {
+      alert('Bağlantı hatası');
+    } finally {
+      setApplyingStock(false);
+    }
+  };
+
   const handleRelease = async () => {
     if (!confirm('Onaylı dağılım ay planına aktarılsın mı? Kilitli aylar korunur, açık aylar yeniden oluşturulur.')) return;
     setReleasing(true);
@@ -470,6 +540,78 @@ export default function PoolDetailPage() {
       {/* Reserves Tab */}
       {tab === 'reserves' && (
         <div className="bg-white border rounded-xl overflow-hidden">
+          {/* Depo Stok Eşle section */}
+          {pool.status === 'ACTIVE' && pool.reserves.length > 0 && (
+            <div className="border-b p-4 bg-green-50/60">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-medium text-green-700">
+                  <Warehouse className="w-4 h-4" />
+                  Manu Depo Düşümü
+                </div>
+                <button
+                  onClick={handleLoadStockMatches}
+                  disabled={loadingStock}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 disabled:opacity-50"
+                >
+                  {loadingStock ? <Loader2 className="w-3 h-3 animate-spin" /> : <Warehouse className="w-3 h-3" />}
+                  Depo Stoku Kontrol Et
+                </button>
+              </div>
+
+              {stockMatches !== null && (
+                <div className="mt-3">
+                  {stockMatches.length === 0 ? (
+                    <p className="text-xs text-gray-500">Eşleşen depo stoğu bulunamadı.</p>
+                  ) : (
+                    <>
+                      <div className="overflow-x-auto rounded-lg border border-green-200 mb-3">
+                        <table className="w-full text-xs">
+                          <thead className="bg-green-100">
+                            <tr>
+                              <th className="text-left px-3 py-2 font-medium text-gray-600">Ürün</th>
+                              <th className="text-center px-3 py-2 font-medium text-gray-600">Depoda</th>
+                              <th className="text-center px-3 py-2 font-medium text-gray-600">Kalan Talep</th>
+                              <th className="text-center px-3 py-2 font-medium text-green-700">Düşülecek</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-green-100 bg-white">
+                            {stockMatches.map(m => (
+                              <tr key={m.iwasku}>
+                                <td className="px-3 py-2">
+                                  <span className="font-mono text-gray-800">{m.iwasku}</span>
+                                  <span className="text-gray-400 ml-1.5 truncate max-w-[160px] inline-block align-bottom">{m.productName}</span>
+                                </td>
+                                <td className="text-center px-3 py-2 text-blue-700 font-medium">{m.mevcut}</td>
+                                <td className="text-center px-3 py-2">{m.target - m.produced}</td>
+                                <td className="text-center px-3 py-2 text-green-700 font-bold">{m.applyQty}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-gray-500">
+                          {stockMatches.length} ürün · toplam {stockMatches.reduce((s, m) => s + m.applyQty, 0)} adet düşülecek
+                        </p>
+                        <div className="flex gap-2">
+                          <button onClick={() => setStockMatches(null)} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700">İptal</button>
+                          <button
+                            onClick={handleApplyStock}
+                            disabled={applyingStock}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 disabled:opacity-50"
+                          >
+                            {applyingStock ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+                            Uygula
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Import section */}
           {pool.status === 'ACTIVE' && (
             <div className="border-b p-4 bg-gray-50">
