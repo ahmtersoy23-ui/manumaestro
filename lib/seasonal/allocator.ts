@@ -154,7 +154,7 @@ function distributeProduct(
 
     // Distribute remaining units by largest remainder
     const distributed = allocations.reduce((s, a) => s + a.qty, 0);
-    let remaining = targetQty - distributed;
+    const remaining = targetQty - distributed;
     const byRemainder = [...allocations].sort((a, b) => b.remainder - a.remainder);
     for (let i = 0; i < remaining && i < byRemainder.length; i++) {
       byRemainder[i]!.qty += 1;
