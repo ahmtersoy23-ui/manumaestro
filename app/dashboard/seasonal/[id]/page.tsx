@@ -602,7 +602,7 @@ export default function PoolDetailPage() {
                                   <span className="text-gray-400 ml-1.5 truncate max-w-[160px] inline-block align-bottom">{m.productName}</span>
                                 </td>
                                 <td className="text-center px-3 py-2 text-blue-700 font-medium">{m.mevcut}</td>
-                                <td className="text-center px-3 py-2">{m.target - m.produced}</td>
+                                <td className="text-center px-3 py-2 text-gray-900 font-medium">{m.target - m.produced}</td>
                                 <td className="text-center px-3 py-2 text-green-700 font-bold">{m.applyQty}</td>
                               </tr>
                             ))}
@@ -697,22 +697,22 @@ export default function PoolDetailPage() {
                     const splitEntries = Object.entries(split).filter(([, q]) => q > 0).sort((a, b) => b[1] - a[1]);
                     return (
                       <tr key={r.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 max-w-[280px]">
+                        <td className="px-4 py-3 max-w-[320px]">
                           <p className="font-mono text-xs text-gray-900">{r.iwasku}</p>
                           {r.productName && (
-                            <p className="text-xs text-gray-500 truncate mt-0.5" title={r.productName}>{r.productName}</p>
+                            <p className="text-xs text-gray-500 mt-0.5 leading-snug">{r.productName}</p>
                           )}
                         </td>
-                        <td className="px-3 py-3 text-xs text-gray-600 max-w-[150px] truncate" title={r.category ?? ''}>
+                        <td className="px-3 py-3 text-xs text-gray-600 max-w-[100px] truncate" title={r.category ?? ''}>
                           {r.category ?? '—'}
                         </td>
-                        <td className="text-center px-3 py-3 font-medium">{r.targetQuantity}</td>
+                        <td className="text-center px-3 py-3 font-medium text-gray-900">{r.targetQuantity}</td>
                         <td className="text-center px-3 py-3">
-                          <span className={r.producedQuantity >= r.targetQuantity ? 'text-green-600 font-medium' : ''}>
+                          <span className={r.producedQuantity >= r.targetQuantity ? 'text-green-600 font-medium' : 'text-gray-900'}>
                             {r.producedQuantity}
                           </span>
                         </td>
-                        <td className="text-center px-3 py-3">{r.shippedQuantity}</td>
+                        <td className="text-center px-3 py-3 text-gray-900">{r.shippedQuantity}</td>
                         <td className="text-center px-3 py-3 text-gray-500">{r.targetDesi ? Math.round(r.targetDesi) : '—'}</td>
                         <td className="px-3 py-3">
                           {splitEntries.length > 0 ? (
@@ -723,7 +723,7 @@ export default function PoolDetailPage() {
                                 </span>
                               ))}
                             </div>
-                          ) : <span className="text-xs text-gray-300">—</span>}
+                          ) : <span className="text-xs text-gray-400">—</span>}
                         </td>
                         <td className="text-center px-3 py-3">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[r.status] ?? ''}`}>
