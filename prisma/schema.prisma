@@ -335,7 +335,8 @@ model StockReserve {
   iwasku           String
   targetQuantity   Int
   targetDesi       Float?
-  producedQuantity Int           @default(0)
+  initialStock     Int           @default(0)  // Depo başlangıç stoğu (mark-stock ile tek seferlik)
+  producedQuantity Int           @default(0)  // Sezon boyunca yeni üretim (haftalık girişlerden)
   shippedQuantity  Int           @default(0)
   status           ReserveStatus @default(PLANNED)
   destination      String?       // "US", "EU", "UK", "NL", "AU", "ZA"

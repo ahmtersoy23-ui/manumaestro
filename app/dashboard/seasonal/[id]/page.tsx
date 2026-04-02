@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
@@ -24,6 +24,7 @@ interface Reserve {
   category: string | null;
   targetQuantity: number;
   targetDesi: number | null;
+  initialStock: number;
   producedQuantity: number;
   shippedQuantity: number;
   status: string;
@@ -92,7 +93,7 @@ export default function PoolDetailPage() {
   const router = useRouter();
   const [pool, setPool] = useState<PoolDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'reserves' | 'allocations'>('reserves');
+  const [tab, setTab] = useState<'reserves' | 'allocations' | 'production'>('reserves');
   const [importing, setImporting] = useState(false);
   const [importJson, setImportJson] = useState('');
 
@@ -112,11 +113,6 @@ export default function PoolDetailPage() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingReserveId, setDeletingReserveId] = useState<string | null>(null);
 
-  // Depo stok eşleştirme state
-  type StockMatch = { iwasku: string; productName: string; mevcut: number; target: number; produced: number; applyQty: number };
-  const [stockMatches, setStockMatches] = useState<StockMatch[] | null>(null);
-  const [loadingStock, setLoadingStock] = useState(false);
-  const [applyingStock, setApplyingStock] = useState(false);
 
   const fetchPool = useCallback(async () => {
     try {
@@ -158,12 +154,15 @@ export default function PoolDetailPage() {
     );
   }
 
+  const totalInitial = pool.reserves.reduce((s, r) => s + r.initialStock, 0);
   const totalTarget = pool.reserves.reduce((s, r) => s + r.targetQuantity, 0);
   const totalProduced = pool.reserves.reduce((s, r) => s + r.producedQuantity, 0);
   const totalShipped = pool.reserves.reduce((s, r) => s + r.shippedQuantity, 0);
   const totalDesi = pool.reserves.reduce((s, r) => s + (r.targetDesi ?? 0), 0);
-  const prodPct = totalTarget > 0 ? Math.round(totalProduced / totalTarget * 100) : 0;
-  const shipPct = totalTarget > 0 ? Math.round(totalShipped / totalTarget * 100) : 0;
+  const totalDemand = totalInitial + totalTarget; // Orijinal toplam talep
+  const totalFulfilled = totalInitial + totalProduced; // Başlangıç + yeni üretim
+  const prodPct = totalDemand > 0 ? Math.round(totalFulfilled / totalDemand * 100) : 0;
+  const shipPct = totalDemand > 0 ? Math.round(totalShipped / totalDemand * 100) : 0;
 
   // Saved monthly allocation summary (from DB)
   const monthMap = new Map<string, { planned: number; actual: number; desi: number; locked: boolean }>();
@@ -345,72 +344,6 @@ export default function PoolDetailPage() {
     }
   };
 
-  const handleLoadStockMatches = async () => {
-    if (!pool) return;
-    setLoadingStock(true);
-    try {
-      const res = await fetch('/api/admin/warehouse-stock');
-      const data = await res.json();
-      if (!data.success) { alert(data.error || 'Depo verisi alınamadı'); return; }
-
-      const poolIwaskus = new Set(pool.reserves.map(r => r.iwasku));
-      const matches: StockMatch[] = [];
-
-      for (const item of data.data) {
-        if (!poolIwaskus.has(item.iwasku)) continue;
-        const reserve = pool.reserves.find(r => r.iwasku === item.iwasku);
-        if (!reserve) continue;
-        const remainingTarget = Math.max(0, reserve.targetQuantity - reserve.producedQuantity);
-        // Serbest stok = mevcut - tüm bekleyen üretim talepleri (sezon dışı)
-        const pendingDemand = (item._totalPendingDemand ?? 0);
-        const available = Math.max(0, item.mevcut - pendingDemand);
-        if (available <= 0 || remainingTarget <= 0) continue;
-        const applyQty = Math.min(available, remainingTarget);
-        matches.push({
-          iwasku: item.iwasku,
-          productName: item.productName,
-          mevcut: available,
-          target: reserve.targetQuantity,
-          produced: reserve.producedQuantity,
-          applyQty,
-        });
-      }
-      setStockMatches(matches);
-    } catch {
-      alert('Bağlantı hatası');
-    } finally {
-      setLoadingStock(false);
-    }
-  };
-
-  const handleApplyStock = async () => {
-    if (!stockMatches || stockMatches.length === 0) return;
-    const items = stockMatches.filter(m => m.applyQty > 0).map(m => ({ iwasku: m.iwasku, quantity: m.applyQty }));
-    if (items.length === 0) { alert('Uygulanacak stok yok'); return; }
-    if (!confirm(`${items.length} ürün için toplam ${items.reduce((s, i) => s + i.quantity, 0)} adet depo stoku uygulanacak. Devam?`)) return;
-    setApplyingStock(true);
-    try {
-      const res = await fetch(`/api/stock-pools/${id}/mark-stock`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert(`${data.data.applied} adet stok uygulandı. Talepten düşüldü.`);
-        setStockMatches(null);
-        setPreview(null);
-        fetchPool();
-      } else {
-        alert(data.error || 'Uygulama başarısız');
-      }
-    } catch {
-      alert('Bağlantı hatası');
-    } finally {
-      setApplyingStock(false);
-    }
-  };
-
   const handleRelease = async () => {
     if (!confirm('Onaylı dağılım ay planına aktarılsın mı? Kilitli aylar korunur, açık aylar yeniden oluşturulur.')) return;
     setReleasing(true);
@@ -515,7 +448,7 @@ export default function PoolDetailPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="bg-white border rounded-xl p-4 text-center">
           <Package className="w-5 h-5 text-gray-400 mx-auto mb-1" />
           <p className="text-2xl font-bold text-gray-900">{pool.reserves.length}</p>
@@ -527,9 +460,14 @@ export default function PoolDetailPage() {
           <p className="text-xs text-gray-500">Hedef Desi</p>
         </div>
         <div className="bg-white border rounded-xl p-4 text-center">
+          <Warehouse className="w-5 h-5 text-orange-400 mx-auto mb-1" />
+          <p className="text-2xl font-bold text-orange-600">{totalInitial.toLocaleString('tr-TR')}</p>
+          <p className="text-xs text-gray-500">Başlangıç</p>
+        </div>
+        <div className="bg-white border rounded-xl p-4 text-center">
           <TrendingUp className="w-5 h-5 text-green-400 mx-auto mb-1" />
           <p className="text-2xl font-bold text-green-600">{prodPct}%</p>
-          <p className="text-xs text-gray-500">Üretim</p>
+          <p className="text-xs text-gray-500">İlerleme</p>
         </div>
         <div className="bg-white border rounded-xl p-4 text-center">
           <Truck className="w-5 h-5 text-blue-400 mx-auto mb-1" />
@@ -556,83 +494,18 @@ export default function PoolDetailPage() {
             <span className="ml-1.5 w-2 h-2 bg-orange-400 rounded-full inline-block" title="Onay bekliyor" />
           )}
         </button>
+        <button
+          onClick={() => setTab('production')}
+          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${tab === 'production' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          <TrendingUp className="w-4 h-4 inline mr-1" />
+          Aylık Üretim
+        </button>
       </div>
 
       {/* Reserves Tab */}
       {tab === 'reserves' && (
         <div className="bg-white border rounded-xl overflow-hidden">
-          {/* Depo Stok Eşle section */}
-          {pool.status === 'ACTIVE' && pool.reserves.length > 0 && (
-            <div className="border-b p-4 bg-green-50/60">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm font-medium text-green-700">
-                  <Warehouse className="w-4 h-4" />
-                  Manu Depo Düşümü
-                </div>
-                <button
-                  onClick={handleLoadStockMatches}
-                  disabled={loadingStock}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 disabled:opacity-50"
-                >
-                  {loadingStock ? <Loader2 className="w-3 h-3 animate-spin" /> : <Warehouse className="w-3 h-3" />}
-                  Depo Stoku Kontrol Et
-                </button>
-              </div>
-
-              {stockMatches !== null && (
-                <div className="mt-3">
-                  {stockMatches.length === 0 ? (
-                    <p className="text-xs text-gray-500">Eşleşen depo stoğu bulunamadı.</p>
-                  ) : (
-                    <>
-                      <div className="overflow-x-auto rounded-lg border border-green-200 mb-3">
-                        <table className="w-full text-xs">
-                          <thead className="bg-green-100">
-                            <tr>
-                              <th className="text-left px-3 py-2 font-medium text-gray-600">Ürün</th>
-                              <th className="text-center px-3 py-2 font-medium text-gray-600">Depoda</th>
-                              <th className="text-center px-3 py-2 font-medium text-gray-600">Kalan Talep</th>
-                              <th className="text-center px-3 py-2 font-medium text-green-700">Düşülecek</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-green-100 bg-white">
-                            {stockMatches.map(m => (
-                              <tr key={m.iwasku}>
-                                <td className="px-3 py-2">
-                                  <span className="font-mono text-gray-800">{m.iwasku}</span>
-                                  <span className="text-gray-400 ml-1.5 truncate max-w-[160px] inline-block align-bottom">{m.productName}</span>
-                                </td>
-                                <td className="text-center px-3 py-2 text-blue-700 font-medium">{m.mevcut}</td>
-                                <td className="text-center px-3 py-2 text-gray-900 font-medium">{m.target - m.produced}</td>
-                                <td className="text-center px-3 py-2 text-green-700 font-bold">{m.applyQty}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-gray-500">
-                          {stockMatches.length} ürün · toplam {stockMatches.reduce((s, m) => s + m.applyQty, 0)} adet düşülecek
-                        </p>
-                        <div className="flex gap-2">
-                          <button onClick={() => setStockMatches(null)} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700">İptal</button>
-                          <button
-                            onClick={handleApplyStock}
-                            disabled={applyingStock}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 disabled:opacity-50"
-                          >
-                            {applyingStock ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
-                            Uygula
-                          </button>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Import section */}
           {pool.status === 'ACTIVE' && (
             <div className="border-b p-4 bg-gray-50">
@@ -683,6 +556,7 @@ export default function PoolDetailPage() {
                   <tr>
                     <th className="text-left px-4 py-3 font-medium text-gray-500">Ürün</th>
                     <th className="text-left px-3 py-3 font-medium text-gray-500">Kategori</th>
+                    <th className="text-center px-3 py-3 font-medium text-gray-500">Başlangıç</th>
                     <th className="text-center px-3 py-3 font-medium text-gray-500">Hedef</th>
                     <th className="text-center px-3 py-3 font-medium text-gray-500">Üretilen</th>
                     <th className="text-center px-3 py-3 font-medium text-gray-500">Sevk</th>
@@ -707,6 +581,7 @@ export default function PoolDetailPage() {
                         <td className="px-3 py-3 text-xs text-gray-600 max-w-[100px] truncate" title={r.category ?? ''}>
                           {r.category ?? '—'}
                         </td>
+                        <td className="text-center px-3 py-3 text-orange-600 font-medium">{r.initialStock > 0 ? r.initialStock : '—'}</td>
                         <td className="text-center px-3 py-3 font-medium text-gray-900">{r.targetQuantity}</td>
                         <td className="text-center px-3 py-3">
                           <span className={r.producedQuantity >= r.targetQuantity ? 'text-green-600 font-medium' : 'text-gray-900'}>
@@ -1015,6 +890,156 @@ export default function PoolDetailPage() {
           )}
         </div>
       )}
+
+      {/* Monthly Production Tab */}
+      {tab === 'production' && (
+        <MonthlyProductionTab poolId={id} />
+      )}
+    </div>
+  );
+}
+
+// ============================================
+// Monthly Production Tab Component
+// ============================================
+
+function MonthlyProductionTab({ poolId }: { poolId: string }) {
+  const [data, setData] = useState<{
+    months: { month: string; totalPlanned: number; totalProduced: number; diff: number; productCount: number }[];
+    byProduct: { month: string; products: { iwasku: string; planned: number; produced: number }[] }[];
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/stock-pools/${poolId}/monthly-production`)
+      .then(res => res.json())
+      .then(res => { if (res.success) setData(res.data); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [poolId]);
+
+  if (loading) return <div className="text-center py-12"><Loader2 className="w-6 h-6 animate-spin mx-auto text-gray-400" /></div>;
+  if (!data || data.months.length === 0) {
+    return (
+      <div className="bg-white border rounded-xl text-center py-12">
+        <BarChart3 className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+        <p className="text-gray-500">Henüz üretim verisi yok</p>
+        <p className="text-gray-400 text-sm mt-1">Haftalık depo girişleri yapıldıkça burada görünecek</p>
+      </div>
+    );
+  }
+
+  const monthLabels: Record<string, string> = {
+    '01': 'Ocak', '02': 'Şubat', '03': 'Mart', '04': 'Nisan',
+    '05': 'Mayıs', '06': 'Haziran', '07': 'Temmuz', '08': 'Ağustos',
+    '09': 'Eylül', '10': 'Ekim', '11': 'Kasım', '12': 'Aralık',
+  };
+  const formatMonth = (m: string) => `${monthLabels[m.slice(5, 7)] ?? m.slice(5, 7)} ${m.slice(0, 4)}`;
+
+  const totalPlanned = data.months.reduce((s, m) => s + m.totalPlanned, 0);
+  const totalProduced = data.months.reduce((s, m) => s + m.totalProduced, 0);
+
+  return (
+    <div className="space-y-4">
+      {/* Summary */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-white border rounded-xl p-4 text-center">
+          <p className="text-2xl font-bold text-gray-900">{totalPlanned.toLocaleString('tr-TR')}</p>
+          <p className="text-xs text-gray-500">Toplam Planlanan</p>
+        </div>
+        <div className="bg-white border rounded-xl p-4 text-center">
+          <p className="text-2xl font-bold text-green-600">{totalProduced.toLocaleString('tr-TR')}</p>
+          <p className="text-xs text-gray-500">Toplam Üretilen</p>
+        </div>
+        <div className="bg-white border rounded-xl p-4 text-center">
+          <p className={`text-2xl font-bold ${totalPlanned > 0 ? (totalProduced / totalPlanned >= 0.7 ? 'text-green-600' : 'text-red-600') : 'text-gray-900'}`}>
+            {totalPlanned > 0 ? Math.round(totalProduced / totalPlanned * 100) : 0}%
+          </p>
+          <p className="text-xs text-gray-500">Gerçekleşme</p>
+        </div>
+      </div>
+
+      {/* Monthly Table */}
+      <div className="bg-white border rounded-xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b">
+            <tr>
+              <th className="text-left px-4 py-3 font-medium text-gray-500">Ay</th>
+              <th className="text-center px-3 py-3 font-medium text-gray-500">Planlanan</th>
+              <th className="text-center px-3 py-3 font-medium text-gray-500">Üretilen</th>
+              <th className="text-center px-3 py-3 font-medium text-gray-500">Fark</th>
+              <th className="text-center px-3 py-3 font-medium text-gray-500">İlerleme</th>
+              <th className="text-center px-3 py-3 font-medium text-gray-500">Ürün</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {data.months.map(m => {
+              const pct = m.totalPlanned > 0 ? Math.round(m.totalProduced / m.totalPlanned * 100) : 0;
+              const pctColor = pct >= 100 ? 'text-green-600' : pct >= 70 ? 'text-yellow-600' : 'text-red-600';
+              const barColor = pct >= 100 ? 'bg-green-500' : pct >= 70 ? 'bg-yellow-500' : 'bg-red-500';
+              const detail = data.byProduct.find(b => b.month === m.month);
+
+              return (
+                <Fragment key={m.month}>
+                  <tr
+                    className="hover:bg-gray-50 cursor-pointer"
+                    onClick={() => setExpandedMonth(expandedMonth === m.month ? null : m.month)}
+                  >
+                    <td className="px-4 py-3 font-medium text-gray-900">{formatMonth(m.month)}</td>
+                    <td className="text-center px-3 py-3 text-gray-900">{m.totalPlanned.toLocaleString('tr-TR')}</td>
+                    <td className="text-center px-3 py-3 font-medium text-gray-900">{m.totalProduced.toLocaleString('tr-TR')}</td>
+                    <td className={`text-center px-3 py-3 font-medium ${m.diff >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {m.diff >= 0 ? '+' : ''}{m.diff.toLocaleString('tr-TR')}
+                    </td>
+                    <td className="text-center px-3 py-3">
+                      <div className="flex items-center gap-2 justify-center">
+                        <div className="w-20 bg-gray-200 rounded-full h-2 overflow-hidden">
+                          <div className={`h-2 rounded-full ${barColor}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+                        </div>
+                        <span className={`text-xs font-medium ${pctColor}`}>{pct}%</span>
+                      </div>
+                    </td>
+                    <td className="text-center px-3 py-3 text-gray-500">{m.productCount}</td>
+                  </tr>
+
+                  {/* Expanded product detail */}
+                  {expandedMonth === m.month && detail && detail.products.length > 0 && (
+                    <tr>
+                      <td colSpan={6} className="bg-gray-50 px-4 py-2">
+                        <div className="max-h-64 overflow-y-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-gray-400">
+                                <th className="text-left py-1 px-2">IWASKU</th>
+                                <th className="text-center py-1 px-2">Planlanan</th>
+                                <th className="text-center py-1 px-2">Üretilen</th>
+                                <th className="text-center py-1 px-2">Fark</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {detail.products.map(p => (
+                                <tr key={p.iwasku} className="hover:bg-white">
+                                  <td className="py-1 px-2 font-mono text-gray-700">{p.iwasku}</td>
+                                  <td className="text-center py-1 px-2 text-gray-600">{p.planned}</td>
+                                  <td className="text-center py-1 px-2 font-medium text-gray-900">{p.produced}</td>
+                                  <td className={`text-center py-1 px-2 font-medium ${p.produced - p.planned >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {p.produced - p.planned >= 0 ? '+' : ''}{p.produced - p.planned}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

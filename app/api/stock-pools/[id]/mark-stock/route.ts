@@ -65,8 +65,8 @@ export async function POST(request: NextRequest, { params }: Params) {
         continue;
       }
 
-      // Can't apply more stock than remaining demand
-      const maxApplicable = Math.max(0, reserve.targetQuantity - reserve.producedQuantity);
+      // Can't apply more stock than remaining demand + existing initial
+      const maxApplicable = Math.max(0, reserve.targetQuantity);
       const applyQty = Math.min(item.quantity, maxApplicable);
 
       if (applyQty <= 0) {
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest, { params }: Params) {
         continue;
       }
 
-      const newProduced = reserve.producedQuantity + applyQty;
+      const newInitial = reserve.initialStock + applyQty;
       const newTarget = reserve.targetQuantity - applyQty;
       const newStatus = newTarget <= 0 ? 'STOCKED' : reserve.status;
 
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       await tx.stockReserve.update({
         where: { id: reserve.id },
         data: {
-          producedQuantity: newProduced,
+          initialStock: newInitial,
           targetQuantity: newTarget,
           status: newStatus as 'STOCKED' | 'PLANNED',
           ...(newTargetDesi !== undefined ? { targetDesi: newTargetDesi } : {}),
