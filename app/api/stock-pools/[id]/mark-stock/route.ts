@@ -78,12 +78,19 @@ export async function POST(request: NextRequest, { params }: Params) {
       const newTarget = reserve.targetQuantity - applyQty;
       const newStatus = newTarget <= 0 ? 'STOCKED' : reserve.status;
 
+      // Keep desiPerUnit constant — recalculate targetDesi from new targetQuantity
+      const desiPerUnit = reserve.targetDesi && reserve.targetQuantity > 0
+        ? reserve.targetDesi / reserve.targetQuantity
+        : null;
+      const newTargetDesi = desiPerUnit !== null ? newTarget * desiPerUnit : undefined;
+
       await tx.stockReserve.update({
         where: { id: reserve.id },
         data: {
           producedQuantity: newProduced,
           targetQuantity: newTarget,
           status: newStatus as 'STOCKED' | 'PLANNED',
+          ...(newTargetDesi !== undefined ? { targetDesi: newTargetDesi } : {}),
         },
       });
 

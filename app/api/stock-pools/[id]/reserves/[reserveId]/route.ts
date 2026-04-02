@@ -64,11 +64,18 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     );
   }
 
+  // Keep desiPerUnit constant — recalculate targetDesi from new targetQuantity
+  const desiPerUnit = reserve.targetDesi && reserve.targetQuantity > 0
+    ? reserve.targetDesi / reserve.targetQuantity
+    : null;
+  const newTargetDesi = desiPerUnit !== null ? targetQuantity * desiPerUnit : undefined;
+
   const updated = await prisma.stockReserve.update({
     where: { id: reserveId },
     data: {
       targetQuantity,
       ...(newSplit !== undefined ? { marketplaceSplit: newSplit } : {}),
+      ...(newTargetDesi !== undefined ? { targetDesi: newTargetDesi } : {}),
     },
   });
 
