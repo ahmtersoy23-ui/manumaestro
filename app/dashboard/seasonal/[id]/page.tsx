@@ -108,7 +108,7 @@ export default function PoolDetailPage() {
 
   // Inline reserve editing state
   const [editingReserveId, setEditingReserveId] = useState<string | null>(null);
-  const [editQty, setEditQty] = useState('');
+  const [editSplit, setEditSplit] = useState<Record<string, number>>({});
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingReserveId, setDeletingReserveId] = useState<string | null>(null);
 
@@ -428,20 +428,19 @@ export default function PoolDetailPage() {
   };
 
   const handleSaveEdit = async (reserveId: string) => {
-    const qty = parseInt(editQty, 10);
-    if (isNaN(qty) || qty < 0) { alert('Geçersiz miktar'); return; }
+    if (Object.values(editSplit).some(v => isNaN(v) || v < 0)) { alert('Geçersiz miktar'); return; }
     setSavingEdit(true);
     try {
       const res = await fetch(`/api/stock-pools/${id}/reserves/${reserveId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetQuantity: qty }),
+        body: JSON.stringify({ marketplaceSplit: editSplit }),
       });
       const data = await res.json();
       if (data.success) {
         setEditingReserveId(null);
-        setEditQty('');
-        setPreview(null); // Clear preview — needs recalculation
+        setEditSplit({});
+        setPreview(null);
         fetchPool();
       } else {
         alert(data.error || 'Güncelleme başarısız');
@@ -731,38 +730,54 @@ export default function PoolDetailPage() {
                           </span>
                         </td>
                         {pool.status === 'ACTIVE' && (
-                          <td className="px-3 py-3 text-right">
+                          <td className="px-3 py-3 text-right align-top">
                             {editingReserveId === r.id ? (
-                              <div className="flex items-center gap-1 justify-end">
-                                <input
-                                  type="number"
-                                  value={editQty}
-                                  onChange={e => setEditQty(e.target.value)}
-                                  min={r.producedQuantity}
-                                  className="w-20 px-2 py-1 border rounded text-xs text-center focus:ring-1 focus:ring-purple-500"
-                                  onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(r.id); if (e.key === 'Escape') setEditingReserveId(null); }}
-                                  autoFocus
-                                />
-                                <button
-                                  onClick={() => handleSaveEdit(r.id)}
-                                  disabled={savingEdit}
-                                  className="p-1 text-green-600 hover:bg-green-50 rounded"
-                                  title="Kaydet"
-                                >
-                                  {savingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                                </button>
-                                <button
-                                  onClick={() => setEditingReserveId(null)}
-                                  className="p-1 text-gray-400 hover:bg-gray-50 rounded"
-                                  title="İptal"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
+                              <div className="min-w-[170px]">
+                                {Object.entries(editSplit).map(([code, qty], i) => (
+                                  <div key={code} className="flex items-center gap-1.5 mb-1">
+                                    <span className="text-xs font-semibold text-gray-700 w-8 text-left">{code}</span>
+                                    <input
+                                      type="number"
+                                      value={qty}
+                                      onChange={e => setEditSplit(prev => ({ ...prev, [code]: parseInt(e.target.value) || 0 }))}
+                                      min={0}
+                                      autoFocus={i === 0}
+                                      onKeyDown={e => { if (e.key === 'Escape') setEditingReserveId(null); }}
+                                      className="w-16 px-1.5 py-0.5 border rounded text-xs text-center focus:ring-1 focus:ring-purple-500"
+                                    />
+                                  </div>
+                                ))}
+                                <div className="text-xs text-gray-500 text-right mb-1.5 pr-0.5">
+                                  Toplam: <span className="font-semibold text-gray-900">{Object.values(editSplit).reduce((s, v) => s + v, 0)}</span>
+                                </div>
+                                <div className="flex gap-1 justify-end">
+                                  <button
+                                    onClick={() => handleSaveEdit(r.id)}
+                                    disabled={savingEdit}
+                                    className="p-1 text-green-600 hover:bg-green-50 rounded"
+                                    title="Kaydet"
+                                  >
+                                    {savingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingReserveId(null)}
+                                    className="p-1 text-gray-400 hover:bg-gray-50 rounded"
+                                    title="İptal"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </div>
                             ) : (
                               <div className="flex items-center gap-1 justify-end">
                                 <button
-                                  onClick={() => { setEditingReserveId(r.id); setEditQty(String(r.targetQuantity)); }}
+                                  onClick={() => {
+                                    const split = r.marketplaceSplit && Object.keys(r.marketplaceSplit).length > 0
+                                      ? { ...r.marketplaceSplit }
+                                      : { TOTAL: r.targetQuantity };
+                                    setEditingReserveId(r.id);
+                                    setEditSplit(split as Record<string, number>);
+                                  }}
                                   className="p-1 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded"
                                   title="Hedefi düzenle"
                                 >

@@ -10,9 +10,16 @@ import { requireRole } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
 import { z } from 'zod';
 
-const UpdateReserveSchema = z.object({
-  targetQuantity: z.number().int().min(0),
-});
+const UpdateReserveSchema = z.union([
+  // Option A: explicit split → targetQuantity derived from sum
+  z.object({
+    marketplaceSplit: z.record(z.string(), z.number().int().min(0)),
+  }),
+  // Option B: direct total (legacy / fallback)
+  z.object({
+    targetQuantity: z.number().int().min(0),
+  }),
+]);
 
 type Params = { params: Promise<{ id: string; reserveId: string }> };
 
@@ -39,7 +46,16 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     );
   }
 
-  const { targetQuantity } = validation.data;
+  const parsed = validation.data;
+  let targetQuantity: number;
+  let newSplit: Record<string, number> | undefined;
+
+  if ('marketplaceSplit' in parsed) {
+    newSplit = parsed.marketplaceSplit;
+    targetQuantity = Object.values(newSplit).reduce((s, v) => s + v, 0);
+  } else {
+    targetQuantity = parsed.targetQuantity;
+  }
 
   if (targetQuantity < reserve.producedQuantity) {
     return NextResponse.json(
@@ -50,14 +66,17 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   const updated = await prisma.stockReserve.update({
     where: { id: reserveId },
-    data: { targetQuantity },
+    data: {
+      targetQuantity,
+      ...(newSplit !== undefined ? { marketplaceSplit: newSplit } : {}),
+    },
   });
 
   await logAction({
     userId: user.id, userName: user.name, userEmail: user.email,
     action: 'UPDATE_REQUEST', entityType: 'StockReserve', entityId: reserveId,
     description: `Talep güncellendi: ${reserve.iwasku} → ${reserve.targetQuantity} → ${targetQuantity}`,
-    metadata: { iwasku: reserve.iwasku, oldQty: reserve.targetQuantity, newQty: targetQuantity },
+    metadata: { iwasku: reserve.iwasku, oldQty: reserve.targetQuantity, newQty: targetQuantity, split: newSplit },
   });
 
   return NextResponse.json({ success: true, data: updated });
