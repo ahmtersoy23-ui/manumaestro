@@ -1,10 +1,7 @@
 /**
  * Stock Reserve Line API
- * PATCH: Update targetQuantity (line-by-line demand reduction)
- *
- * Body: { targetQuantity: number }
- * - Cannot reduce below producedQuantity (already produced)
- * - After update, caller should re-run /allocate to revise monthly plan
+ * PATCH:  Update targetQuantity (line-by-line demand reduction)
+ * DELETE: Remove reserve entirely (admin only, cascades allocations)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -64,4 +61,31 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   });
 
   return NextResponse.json({ success: true, data: updated });
+}
+
+export async function DELETE(request: NextRequest, { params }: Params) {
+  const authResult = await requireRole(request, ['admin']);
+  if (authResult instanceof NextResponse) return authResult;
+  const { user } = authResult;
+  const { id, reserveId } = await params;
+
+  const reserve = await prisma.stockReserve.findFirst({
+    where: { id: reserveId, poolId: id },
+  });
+
+  if (!reserve) {
+    return NextResponse.json({ success: false, error: 'Reserve bulunamadı' }, { status: 404 });
+  }
+
+  // Cascade: allocations deleted automatically by Prisma (onDelete: Cascade in schema)
+  await prisma.stockReserve.delete({ where: { id: reserveId } });
+
+  await logAction({
+    userId: user.id, userName: user.name, userEmail: user.email,
+    action: 'DELETE_REQUEST', entityType: 'StockReserve', entityId: reserveId,
+    description: `Reserve silindi: ${reserve.iwasku} (havuz: ${id})`,
+    metadata: { iwasku: reserve.iwasku, targetQuantity: reserve.targetQuantity },
+  });
+
+  return NextResponse.json({ success: true });
 }

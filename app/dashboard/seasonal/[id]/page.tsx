@@ -13,7 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   Home, Upload, Package, TrendingUp, Truck, AlertCircle,
   Loader2, CheckCircle2, XCircle, BarChart3, Calendar, FileSpreadsheet,
-  CalendarRange, Eye, ThumbsUp, Lock, Send, Edit2, X, Warehouse,
+  CalendarRange, Eye, ThumbsUp, Lock, Send, Edit2, X, Warehouse, Trash2,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -110,6 +110,7 @@ export default function PoolDetailPage() {
   const [editingReserveId, setEditingReserveId] = useState<string | null>(null);
   const [editQty, setEditQty] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingReserveId, setDeletingReserveId] = useState<string | null>(null);
 
   // Depo stok eşleştirme state
   type StockMatch = { iwasku: string; productName: string; mevcut: number; target: number; produced: number; applyQty: number };
@@ -452,6 +453,25 @@ export default function PoolDetailPage() {
     }
   };
 
+  const handleDeleteReserve = async (reserveId: string, iwasku: string) => {
+    if (!confirm(`"${iwasku}" rezervini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`)) return;
+    setDeletingReserveId(reserveId);
+    try {
+      const res = await fetch(`/api/stock-pools/${id}/reserves/${reserveId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setPreview(null);
+        fetchPool();
+      } else {
+        alert(data.error || 'Silme başarısız');
+      }
+    } catch {
+      alert('Bağlantı hatası');
+    } finally {
+      setDeletingReserveId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -740,13 +760,25 @@ export default function PoolDetailPage() {
                                 </button>
                               </div>
                             ) : (
-                              <button
-                                onClick={() => { setEditingReserveId(r.id); setEditQty(String(r.targetQuantity)); }}
-                                className="p-1 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded"
-                                title="Hedefi düzenle"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
+                              <div className="flex items-center gap-1 justify-end">
+                                <button
+                                  onClick={() => { setEditingReserveId(r.id); setEditQty(String(r.targetQuantity)); }}
+                                  className="p-1 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded"
+                                  title="Hedefi düzenle"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteReserve(r.id, r.iwasku)}
+                                  disabled={deletingReserveId === r.id}
+                                  className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                  title="Sil"
+                                >
+                                  {deletingReserveId === r.id
+                                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    : <Trash2 className="w-3.5 h-3.5" />}
+                                </button>
+                              </div>
                             )}
                           </td>
                         )}
