@@ -361,13 +361,15 @@ export default function PoolDetailPage() {
         const reserve = pool.reserves.find(r => r.iwasku === item.iwasku);
         if (!reserve) continue;
         const remainingTarget = Math.max(0, reserve.targetQuantity - reserve.producedQuantity);
-        const available = Math.max(0, item.mevcut);
+        // Serbest stok = mevcut - tüm bekleyen üretim talepleri (sezon dışı)
+        const pendingDemand = (item._totalPendingDemand ?? 0);
+        const available = Math.max(0, item.mevcut - pendingDemand);
         if (available <= 0 || remainingTarget <= 0) continue;
         const applyQty = Math.min(available, remainingTarget);
         matches.push({
           iwasku: item.iwasku,
           productName: item.productName,
-          mevcut: item.mevcut,
+          mevcut: available,
           target: reserve.targetQuantity,
           produced: reserve.producedQuantity,
           applyQty,

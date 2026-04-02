@@ -159,6 +159,24 @@ export async function GET(request: NextRequest) {
       demandMap.set(d.iwasku, list);
     }
 
+    // Get ALL pending production requests (all months, non-seasonal, not shipped/cancelled)
+    // Used by season mark-stock to calculate truly free stock
+    const allPendingDemands = iwaskus.length > 0
+      ? await prisma.productionRequest.findMany({
+          where: {
+            iwasku: { in: iwaskus },
+            status: { notIn: ['SHIPPED', 'CANCELLED'] },
+            marketplace: { code: { not: 'SEZON' } },
+          },
+          select: { iwasku: true, quantity: true },
+        })
+      : [];
+
+    const pendingDemandMap = new Map<string, number>();
+    for (const d of allPendingDemands) {
+      pendingDemandMap.set(d.iwasku, (pendingDemandMap.get(d.iwasku) ?? 0) + d.quantity);
+    }
+
     // Enrich with product details and calculated fields
     const data = products.map(p => {
       const productionEntries = p.weeklyEntries.filter(w => w.type === 'PRODUCTION');
@@ -188,6 +206,7 @@ export async function GET(request: NextRequest) {
         _seasonPool: seasonPoolMap.get(p.iwasku) ?? null,
         _monthDemands: demandMap.get(p.iwasku) ?? [],
         _seasonDemands: seasonDemandsMap.get(p.iwasku) ?? [],
+        _totalPendingDemand: pendingDemandMap.get(p.iwasku) ?? 0,
         toplamDesi: desi ? Math.round(mevcut * desi * 100) / 100 : null,
         weeklyEntries: productionEntries.map(w => ({
           id: w.id,
