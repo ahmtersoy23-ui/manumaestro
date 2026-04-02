@@ -450,14 +450,9 @@ export default function PoolDetailPage() {
       {/* Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="bg-white border rounded-xl p-4 text-center">
-          <Package className="w-5 h-5 text-gray-400 mx-auto mb-1" />
-          <p className="text-2xl font-bold text-gray-900">{pool.reserves.length}</p>
-          <p className="text-xs text-gray-500">Ürün</p>
-        </div>
-        <div className="bg-white border rounded-xl p-4 text-center">
-          <BarChart3 className="w-5 h-5 text-purple-400 mx-auto mb-1" />
-          <p className="text-2xl font-bold text-gray-900">{Math.round(totalDesi).toLocaleString('tr-TR')}</p>
-          <p className="text-xs text-gray-500">Hedef Desi</p>
+          <Package className="w-5 h-5 text-purple-400 mx-auto mb-1" />
+          <p className="text-2xl font-bold text-gray-900">{totalDemand.toLocaleString('tr-TR')}</p>
+          <p className="text-xs text-gray-500">Toplam Talep</p>
         </div>
         <div className="bg-white border rounded-xl p-4 text-center">
           <Warehouse className="w-5 h-5 text-orange-400 mx-auto mb-1" />
@@ -465,9 +460,14 @@ export default function PoolDetailPage() {
           <p className="text-xs text-gray-500">Başlangıç</p>
         </div>
         <div className="bg-white border rounded-xl p-4 text-center">
+          <BarChart3 className="w-5 h-5 text-gray-400 mx-auto mb-1" />
+          <p className="text-2xl font-bold text-gray-900">{totalTarget.toLocaleString('tr-TR')}</p>
+          <p className="text-xs text-gray-500">Kalan Üretim</p>
+        </div>
+        <div className="bg-white border rounded-xl p-4 text-center">
           <TrendingUp className="w-5 h-5 text-green-400 mx-auto mb-1" />
           <p className="text-2xl font-bold text-green-600">{prodPct}%</p>
-          <p className="text-xs text-gray-500">İlerleme</p>
+          <p className="text-xs text-gray-500">{totalFulfilled.toLocaleString('tr-TR')} / {totalDemand.toLocaleString('tr-TR')}</p>
         </div>
         <div className="bg-white border rounded-xl p-4 text-center">
           <Truck className="w-5 h-5 text-blue-400 mx-auto mb-1" />
