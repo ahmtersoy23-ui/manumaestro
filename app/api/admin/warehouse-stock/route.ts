@@ -165,7 +165,7 @@ export async function GET(request: NextRequest) {
       ? await prisma.productionRequest.findMany({
           where: {
             iwasku: { in: iwaskus },
-            status: { notIn: ['SHIPPED', 'CANCELLED'] },
+            status: { notIn: ['COMPLETED', 'CANCELLED'] },
             marketplace: { code: { not: 'SEZON' } },
           },
           select: { iwasku: true, quantity: true },
