@@ -757,9 +757,29 @@ export default function PoolDetailPage() {
                       const pct = data.planned > 0 ? Math.round(data.actual / data.planned * 100) : 0;
                       return (
                         <tr key={month} className={`hover:bg-gray-50 ${data.locked ? 'bg-orange-50/40' : ''}`}>
-                          <td className="px-4 py-3 font-medium flex items-center gap-1.5">
-                            {data.locked && <span title="Üretimi başlamış — kilitli"><Lock className="w-3 h-3 text-orange-400 shrink-0" /></span>}
-                            {MONTH_LABELS[month] ?? month}
+                          <td className="px-4 py-3 font-medium">
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={async () => {
+                                  const newLocked = !data.locked;
+                                  try {
+                                    const res = await fetch(`/api/stock-pools/${id}/lock-month`, {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ month, locked: newLocked }),
+                                    });
+                                    const d = await res.json();
+                                    if (d.success) fetchPool();
+                                    else alert(d.error || 'İşlem başarısız');
+                                  } catch { alert('Bağlantı hatası'); }
+                                }}
+                                className={`p-0.5 rounded transition-colors ${data.locked ? 'text-orange-500 hover:text-orange-700' : 'text-gray-300 hover:text-gray-500'}`}
+                                title={data.locked ? 'Kilidi aç' : 'Kilitle'}
+                              >
+                                <Lock className="w-3.5 h-3.5" />
+                              </button>
+                              {MONTH_LABELS[month] ?? month}
+                            </div>
                           </td>
                           <td className="text-center px-3 py-3">{data.planned.toLocaleString('tr-TR')}</td>
                           <td className="text-center px-3 py-3">{data.actual.toLocaleString('tr-TR')}</td>
