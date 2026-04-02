@@ -62,47 +62,25 @@ export function calculateMonthWeights(months: MonthCapacity[]): MonthCapacity[] 
 // ============================================
 
 /**
- * Calculate rolling month shares:
- *   share[0] = quota[0] / totalCapacity
- *   share[1] = quota[1] / (totalCapacity - quota[0])
- *   share[2] = quota[2] / (totalCapacity - quota[0] - quota[1])
- *   ...
+ * Calculate month shares: ay_kotası / toplam_talep
  *
- * Each share tells: "what fraction of REMAINING demand goes to this month"
- * Multiplied cumulatively, this distributes total demand across months
- * proportionally to their quotas, regardless of demand/capacity ratio.
+ * Her ürünün bu oranı kadar o aya yerleştirilir.
+ * Toplam talep < toplam kapasite ise toplam üretim > toplam talep olur (kapasite doldurma).
+ * Bu sayede her ay ~%99+ kota kullanımına ulaşır.
+ *
+ * Örnek: Nisan kotası=11,500, toplam talep=53,376
+ *   share = 11,500/53,376 = 0.2155 → her ürünün %21.5'i Nisan'a
+ *   Nisan toplam = 53,376 × 0.2155 = 11,500 desi (kota %100)
  */
-function calculateRollingShares(months: MonthCapacity[]): number[] {
-  const shares: number[] = [];
-  let remainingCapacity = months.reduce((s, m) => s + m.totalDesi, 0);
-
-  for (const m of months) {
-    const share = remainingCapacity > 0 ? m.totalDesi / remainingCapacity : 0;
-    shares.push(share);
-    remainingCapacity -= m.totalDesi;
+function calculateMonthShares(
+  months: MonthCapacity[],
+  totalDemandDesi: number,
+): number[] {
+  if (totalDemandDesi <= 0) {
+    const n = months.length;
+    return months.map(() => 1 / n);
   }
-
-  return shares;
-}
-
-/**
- * Convert rolling shares to flat month weights (what % of total goes to each month).
- * rolling: [0.148, 0.121, 0.207, ...]
- * flat:    [0.148, 0.103, 0.155, ...] (multiply through remaining fractions)
- */
-function rollingToFlat(rollingShares: number[]): number[] {
-  const flat: number[] = [];
-  let remaining = 1.0;
-
-  for (const share of rollingShares) {
-    const monthPortion = remaining * share;
-    flat.push(monthPortion);
-    remaining -= monthPortion;
-  }
-
-  // Normalize (handle floating point drift)
-  const sum = flat.reduce((s, w) => s + w, 0);
-  return sum > 0 ? flat.map(w => w / sum) : flat;
+  return months.map(m => m.totalDesi / totalDemandDesi);
 }
 
 // ============================================
@@ -217,9 +195,13 @@ export function allocateReserves(
   const weightedMonths = calculateMonthWeights(months);
   const allMonthCodes = weightedMonths.map(m => m.month);
 
-  // Rolling shares → flat weights
-  const rollingShares = calculateRollingShares(weightedMonths);
-  const flatWeights = rollingToFlat(rollingShares);
+  // Total demand desi across all reserves
+  const totalDemandDesi = reserves.reduce(
+    (s, r) => s + r.targetQuantity * r.desiPerUnit, 0
+  );
+
+  // Month shares: ay_kotası / toplam_talep → fills capacity to ~99%
+  const flatWeights = calculateMonthShares(weightedMonths, totalDemandDesi);
 
   // Group reserves by category
   const byCategory = new Map<string, ReserveInput[]>();
