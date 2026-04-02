@@ -1,9 +1,11 @@
 /**
- * Seasonal demand allocation algorithm
+ * Seasonal demand allocation — Waterfall Fill
  *
- * monthShare = month_quota / total_demand → her ay %99+ kota
- * Min 15 consolidation: ROTASYONLU ay seçimi (farklı ürünler farklı aylar)
- * Kategori bazlı bağımsız dağıtım (her kategori = ayrı üretim bandı)
+ * Ayları sırayla doldurur: Nisan→Kasım. Her ay kotasına kadar dolar.
+ * Talep bitince kalan aylar boş kalır. Yeni listeler gelince yeniden hesaplanır.
+ *
+ * Her kategoride aynı oranda ilerleme (eşit dağılım).
+ * Ürünler büyükten küçüğe, min 15 batch.
  */
 
 import { getMinBatchSize } from './config';
@@ -21,11 +23,11 @@ export interface ReserveInput {
 }
 
 export interface MonthCapacity {
-  month: string; // "2026-04"
+  month: string;
   workingDays: number;
   desiPerDay: number;
   totalDesi: number;
-  weight: number; // 0-1, proportion of total capacity
+  weight: number;
 }
 
 export interface AllocationResult {
@@ -48,124 +50,19 @@ export function calculateMonthWeights(months: MonthCapacity[]): MonthCapacity[] 
 }
 
 // ============================================
-// Month shares: ay_kotası / toplam_talep
-// ============================================
-
-function calculateMonthShares(
-  months: MonthCapacity[],
-  totalDemandDesi: number,
-): number[] {
-  if (totalDemandDesi <= 0) {
-    return months.map(() => 1 / months.length);
-  }
-  return months.map(m => m.totalDesi / totalDemandDesi);
-}
-
-// ============================================
-// Evenly spaced month selection with rotation
-// ============================================
-
-/**
- * Select `numNeeded` months from `totalMonths`, evenly spaced with rotation offset.
- * Different offsets produce different month subsets → load balancing.
- *
- * Example: 8 months, need 5, offset=0 → [0,1,3,5,6]
- *          8 months, need 5, offset=1 → [1,2,4,6,7]
- *          8 months, need 5, offset=2 → [0,2,3,5,7]
- */
-function selectMonths(totalMonths: number, numNeeded: number, offset: number): number[] {
-  if (numNeeded >= totalMonths) {
-    return Array.from({ length: totalMonths }, (_, i) => i);
-  }
-  if (numNeeded <= 0) return [];
-
-  const spacing = totalMonths / numNeeded;
-  const indices = new Set<number>();
-
-  for (let i = 0; i < numNeeded; i++) {
-    const idx = Math.floor((offset + i * spacing) % totalMonths);
-    indices.add(idx);
-  }
-
-  // If set collisions reduced count, fill gaps
-  if (indices.size < numNeeded) {
-    for (let i = 0; i < totalMonths && indices.size < numNeeded; i++) {
-      indices.add((offset + i) % totalMonths);
-    }
-  }
-
-  return [...indices].sort((a, b) => a - b);
-}
-
-// ============================================
-// Proportional distribution with largest remainder
-// ============================================
-
-function distributeProportional(
-  targetQty: number,
-  monthIndices: number[],
-  shares: number[],
-): { monthIdx: number; qty: number }[] {
-  if (monthIndices.length === 0 || targetQty <= 0) return [];
-
-  // Get shares for selected months, normalize
-  const selectedShares = monthIndices.map(i => shares[i]!);
-  const totalShare = selectedShares.reduce((s, w) => s + w, 0);
-
-  if (totalShare === 0) {
-    // Equal fallback
-    const perMonth = Math.floor(targetQty / monthIndices.length);
-    const remainder = targetQty - perMonth * monthIndices.length;
-    return monthIndices.map((idx, i) => ({
-      monthIdx: idx,
-      qty: perMonth + (i < remainder ? 1 : 0),
-    }));
-  }
-
-  // Proportional with largest remainder rounding
-  const allocations = monthIndices.map((idx, j) => ({
-    monthIdx: idx,
-    raw: targetQty * (selectedShares[j]! / totalShare),
-    qty: 0,
-    remainder: 0,
-  }));
-
-  for (const a of allocations) {
-    a.qty = Math.floor(a.raw);
-    a.remainder = a.raw - a.qty;
-  }
-
-  const distributed = allocations.reduce((s, a) => s + a.qty, 0);
-  const remaining = targetQty - distributed;
-  const byRemainder = [...allocations].sort((a, b) => b.remainder - a.remainder);
-  for (let i = 0; i < remaining && i < byRemainder.length; i++) {
-    byRemainder[i]!.qty += 1;
-  }
-
-  return allocations.filter(a => a.qty > 0);
-}
-
-// ============================================
-// MAIN: Allocate all reserves across months
+// MAIN: Waterfall allocation
 // ============================================
 
 export function allocateReserves(
   reserves: ReserveInput[],
   months: MonthCapacity[],
 ): AllocationResult[] {
-  const weightedMonths = calculateMonthWeights(months);
-  const allMonthCodes = weightedMonths.map(m => m.month);
-  const totalMonths = allMonthCodes.length;
-
-  // Total demand desi
   const totalDemandDesi = reserves.reduce(
     (s, r) => s + r.targetQuantity * r.desiPerUnit, 0
   );
+  if (totalDemandDesi <= 0 || months.length === 0) return [];
 
-  // Month shares: ay_kotası / toplam_talep
-  const shares = calculateMonthShares(weightedMonths, totalDemandDesi);
-
-  // Group reserves by category
+  // Group by category
   const byCategory = new Map<string, ReserveInput[]>();
   for (const reserve of reserves) {
     const cat = reserve.category || '_uncategorized';
@@ -174,54 +71,89 @@ export function allocateReserves(
     byCategory.set(cat, group);
   }
 
+  // Calculate each category's share of total demand
+  const catDesiMap = new Map<string, number>();
+  for (const [cat, catReserves] of Array.from(byCategory)) {
+    const catDesi = catReserves.reduce((s, r) => s + r.targetQuantity * r.desiPerUnit, 0);
+    catDesiMap.set(cat, catDesi);
+  }
+
   const results: AllocationResult[] = [];
 
-  for (const [, categoryReserves] of Array.from(byCategory)) {
-    // Sort by total desi descending
-    const sorted = [...categoryReserves].sort(
+  // Process each category independently (each has its own production line)
+  for (const [cat, catReserves] of Array.from(byCategory)) {
+    const catTotalDesi = catDesiMap.get(cat)!;
+    const catShare = catTotalDesi / totalDemandDesi;
+
+    // Sort by desi descending — large products first for stable allocation
+    const sorted = [...catReserves].sort(
       (a, b) => (b.targetQuantity * b.desiPerUnit) - (a.targetQuantity * a.desiPerUnit)
     );
 
-    for (let productIdx = 0; productIdx < sorted.length; productIdx++) {
-      const reserve = sorted[productIdx]!;
-      const minBatch = getMinBatchSize(reserve.desiPerUnit);
+    // Track remaining qty per product
+    const remaining = new Map<string, number>();
+    for (const r of sorted) remaining.set(r.iwasku, r.targetQuantity);
 
-      // Check if product fits in all months with min 15
-      const idealPerMonth = shares.map(s => reserve.targetQuantity * s);
-      const allAboveMin = idealPerMonth.every(q => q >= minBatch || q === 0);
+    let catRemainingDesi = catTotalDesi;
 
-      let selectedIndices: number[];
+    // Waterfall: fill months in order
+    for (const month of months) {
+      if (catRemainingDesi <= 0) break;
 
-      if (allAboveMin) {
-        // All months qualify → use all
-        selectedIndices = Array.from({ length: totalMonths }, (_, i) => i);
-      } else if (reserve.targetQuantity < minBatch) {
-        // Total below min → single month (rotated)
-        selectedIndices = [productIdx % totalMonths];
-      } else {
-        // Need fewer months — calculate how many
-        const numMonths = Math.min(
-          totalMonths,
-          Math.max(1, Math.floor(reserve.targetQuantity / minBatch))
-        );
-        // Rotated even spacing
-        selectedIndices = selectMonths(totalMonths, numMonths, productIdx % numMonths);
+      // This category's quota for this month
+      const monthCatQuota = month.totalDesi * catShare;
+
+      // Share of remaining to allocate this month
+      const share = Math.min(1, monthCatQuota / catRemainingDesi);
+
+      let monthAllocDesi = 0;
+
+      for (const reserve of sorted) {
+        const remQty = remaining.get(reserve.iwasku)!;
+        if (remQty <= 0) continue;
+
+        const minBatch = getMinBatchSize(reserve.desiPerUnit);
+        const idealQty = Math.round(remQty * share);
+
+        if (idealQty >= minBatch) {
+          // Normal allocation
+          results.push({
+            iwasku: reserve.iwasku,
+            month: month.month,
+            plannedQty: idealQty,
+            plannedDesi: Math.round(idealQty * reserve.desiPerUnit * 10) / 10,
+          });
+          remaining.set(reserve.iwasku, remQty - idealQty);
+          monthAllocDesi += idealQty * reserve.desiPerUnit;
+        } else if (remQty <= minBatch) {
+          // Remaining is small — dump all here
+          results.push({
+            iwasku: reserve.iwasku,
+            month: month.month,
+            plannedQty: remQty,
+            plannedDesi: Math.round(remQty * reserve.desiPerUnit * 10) / 10,
+          });
+          remaining.set(reserve.iwasku, 0);
+          monthAllocDesi += remQty * reserve.desiPerUnit;
+        }
+        // else: skip — will be allocated in a later month where share is higher
       }
 
-      // Distribute across selected months proportionally
-      const distributed = distributeProportional(
-        reserve.targetQuantity,
-        selectedIndices,
-        shares,
-      );
+      catRemainingDesi -= monthAllocDesi;
+    }
 
-      for (const d of distributed) {
+    // Safety: any remaining goes to last month
+    const lastMonth = months[months.length - 1]!;
+    for (const reserve of sorted) {
+      const remQty = remaining.get(reserve.iwasku)!;
+      if (remQty > 0) {
         results.push({
           iwasku: reserve.iwasku,
-          month: allMonthCodes[d.monthIdx]!,
-          plannedQty: d.qty,
-          plannedDesi: Math.round(d.qty * reserve.desiPerUnit * 10) / 10,
+          month: lastMonth.month,
+          plannedQty: remQty,
+          plannedDesi: Math.round(remQty * reserve.desiPerUnit * 10) / 10,
         });
+        remaining.set(reserve.iwasku, 0);
       }
     }
   }
