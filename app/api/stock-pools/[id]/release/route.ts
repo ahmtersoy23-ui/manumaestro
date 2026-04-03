@@ -86,13 +86,13 @@ export async function POST(request: NextRequest, { params }: Params) {
     try {
       const ph = iwaskus.map((_, i) => `$${i + 1}`).join(',');
       const rows = await queryProductDb(
-        `SELECT product_sku, name, category_type, desi FROM products WHERE product_sku IN (${ph})`,
+        `SELECT product_sku, name, category, COALESCE(manual_size, size) as desi FROM products WHERE product_sku IN (${ph})`,
         iwaskus
-      ) as { product_sku: string; name: string; category_type: string; desi: number | null }[];
+      ) as { product_sku: string; name: string; category: string; desi: number | null }[];
       for (const row of rows) {
         productMap.set(row.product_sku, {
           name: row.name,
-          category: row.category_type,
+          category: row.category,
           desi: row.desi,
         });
       }
@@ -135,7 +135,7 @@ export async function POST(request: NextRequest, { params }: Params) {
         iwasku: alloc.iwasku,
         productName: product?.name ?? alloc.iwasku,
         productCategory: alloc.category ?? product?.category ?? '',
-        productSize: product?.desi ?? alloc.desiPerUnit ?? null,
+        productSize: alloc.desiPerUnit ?? product?.desi ?? null,
         marketplaceId: sezonMarketplace.id,
         quantity: alloc.plannedQty,
         productionMonth: alloc.month,
