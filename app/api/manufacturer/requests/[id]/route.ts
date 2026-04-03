@@ -65,7 +65,7 @@ export async function PATCH(
     // Fetch the request to get quantity, category, and month
     const existingRequest = await prisma.productionRequest.findUnique({
       where: { id },
-      select: { iwasku: true, productName: true, quantity: true, productCategory: true, productionMonth: true, producedQuantity: true },
+      select: { iwasku: true, productName: true, quantity: true, productCategory: true, productionMonth: true, producedQuantity: true, status: true },
     });
 
     if (!existingRequest) {
@@ -141,10 +141,7 @@ export async function PATCH(
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      data: updated,
-    });
+    return NextResponse.json({ success: true });
   } catch (error) {
     return errorResponse(error, 'Talep güncellenemedi');
   }
