@@ -47,13 +47,22 @@ export async function waterfallComplete(iwasku: string, month: string): Promise<
   });
   const warehouseStock = snapshot?.warehouseStock ?? 0;
 
-  // 3. Total produced from manufacturer panel (MAX — stored on first request)
+  // 3. Subtract season reserved stock (initialStock is earmarked, not available for monthly)
+  const seasonReserve = await prisma.stockReserve.findFirst({
+    where: { iwasku, pool: { poolType: 'SEASONAL' }, status: { not: 'CANCELLED' } },
+    select: { initialStock: true, producedQuantity: true, shippedQuantity: true },
+  });
+  const seasonReserved = seasonReserve
+    ? Math.max(0, seasonReserve.initialStock + seasonReserve.producedQuantity - seasonReserve.shippedQuantity)
+    : 0;
+
+  // 4. Total produced from manufacturer panel (MAX — stored on first request)
   const totalProduced = Math.max(
     ...allRequests.map(r => r.producedQuantity ?? 0)
   );
 
-  // 4. Available = stock + produced
-  const totalAvailable = warehouseStock + totalProduced;
+  // 5. Available = stock + produced - season reserved
+  const totalAvailable = Math.max(0, warehouseStock + totalProduced - seasonReserved);
 
   // 2. Get marketplace priorities for this month
   const priorities = await prisma.marketplacePriority.findMany({
@@ -121,7 +130,7 @@ export async function waterfallComplete(iwasku: string, month: string): Promise<
   }
 
   if (changed > 0) {
-    logger.info(`Waterfall: ${iwasku} (${month}) — stok:${warehouseStock} + üretilen:${totalProduced} = ${totalAvailable}, ${changed} talep güncellendi`);
+    logger.info(`Waterfall: ${iwasku} (${month}) — stok:${warehouseStock} + üretilen:${totalProduced} - sezon:${seasonReserved} = ${totalAvailable}, ${changed} talep güncellendi`);
   }
 
   return changed;
