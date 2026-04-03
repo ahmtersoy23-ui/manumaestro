@@ -44,19 +44,11 @@ export async function waterfallComplete(iwasku: string, month: string): Promise<
 
   if (allRequests.length === 0) return 0;
 
-  // 2. Get snapshot stock (already has season reserves subtracted)
-  const snapshot = await prisma.monthSnapshot.findUnique({
-    where: { month_iwasku: { month, iwasku } },
-  });
-  const warehouseStock = snapshot?.warehouseStock ?? 0;
-
-  // 3. Total produced = MAX across all requests (production is product-level, stored on one request)
-  const totalProduced = Math.max(
+  // 2. Total produced = MAX across all requests (production is product-level, manufacturer perspective only)
+  //    Depot stock is handled separately by autoCompleteFromSnapshot — these are INDEPENDENT systems.
+  const totalAvailable = Math.max(
     ...allRequests.map(r => r.producedQuantity ?? 0)
   );
-
-  // 4. Available = snapshot stock + produced
-  const totalAvailable = warehouseStock + totalProduced;
 
   // 5. Get marketplace priorities for this month
   const priorities = await prisma.marketplacePriority.findMany({
@@ -124,7 +116,7 @@ export async function waterfallComplete(iwasku: string, month: string): Promise<
   }
 
   if (changed > 0) {
-    logger.info(`Waterfall: ${iwasku} (${month}) — stok:${warehouseStock} + üretilen:${totalProduced} = ${totalAvailable}, ${changed} talep güncellendi`);
+    logger.info(`Waterfall: ${iwasku} (${month}) — üretilen:${totalAvailable}, ${changed} talep güncellendi`);
   }
 
   return changed;
