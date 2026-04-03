@@ -84,40 +84,36 @@ export async function PATCH(
       );
     }
 
-    // Prepare update data
+    // Prepare update data (per-request fields only)
     const updateData: Prisma.ProductionRequestUpdateInput = {};
 
-    if (status !== undefined) {
+    if (status !== undefined && status !== existingRequest.status) {
       updateData.status = status;
     }
-
-    // producedQuantity is written to MonthSnapshot.produced (product-level, not per-request)
-    // ProductionRequest.producedQuantity is kept in sync for display but MonthSnapshot is source of truth
-
     if (manufacturerNotes !== undefined) {
       updateData.manufacturerNotes = manufacturerNotes;
     }
-
     if (workflowStage !== undefined) {
       updateData.workflowStage = workflowStage;
     }
 
-    // Update the request
-    const updated = await prisma.productionRequest.update({
-      where: { id },
-      data: updateData,
-    });
+    // producedQuantity → MonthSnapshot.produced (product-level, handled below)
+    // Check if anything actually changed on this request
+    const hasRequestChanges = Object.keys(updateData).length > 0;
 
-    await logAction({
-      userId: user.id,
-      userName: user.name,
-      userEmail: user.email,
-      action: 'UPDATE_PRODUCTION',
-      entityType: 'ProductionRequest',
-      entityId: id,
-      description: `Üretim güncellendi: ${existingRequest.iwasku} ${existingRequest.productName} (${existingRequest.productCategory}) — durum: ${updated.status}, üretilen: ${updated.producedQuantity ?? '-'}`,
-      metadata: { ...updateData, requestId: id, iwasku: existingRequest.iwasku, productName: existingRequest.productName, productCategory: existingRequest.productCategory },
-    });
+    if (hasRequestChanges) {
+      const updated = await prisma.productionRequest.update({
+        where: { id },
+        data: updateData,
+      });
+
+      await logAction({
+        userId: user.id, userName: user.name, userEmail: user.email,
+        action: 'UPDATE_PRODUCTION', entityType: 'ProductionRequest', entityId: id,
+        description: `Üretim güncellendi: ${existingRequest.iwasku} ${existingRequest.productName} (${existingRequest.productCategory}) — durum: ${updated.status}, üretilen: ${updated.producedQuantity ?? '-'}`,
+        metadata: { ...updateData, requestId: id, iwasku: existingRequest.iwasku },
+      });
+    }
 
     // Write producedQuantity to MonthSnapshot.produced (product-level single value)
     // Skip if value hasn't changed (prevents redundant waterfall when frontend sends multiple requests)
