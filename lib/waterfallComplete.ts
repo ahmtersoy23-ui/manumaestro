@@ -87,13 +87,11 @@ export async function waterfallComplete(iwasku: string, month: string): Promise<
     }
 
     const statusChanged = req.status !== targetStatus;
-    const producedChanged = (req.producedQuantity ?? 0) !== allocated;
 
-    if (statusChanged || producedChanged) {
+    if (statusChanged) {
       await prisma.productionRequest.update({
         where: { id: req.id },
         data: {
-          producedQuantity: allocated,
           status: targetStatus,
           manufacturerNotes: allocated > 0 ? 'Öncelik tamamlandı' : null,
         },
