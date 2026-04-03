@@ -47,7 +47,12 @@ export async function POST(request: NextRequest, { params }: Params) {
   }
 
   const allAllocations = pool.reserves.flatMap(r =>
-    r.allocations.map(a => ({ ...a, iwasku: r.iwasku, desiPerUnit: r.desiPerUnit ?? (r.targetDesi && r.targetQuantity ? r.targetDesi / r.targetQuantity : null) }))
+    r.allocations.map(a => ({
+      ...a,
+      iwasku: r.iwasku,
+      category: r.category,
+      desiPerUnit: r.desiPerUnit ?? (r.targetDesi && r.targetQuantity ? r.targetDesi / r.targetQuantity : null),
+    }))
   );
 
   if (allAllocations.length === 0) {
@@ -128,7 +133,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       data: {
         iwasku: alloc.iwasku,
         productName: product?.name ?? alloc.iwasku,
-        productCategory: product?.category ?? 'Sezon',
+        productCategory: alloc.category ?? product?.category ?? '',
         productSize: product?.desi ?? alloc.desiPerUnit ?? null,
         marketplaceId: sezonMarketplace.id,
         quantity: alloc.plannedQty,
