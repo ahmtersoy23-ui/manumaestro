@@ -71,24 +71,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // If seasonal pool specified, update reserve.producedQuantity
-    if (poolId && type === 'PRODUCTION' && quantity > 0) {
-      const reserve = await prisma.stockReserve.findFirst({
-        where: { poolId, iwasku },
-      });
-      if (reserve) {
-        const diff = quantity - (existing?.quantity ?? 0);
-        if (diff !== 0) {
-          await prisma.stockReserve.update({
-            where: { id: reserve.id },
-            data: {
-              producedQuantity: { increment: diff },
-              status: 'STOCKED',
-            },
-          });
-        }
-      }
-    }
+    // Season pool tracking: poolId is kept for UI display (mor/yeşil renk)
+    // but producedQuantity is NOT auto-incremented here.
+    // Season production is tracked via batch reconciliation (toptan uzlaştırma).
+    // Weekly entries only affect warehouse mevcut — season accounting is separate.
 
     const oldQty = existing?.quantity ?? 0;
     const typeLabel = type === 'PRODUCTION' ? 'Üretim' : 'Çıkış';

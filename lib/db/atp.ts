@@ -41,29 +41,27 @@ export async function getATPBulk(iwaskus: string[]): Promise<ATPResult[]> {
     },
   });
 
-  // Get seasonal reserves (initialStock + producedQuantity = total season stock)
+  // Get seasonal reserves (only initialStock — pre-assigned depot stock)
+  // producedQuantity is NOT included: new production goes to monthly demands first,
+  // season accounting is handled via batch reconciliation separately.
   const reserves = await prisma.stockReserve.findMany({
     where: {
       iwasku: { in: iwaskus },
       pool: { poolType: 'SEASONAL' },
-      OR: [
-        { initialStock: { gt: 0 } },
-        { producedQuantity: { gt: 0 } },
-      ],
+      initialStock: { gt: 0 },
     },
     select: {
       iwasku: true,
       initialStock: true,
-      producedQuantity: true,
       shippedQuantity: true,
     },
   });
 
-  // Build reserve map: reserved = initialStock + producedQuantity - shippedQuantity
+  // Build reserve map: reserved = initialStock - shippedQuantity
   const reserveMap = new Map<string, number>();
   for (const r of reserves) {
     const current = reserveMap.get(r.iwasku) ?? 0;
-    reserveMap.set(r.iwasku, current + (r.initialStock + r.producedQuantity - r.shippedQuantity));
+    reserveMap.set(r.iwasku, current + (r.initialStock - r.shippedQuantity));
   }
 
   // Calculate ATP for each product
