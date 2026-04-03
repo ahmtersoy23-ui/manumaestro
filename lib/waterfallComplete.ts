@@ -1,17 +1,14 @@
 /**
- * Waterfall Completion — Product-level production distribution
+ * Waterfall Completion — Priority-based distribution
  *
- * Production is product-level (IWASKU+month), not marketplace-level.
- * Waterfall distributes total available qty to marketplace requests in priority order,
- * writing both producedQuantity and status to each request.
+ * Combines snapshot stock (depot) + manufacturer produced to determine status.
+ * Distributes totalAvailable across marketplace requests by priority.
  *
- * Example: totalAvailable = 25, Takealot (6, pri 1), Amazon AU (30, pri 2), Amazon US (7, pri 3)
- *   Takealot  → produced=6,  COMPLETED (6 ≤ 25, remaining=19)
- *   Amazon AU → produced=19, PARTIALLY_PRODUCED (19 < 30, remaining=0)
- *   Amazon US → produced=0,  unchanged
- *
- * Only auto-managed requests are touched (manufacturerNotes = 'Öncelik tamamlandı' / 'Stoktan karşılandı'
- * or status was auto-set). Manual overrides are preserved.
+ * Status rules:
+ *   allocated >= quantity           → COMPLETED
+ *   allocated > 0 && < quantity     → PARTIALLY_PRODUCED
+ *   allocated = 0 && was auto-set   → REQUESTED (revert)
+ *   allocated = 0 && manual          → don't touch
  */
 
 import { prisma } from '@/lib/db/prisma';
@@ -22,14 +19,7 @@ const logger = createLogger('WaterfallComplete');
 
 const AUTO_NOTES = ['Öncelik tamamlandı', 'Stoktan karşılandı'];
 
-/**
- * Run waterfall completion for a specific iwasku + month.
- * Distributes totalAvailable (snapshot stock + produced) across requests by priority.
- *
- * @returns number of requests changed
- */
 export async function waterfallComplete(iwasku: string, month: string): Promise<number> {
-  // 1. Get all requests for this iwasku in this month
   const allRequests = await prisma.productionRequest.findMany({
     where: { iwasku, productionMonth: month },
     select: {
@@ -44,13 +34,19 @@ export async function waterfallComplete(iwasku: string, month: string): Promise<
 
   if (allRequests.length === 0) return 0;
 
-  // 2. Total produced = MAX across all requests (production is product-level, manufacturer perspective only)
-  //    Depot stock is handled separately by autoCompleteFromSnapshot — these are INDEPENDENT systems.
-  const totalAvailable = Math.max(
-    ...allRequests.map(r => r.producedQuantity ?? 0)
-  );
+  // Snapshot stock (depot perspective, season reserved already subtracted)
+  const snapshot = await prisma.monthSnapshot.findUnique({
+    where: { month_iwasku: { month, iwasku } },
+  });
+  const snapshotStock = snapshot?.warehouseStock ?? 0;
 
-  // 5. Get marketplace priorities for this month
+  // Manufacturer reported production (product-level, MAX across requests)
+  const totalProduced = Math.max(...allRequests.map(r => r.producedQuantity ?? 0));
+
+  // Combined available = what's physically reachable
+  const totalAvailable = snapshotStock + totalProduced;
+
+  // Marketplace priorities
   const priorities = await prisma.marketplacePriority.findMany({
     where: { month },
     orderBy: { priority: 'asc' },
@@ -60,14 +56,13 @@ export async function waterfallComplete(iwasku: string, month: string): Promise<
 
   const priorityMap = new Map(priorities.map(p => [p.marketplaceId, p.priority]));
 
-  // 6. Sort requests by marketplace priority
   const sorted = [...allRequests].sort((a, b) => {
     const pa = priorityMap.get(a.marketplaceId) ?? 999;
     const pb = priorityMap.get(b.marketplaceId) ?? 999;
     return pa - pb;
   });
 
-  // 7. Distribute available qty in priority order + set status accordingly
+  // Distribute by priority
   let remaining = totalAvailable;
   let changed = 0;
 
@@ -75,40 +70,32 @@ export async function waterfallComplete(iwasku: string, month: string): Promise<
     const allocated = Math.min(req.quantity, Math.max(0, remaining));
     remaining -= allocated;
 
-    // Determine target status
+    // Determine target status from allocated amount
     let targetStatus: RequestStatus;
-    let targetNotes: string | null;
-
     if (allocated >= req.quantity) {
       targetStatus = RequestStatus.COMPLETED;
-      targetNotes = 'Öncelik tamamlandı';
     } else if (allocated > 0) {
       targetStatus = RequestStatus.PARTIALLY_PRODUCED;
-      targetNotes = 'Öncelik tamamlandı';
     } else {
-      // No allocation — only revert if we previously auto-set this request
-      if ((req.status === 'COMPLETED' || req.status === 'PARTIALLY_PRODUCED') && AUTO_NOTES.includes(req.manufacturerNotes ?? '')) {
+      // No allocation — revert only if we auto-set this before
+      const isAutoManaged = AUTO_NOTES.includes(req.manufacturerNotes ?? '');
+      if ((req.status === 'COMPLETED' || req.status === 'PARTIALLY_PRODUCED') && isAutoManaged) {
         targetStatus = RequestStatus.REQUESTED;
-        targetNotes = null;
       } else {
-        continue;
+        continue; // Manual or already correct — skip
       }
     }
 
-    // Only update if something actually changed
     const statusChanged = req.status !== targetStatus;
     const producedChanged = (req.producedQuantity ?? 0) !== allocated;
-    const isAutoManaged = AUTO_NOTES.includes(req.manufacturerNotes ?? '') || req.manufacturerNotes === null;
-
-    // Skip manual overrides: if status was manually set (not auto-notes) and we'd change it
-    if (!isAutoManaged && statusChanged && allocated === 0) continue;
 
     if (statusChanged || producedChanged) {
       await prisma.productionRequest.update({
         where: { id: req.id },
         data: {
           producedQuantity: allocated,
-          ...(statusChanged ? { status: targetStatus, manufacturerNotes: targetNotes } : {}),
+          status: targetStatus,
+          manufacturerNotes: allocated > 0 ? 'Öncelik tamamlandı' : null,
         },
       });
       changed++;
@@ -116,7 +103,7 @@ export async function waterfallComplete(iwasku: string, month: string): Promise<
   }
 
   if (changed > 0) {
-    logger.info(`Waterfall: ${iwasku} (${month}) — üretilen:${totalAvailable}, ${changed} talep güncellendi`);
+    logger.info(`Waterfall: ${iwasku} (${month}) — stok:${snapshotStock} + üretilen:${totalProduced} = ${totalAvailable}, ${changed} güncellendi`);
   }
 
   return changed;

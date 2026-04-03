@@ -552,9 +552,6 @@ export default function ManufacturerCategoryPage() {
                           min="0"
                           className="w-20 px-2 py-1 text-sm text-gray-900 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                         />
-                        {editValues[group.iwasku]?.status === 'COMPLETED' && (
-                          <span className="text-xs text-green-600">Otomatik tamamlandı</span>
-                        )}
                       </div>
                     </td>                    <td className="px-4 py-3 whitespace-nowrap">
                       <select
