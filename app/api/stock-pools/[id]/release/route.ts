@@ -11,6 +11,7 @@ import { prisma } from '@/lib/db/prisma';
 import { queryProductDb } from '@/lib/db/prisma';
 import { requireRole } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
+import { waterfallComplete } from '@/lib/waterfallComplete';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -165,11 +166,20 @@ export async function POST(request: NextRequest, { params }: Params) {
     });
   }
 
+  // Re-run waterfall for affected iwasku+month pairs
+  // New SEZON requests change total demand → existing COMPLETED requests may need to revert
+  const affectedPairs = new Set(toCreate.map(a => `${a.iwasku}|${a.month}`));
+  let waterfallChanged = 0;
+  for (const pair of affectedPairs) {
+    const [iwasku, month] = pair.split('|');
+    waterfallChanged += await waterfallComplete(iwasku, month);
+  }
+
   await logAction({
     userId: user.id, userName: user.name, userEmail: user.email,
     action: 'BULK_UPLOAD', entityType: 'StockPool', entityId: id,
-    description: `Ay planına aktarıldı: ${created} istek oluşturuldu, ${lockedMonths.size} kilitli ay atlandı`,
-    metadata: { created, lockedMonths: lockedMonths.size, sezonMarketplaceId: sezonMarketplace.id },
+    description: `Ay planına aktarıldı: ${created} istek oluşturuldu, ${lockedMonths.size} kilitli ay atlandı, ${waterfallChanged} waterfall güncellendi`,
+    metadata: { created, lockedMonths: lockedMonths.size, sezonMarketplaceId: sezonMarketplace.id, waterfallChanged },
   });
 
   return NextResponse.json({
