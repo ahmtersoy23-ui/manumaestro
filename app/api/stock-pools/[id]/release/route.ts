@@ -47,7 +47,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   }
 
   const allAllocations = pool.reserves.flatMap(r =>
-    r.allocations.map(a => ({ ...a, iwasku: r.iwasku, desiPerUnit: r.targetDesi && r.targetQuantity ? r.targetDesi / r.targetQuantity : null }))
+    r.allocations.map(a => ({ ...a, iwasku: r.iwasku, desiPerUnit: r.desiPerUnit ?? (r.targetDesi && r.targetQuantity ? r.targetDesi / r.targetQuantity : null) }))
   );
 
   if (allAllocations.length === 0) {
@@ -141,6 +141,23 @@ export async function POST(request: NextRequest, { params }: Params) {
       },
     });
     created++;
+  }
+
+  // Ensure SEZON marketplace has lowest priority for each released month
+  const releasedMonths = [...new Set(toCreate.map(a => a.month))];
+  for (const month of releasedMonths) {
+    // Get current max priority for this month
+    const maxPriority = await prisma.marketplacePriority.aggregate({
+      where: { month },
+      _max: { priority: true },
+    });
+    const sezonPriority = (maxPriority._max.priority ?? 0) + 1;
+
+    await prisma.marketplacePriority.upsert({
+      where: { month_marketplaceId: { month, marketplaceId: sezonMarketplace.id } },
+      create: { month, marketplaceId: sezonMarketplace.id, priority: sezonPriority },
+      update: { priority: sezonPriority },
+    });
   }
 
   await logAction({
