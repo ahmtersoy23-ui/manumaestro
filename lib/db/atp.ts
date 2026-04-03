@@ -4,8 +4,8 @@
  * ATP = Total warehouse stock - Seasonal reserved stock
  *
  * Total stock (mevcut) = eskiStok + ilaveStok + weeklyProduction - cikis - weeklyShipment
- * Reserved = SUM(stock_reserves.producedQuantity - stock_reserves.shippedQuantity)
- *            WHERE status IN (STOCKED, RELEASING) AND pool is SEASONAL
+ * Reserved = SUM(stock_reserves.initialStock + stock_reserves.producedQuantity - stock_reserves.shippedQuantity)
+ *            WHERE pool is SEASONAL AND (initialStock > 0 OR producedQuantity > 0)
  */
 
 import { prisma } from './prisma';
@@ -41,25 +41,29 @@ export async function getATPBulk(iwaskus: string[]): Promise<ATPResult[]> {
     },
   });
 
-  // Get seasonal reserves
+  // Get seasonal reserves (initialStock + producedQuantity = total season stock)
   const reserves = await prisma.stockReserve.findMany({
     where: {
       iwasku: { in: iwaskus },
-      status: { in: ['STOCKED', 'RELEASING'] },
       pool: { poolType: 'SEASONAL' },
+      OR: [
+        { initialStock: { gt: 0 } },
+        { producedQuantity: { gt: 0 } },
+      ],
     },
     select: {
       iwasku: true,
+      initialStock: true,
       producedQuantity: true,
       shippedQuantity: true,
     },
   });
 
-  // Build reserve map
+  // Build reserve map: reserved = initialStock + producedQuantity - shippedQuantity
   const reserveMap = new Map<string, number>();
   for (const r of reserves) {
     const current = reserveMap.get(r.iwasku) ?? 0;
-    reserveMap.set(r.iwasku, current + (r.producedQuantity - r.shippedQuantity));
+    reserveMap.set(r.iwasku, current + (r.initialStock + r.producedQuantity - r.shippedQuantity));
   }
 
   // Calculate ATP for each product
