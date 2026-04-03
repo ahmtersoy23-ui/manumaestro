@@ -25,30 +25,48 @@ async function generateSnapshot(month: string): Promise<void> {
     _sum: { quantity: true },
   });
 
-  if (requests.length === 0) return;
-
-  // 2. Get warehouse mevcut for each product
+  // 2. Get warehouse mevcut for ALL products (not just those with requests)
   const warehouseProducts = await prisma.warehouseProduct.findMany({
     include: { weeklyEntries: true },
   });
 
   const stockMap = new Map<string, number>();
   for (const p of warehouseProducts) {
-    const uretilen = p.weeklyEntries.reduce((sum, w) => sum + w.quantity, 0);
-    const mevcut = p.eskiStok + uretilen + p.ilaveStok - p.cikis;
-    stockMap.set(p.iwasku, mevcut);
+    const weeklyProd = p.weeklyEntries.filter(w => w.type === 'PRODUCTION').reduce((s, w) => s + w.quantity, 0);
+    const weeklyShip = p.weeklyEntries.filter(w => w.type === 'SHIPMENT').reduce((s, w) => s + w.quantity, 0);
+    const mevcut = p.eskiStok + weeklyProd + p.ilaveStok - p.cikis - weeklyShip;
+    if (mevcut > 0) stockMap.set(p.iwasku, mevcut);
   }
 
-  // 3. Calculate and store snapshots (batch upsert in single transaction)
-  const upsertOps = requests.map(r => {
-    const totalRequested = r._sum.quantity || 0;
-    const warehouseStock = stockMap.get(r.iwasku) || 0;
+  // 3. Get season reserved stock (initialStock + producedQuantity - shippedQuantity)
+  const seasonReserves = await prisma.stockReserve.findMany({
+    where: { pool: { poolType: 'SEASONAL' }, status: { not: 'CANCELLED' } },
+    select: { iwasku: true, initialStock: true, producedQuantity: true, shippedQuantity: true },
+  });
+  const seasonMap = new Map<string, number>();
+  for (const r of seasonReserves) {
+    const reserved = Math.max(0, r.initialStock + r.producedQuantity - r.shippedQuantity);
+    if (reserved > 0) seasonMap.set(r.iwasku, (seasonMap.get(r.iwasku) ?? 0) + reserved);
+  }
+
+  // 4. Collect ALL iwaskus: those with requests + those with stock in warehouse
+  const requestMap = new Map(requests.map(r => [r.iwasku, r._sum.quantity || 0]));
+  const allIwaskus = new Set([...requestMap.keys(), ...stockMap.keys()]);
+
+  if (allIwaskus.size === 0) return;
+
+  // 5. Calculate and store snapshots
+  const upsertOps = Array.from(allIwaskus).map(iwasku => {
+    const totalRequested = requestMap.get(iwasku) || 0;
+    const rawStock = stockMap.get(iwasku) || 0;
+    const reserved = seasonMap.get(iwasku) || 0;
+    const warehouseStock = Math.max(0, rawStock - reserved); // Sezon reserved düşülmüş
     const netProduction = Math.max(0, totalRequested - warehouseStock);
 
     return prisma.monthSnapshot.upsert({
-      where: { month_iwasku: { month, iwasku: r.iwasku } },
+      where: { month_iwasku: { month, iwasku } },
       update: { totalRequested, warehouseStock, netProduction },
-      create: { month, iwasku: r.iwasku, totalRequested, warehouseStock, netProduction },
+      create: { month, iwasku, totalRequested, warehouseStock, netProduction },
     });
   });
 
@@ -57,7 +75,7 @@ async function generateSnapshot(month: string): Promise<void> {
   // 4. Auto-complete requests where stock covers full demand
   await autoCompleteFromSnapshot(month);
 
-  // 5. Waterfall completion: check all iwaskus with priorities
+  // 5. Waterfall completion: check all iwaskus that have requests
   const iwaskus = requests.map(r => r.iwasku);
   for (const iwasku of iwaskus) {
     await waterfallComplete(iwasku, month);
