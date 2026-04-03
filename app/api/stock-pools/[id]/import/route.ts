@@ -71,9 +71,8 @@ export async function POST(request: NextRequest, { params }: Params) {
     try {
       const placeholders = iwaskusNeedingEnrichment.map((_, i) => `$${i + 1}`).join(',');
       const rows = await queryProductDb(
-        `SELECT DISTINCT ON (iwasku) iwasku, size AS desi, category
-         FROM sku_master WHERE iwasku IN (${placeholders}) AND size > 0
-         ORDER BY iwasku, updated_at DESC`,
+        `SELECT product_sku AS iwasku, COALESCE(manual_size, size) AS desi, category
+         FROM products WHERE product_sku IN (${placeholders}) AND COALESCE(manual_size, size) > 0`,
         iwaskusNeedingEnrichment
       );
       for (const row of rows) {
@@ -134,12 +133,14 @@ export async function POST(request: NextRequest, { params }: Params) {
           iwasku,
           targetQuantity: data.quantity,
           targetDesi: data.quantity * data.desi,
+          desiPerUnit: data.desi || null,
           category: data.category || null,
           marketplaceSplit: splitJson ?? undefined,
         },
         update: {
           targetQuantity: data.quantity,
           targetDesi: data.quantity * data.desi,
+          desiPerUnit: data.desi || null,
           category: data.category || null,
           marketplaceSplit: splitJson ?? undefined,
         },
