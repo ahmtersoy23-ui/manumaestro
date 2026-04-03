@@ -65,7 +65,7 @@ export async function PATCH(
     // Fetch the request to get quantity, category, and month
     const existingRequest = await prisma.productionRequest.findUnique({
       where: { id },
-      select: { iwasku: true, productName: true, quantity: true, productCategory: true, productionMonth: true },
+      select: { iwasku: true, productName: true, quantity: true, productCategory: true, productionMonth: true, producedQuantity: true },
     });
 
     if (!existingRequest) {

@@ -15,6 +15,7 @@
  */
 
 import { prisma } from '@/lib/db/prisma';
+import { RequestStatus } from '@prisma/client';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('WaterfallComplete');
@@ -83,25 +84,21 @@ export async function waterfallComplete(iwasku: string, month: string): Promise<
     remaining -= allocated;
 
     // Determine target status
-    let targetStatus: string;
+    let targetStatus: RequestStatus;
     let targetNotes: string | null;
 
     if (allocated >= req.quantity) {
-      targetStatus = 'COMPLETED';
+      targetStatus = RequestStatus.COMPLETED;
       targetNotes = 'Öncelik tamamlandı';
     } else if (allocated > 0) {
-      targetStatus = 'PARTIALLY_PRODUCED';
+      targetStatus = RequestStatus.PARTIALLY_PRODUCED;
       targetNotes = 'Öncelik tamamlandı';
     } else {
       // No allocation — only revert if we previously auto-set this request
-      if (req.status === 'COMPLETED' && AUTO_NOTES.includes(req.manufacturerNotes ?? '')) {
-        targetStatus = 'REQUESTED';
-        targetNotes = null;
-      } else if (req.status === 'PARTIALLY_PRODUCED' && AUTO_NOTES.includes(req.manufacturerNotes ?? '')) {
-        targetStatus = 'REQUESTED';
+      if ((req.status === 'COMPLETED' || req.status === 'PARTIALLY_PRODUCED') && AUTO_NOTES.includes(req.manufacturerNotes ?? '')) {
+        targetStatus = RequestStatus.REQUESTED;
         targetNotes = null;
       } else {
-        // Manual or other status — don't touch
         continue;
       }
     }
