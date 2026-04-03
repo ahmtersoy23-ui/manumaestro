@@ -120,8 +120,8 @@ export async function PATCH(
       metadata: { ...updateData, requestId: id, iwasku: existingRequest.iwasku, productName: existingRequest.productName, productCategory: existingRequest.productCategory },
     });
 
-    // Waterfall completion: auto-complete marketplace requests by priority
-    if (producedQuantity !== undefined) {
+    // Waterfall completion: only trigger when producedQuantity actually CHANGED
+    if (producedQuantity !== undefined && producedQuantity !== (existingRequest.producedQuantity ?? 0)) {
       await waterfallComplete(existingRequest.iwasku, existingRequest.productionMonth);
     }
 

@@ -665,7 +665,9 @@ export default function MonthDetailPage() {
             const completedQty = summary?.completedQty || 0;
             const completedDesi = summary?.completedDesi || 0;
             const displayValue = viewMode === 'quantity' ? totalQuantity : Math.round(totalDesi);
-            const completionPct = requestCount > 0 ? Math.round((completedCount / requestCount) * 100) : 0;
+            const completionPct = viewMode === 'quantity'
+              ? (totalQuantity > 0 ? Math.round((completedQty / totalQuantity) * 100) : 0)
+              : (totalDesi > 0 ? Math.round((completedDesi / totalDesi) * 100) : 0);
 
             // Get slug from code
             const slug = marketplaceSlugMap[mp.code] || mp.code.toLowerCase().replace('_', '-');
