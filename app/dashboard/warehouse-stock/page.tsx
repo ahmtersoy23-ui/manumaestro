@@ -367,6 +367,11 @@ export default function WarehouseStockPage() {
         const totalCount = products.length;
         const totalMevcut = products.reduce((s, p) => s + p.mevcut, 0);
         const totalDesi = products.reduce((s, p) => s + (p.toplamDesi ?? 0), 0);
+        // Sezon reserved toplamı
+        const seasonProducts = products.filter(p => p.reserved > 0);
+        const seasonCount = seasonProducts.length;
+        const seasonReserved = seasonProducts.reduce((s, p) => s + p.reserved, 0);
+        const seasonDesi = seasonProducts.reduce((s, p) => s + p.reserved * (p.desi ?? 0), 0);
         return (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
             <button
@@ -388,6 +393,13 @@ export default function WarehouseStockPage() {
                 <p className="text-[10px] text-gray-400">{s.count} ürün · {Math.round(s.desi)} desi</p>
               </button>
             ))}
+            {seasonCount > 0 && (
+              <div className="text-left rounded-lg border border-purple-300 bg-purple-50 p-2.5">
+                <p className="text-[10px] text-purple-600 font-semibold">Sezon Rezerve</p>
+                <p className="text-sm font-bold text-purple-700">{seasonReserved.toLocaleString()} <span className="text-[10px] font-normal text-purple-400">adet</span></p>
+                <p className="text-[10px] text-purple-400">{seasonCount} ürün · {Math.round(seasonDesi).toLocaleString()} desi</p>
+              </div>
+            )}
           </div>
         );
       })()}
