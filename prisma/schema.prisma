@@ -294,6 +294,7 @@ model MonthSnapshot {
   totalRequested  Int
   warehouseStock  Int
   netProduction   Int
+  produced        Int      @default(0)  // Üretici girişi (ürün bazlı, tek değer)
   createdAt       DateTime @default(now())
 
   @@unique([month, iwasku])

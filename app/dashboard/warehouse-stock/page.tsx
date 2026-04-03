@@ -239,7 +239,7 @@ export default function WarehouseStockPage() {
       p.weeklyEntries.forEach(w => { row[`Üretim ${w.weekStart.split('T')[0]}`] = w.quantity; });
       row['Üretilen'] = p.uretilen; row['İlave'] = p.ilaveStok;
       p.shipmentEntries.forEach(w => { row[`Çıkış ${w.weekStart.split('T')[0]}`] = w.quantity; });
-      row['Çıkış'] = p.toplamCikis; row['Mevcut'] = p.mevcut; row['Ayrılmış'] = p.reserved; row['ATP'] = p.atp; row['Toplam Desi'] = p.toplamDesi;
+      row['Çıkış'] = p.toplamCikis; row['Mevcut'] = p.mevcut; row['Sezon Rez.'] = p.reserved; row['ATP'] = p.atp; row['Toplam Desi'] = p.toplamDesi;
       return row;
     });
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -549,7 +549,7 @@ export default function WarehouseStockPage() {
                       <th className="px-2 py-2 text-left font-semibold text-purple-600 bg-purple-50 min-w-[100px]">
                         SZN Talep
                       </th>
-                      <SortHeader label="Ayrılmış" sortField="reserved" className="text-right font-semibold text-orange-600 bg-orange-50 min-w-[55px]" />
+                      <SortHeader label="Sezon Rez." sortField="reserved" className="text-right font-semibold text-orange-600 bg-orange-50 min-w-[55px]" />
                       <SortHeader label="ATP" sortField="atp" className="text-right font-bold text-emerald-700 bg-emerald-50 min-w-[55px]" />
                       <SortHeader label="T.Desi" sortField="toplamDesi" className="text-right font-semibold text-gray-500 min-w-[55px]" />
                     </tr>

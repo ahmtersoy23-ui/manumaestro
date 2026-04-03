@@ -12,7 +12,6 @@ import { verifyAuth } from '@/lib/auth/verify';
 import { isMonthLocked } from '@/lib/monthUtils';
 import { errorResponse } from '@/lib/api/response';
 import { createLogger } from '@/lib/logger';
-import { waterfallComplete } from '@/lib/waterfallComplete';
 
 const logger = createLogger('MonthSnapshot');
 
@@ -71,12 +70,8 @@ async function generateSnapshot(month: string): Promise<void> {
 
   await prisma.$transaction(upsertOps);
 
-  // 4. Run waterfall for all products with requests
-  //    Uses combined view: snapshotStock + producedQuantity → status by priority
-  for (const iwasku of requestMap.keys()) {
-    await waterfallComplete(iwasku, month);
-  }
-
+  // Snapshot is informational only — does NOT trigger waterfall or change statuses.
+  // Waterfall runs independently when manufacturer enters producedQuantity.
   logger.info(`Snapshot generated for ${month}: ${allIwaskus.size} products`);
 }
 

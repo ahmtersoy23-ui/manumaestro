@@ -91,9 +91,8 @@ export async function PATCH(
       updateData.status = status;
     }
 
-    if (producedQuantity !== undefined) {
-      updateData.producedQuantity = producedQuantity;
-    }
+    // producedQuantity is written to MonthSnapshot.produced (product-level, not per-request)
+    // ProductionRequest.producedQuantity is kept in sync for display but MonthSnapshot is source of truth
 
     if (manufacturerNotes !== undefined) {
       updateData.manufacturerNotes = manufacturerNotes;
@@ -120,8 +119,22 @@ export async function PATCH(
       metadata: { ...updateData, requestId: id, iwasku: existingRequest.iwasku, productName: existingRequest.productName, productCategory: existingRequest.productCategory },
     });
 
-    // Waterfall completion: only trigger when producedQuantity actually CHANGED
-    if (producedQuantity !== undefined && producedQuantity !== (existingRequest.producedQuantity ?? 0)) {
+    // Write producedQuantity to MonthSnapshot.produced (product-level single value)
+    if (producedQuantity !== undefined) {
+      await prisma.monthSnapshot.upsert({
+        where: { month_iwasku: { month: existingRequest.productionMonth, iwasku: existingRequest.iwasku } },
+        update: { produced: producedQuantity },
+        create: {
+          month: existingRequest.productionMonth,
+          iwasku: existingRequest.iwasku,
+          totalRequested: existingRequest.quantity,
+          warehouseStock: 0,
+          netProduction: existingRequest.quantity,
+          produced: producedQuantity,
+        },
+      });
+
+      // Waterfall: recalculate statuses for all requests of this product
       await waterfallComplete(existingRequest.iwasku, existingRequest.productionMonth);
     }
 
