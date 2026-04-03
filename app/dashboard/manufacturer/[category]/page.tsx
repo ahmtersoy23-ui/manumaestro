@@ -216,15 +216,9 @@ export default function ManufacturerCategoryPage() {
       const values = editValues[iwasku];
       const totalProducedQuantity = values.producedQuantity;
 
-      // Validate: COMPLETED requires üretilen >= net ihtiyaç
-      if (values.status === 'COMPLETED' && group.netNeed > 0 && totalProducedQuantity < group.netNeed) {
-        alert(`Tamamlandı olarak kaydetmek için üretilen miktar (${totalProducedQuantity}) net ihtiyacı (${group.netNeed}) karşılamalıdır.`);
-        setSaving(null);
-        return;
-      }
+      // Status is computed by waterfall — no manual validation needed
 
-      // Save total produced to first request — waterfall handles marketplace completion
-      // Status and notes also go to first request only; waterfall sets per-marketplace status
+      // Single PATCH: producedQuantity → MonthSnapshot.produced, waterfall handles status
       const firstRequest = group.requests[0];
       const response = await fetch(`/api/manufacturer/requests/${firstRequest.id}`, {
         method: 'PATCH',
@@ -232,26 +226,8 @@ export default function ManufacturerCategoryPage() {
         body: JSON.stringify({
           producedQuantity: totalProducedQuantity,
           manufacturerNotes: values.manufacturerNotes,
-          ...(values.status !== 'COMPLETED' ? { status: values.status } : {}),
         }),
       });
-
-      // Clear producedQuantity on other requests (cleanup old distribution)
-      if (group.requests.length > 1) {
-        await Promise.all(
-          group.requests.slice(1).map(request =>
-            fetch(`/api/manufacturer/requests/${request.id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                producedQuantity: 0,
-                manufacturerNotes: values.manufacturerNotes,
-                ...(values.status !== 'COMPLETED' ? { status: values.status } : {}),
-              }),
-            })
-          )
-        );
-      }
 
       const allSuccess = response.ok;
 
