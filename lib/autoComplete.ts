@@ -11,7 +11,7 @@
 
 import { prisma } from '@/lib/db/prisma';
 import { createLogger } from '@/lib/logger';
-import { getATPBulk } from '@/lib/db/atp';
+
 
 const logger = createLogger('AutoComplete');
 
@@ -23,20 +23,10 @@ export async function autoCompleteFromSnapshot(month: string): Promise<number> {
 
   if (snapshots.length === 0) return 0;
 
-  const snapshotStockMap = new Map<string, number>();
-  for (const s of snapshots) {
-    snapshotStockMap.set(s.iwasku, s.warehouseStock);
-  }
-
-  // 2. Calculate ATP: snapshot stock - seasonal reserves
-  const iwaskus = [...snapshotStockMap.keys()];
-  const atpResults = await getATPBulk(iwaskus);
-  const reserveMap = new Map(atpResults.map(a => [a.iwasku, a.reserved]));
-
+  // Snapshot warehouseStock already has season reserves subtracted — use directly as ATP
   const atpMap = new Map<string, number>();
-  for (const [iwasku, stock] of snapshotStockMap) {
-    const reserved = reserveMap.get(iwasku) ?? 0;
-    atpMap.set(iwasku, Math.max(0, stock - reserved));
+  for (const s of snapshots) {
+    atpMap.set(s.iwasku, s.warehouseStock);
   }
 
   // 3. Get marketplace priorities for this month (if set)
