@@ -112,7 +112,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       return {
         iwasku: r.iwasku,
         targetQuantity: remainingTarget,
-        desiPerUnit: r.targetDesi ? r.targetDesi / r.targetQuantity : 0,
+        desiPerUnit: r.desiPerUnit ?? (r.targetDesi && r.targetQuantity > 0 ? r.targetDesi / r.targetQuantity : 0),
         category: r.category ?? '',
         marketplaceSplit: (r.marketplaceSplit as Record<string, number>) ?? undefined,
       };

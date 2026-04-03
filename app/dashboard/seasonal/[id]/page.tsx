@@ -24,6 +24,7 @@ interface Reserve {
   category: string | null;
   targetQuantity: number;
   targetDesi: number | null;
+  desiPerUnit: number | null;
   initialStock: number;
   producedQuantity: number;
   shippedQuantity: number;
@@ -163,8 +164,8 @@ export default function PoolDetailPage() {
   const totalDemand = totalInitial + totalTarget;
   const totalFulfilled = totalInitial + totalProduced;
 
-  // Desi bazlı (her ürünün desiPerUnit'i ile çarpılmış)
-  const desiOf = (r: Reserve) => r.targetDesi && r.targetQuantity > 0 ? r.targetDesi / r.targetQuantity : 0;
+  // Desi bazlı (sabit desiPerUnit field'ından)
+  const desiOf = (r: Reserve) => r.desiPerUnit ?? (r.targetDesi && r.targetQuantity > 0 ? r.targetDesi / r.targetQuantity : 0);
   const totalInitialDesi = Math.round(pool.reserves.reduce((s, r) => s + r.initialStock * desiOf(r), 0));
   const totalTargetDesi = Math.round(pool.reserves.reduce((s, r) => s + (r.targetDesi ?? 0), 0));
   const totalProducedDesi = Math.round(pool.reserves.reduce((s, r) => s + r.producedQuantity * desiOf(r), 0));

@@ -335,6 +335,7 @@ model StockReserve {
   iwasku           String
   targetQuantity   Int
   targetDesi       Float?
+  desiPerUnit      Float?        // Sabit: ürünün birim desisi (import'tan, değişmez)
   initialStock     Int           @default(0)  // Depo başlangıç stoğu (mark-stock ile tek seferlik)
   producedQuantity Int           @default(0)  // Sezon boyunca yeni üretim (haftalık girişlerden)
   shippedQuantity  Int           @default(0)
