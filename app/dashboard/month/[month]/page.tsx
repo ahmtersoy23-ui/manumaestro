@@ -538,6 +538,33 @@ export default function MonthDetailPage() {
                       ({groupCats.length} kategori)
                     </span>
                   </div>
+
+                  {/* Group summary */}
+                  {(() => {
+                    const hasStock = categoryStockMap.size > 0;
+                    const gTalep = groupCats.reduce((s, c) => s + (viewMode === 'quantity' ? c.totalQuantity : c.totalDesi), 0);
+                    const gStok = groupCats.reduce((s, c) => {
+                      const cs = categoryStockMap.get(c.productCategory);
+                      return s + (cs ? (viewMode === 'quantity' ? cs.coveredQty : cs.coveredDesi) : 0);
+                    }, 0);
+                    const gNet = groupCats.reduce((s, c) => {
+                      const cs = categoryStockMap.get(c.productCategory);
+                      return s + (cs ? (viewMode === 'quantity' ? cs.netQty : cs.netDesi) : (viewMode === 'quantity' ? c.totalQuantity : c.totalDesi));
+                    }, 0);
+                    const gUretilen = groupCats.reduce((s, c) => s + (viewMode === 'quantity' ? c.totalProduced : c.producedDesi), 0);
+                    const gKalan = Math.max(0, Math.round(gNet - gUretilen));
+                    const suffix = viewMode === 'quantity' ? '' : ' desi';
+                    return hasStock ? (
+                      <div className="grid grid-cols-5 gap-2 mb-3 text-center text-xs">
+                        <div className="bg-gray-50 rounded-lg py-2"><p className="text-gray-500">Talep</p><p className="font-bold text-gray-900">{Math.round(gTalep).toLocaleString('tr-TR')}{suffix}</p></div>
+                        <div className="bg-emerald-50 rounded-lg py-2"><p className="text-emerald-600">Stok</p><p className="font-bold text-emerald-700">{Math.round(gStok).toLocaleString('tr-TR')}{suffix}</p></div>
+                        <div className="bg-blue-50 rounded-lg py-2"><p className="text-blue-600">Net İhtiyaç</p><p className="font-bold text-blue-700">{Math.round(gNet).toLocaleString('tr-TR')}{suffix}</p></div>
+                        <div className="bg-gray-50 rounded-lg py-2"><p className="text-gray-500">Üretilen</p><p className="font-bold text-gray-900">{Math.round(gUretilen).toLocaleString('tr-TR')}{suffix}</p></div>
+                        <div className={`${gKalan === 0 ? 'bg-green-50' : 'bg-red-50'} rounded-lg py-2`}><p className={gKalan === 0 ? 'text-green-600' : 'text-red-500'}>Kalan</p><p className={`font-bold ${gKalan === 0 ? 'text-green-700' : 'text-red-600'}`}>{gKalan === 0 ? '✓' : gKalan.toLocaleString('tr-TR')}{gKalan > 0 ? suffix : ''}</p></div>
+                      </div>
+                    ) : null;
+                  })()}
+
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {groupCats.map((category) => {
                       const catStock = categoryStockMap.get(category.productCategory);
@@ -589,7 +616,7 @@ export default function MonthDetailPage() {
                               </div>
                               <div className="flex justify-between items-center">
                                 <p className="text-xs text-gray-600">Net İhtiyaç</p>
-                                <p className={`text-sm font-bold ${catStock.netQty > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                <p className={`text-sm font-bold ${catStock.netQty > 0 ? 'text-blue-700' : 'text-green-600'}`}>
                                   {viewMode === 'quantity'
                                     ? (catStock.netQty > 0 ? `${catStock.netQty} adet` : 'Yeterli')
                                     : (catStock.netDesi > 0 ? `${Math.round(catStock.netDesi)} desi` : 'Yeterli')}
@@ -600,12 +627,27 @@ export default function MonthDetailPage() {
 
                           <div className="flex justify-between items-center">
                             <p className="text-xs text-gray-600">Üretilen</p>
-                            <p className="text-sm font-bold text-green-600">
+                            <p className="text-sm font-bold text-gray-900">
                               {viewMode === 'quantity'
                                 ? `${Math.round(category.totalProduced)} adet`
                                 : `${Math.round(category.producedDesi)} desi`}
                             </p>
                           </div>
+
+                          {catStock && (() => {
+                            const kalanQty = Math.max(0, catStock.netQty - category.totalProduced);
+                            const kalanDesi = Math.max(0, catStock.netDesi - category.producedDesi);
+                            return (
+                              <div className="flex justify-between items-center">
+                                <p className="text-xs text-gray-600">Kalan</p>
+                                <p className={`text-sm font-bold ${(viewMode === 'quantity' ? kalanQty : kalanDesi) === 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {viewMode === 'quantity'
+                                    ? (kalanQty === 0 ? '✓' : `${kalanQty} adet`)
+                                    : (kalanDesi === 0 ? '✓' : `${Math.round(kalanDesi)} desi`)}
+                                </p>
+                              </div>
+                            );
+                          })()}
 
                           {(() => {
                             // Progress = üretilen / net ihtiyaç (snapshot varsa), yoksa üretilen / talep
