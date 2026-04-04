@@ -484,8 +484,8 @@ export default function ManufacturerCategoryPage() {
           <p className="text-gray-600">{monthLabel} ayında bu kategori için üretim talebi bulunmuyor</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
+        <div className="bg-white rounded-xl border border-gray-200">
+          <div className="overflow-auto max-h-[calc(100vh-280px)]">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
                 <tr>
