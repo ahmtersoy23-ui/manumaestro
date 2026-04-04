@@ -433,6 +433,50 @@ export default function ManufacturerCategoryPage() {
         )}
       </div>
 
+      {/* Summary Card */}
+      {groupedRequests.length > 0 && (() => {
+        const totals = groupedRequests.reduce((acc, g) => {
+          const produced = editValues[g.iwasku]?.producedQuantity || 0;
+          acc.talep += g.totalQuantity;
+          acc.stok += g.warehouseStock ?? 0;
+          acc.netIhtiyac += g.netNeed;
+          acc.uretilen += produced;
+          acc.kalan += Math.max(0, g.netNeed - produced);
+          return acc;
+        }, { talep: 0, stok: 0, netIhtiyac: 0, uretilen: 0, kalan: 0 });
+        const pct = totals.netIhtiyac > 0 ? Math.round((totals.uretilen / totals.netIhtiyac) * 100) : 0;
+        return (
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 text-center">
+              <div>
+                <p className="text-xs text-gray-500">Talep</p>
+                <p className="text-lg font-bold text-gray-900">{totals.talep.toLocaleString('tr-TR')}</p>
+              </div>
+              <div>
+                <p className="text-xs text-emerald-600">Stok</p>
+                <p className="text-lg font-bold text-emerald-700">{totals.stok.toLocaleString('tr-TR')}</p>
+              </div>
+              <div>
+                <p className="text-xs text-blue-600">Net İhtiyaç</p>
+                <p className="text-lg font-bold text-blue-700">{totals.netIhtiyac.toLocaleString('tr-TR')}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Üretilen</p>
+                <p className="text-lg font-bold text-gray-900">{totals.uretilen.toLocaleString('tr-TR')}</p>
+              </div>
+              <div>
+                <p className="text-xs text-red-500">Kalan</p>
+                <p className={`text-lg font-bold ${totals.kalan === 0 ? 'text-green-600' : 'text-red-600'}`}>{totals.kalan.toLocaleString('tr-TR')}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">İlerleme</p>
+                <p className={`text-lg font-bold ${pct >= 100 ? 'text-green-600' : 'text-gray-900'}`}>{pct}%</p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Requests Table */}
       {groupedRequests.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
@@ -457,13 +501,13 @@ export default function ManufacturerCategoryPage() {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-emerald-700 uppercase tracking-wider">
                     Stok
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-orange-700 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-blue-700 uppercase tracking-wider">
                     Net İhtiyaç
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Üretilen
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-orange-600 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-red-600 uppercase tracking-wider">
                     Kalan
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
@@ -528,7 +572,7 @@ export default function ManufacturerCategoryPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <span className={`text-sm font-semibold ${group.netNeed > 0 ? 'text-orange-700' : 'text-green-600'}`}>
+                      <span className={`text-sm font-semibold ${group.netNeed > 0 ? 'text-blue-700' : 'text-green-600'}`}>
                         {group.warehouseStock !== null ? (group.netNeed > 0 ? group.netNeed : '✓ Yeterli') : '-'}
                       </span>
                     </td>
@@ -557,7 +601,7 @@ export default function ManufacturerCategoryPage() {
                         const produced = editValues[group.iwasku]?.producedQuantity || 0;
                         const remaining = Math.max(0, group.netNeed - produced);
                         return (
-                          <span className={`text-sm font-semibold ${remaining === 0 ? 'text-green-600' : 'text-orange-600'}`}>
+                          <span className={`text-sm font-semibold ${remaining === 0 ? 'text-green-600' : 'text-red-600'}`}>
                             {group.warehouseStock !== null ? (remaining === 0 ? '✓' : remaining) : '-'}
                           </span>
                         );
