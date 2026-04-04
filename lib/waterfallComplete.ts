@@ -1,16 +1,15 @@
 /**
- * Waterfall Completion — Product-level status
+ * Waterfall Completion — Priority-based status distribution
  *
  * Reads from MonthSnapshot (single source of truth):
  *   totalAvailable = warehouseStock + produced
  *
- * Product-level status (written to ALL requests for this iwasku+month):
- *   totalAvailable >= totalRequested  → COMPLETED
- *   produced > 0                      → PARTIALLY_PRODUCED
- *   produced = 0                      → REQUESTED
- *
- * Marketplace tik'leri (priority-based) are computed on-the-fly for display,
- * NOT stored on individual requests.
+ * Status rules:
+ *   totalAvailable >= totalRequested → ALL requests COMPLETED
+ *   totalAvailable < totalRequested && produced > 0 → priority distribution:
+ *     - Fill marketplace requests in priority order
+ *     - Filled → COMPLETED (tik), partially filled → PARTIALLY_PRODUCED, unfilled → REQUESTED
+ *   produced = 0 && warehouseStock = 0 → all REQUESTED
  */
 
 import { prisma } from '@/lib/db/prisma';
@@ -29,29 +28,75 @@ export async function waterfallComplete(iwasku: string, month: string): Promise<
 
   const totalAvailable = snapshot.warehouseStock + snapshot.produced;
 
-  // 2. Determine PRODUCT-LEVEL status
-  let targetStatus: RequestStatus;
-  if (totalAvailable >= snapshot.totalRequested) {
-    targetStatus = RequestStatus.COMPLETED;
-  } else if (snapshot.produced > 0) {
-    targetStatus = RequestStatus.PARTIALLY_PRODUCED;
-  } else {
-    targetStatus = RequestStatus.REQUESTED;
-  }
-
-  // 3. Apply to ALL requests for this product+month
-  const result = await prisma.productionRequest.updateMany({
-    where: {
-      iwasku,
-      productionMonth: month,
-      status: { not: targetStatus },
-    },
-    data: { status: targetStatus },
+  // 2. Get all requests + priorities
+  const allRequests = await prisma.productionRequest.findMany({
+    where: { iwasku, productionMonth: month },
+    select: { id: true, marketplaceId: true, quantity: true, status: true },
   });
 
-  if (result.count > 0) {
-    logger.info(`Waterfall: ${iwasku} (${month}) — stok:${snapshot.warehouseStock} + üretilen:${snapshot.produced} = ${totalAvailable}/${snapshot.totalRequested} → ${targetStatus}, ${result.count} güncellendi`);
+  if (allRequests.length === 0) return 0;
+
+  // 3. Simple cases: all COMPLETED or all REQUESTED
+  if (totalAvailable >= snapshot.totalRequested) {
+    const result = await prisma.productionRequest.updateMany({
+      where: { iwasku, productionMonth: month, status: { not: RequestStatus.COMPLETED } },
+      data: { status: RequestStatus.COMPLETED },
+    });
+    if (result.count > 0) logger.info(`Waterfall: ${iwasku} (${month}) — ${totalAvailable}/${snapshot.totalRequested} → ALL COMPLETED`);
+    return result.count;
   }
 
-  return result.count;
+  if (snapshot.produced === 0 && snapshot.warehouseStock === 0) {
+    const result = await prisma.productionRequest.updateMany({
+      where: { iwasku, productionMonth: month, status: { not: RequestStatus.REQUESTED } },
+      data: { status: RequestStatus.REQUESTED },
+    });
+    return result.count;
+  }
+
+  // 4. Partial: distribute by marketplace priority
+  const priorities = await prisma.marketplacePriority.findMany({
+    where: { month },
+    orderBy: { priority: 'asc' },
+  });
+
+  if (priorities.length === 0) return 0;
+
+  const priorityMap = new Map(priorities.map(p => [p.marketplaceId, p.priority]));
+  const sorted = [...allRequests].sort((a, b) => {
+    const pa = priorityMap.get(a.marketplaceId) ?? 999;
+    const pb = priorityMap.get(b.marketplaceId) ?? 999;
+    return pa - pb;
+  });
+
+  let remaining = totalAvailable;
+  let changed = 0;
+
+  for (const req of sorted) {
+    let targetStatus: RequestStatus;
+
+    if (remaining >= req.quantity) {
+      remaining -= req.quantity;
+      targetStatus = RequestStatus.COMPLETED; // tik ✅
+    } else if (remaining > 0) {
+      remaining = 0;
+      targetStatus = RequestStatus.PARTIALLY_PRODUCED;
+    } else {
+      targetStatus = RequestStatus.REQUESTED;
+    }
+
+    if (req.status !== targetStatus) {
+      await prisma.productionRequest.update({
+        where: { id: req.id },
+        data: { status: targetStatus },
+      });
+      changed++;
+    }
+  }
+
+  if (changed > 0) {
+    logger.info(`Waterfall: ${iwasku} (${month}) — stok:${snapshot.warehouseStock} + üretilen:${snapshot.produced} = ${totalAvailable}/${snapshot.totalRequested}, ${changed} güncellendi`);
+  }
+
+  return changed;
 }
