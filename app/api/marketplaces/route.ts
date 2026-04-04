@@ -9,7 +9,7 @@ import { prisma } from '@/lib/db/prisma';
 import { logAction } from '@/lib/auditLog';
 import { MarketplaceCreateSchema, formatValidationError } from '@/lib/validation/schemas';
 import { successResponse, createdResponse, errorResponse } from '@/lib/api/response';
-import { ValidationError, InternalServerError, NotFoundError } from '@/lib/api/errors';
+import { ValidationError, NotFoundError } from '@/lib/api/errors';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { verifyAuth, requireRole } from '@/lib/auth/verify';
 import { z } from 'zod';

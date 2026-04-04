@@ -135,7 +135,7 @@ model ProductionRequest {
   productSize       Float?       // Cached from products - desi (volumetric size)
   marketplaceId     String
   quantity          Int
-  producedQuantity  Int?         // Quantity actually produced by manufacturer
+  producedQuantity  Int?         // @deprecated — MonthSnapshot.produced tek kaynak. İleride kaldırılacak.
   requestDate       DateTime     @default(now()) // Entry date (today)
   productionMonth   String       // Production month in YYYY-MM format (e.g., "2026-03")
   priority          RequestPriority @default(MEDIUM)

@@ -15,12 +15,6 @@ import { autoCompleteFromSnapshot } from '@/lib/autoComplete';
 
 const logger = createLogger('Bulk Requests API');
 
-interface BulkRequestItem {
-  iwasku: string;
-  quantity: number;
-  notes?: string;
-}
-
 export async function POST(request: NextRequest) {
   try {
     // Rate limiting: 10 requests per minute for bulk operations

@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
     const totalProduced = pool.reserves.reduce((s, r) => s + r.producedQuantity, 0);
     const totalShipped = pool.reserves.reduce((s, r) => s + r.shippedQuantity, 0);
 
-    const { reserves, ...poolData } = pool;
+    const { reserves: _reserves, ...poolData } = pool;
 
     return {
       ...poolData,

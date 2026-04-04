@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
   const shipmentsWithStats = shipments.map(s => {
     const totalQty = s.items.reduce((sum, i) => sum + i.quantity, 0);
     const totalDesi = s.items.reduce((sum, i) => sum + (i.desi ?? 0), 0);
-    const { items, ...shipmentData } = s;
+    const { items: _items, ...shipmentData } = s;
     return {
       ...shipmentData,
       stats: {

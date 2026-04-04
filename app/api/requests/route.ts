@@ -7,15 +7,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma, EntryType, RequestStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
-import { createLogger } from '@/lib/logger';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { verifyAuth, requireRole, checkMarketplacePermission } from '@/lib/auth/verify';
 import { ProductionRequestSchema, formatValidationError } from '@/lib/validation/schemas';
 import { errorResponse } from '@/lib/api/response';
 import { logAction } from '@/lib/auditLog';
 import { autoCompleteFromSnapshot } from '@/lib/autoComplete';
-
-const logger = createLogger('Requests API');
 
 export async function POST(request: NextRequest) {
   try {

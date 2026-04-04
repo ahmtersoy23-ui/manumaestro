@@ -10,7 +10,6 @@ import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLi
 import { verifyAuth } from '@/lib/auth/verify';
 import {
   exportToExcel,
-  formatDateForExcel,
   formatStatusForExcel,
   type ExportColumn,
 } from '@/lib/excel/exporter';
@@ -160,7 +159,7 @@ export async function GET(request: NextRequest) {
         'Content-Length': buffer.byteLength.toString(),
       },
     });
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       {
         success: false,

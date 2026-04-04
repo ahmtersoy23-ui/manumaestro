@@ -103,7 +103,7 @@ export async function middleware(request: NextRequest) {
 
     logger.debug('SSO response status:', ssoResponse.status);
     const data = await ssoResponse.json();
-    logger.debug('SSO response:', JSON.stringify(data));
+    logger.debug('SSO response: success=', data.success);
 
     if (!data.success) {
       logger.debug('Token invalid, redirecting to SSO');

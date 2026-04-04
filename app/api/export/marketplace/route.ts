@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
         'Content-Length': buffer.byteLength.toString(),
       },
     });
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { success: false, error: 'Veri dışa aktarılamadı' },
       { status: 500 }
