@@ -608,17 +608,12 @@ export default function ManufacturerCategoryPage() {
                       })()}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <select
-                        value={editValues[group.iwasku]?.status || group.requests[0].status}
-                        onChange={(e) => updateEditValue(group.iwasku, 'status', e.target.value)}
-                        className="text-sm text-gray-900 border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                      >
-                        {statusOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                      {(() => {
+                        const s = editValues[group.iwasku]?.status || group.requests[0].status;
+                        const label = s === 'COMPLETED' ? 'Tamamlandı' : s === 'PARTIALLY_PRODUCED' ? 'Kısmen' : s === 'REQUESTED' ? 'Talep Edildi' : s;
+                        const color = s === 'COMPLETED' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : s === 'PARTIALLY_PRODUCED' ? 'text-amber-700 bg-amber-50 border-amber-200' : 'text-slate-600 bg-slate-50 border-slate-200';
+                        return <span className={`text-xs font-medium px-2 py-1 rounded border ${color}`}>{label}</span>;
+                      })()}
                     </td>
                     <td className="px-4 py-3">
                       <textarea
