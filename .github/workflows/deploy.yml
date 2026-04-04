@@ -66,7 +66,7 @@ jobs:
           command_timeout: 10m
           script: |
             cd /var/www/manumaestro
-            npm ci --omit=dev
+            npm ci --omit=dev --ignore-scripts
             npx prisma generate
             npx prisma migrate deploy
             pm2 restart manumaestro

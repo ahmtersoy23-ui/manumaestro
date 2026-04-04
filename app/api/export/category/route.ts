@@ -13,6 +13,7 @@ import {
   formatStatusForExcel,
   type ExportColumn,
 } from '@/lib/excel/exporter';
+import { getProducedMap, getSnapshotStockMap } from '@/lib/export/helpers';
 
 interface AggregatedProduct {
   iwasku: string;
@@ -79,19 +80,12 @@ export async function GET(request: NextRequest) {
       ],
     });
 
-    // Fetch snapshot stock for this month (fixed values)
+    // Fetch snapshot stock and produced values for this month
     const productionMonth = month || requests[0]?.productionMonth;
-    const snapshots = productionMonth
-      ? await prisma.monthSnapshot.findMany({
-          where: { month: productionMonth },
-        })
-      : [];
-    const stockMap = new Map<string, number>();
-    const producedMap = new Map<string, number>();
-    for (const s of snapshots) {
-      stockMap.set(s.iwasku, s.warehouseStock);
-      producedMap.set(s.iwasku, s.produced);
-    }
+    const [stockMap, producedMap] = await Promise.all([
+      getSnapshotStockMap(productionMonth),
+      getProducedMap(productionMonth),
+    ]);
 
     // Aggregate by IWASKU (same pattern as manufacturer export)
     const aggregatedData = new Map<string, AggregatedProduct>();

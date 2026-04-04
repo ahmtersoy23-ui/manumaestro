@@ -12,7 +12,6 @@ import { verifyAuth, requireRole, checkMarketplacePermission } from '@/lib/auth/
 import { ProductionRequestSchema, formatValidationError } from '@/lib/validation/schemas';
 import { errorResponse } from '@/lib/api/response';
 import { logAction } from '@/lib/auditLog';
-import { autoCompleteFromSnapshot } from '@/lib/autoComplete';
 
 export async function POST(request: NextRequest) {
   try {
@@ -90,9 +89,6 @@ export async function POST(request: NextRequest) {
       description: `Talep oluşturuldu: ${iwasku} — ${productName} (${quantity} adet, ${productionMonth})`,
       metadata: { iwasku, productName, productCategory, quantity, productionMonth, priority, marketplaceId },
     });
-
-    // Auto-complete if snapshot stock covers demand
-    await autoCompleteFromSnapshot(productionMonth).catch(() => {});
 
     return NextResponse.json({
       success: true,

@@ -11,7 +11,6 @@ import { BulkRequestSchema, formatValidationError } from '@/lib/validation/schem
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { requireRole } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
-import { autoCompleteFromSnapshot } from '@/lib/autoComplete';
 
 const logger = createLogger('Bulk Requests API');
 
@@ -110,9 +109,6 @@ export async function POST(request: NextRequest) {
       description: `Toplu yükleme: ${createdRequests.length} talep oluşturuldu, ${errors.length} hata (${productionMonth}, pazaryeri: ${marketplaceId})`,
       metadata: { created: createdRequests.length, errors, warnings, marketplaceId, productionMonth },
     });
-
-    // Auto-complete if snapshot stock covers demand
-    await autoCompleteFromSnapshot(productionMonth).catch(() => {});
 
     return NextResponse.json({
       success: true,

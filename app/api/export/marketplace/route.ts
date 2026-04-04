@@ -14,6 +14,7 @@ import {
   formatStatusForExcel,
   type ExportColumn,
 } from '@/lib/excel/exporter';
+import { getProducedMap } from '@/lib/export/helpers';
 
 export async function GET(request: NextRequest) {
   try {
@@ -72,13 +73,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Fetch produced values from MonthSnapshot
-    const snapshots = month
-      ? await prisma.monthSnapshot.findMany({
-          where: { month },
-          select: { iwasku: true, produced: true },
-        })
-      : [];
-    const producedMap = new Map(snapshots.map(s => [s.iwasku, s.produced]));
+    const producedMap = await getProducedMap(month);
 
     const exportData = requests.map(r => ({
       iwasku: r.iwasku,

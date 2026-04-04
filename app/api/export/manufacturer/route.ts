@@ -13,6 +13,7 @@ import {
   formatStatusForExcel,
   type ExportColumn,
 } from '@/lib/excel/exporter';
+import { getProducedMap } from '@/lib/export/helpers';
 
 interface AggregatedProduct {
   iwasku: string;
@@ -83,13 +84,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch produced values from MonthSnapshot
     const productionMonth = month || requests[0]?.productionMonth;
-    const snapshots = productionMonth
-      ? await prisma.monthSnapshot.findMany({
-          where: { month: productionMonth },
-          select: { iwasku: true, produced: true },
-        })
-      : [];
-    const producedMap = new Map(snapshots.map(s => [s.iwasku, s.produced]));
+    const producedMap = await getProducedMap(productionMonth);
 
     // Aggregate data by IWASKU (group marketplace requests)
     const aggregatedData = new Map<string, AggregatedProduct>();
