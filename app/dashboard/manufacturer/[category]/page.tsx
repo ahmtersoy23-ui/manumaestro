@@ -169,10 +169,10 @@ export default function ManufacturerCategoryPage() {
 
           setGroupedRequests(grouped);
 
-          // Initialize edit values using SUM of all requests in each group
+          // Initialize edit values — producedQuantity is product-level (same on all requests from MonthSnapshot)
           const initialValues: EditValues = {};
           grouped.forEach((group: GroupedRequest) => {
-            const totalProduced = group.requests.reduce((sum, r) => sum + (r.producedQuantity || 0), 0);
+            const totalProduced = Math.max(...group.requests.map(r => r.producedQuantity ?? 0));
             const firstRequest = group.requests[0];
             initialValues[group.iwasku] = {
               producedQuantity: totalProduced,

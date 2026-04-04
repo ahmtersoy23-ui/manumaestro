@@ -103,8 +103,10 @@ export async function GET(
         })
       : [];
     const stockMap = new Map<string, number>();
+    const producedMap = new Map<string, number>();
     for (const s of snapshots) {
       stockMap.set(s.iwasku, s.warehouseStock);
+      producedMap.set(s.iwasku, s.produced);
     }
 
     // 5. Format
@@ -116,7 +118,7 @@ export async function GET(
       marketplaceName: r.marketplace.name,
       marketplaceColorTag: r.marketplace.colorTag,
       quantity: r.quantity,
-      producedQuantity: r.producedQuantity,
+      producedQuantity: producedMap.get(r.iwasku) ?? r.producedQuantity ?? 0,
       manufacturerNotes: r.manufacturerNotes,
       status: r.status,
       priority: r.priority,
