@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { ProductionRequest, EntryType, RequestStatus } from '@prisma/client';
+import { Prisma, EntryType, RequestStatus } from '@prisma/client';
 import { prisma, queryProductDb } from '@/lib/db/prisma';
 import { createLogger } from '@/lib/logger';
 import { BulkRequestSchema, formatValidationError } from '@/lib/validation/schemas';
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     const productMap = new Map(products.map((p: { iwasku: string; name: string; category: string; size: number | null }) => [p.iwasku, p]));
 
     // Validate + prepare batch data
-    const toCreate: Parameters<typeof prisma.productionRequest.createMany>[0]['data'] = [];
+    const toCreate: Prisma.ProductionRequestCreateManyInput[] = [];
 
     for (const item of requests) {
       const product = productMap.get(item.iwasku);

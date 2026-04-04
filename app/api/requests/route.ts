@@ -185,11 +185,35 @@ export async function GET(request: NextRequest) {
       prisma.productionRequest.count({ where }),
     ]);
 
+    // COMPLETED request'ler için routing bilgisini ekle
+    const completedIds = requests
+      .filter(r => r.status === 'COMPLETED')
+      .map(r => r.id);
+
+    const routedItems = completedIds.length > 0
+      ? await prisma.shipmentItem.findMany({
+          where: { productionRequestId: { in: completedIds } },
+          select: {
+            productionRequestId: true,
+            shipment: { select: { id: true, name: true } },
+          },
+        })
+      : [];
+
+    const routedMap = new Map(
+      routedItems.map(i => [i.productionRequestId, i.shipment])
+    );
+
+    const enrichedRequests = requests.map(r => ({
+      ...r,
+      routedShipment: r.status === 'COMPLETED' ? routedMap.get(r.id) ?? null : null,
+    }));
+
     const totalPages = Math.ceil(total / limit);
 
     return NextResponse.json({
       success: true,
-      data: requests,
+      data: enrichedRequests,
       pagination: {
         page,
         limit,

@@ -1,13 +1,13 @@
 /**
  * Requests Table Component
  * Displays recent production requests for a marketplace
- * With bulk delete functionality and production month display
+ * With bulk delete, shipment routing functionality and production month display
  */
 
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Calendar, Package, Trash2, CheckSquare, Square } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Calendar, Package, Trash2, CheckSquare, Square, Ship, Check, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
 
@@ -16,10 +16,15 @@ const SSO_URL = process.env.NEXT_PUBLIC_SSO_URL || 'https://apps.iwa.web.tr';
 
 interface RequestsTableProps {
   marketplaceId: string;
-  month?: string; // Filter by specific month (YYYY-MM format)
+  month?: string;
   refreshTrigger?: number;
   onDelete?: () => void;
   archiveMode?: boolean;
+}
+
+interface RoutedShipment {
+  id: string;
+  name: string;
 }
 
 interface Request {
@@ -34,9 +39,18 @@ interface Request {
   productionMonth: string;
   createdAt: string;
   notes: string | null;
+  routedShipment: RoutedShipment | null;
   enteredBy: {
     name: string;
   };
+}
+
+interface AvailableShipment {
+  id: string;
+  name: string;
+  status: string;
+  plannedDate: string;
+  shippingMethod: string;
 }
 
 const PRIORITY_STYLE: Record<string, string> = {
@@ -78,6 +92,17 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [page, setPage] = useState(1);
 
+  // Shipment routing state
+  const [availableShipments, setAvailableShipments] = useState<AvailableShipment[]>([]);
+  const [shipmentsLoaded, setShipmentsLoaded] = useState(false);
+  const [routingId, setRoutingId] = useState<string | null>(null); // ID of request currently being routed
+  const [bulkRouting, setBulkRouting] = useState(false);
+  const [bulkShipmentId, setBulkShipmentId] = useState<string>('');
+
+  const isAdmin = hasRole(['admin']);
+  const isEditor = hasRole(['admin', 'editor']);
+
+  // Fetch requests
   useEffect(() => {
     async function fetchRequests() {
       setLoading(true);
@@ -88,7 +113,6 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
         const data = await res.json();
 
         if (data.success) {
-          // Sort A-Z by iwasku
           const sorted = [...data.data].sort((a: Request, b: Request) => a.iwasku.localeCompare(b.iwasku));
           setRequests(sorted);
         }
@@ -102,11 +126,41 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
     fetchRequests();
     setSelectedIds(new Set());
     setPage(1);
+    setShipmentsLoaded(false);
   }, [marketplaceId, month, refreshTrigger, archiveMode]);
+
+  // Fetch available shipments for this marketplace (once, when there are COMPLETED requests)
+  useEffect(() => {
+    if (shipmentsLoaded || !isAdmin) return;
+    const hasCompleted = requests.some(r => r.status === 'COMPLETED');
+    if (!hasCompleted) return;
+
+    async function fetchShipments() {
+      try {
+        const res = await fetch(`/api/requests/routable-shipments?marketplaceId=${marketplaceId}`);
+        const data = await res.json();
+        if (data.success) {
+          setAvailableShipments(data.data.shipments);
+        }
+      } catch (error) {
+        logger.error('Failed to fetch routable shipments:', error);
+      } finally {
+        setShipmentsLoaded(true);
+      }
+    }
+
+    fetchShipments();
+  }, [requests, marketplaceId, shipmentsLoaded, isAdmin]);
 
   // Pagination
   const totalPages = Math.ceil(requests.length / PAGE_SIZE);
   const paginatedRequests = requests.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  // Selected completed (unrouted) requests for bulk routing
+  const selectedCompletedIds = [...selectedIds].filter(id => {
+    const req = requests.find(r => r.id === id);
+    return req && req.status === 'COMPLETED' && !req.routedShipment;
+  });
 
   const handleToggleSelect = (id: string) => {
     const newSelected = new Set(selectedIds);
@@ -126,6 +180,70 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
     }
   };
 
+  // Route single request to shipment
+  const handleRouteToShipment = useCallback(async (requestId: string, shipmentId: string) => {
+    setRoutingId(requestId);
+    try {
+      const res = await fetch('/api/requests/route-to-shipment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestIds: [requestId], shipmentId }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        // Update local state with routed shipment info
+        const shipment = availableShipments.find(s => s.id === shipmentId);
+        setRequests(prev => prev.map(r =>
+          r.id === requestId
+            ? { ...r, routedShipment: { id: shipmentId, name: shipment?.name ?? data.data.shipmentName } }
+            : r
+        ));
+      } else {
+        alert(data.error || 'Yönlendirme başarısız');
+      }
+    } catch (error) {
+      logger.error('Route to shipment error:', error);
+      alert('Sevkiyata yönlendirme başarısız');
+    } finally {
+      setRoutingId(null);
+    }
+  }, [availableShipments]);
+
+  // Bulk route selected completed requests
+  const handleBulkRoute = useCallback(async (shipmentId: string) => {
+    if (selectedCompletedIds.length === 0) return;
+
+    setBulkRouting(true);
+    try {
+      const res = await fetch('/api/requests/route-to-shipment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestIds: selectedCompletedIds, shipmentId }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        const shipment = availableShipments.find(s => s.id === shipmentId);
+        const routedSet = new Set(selectedCompletedIds);
+        setRequests(prev => prev.map(r =>
+          routedSet.has(r.id)
+            ? { ...r, routedShipment: { id: shipmentId, name: shipment?.name ?? data.data.shipmentName } }
+            : r
+        ));
+        setSelectedIds(new Set());
+        setBulkShipmentId('');
+      } else {
+        alert(data.error || 'Toplu yönlendirme başarısız');
+      }
+    } catch (error) {
+      logger.error('Bulk route error:', error);
+      alert('Toplu yönlendirme başarısız');
+    } finally {
+      setBulkRouting(false);
+    }
+  }, [selectedCompletedIds, availableShipments]);
+
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
 
@@ -135,7 +253,6 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
 
     setBulkDeleting(true);
     try {
-      // Delete each selected request sequentially to avoid rate limiting
       const failedIds: string[] = [];
       let rateLimited = false;
 
@@ -145,96 +262,69 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
 
           if (res.status === 429) {
             rateLimited = true;
-            alert('⏳ Rate limit aşıldı. Lütfen birkaç saniye bekleyip tekrar deneyin.');
+            alert('Rate limit asildi. Lutfen birkac saniye bekleyip tekrar deneyin.');
             break;
           }
-
           if (res.status === 401) {
-            alert('🔒 Oturum süreniz dolmuş. Lütfen yeniden giriş yapın.');
             window.location.href = SSO_URL;
             return;
           }
-
           if (res.status === 403) {
-            alert('⛔ Bu işlem için yetkiniz yok.');
+            alert('Bu islem icin yetkiniz yok.');
             return;
           }
 
           const data = await res.json();
-          if (!data.success) {
-            failedIds.push(id);
-          }
+          if (!data.success) failedIds.push(id);
         } catch (error) {
           logger.error(`Failed to delete ${id}:`, error);
           failedIds.push(id);
         }
       }
 
-      // Remove successfully deleted items from local state
       const deletedIds = Array.from(selectedIds).filter(id => !failedIds.includes(id));
       setRequests(requests.filter(r => !deletedIds.includes(r.id)));
       setSelectedIds(new Set(failedIds));
 
-      // Show result
       if (failedIds.length > 0 && !rateLimited) {
-        alert(`⚠️ ${deletedIds.length} talep silindi, ${failedIds.length} talep silinemedi.`);
+        alert(`${deletedIds.length} talep silindi, ${failedIds.length} talep silinemedi.`);
       } else if (!rateLimited && deletedIds.length > 0) {
-        alert(`✅ ${deletedIds.length} talep başarıyla silindi.`);
+        alert(`${deletedIds.length} talep basariyla silindi.`);
       }
 
-      // Trigger parent callback if any were deleted
-      if (deletedIds.length > 0 && onDelete) {
-        onDelete();
-      }
+      if (deletedIds.length > 0 && onDelete) onDelete();
     } catch (error) {
       logger.error('Bulk delete error:', error);
-      alert('Toplu silme işlemi başarısız oldu.');
+      alert('Toplu silme islemi basarisiz oldu.');
     } finally {
       setBulkDeleting(false);
     }
   };
 
   const handleDelete = async (requestId: string) => {
-    if (!confirm('Bu talebi silmek istediğinize emin misiniz?')) {
-      return;
-    }
+    if (!confirm('Bu talebi silmek istediginize emin misiniz?')) return;
 
     setDeleting(requestId);
     try {
-      const res = await fetch(`/api/requests/${requestId}`, {
-        method: 'DELETE',
-      });
+      const res = await fetch(`/api/requests/${requestId}`, { method: 'DELETE' });
 
-      // Handle rate limiting
       if (res.status === 429) {
-        const data = await res.json();
-        alert('⏳ Çok fazla istek yaptınız. Lütfen birkaç saniye bekleyip tekrar deneyin.');
+        alert('Cok fazla istek yaptiniz. Lutfen birkac saniye bekleyip tekrar deneyin.');
         return;
       }
-
-      // Handle authentication errors
       if (res.status === 401) {
-        alert('🔒 Oturum süreniz dolmuş. Lütfen yeniden giriş yapın.');
         window.location.href = SSO_URL;
         return;
       }
-
-      // Handle authorization errors
       if (res.status === 403) {
-        alert('⛔ Bu işlem için yetkiniz yok. Sadece kendi girdiğiniz talepleri silebilirsiniz.');
+        alert('Bu islem icin yetkiniz yok.');
         return;
       }
 
       const data = await res.json();
-
       if (data.success) {
-        // Remove from local state
         setRequests(requests.filter(r => r.id !== requestId));
-
-        // Trigger parent callback
-        if (onDelete) {
-          onDelete();
-        }
+        if (onDelete) onDelete();
       } else {
         alert(data.error || 'Talep silinemedi');
       }
@@ -244,6 +334,61 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
     } finally {
       setDeleting(null);
     }
+  };
+
+  // Render shipment cell for a request
+  const renderShipmentCell = (request: Request) => {
+    if (request.status !== 'COMPLETED') {
+      return <span className="text-gray-300">—</span>;
+    }
+
+    // Already routed
+    if (request.routedShipment) {
+      return (
+        <span className="inline-flex items-center gap-1 text-xs text-green-700">
+          <Check className="w-3.5 h-3.5" />
+          {request.routedShipment.name}
+        </span>
+      );
+    }
+
+    // Loading shipments
+    if (!shipmentsLoaded) {
+      return <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin" />;
+    }
+
+    // No route configured
+    if (availableShipments.length === 0) {
+      return <span className="text-xs text-gray-400">Rota yok</span>;
+    }
+
+    // Currently routing this request
+    if (routingId === request.id) {
+      return <Loader2 className="w-3.5 h-3.5 text-purple-600 animate-spin" />;
+    }
+
+    // Single shipment: one-click button
+    if (availableShipments.length === 1) {
+      const shipment = availableShipments[0];
+      return (
+        <button
+          onClick={() => handleRouteToShipment(request.id, shipment.id)}
+          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded hover:bg-purple-100 transition-colors"
+          title={`${shipment.name} sevkiyatina ekle`}
+        >
+          <Ship className="w-3 h-3" />
+          {shipment.name}
+        </button>
+      );
+    }
+
+    // Multiple shipments: dropdown
+    return (
+      <ShipmentDropdown
+        shipments={availableShipments}
+        onSelect={(shipmentId) => handleRouteToShipment(request.id, shipmentId)}
+      />
+    );
   };
 
   if (loading) {
@@ -264,10 +409,10 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
             <Package className="w-8 h-8 text-gray-400" />
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            Henüz talep yok
+            Henuz talep yok
           </h3>
           <p className="text-sm text-gray-600">
-            Yukarıdan ilk üretim talebinizi ekleyerek başlayın
+            Yukaridan ilk uretim talebinizi ekleyerek baslayin
           </p>
         </div>
       </div>
@@ -277,28 +422,74 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
   return (
     <div className="space-y-4">
       {/* Bulk Actions Bar */}
-      {hasRole(['admin', 'editor']) && selectedIds.size > 0 && (
+      {isEditor && selectedIds.size > 0 && (
         <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 flex items-center justify-between">
           <p className="text-sm font-medium text-purple-900">
-            {selectedIds.size} öğe seçildi
+            {selectedIds.size} oge secildi
           </p>
-          <button
-            onClick={handleBulkDelete}
-            disabled={bulkDeleting}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {bulkDeleting ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Siliniyor...
-              </>
-            ) : (
-              <>
-                <Trash2 className="w-4 h-4" />
-                Seçilenleri Sil
-              </>
+          <div className="flex items-center gap-3">
+            {/* Bulk Route — only for admin, when completed unrouted items selected */}
+            {isAdmin && selectedCompletedIds.length > 0 && availableShipments.length > 0 && (
+              <div className="flex items-center gap-2">
+                {availableShipments.length === 1 ? (
+                  <button
+                    onClick={() => handleBulkRoute(availableShipments[0].id)}
+                    disabled={bulkRouting}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {bulkRouting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Ship className="w-4 h-4" />
+                    )}
+                    {selectedCompletedIds.length} talebi {availableShipments[0].name} sevkiyatina yonlendir
+                  </button>
+                ) : (
+                  <>
+                    <select
+                      value={bulkShipmentId}
+                      onChange={e => setBulkShipmentId(e.target.value)}
+                      className="px-3 py-2 text-sm border border-purple-200 rounded-lg bg-white"
+                    >
+                      <option value="">Sevkiyat sec...</option>
+                      {availableShipments.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => bulkShipmentId && handleBulkRoute(bulkShipmentId)}
+                      disabled={!bulkShipmentId || bulkRouting}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {bulkRouting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Ship className="w-4 h-4" />
+                      )}
+                      {selectedCompletedIds.length} talebi yonlendir
+                    </button>
+                  </>
+                )}
+              </div>
             )}
-          </button>
+            <button
+              onClick={handleBulkDelete}
+              disabled={bulkDeleting}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {bulkDeleting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Siliniyor...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4" />
+                  Secilenleri Sil
+                </>
+              )}
+            </button>
+          </div>
         </div>
       )}
 
@@ -307,25 +498,26 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
         <div className="overflow-x-auto">
           <table className="w-full table-fixed">
             <colgroup>
-              {hasRole(['admin', 'editor']) && <col className="w-12" />} {/* Checkbox */}
-              <col className="w-28" /> {/* Production Month */}
-              <col className="w-32" /> {/* Date */}
-              <col className="w-36" /> {/* IWASKU */}
-              <col className="w-auto" /> {/* Product Name */}
-              <col className="w-48" /> {/* Category */}
-              <col className="w-24" /> {/* Quantity */}
-              <col className="w-24" /> {/* Priority */}
-              <col className="w-32" /> {/* Status */}
-              {hasRole(['admin', 'editor']) && <col className="w-32" />} {/* Actions */}
+              {isEditor && <col className="w-12" />}
+              <col className="w-28" />
+              <col className="w-32" />
+              <col className="w-36" />
+              <col className="w-auto" />
+              <col className="w-44" />
+              <col className="w-20" />
+              <col className="w-20" />
+              <col className="w-28" />
+              {isAdmin && <col className="w-36" />}
+              {isEditor && <col className="w-16" />}
             </colgroup>
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {hasRole(['admin', 'editor']) && (
+                {isEditor && (
                   <th className="px-4 py-3 text-center">
                     <button
                       onClick={handleSelectAll}
                       className="text-gray-600 hover:text-purple-600 transition-colors"
-                      title={selectedIds.size === requests.length ? 'Tümünü kaldır' : 'Tümünü seç'}
+                      title={selectedIds.size === requests.length ? 'Tumunu kaldir' : 'Tumunu sec'}
                     >
                       {selectedIds.size === requests.length ? (
                         <CheckSquare className="w-5 h-5" />
@@ -336,7 +528,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                   </th>
                 )}
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Üretim Ayı
+                  Uretim Ayi
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Tarih
@@ -345,7 +537,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                   IWASKU
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Ürün Adı
+                  Urun Adi
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Kategori
@@ -354,14 +546,19 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                   Miktar
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Öncelik
+                  Oncelik
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Durum
                 </th>
-                {hasRole(['admin', 'editor']) && (
+                {isAdmin && (
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Sevkiyat
+                  </th>
+                )}
+                {isEditor && (
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    İşlem
+                    Sil
                   </th>
                 )}
               </tr>
@@ -369,7 +566,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
             <tbody className="divide-y divide-gray-200">
               {paginatedRequests.map((request) => (
                 <tr key={request.id} className={`transition-colors ${selectedIds.has(request.id) ? 'bg-purple-50' : 'hover:bg-gray-50'}`}>
-                  {hasRole(['admin', 'editor']) && (
+                  {isEditor && (
                     <td className="px-4 py-3 text-center">
                       <button
                         onClick={() => handleToggleSelect(request.id)}
@@ -386,8 +583,8 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                   <td className="px-4 py-3 whitespace-nowrap">
                     <span className="text-sm font-medium text-gray-900">
                       {(() => {
-                        const [year, month] = request.productionMonth.split('-');
-                        return new Date(parseInt(year), parseInt(month) - 1, 1).toLocaleDateString('tr-TR', {
+                        const [year, m] = request.productionMonth.split('-');
+                        return new Date(parseInt(year), parseInt(m) - 1, 1).toLocaleDateString('tr-TR', {
                           month: 'short',
                           year: 'numeric',
                         });
@@ -438,24 +635,27 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                       {statusLabels[request.status as keyof typeof statusLabels]}
                     </span>
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-right">
-                    {hasRole(['admin', 'editor']) && (
+                  {isAdmin && (
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {renderShipmentCell(request)}
+                    </td>
+                  )}
+                  {isEditor && (
+                    <td className="px-4 py-3 whitespace-nowrap text-right">
                       <button
                         onClick={() => handleDelete(request.id)}
                         disabled={deleting === request.id}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="inline-flex items-center p-1.5 text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         title="Talebi sil"
                       >
                         {deleting === request.id ? (
-                          <>
-                            <div className="w-3.5 h-3.5 border-2 border-red-700 border-t-transparent rounded-full animate-spin" />
-                          </>
+                          <div className="w-3.5 h-3.5 border-2 border-red-700 border-t-transparent rounded-full animate-spin" />
                         ) : (
                           <Trash2 className="w-3.5 h-3.5" />
                         )}
                       </button>
-                    )}
-                  </td>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -466,7 +666,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
             <p className="text-xs text-gray-500">
-              {requests.length} talepten {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, requests.length)} gösteriliyor
+              {requests.length} talepten {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, requests.length)} gosteriliyor
             </p>
             <div className="flex items-center gap-1">
               <button
@@ -474,7 +674,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                 disabled={page === 1}
                 className="px-3 py-1 text-sm border rounded-lg disabled:opacity-30 hover:bg-gray-100"
               >
-                ‹ Önceki
+                ‹ Onceki
               </button>
               {Array.from({ length: totalPages }, (_, i) => i + 1)
                 .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
@@ -501,6 +701,35 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// Inline dropdown for selecting from multiple shipments
+function ShipmentDropdown({ shipments, onSelect }: { shipments: AvailableShipment[]; onSelect: (id: string) => void }) {
+  const [selected, setSelected] = useState('');
+
+  return (
+    <div className="flex items-center gap-1">
+      <select
+        value={selected}
+        onChange={e => setSelected(e.target.value)}
+        className="w-24 px-1.5 py-1 text-xs border border-gray-200 rounded bg-white"
+      >
+        <option value="">Sec...</option>
+        {shipments.map(s => (
+          <option key={s.id} value={s.id}>{s.name}</option>
+        ))}
+      </select>
+      {selected && (
+        <button
+          onClick={() => onSelect(selected)}
+          className="p-1 text-purple-600 hover:bg-purple-50 rounded transition-colors"
+          title="Yonlendir"
+        >
+          <Ship className="w-3.5 h-3.5" />
+        </button>
+      )}
     </div>
   );
 }

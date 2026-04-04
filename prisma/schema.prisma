@@ -240,6 +240,7 @@ enum AuditAction {
   MONTH_CLOSE
   UPDATE_STOCK
   ACCESS_DENIED
+  ROUTE_TO_SHIPMENT
 }
 
 // ============================================
@@ -458,20 +459,22 @@ model Shipment {
 }
 
 model ShipmentItem {
-  id            String    @id @default(uuid())
-  shipmentId    String
-  iwasku        String
-  quantity      Int
-  desi          Float?
-  marketplaceId String?
-  reserveId     String?
+  id                   String    @id @default(uuid())
+  shipmentId           String
+  iwasku               String
+  quantity             Int
+  desi                 Float?
+  marketplaceId        String?
+  reserveId            String?
+  productionRequestId  String?   // Yönlendirilen ProductionRequest bağlantısı
 
-  createdAt     DateTime  @default(now())
+  createdAt            DateTime  @default(now())
 
-  shipment      Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipment             Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
 
   @@index([shipmentId])
   @@index([iwasku])
+  @@index([productionRequestId])
   @@map("shipment_items")
 }
 

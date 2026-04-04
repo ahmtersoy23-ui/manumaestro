@@ -233,7 +233,7 @@ export default function WarehouseStockPage() {
   };
 
   // Export all data as Excel
-  const handleExport = () => {
+  const handleExport = async () => {
     const rows = products.map(p => {
       const row: Record<string, unknown> = {
         IWASKU: p.iwasku, 'Ürün Adı': p.productName, Kategori: p.productCategory,

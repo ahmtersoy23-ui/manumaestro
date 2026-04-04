@@ -89,6 +89,14 @@ export const CategoryPermissionSchema = z.object({
 });
 
 /**
+ * Route to Shipment Schema
+ */
+export const RouteToShipmentSchema = z.object({
+  requestIds: z.array(z.string().uuid('Geçersiz talep ID')).min(1, 'En az bir talep seçilmeli').max(500),
+  shipmentId: z.string().uuid('Geçersiz sevkiyat ID'),
+});
+
+/**
  * Month Parameter Schema
  */
 export const MonthParamSchema = z.string().regex(/^\d{4}-\d{2}$/, 'Invalid month format. Expected YYYY-MM');
