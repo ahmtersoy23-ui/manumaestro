@@ -23,9 +23,36 @@ export async function GET(request: NextRequest, { params }: Params) {
   const shipment = await prisma.shipment.findUnique({
     where: { id },
     include: {
-      items: { orderBy: { iwasku: 'asc' } },
+      items: {
+        orderBy: { iwasku: 'asc' },
+        include: {
+          shipment: false,
+        },
+      },
     },
   });
+
+  // Marketplace bilgilerini çöz (items'taki marketplaceId'lerden)
+  if (shipment) {
+    const mktIds = [...new Set(shipment.items.map(i => i.marketplaceId).filter(Boolean))] as string[];
+    const marketplaces = mktIds.length > 0
+      ? await prisma.marketplace.findMany({
+          where: { id: { in: mktIds } },
+          select: { id: true, name: true, code: true },
+        })
+      : [];
+    const mktMap = new Map(marketplaces.map(m => [m.id, m]));
+
+    const enrichedItems = shipment.items.map(item => ({
+      ...item,
+      marketplace: item.marketplaceId ? mktMap.get(item.marketplaceId) ?? null : null,
+    }));
+
+    return NextResponse.json({
+      success: true,
+      data: { ...shipment, items: enrichedItems },
+    });
+  }
 
   if (!shipment) {
     return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadı' }, { status: 404 });

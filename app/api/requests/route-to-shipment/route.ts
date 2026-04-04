@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db/prisma';
+import { prisma, queryProductDb } from '@/lib/db/prisma';
 import { requireRole } from '@/lib/auth/verify';
 import { RouteToShipmentSchema, formatValidationError } from '@/lib/validation/schemas';
 import { errorResponse } from '@/lib/api/response';
@@ -100,20 +100,39 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // productSize null olanlar için pricelab_db'den desi çek
+    const missingDesiIwaskus = requests
+      .filter(r => r.productSize == null)
+      .map(r => r.iwasku);
+
+    const desiMap = new Map<string, number>();
+    if (missingDesiIwaskus.length > 0) {
+      const uniqueIwaskus = [...new Set(missingDesiIwaskus)];
+      const placeholders = uniqueIwaskus.map((_, i) => `$${i + 1}`).join(',');
+      const rows = await queryProductDb(
+        `SELECT DISTINCT iwasku, size::float AS desi FROM sku_master WHERE iwasku IN (${placeholders}) AND size IS NOT NULL`,
+        uniqueIwaskus
+      );
+      for (const row of rows) {
+        desiMap.set(row.iwasku, row.desi);
+      }
+    }
+
     // Transaction: ShipmentItem'lar oluştur
     const items = await prisma.$transaction(
-      requests.map(req =>
-        prisma.shipmentItem.create({
+      requests.map(req => {
+        const desi = req.productSize ?? desiMap.get(req.iwasku) ?? null;
+        return prisma.shipmentItem.create({
           data: {
             shipmentId,
             iwasku: req.iwasku,
             quantity: req.quantity,
-            desi: req.productSize ?? null,
+            desi,
             marketplaceId: req.marketplaceId,
             productionRequestId: req.id,
           },
-        })
-      )
+        });
+      })
     );
 
     await logAction({

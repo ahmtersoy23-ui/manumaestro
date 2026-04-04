@@ -21,6 +21,7 @@ interface ShipmentItem {
   quantity: number;
   desi: number | null;
   marketplaceId: string | null;
+  marketplace: { id: string; name: string; code: string } | null;
   reserveId: string | null;
   createdAt: string;
 }
@@ -89,7 +90,7 @@ export default function ShipmentDetailPage() {
   const config = statusConfig[shipment.status] ?? statusConfig.PLANNING;
   const MethodIcon = methodIcons[shipment.shippingMethod] ?? Anchor;
   const totalQty = shipment.items.reduce((s, i) => s + i.quantity, 0);
-  const totalDesi = shipment.items.reduce((s, i) => s + (i.desi ?? 0), 0);
+  const totalDesi = shipment.items.reduce((s, i) => s + (i.desi ?? 0) * i.quantity, 0);
   const canEdit = shipment.status === 'PLANNING' || shipment.status === 'LOADING';
 
   const handleStatusChange = async (newStatus: string) => {
@@ -247,28 +248,44 @@ export default function ShipmentDetailPage() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">IWASKU</th>
-                <th className="text-center px-3 py-3 font-medium text-gray-500">Miktar</th>
-                <th className="text-center px-3 py-3 font-medium text-gray-500">Desi</th>
-                <th className="text-center px-3 py-3 font-medium text-gray-500">Eklenme</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-700 text-xs uppercase">IWASKU</th>
+                <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Pazar Yeri</th>
+                <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Miktar</th>
+                <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Birim Desi</th>
+                <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Toplam Desi</th>
+                <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Eklenme</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {shipment.items.map(item => (
-                <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-mono text-xs">{item.iwasku}</td>
-                  <td className="text-center px-3 py-3 font-medium">{item.quantity}</td>
-                  <td className="text-center px-3 py-3 text-gray-500">{item.desi ? Math.round(item.desi) : '—'}</td>
-                  <td className="text-center px-3 py-3 text-xs text-gray-400">
-                    {new Date(item.createdAt).toLocaleDateString('tr-TR')}
-                  </td>
-                </tr>
-              ))}
+              {shipment.items.map(item => {
+                const unitDesi = item.desi ?? 0;
+                const itemTotalDesi = unitDesi * item.quantity;
+                return (
+                  <tr key={item.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-mono text-sm text-gray-900">{item.iwasku}</td>
+                    <td className="px-3 py-3 text-sm text-gray-700">
+                      {item.marketplace ? item.marketplace.code : '—'}
+                    </td>
+                    <td className="text-center px-3 py-3 font-semibold text-gray-900">{item.quantity}</td>
+                    <td className="text-center px-3 py-3 text-sm text-gray-700">
+                      {unitDesi > 0 ? unitDesi.toFixed(1) : '—'}
+                    </td>
+                    <td className="text-center px-3 py-3 text-sm font-medium text-gray-900">
+                      {itemTotalDesi > 0 ? Math.round(itemTotalDesi).toLocaleString('tr-TR') : '—'}
+                    </td>
+                    <td className="text-center px-3 py-3 text-sm text-gray-600">
+                      {new Date(item.createdAt).toLocaleDateString('tr-TR')}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
             <tfoot className="bg-gray-50 border-t">
-              <tr className="font-medium">
+              <tr className="font-semibold text-gray-900">
                 <td className="px-4 py-3">Toplam</td>
+                <td></td>
                 <td className="text-center px-3 py-3">{totalQty.toLocaleString('tr-TR')}</td>
+                <td></td>
                 <td className="text-center px-3 py-3">{Math.round(totalDesi).toLocaleString('tr-TR')}</td>
                 <td></td>
               </tr>
