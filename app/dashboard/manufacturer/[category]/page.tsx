@@ -174,10 +174,14 @@ export default function ManufacturerCategoryPage() {
           grouped.forEach((group: GroupedRequest) => {
             const totalProduced = Math.max(...group.requests.map(r => r.producedQuantity ?? 0));
             const firstRequest = group.requests[0];
+            // Aggregate status: ALL completed → COMPLETED, any partial → PARTIALLY, else REQUESTED
+            const allCompleted = group.requests.every(r => r.status === 'COMPLETED');
+            const anyProgress = group.requests.some(r => r.status === 'COMPLETED' || r.status === 'PARTIALLY_PRODUCED');
+            const aggStatus = allCompleted ? 'COMPLETED' : anyProgress ? 'PARTIALLY_PRODUCED' : firstRequest.status;
             initialValues[group.iwasku] = {
               producedQuantity: totalProduced,
               manufacturerNotes: firstRequest.manufacturerNotes || '',
-              status: firstRequest.status,
+              status: aggStatus,
             };
           });
           setEditValues(initialValues);
@@ -251,14 +255,20 @@ export default function ManufacturerCategoryPage() {
 
         const totalProduced = totalProducedQuantity;
 
-        // Update editValues to reflect the aggregate values
+        // Update editValues — recalculate aggregate status from refreshed requests
+        const updatedGroup = groupedRequests.find(g => g.iwasku === iwasku);
+        const refreshedRequests = updatedGroup?.requests ?? [];
+        const allDone = refreshedRequests.every(r => r.status === 'COMPLETED');
+        const anyDone = refreshedRequests.some(r => r.status === 'COMPLETED' || r.status === 'PARTIALLY_PRODUCED');
+        const newAggStatus = allDone ? 'COMPLETED' : anyDone ? 'PARTIALLY_PRODUCED' : 'REQUESTED';
+
         setEditValues(prevValues => ({
           ...prevValues,
           [iwasku]: {
             ...prevValues[iwasku],
             producedQuantity: totalProduced,
             manufacturerNotes: values.manufacturerNotes,
-            status: values.status,
+            status: newAggStatus,
           }
         }));
       } else {
