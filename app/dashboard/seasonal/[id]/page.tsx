@@ -15,7 +15,7 @@ import {
   Loader2, CheckCircle2, XCircle, BarChart3, Calendar, FileSpreadsheet,
   CalendarRange, Eye, ThumbsUp, Lock, Send, Edit2, X, Warehouse, Trash2,
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
+const loadXLSX = () => import('xlsx');
 
 interface Reserve {
   id: string;
@@ -237,8 +237,9 @@ export default function PoolDetailPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
+        const XLSX = await loadXLSX();
         const wb = XLSX.read(evt.target?.result, { type: 'binary' });
         const items: { iwasku: string; quantity: number; desi: number; category: string; marketplace: string }[] = [];
 
@@ -249,7 +250,7 @@ export default function PoolDetailPage() {
           if (!marketplace) continue;
 
           const ws = wb.Sheets[sheetName]!;
-          const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+          const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws!) as Record<string, unknown>[];
 
           for (const row of rows) {
             const iwasku = String(row['iwasku'] || row['IWASKU'] || '');

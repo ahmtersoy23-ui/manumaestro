@@ -10,7 +10,9 @@ import Link from 'next/link';
 import { ArrowLeft, Warehouse, Upload, Search, Plus, Download, ChevronDown, ChevronUp, Camera, ArrowUpDown } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
-import * as XLSX from 'xlsx';
+// XLSX lazy-loaded at point of use — 500KB not in initial bundle
+type XLSX = typeof import('xlsx');
+const loadXLSX = () => import('xlsx') as Promise<XLSX>;
 
 const logger = createLogger('WarehouseStockPage');
 
@@ -210,6 +212,7 @@ export default function WarehouseStockPage() {
     if (!file) return;
     setImporting(true); setImportResult(null);
     try {
+      const XLSX = await loadXLSX();
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer);
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -242,6 +245,7 @@ export default function WarehouseStockPage() {
       row['Çıkış'] = p.toplamCikis; row['Mevcut'] = p.mevcut; row['Sezon Rez.'] = p.reserved; row['ATP'] = p.atp; row['Toplam Desi'] = p.toplamDesi;
       return row;
     });
+    const XLSX = await loadXLSX();
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Depo Stoğu');

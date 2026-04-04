@@ -124,47 +124,53 @@ export async function POST(request: NextRequest, { params }: Params) {
     });
   }
 
-  // Create new ProductionRequests for unlocked allocations
+  // Batch create ProductionRequests for unlocked allocations
   const toCreate = allAllocations.filter(a => !lockedMonths.has(a.month));
-  let created = 0;
 
-  for (const alloc of toCreate) {
-    const product = productMap.get(alloc.iwasku);
-    await prisma.productionRequest.create({
-      data: {
-        iwasku: alloc.iwasku,
-        productName: product?.name ?? alloc.iwasku,
-        productCategory: alloc.category ?? product?.category ?? '',
-        productSize: alloc.desiPerUnit ?? product?.desi ?? null,
-        marketplaceId: sezonMarketplace.id,
-        quantity: alloc.plannedQty,
-        productionMonth: alloc.month,
-        entryType: 'EXCEL',
-        status: 'REQUESTED',
-        priority: 'MEDIUM',
-        enteredById: user.id,
-        notes: poolTag,
-      },
+  if (toCreate.length > 0) {
+    await prisma.productionRequest.createMany({
+      data: toCreate.map(alloc => {
+        const product = productMap.get(alloc.iwasku);
+        return {
+          iwasku: alloc.iwasku,
+          productName: product?.name ?? alloc.iwasku,
+          productCategory: alloc.category ?? product?.category ?? '',
+          productSize: alloc.desiPerUnit ?? product?.desi ?? null,
+          marketplaceId: sezonMarketplace.id,
+          quantity: alloc.plannedQty,
+          productionMonth: alloc.month,
+          entryType: 'EXCEL' as const,
+          status: 'REQUESTED' as const,
+          priority: 'MEDIUM' as const,
+          enteredById: user.id,
+          notes: poolTag,
+        };
+      }),
     });
-    created++;
   }
+  const created = toCreate.length;
 
   // Ensure SEZON marketplace has lowest priority for each released month
   const releasedMonths = [...new Set(toCreate.map(a => a.month))];
-  for (const month of releasedMonths) {
-    // Get current max priority for this month
-    const maxPriority = await prisma.marketplacePriority.aggregate({
-      where: { month },
-      _max: { priority: true },
-    });
-    const sezonPriority = (maxPriority._max.priority ?? 0) + 1;
+  // Batch: get all max priorities in one query
+  const allPriorities = await prisma.marketplacePriority.groupBy({
+    by: ['month'],
+    where: { month: { in: releasedMonths } },
+    _max: { priority: true },
+  });
+  const maxPriorityMap = new Map(allPriorities.map(p => [p.month, p._max.priority ?? 0]));
 
-    await prisma.marketplacePriority.upsert({
-      where: { month_marketplaceId: { month, marketplaceId: sezonMarketplace.id } },
-      create: { month, marketplaceId: sezonMarketplace.id, priority: sezonPriority },
-      update: { priority: sezonPriority },
-    });
-  }
+  // Upsert still needed per month (unique constraint)
+  await prisma.$transaction(
+    releasedMonths.map(month => {
+      const sezonPriority = (maxPriorityMap.get(month) ?? 0) + 1;
+      return prisma.marketplacePriority.upsert({
+        where: { month_marketplaceId: { month, marketplaceId: sezonMarketplace.id } },
+        create: { month, marketplaceId: sezonMarketplace.id, priority: sezonPriority },
+        update: { priority: sezonPriority },
+      });
+    })
+  );
 
   // Re-run waterfall for affected iwasku+month pairs
   // New SEZON requests change total demand → existing COMPLETED requests may need to revert

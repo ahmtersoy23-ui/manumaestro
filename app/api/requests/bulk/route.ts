@@ -11,6 +11,7 @@ import { BulkRequestSchema, formatValidationError } from '@/lib/validation/schem
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { requireRole } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
+import { errorResponse } from '@/lib/api/response';
 
 const logger = createLogger('Bulk Requests API');
 
@@ -50,55 +51,54 @@ export async function POST(request: NextRequest) {
     // requestDate is always today (entry date)
     const requestDate = new Date();
 
-    // Fetch product details directly from database (FIX 3: Remove self-referencing fetch)
-    const createdRequests: ProductionRequest[] = [];
     const errors: string[] = [];
     const warnings: string[] = [];
 
+    // Batch product lookup: 1 query instead of N
+    const uniqueIwaskus = [...new Set(requests.map(r => r.iwasku))];
+    const placeholders = uniqueIwaskus.map((_, i) => `$${i + 1}`).join(',');
+    const products = uniqueIwaskus.length > 0
+      ? await queryProductDb(
+          `SELECT product_sku as iwasku, name, category, COALESCE(manual_size, size) as size FROM products WHERE product_sku IN (${placeholders})`,
+          uniqueIwaskus
+        )
+      : [];
+    const productMap = new Map(products.map((p: { iwasku: string; name: string; category: string; size: number | null }) => [p.iwasku, p]));
+
+    // Validate + prepare batch data
+    const toCreate: Parameters<typeof prisma.productionRequest.createMany>[0]['data'] = [];
+
     for (const item of requests) {
-      try {
-        // Direct database query instead of self-referencing API call
-        const products = await queryProductDb(
-          'SELECT product_sku as iwasku, name, category, COALESCE(manual_size, size) as size FROM products WHERE product_sku = $1 LIMIT 1',
-          [item.iwasku]
-        );
-
-        if (products.length === 0) {
-          errors.push(`Ürün bulunamadı: ${item.iwasku}`);
-          continue;
-        }
-
-        const product = products[0];
-
-        // Warn if product has no size (desi) data
-        if (!product.size) {
-          warnings.push(`${item.iwasku}: Desi verisi eksik`);
-        }
-
-        const productionRequest = await prisma.productionRequest.create({
-          data: {
-            iwasku: item.iwasku,
-            productName: product.name,
-            productCategory: product.category || 'Kategorisiz',
-            productSize: product.size ? parseFloat(product.size) : null,
-            marketplaceId,
-            quantity: item.quantity,
-            requestDate,
-            productionMonth, // YYYY-MM format (e.g., "2026-03")
-            notes: item.notes || null,
-            priority: item.priority ?? 'MEDIUM',
-            entryType: EntryType.EXCEL,
-            status: RequestStatus.REQUESTED,
-            enteredById: user.id, // Real authenticated user
-          },
-        });
-
-        createdRequests.push(productionRequest);
-      } catch (error) {
-        logger.error(`Failed to create request for ${item.iwasku}:`, error);
-        errors.push(`Talep oluşturulamadı: ${item.iwasku}`);
+      const product = productMap.get(item.iwasku);
+      if (!product) {
+        errors.push(`Ürün bulunamadı: ${item.iwasku}`);
+        continue;
       }
+      if (!product.size) {
+        warnings.push(`${item.iwasku}: Desi verisi eksik`);
+      }
+      (toCreate as Array<Record<string, unknown>>).push({
+        iwasku: item.iwasku,
+        productName: product.name,
+        productCategory: product.category || 'Kategorisiz',
+        productSize: product.size ? parseFloat(String(product.size)) : null,
+        marketplaceId,
+        quantity: item.quantity,
+        requestDate,
+        productionMonth,
+        notes: item.notes || null,
+        priority: item.priority ?? 'MEDIUM',
+        entryType: EntryType.EXCEL,
+        status: RequestStatus.REQUESTED,
+        enteredById: user.id,
+      });
     }
+
+    // Batch create: 1 query instead of N
+    if ((toCreate as unknown[]).length > 0) {
+      await prisma.productionRequest.createMany({ data: toCreate as never });
+    }
+    const createdCount = (toCreate as unknown[]).length;
 
     await logAction({
       userId: user.id,
@@ -106,26 +106,19 @@ export async function POST(request: NextRequest) {
       userEmail: user.email,
       action: 'BULK_UPLOAD',
       entityType: 'ProductionRequest',
-      description: `Toplu yükleme: ${createdRequests.length} talep oluşturuldu, ${errors.length} hata (${productionMonth}, pazaryeri: ${marketplaceId})`,
-      metadata: { created: createdRequests.length, errors, warnings, marketplaceId, productionMonth },
+      description: `Toplu yükleme: ${createdCount} talep oluşturuldu, ${errors.length} hata (${productionMonth}, pazaryeri: ${marketplaceId})`,
+      metadata: { created: createdCount, errors, warnings, marketplaceId, productionMonth },
     });
 
     return NextResponse.json({
       success: true,
       data: {
-        created: createdRequests.length,
+        created: createdCount,
         errors: errors.length > 0 ? errors : undefined,
         warnings: warnings.length > 0 ? warnings : undefined,
       },
     });
   } catch (error) {
-    logger.error('Bulk create request error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Toplu talepler oluşturulamadı',
-      },
-      { status: 500 }
-    );
+    return errorResponse(error, 'Toplu talepler oluşturulamadı');
   }
 }

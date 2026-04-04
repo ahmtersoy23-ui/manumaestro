@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { createLogger } from '@/lib/logger';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { verifyAuth } from '@/lib/auth/verify';
-
-const logger = createLogger('Auth Me API');
+import { errorResponse } from '@/lib/api/response';
 
 /**
  * GET /api/auth/me
@@ -45,10 +43,6 @@ export async function GET(request: NextRequest) {
       permissions: { canViewStock },
     });
   } catch (error) {
-    logger.error('Error in /api/auth/me:', error);
-    return NextResponse.json(
-      { success: false, error: 'Sunucu hatası' },
-      { status: 500 }
-    );
+    return errorResponse(error, 'Sunucu hatası');
   }
 }

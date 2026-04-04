@@ -69,15 +69,18 @@ export async function waterfallComplete(iwasku: string, month: string): Promise<
     return pa - pb;
   });
 
+  // Calculate target status for each request, group by status for batch update
   let remaining = totalAvailable;
-  let changed = 0;
+  const completedIds: string[] = [];
+  const partialIds: string[] = [];
+  const requestedIds: string[] = [];
 
   for (const req of sorted) {
     let targetStatus: RequestStatus;
 
     if (remaining >= req.quantity) {
       remaining -= req.quantity;
-      targetStatus = RequestStatus.COMPLETED; // tik ✅
+      targetStatus = RequestStatus.COMPLETED;
     } else if (remaining > 0) {
       remaining = 0;
       targetStatus = RequestStatus.PARTIALLY_PRODUCED;
@@ -86,12 +89,25 @@ export async function waterfallComplete(iwasku: string, month: string): Promise<
     }
 
     if (req.status !== targetStatus) {
-      await prisma.productionRequest.update({
-        where: { id: req.id },
-        data: { status: targetStatus },
-      });
-      changed++;
+      if (targetStatus === RequestStatus.COMPLETED) completedIds.push(req.id);
+      else if (targetStatus === RequestStatus.PARTIALLY_PRODUCED) partialIds.push(req.id);
+      else requestedIds.push(req.id);
     }
+  }
+
+  // Batch updates: max 3 queries instead of N
+  let changed = 0;
+  if (completedIds.length > 0) {
+    const r = await prisma.productionRequest.updateMany({ where: { id: { in: completedIds } }, data: { status: RequestStatus.COMPLETED } });
+    changed += r.count;
+  }
+  if (partialIds.length > 0) {
+    const r = await prisma.productionRequest.updateMany({ where: { id: { in: partialIds } }, data: { status: RequestStatus.PARTIALLY_PRODUCED } });
+    changed += r.count;
+  }
+  if (requestedIds.length > 0) {
+    const r = await prisma.productionRequest.updateMany({ where: { id: { in: requestedIds } }, data: { status: RequestStatus.REQUESTED } });
+    changed += r.count;
   }
 
   if (changed > 0) {

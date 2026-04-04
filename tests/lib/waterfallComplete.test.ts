@@ -138,26 +138,24 @@ describe('waterfallComplete', () => {
       { marketplaceId: 'mp-us', priority: 3 },
     ]);
 
+    mockUpdateMany.mockResolvedValue({ count: 2 }); // COMPLETED batch
+    mockUpdateMany.mockResolvedValueOnce({ count: 2 }); // first call: COMPLETED
+    mockUpdateMany.mockResolvedValueOnce({ count: 1 }); // second call: PARTIALLY
+
     const result = await waterfallComplete('SKU-001', '2026-04');
 
-    // All 3 requests changed status
+    // 3 requests changed via batch updateMany calls
     expect(result).toBe(3);
 
-    // Takealot (priority 1): 50 >= 6 -> COMPLETED, remaining = 44
-    expect(mockUpdate).toHaveBeenCalledWith({
-      where: { id: 'r-takealot' },
+    // Batch: Takealot + AU → COMPLETED
+    expect(mockUpdateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['r-takealot', 'r-au'] } },
       data: { status: 'COMPLETED' },
     });
 
-    // AU (priority 2): 44 >= 30 -> COMPLETED, remaining = 14
-    expect(mockUpdate).toHaveBeenCalledWith({
-      where: { id: 'r-au' },
-      data: { status: 'COMPLETED' },
-    });
-
-    // US (priority 3): 14 < 20 -> PARTIALLY_PRODUCED, remaining = 0
-    expect(mockUpdate).toHaveBeenCalledWith({
-      where: { id: 'r-us' },
+    // Batch: US → PARTIALLY_PRODUCED
+    expect(mockUpdateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['r-us'] } },
       data: { status: 'PARTIALLY_PRODUCED' },
     });
   });
@@ -186,8 +184,6 @@ describe('waterfallComplete', () => {
   });
 
   it('should set a single request to COMPLETED when fully covered', async () => {
-    // totalAvailable = 50 + 0 = 50, totalRequested = 80 (partial path)
-    // But only one request exists with quantity=30, which fits
     mockFindUnique.mockResolvedValue({
       warehouseStock: 50,
       produced: 0,
@@ -202,11 +198,13 @@ describe('waterfallComplete', () => {
       { marketplaceId: 'mp1', priority: 1 },
     ]);
 
+    mockUpdateMany.mockResolvedValueOnce({ count: 1 });
+
     const result = await waterfallComplete('SKU-001', '2026-04');
 
     expect(result).toBe(1);
-    expect(mockUpdate).toHaveBeenCalledWith({
-      where: { id: 'r1' },
+    expect(mockUpdateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['r1'] } },
       data: { status: 'COMPLETED' },
     });
   });
@@ -226,14 +224,13 @@ describe('waterfallComplete', () => {
   });
 
   it('should not count unchanged statuses in the return value', async () => {
-    // Partial distribution: available=50, totalRequested=56
     mockFindUnique.mockResolvedValue({
       warehouseStock: 20,
       produced: 30,
       totalRequested: 56,
     });
 
-    // r-takealot is already COMPLETED -- no status change needed
+    // r-takealot already COMPLETED — no change needed
     mockFindMany.mockResolvedValue([
       { id: 'r-takealot', marketplaceId: 'mp-takealot', quantity: 6, status: 'COMPLETED' },
       { id: 'r-au', marketplaceId: 'mp-au', quantity: 30, status: 'REQUESTED' },
@@ -246,15 +243,18 @@ describe('waterfallComplete', () => {
       { marketplaceId: 'mp-us', priority: 3 },
     ]);
 
+    // AU → COMPLETED batch
+    mockUpdateMany.mockResolvedValueOnce({ count: 1 });
+    // US → PARTIALLY batch
+    mockUpdateMany.mockResolvedValueOnce({ count: 1 });
+
     const result = await waterfallComplete('SKU-001', '2026-04');
 
-    // Only 2 changed (AU and US). Takealot was already COMPLETED.
+    // Only 2 changed (AU and US). Takealot already correct.
     expect(result).toBe(2);
-    expect(mockUpdate).toHaveBeenCalledTimes(2);
   });
 
   it('should assign REQUESTED to unfilled requests after remaining hits 0', async () => {
-    // available = 10, totalRequested = 100
     mockFindUnique.mockResolvedValue({
       warehouseStock: 5,
       produced: 5,
@@ -273,26 +273,26 @@ describe('waterfallComplete', () => {
       { marketplaceId: 'mp3', priority: 3 },
     ]);
 
+    // r1 → COMPLETED, r2 → PARTIALLY, r3 → REQUESTED
+    mockUpdateMany.mockResolvedValueOnce({ count: 1 }); // COMPLETED
+    mockUpdateMany.mockResolvedValueOnce({ count: 1 }); // PARTIALLY
+    mockUpdateMany.mockResolvedValueOnce({ count: 1 }); // REQUESTED
+
     const result = await waterfallComplete('SKU-001', '2026-04');
 
-    // r1: 10 >= 8 -> COMPLETED (no change since already REQUESTED -> changed)
-    expect(mockUpdate).toHaveBeenCalledWith({
-      where: { id: 'r1' },
+    expect(result).toBe(3);
+
+    expect(mockUpdateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['r1'] } },
       data: { status: 'COMPLETED' },
     });
-
-    // r2: remaining=2, 2 < 50 -> PARTIALLY_PRODUCED (was COMPLETED -> changed)
-    expect(mockUpdate).toHaveBeenCalledWith({
-      where: { id: 'r2' },
+    expect(mockUpdateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['r2'] } },
       data: { status: 'PARTIALLY_PRODUCED' },
     });
-
-    // r3: remaining=0 -> REQUESTED (was COMPLETED -> changed)
-    expect(mockUpdate).toHaveBeenCalledWith({
-      where: { id: 'r3' },
+    expect(mockUpdateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['r3'] } },
       data: { status: 'REQUESTED' },
     });
-
-    expect(result).toBe(3);
   });
 });

@@ -5,12 +5,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { createLogger } from '@/lib/logger';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { verifyAuth } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
-
-const logger = createLogger('Request API');
+import { errorResponse } from '@/lib/api/response';
 
 export async function DELETE(
   request: NextRequest,
@@ -81,25 +79,6 @@ export async function DELETE(
       message: 'Talep başarıyla silindi',
     });
   } catch (error) {
-    logger.error('Delete request error:', error);
-
-    // Check if it's a "not found" error
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Talep bulunamadı',
-        },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Talep silinemedi',
-      },
-      { status: 500 }
-    );
+    return errorResponse(error, 'Talep silinemedi');
   }
 }
