@@ -463,6 +463,9 @@ export default function ManufacturerCategoryPage() {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Üretilen
                   </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-orange-600 uppercase tracking-wider">
+                    Kalan
+                  </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Durum
                   </th>
@@ -530,16 +533,37 @@ export default function ManufacturerCategoryPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <div className="flex flex-col gap-1">
-                        <input
-                          type="number"
-                          value={editValues[group.iwasku]?.producedQuantity || 0}
-                          onChange={(e) => updateEditValue(group.iwasku, 'producedQuantity', parseInt(e.target.value) || 0)}
-                          min="0"
-                          className="w-20 px-2 py-1 text-sm text-gray-900 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                        />
-                      </div>
-                    </td>                    <td className="px-4 py-3 whitespace-nowrap">
+                      <input
+                        type="text"
+                        defaultValue={editValues[group.iwasku]?.producedQuantity || 0}
+                        onBlur={(e) => {
+                          const raw = e.target.value.trim();
+                          const current = editValues[group.iwasku]?.producedQuantity || 0;
+                          let newVal: number;
+                          if (raw.startsWith('+')) {
+                            newVal = current + (parseInt(raw.slice(1)) || 0);
+                          } else {
+                            newVal = parseInt(raw) || 0;
+                          }
+                          e.target.value = String(newVal);
+                          updateEditValue(group.iwasku, 'producedQuantity', newVal);
+                        }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                        className="w-20 px-2 py-1 text-sm text-gray-900 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      />
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {(() => {
+                        const produced = editValues[group.iwasku]?.producedQuantity || 0;
+                        const remaining = Math.max(0, group.netNeed - produced);
+                        return (
+                          <span className={`text-sm font-semibold ${remaining === 0 ? 'text-green-600' : 'text-orange-600'}`}>
+                            {group.warehouseStock !== null ? (remaining === 0 ? '✓' : remaining) : '-'}
+                          </span>
+                        );
+                      })()}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <select
                         value={editValues[group.iwasku]?.status || group.requests[0].status}
                         onChange={(e) => updateEditValue(group.iwasku, 'status', e.target.value)}
