@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
       _count: { select: { items: true } },
     },
     orderBy: { plannedDate: 'desc' },
+    take: 100,
   });
 
   const shipmentsWithStats = shipments.map(s => {
