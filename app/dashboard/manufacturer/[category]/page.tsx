@@ -177,7 +177,7 @@ export default function ManufacturerCategoryPage() {
             // Aggregate status: ALL completed → COMPLETED, any partial → PARTIALLY, else REQUESTED
             const allCompleted = group.requests.every(r => r.status === 'COMPLETED');
             const anyProgress = group.requests.some(r => r.status === 'COMPLETED' || r.status === 'PARTIALLY_PRODUCED');
-            const aggStatus = allCompleted ? 'COMPLETED' : anyProgress ? 'PARTIALLY_PRODUCED' : firstRequest.status;
+            const aggStatus = allCompleted ? 'COMPLETED' : (anyProgress || totalProduced > 0) ? 'PARTIALLY_PRODUCED' : firstRequest.status;
             initialValues[group.iwasku] = {
               producedQuantity: totalProduced,
               manufacturerNotes: firstRequest.manufacturerNotes || '',
@@ -260,7 +260,7 @@ export default function ManufacturerCategoryPage() {
         const refreshedRequests = updatedGroup?.requests ?? [];
         const allDone = refreshedRequests.every(r => r.status === 'COMPLETED');
         const anyDone = refreshedRequests.some(r => r.status === 'COMPLETED' || r.status === 'PARTIALLY_PRODUCED');
-        const newAggStatus = allDone ? 'COMPLETED' : anyDone ? 'PARTIALLY_PRODUCED' : 'REQUESTED';
+        const newAggStatus = allDone ? 'COMPLETED' : (anyDone || totalProduced > 0) ? 'PARTIALLY_PRODUCED' : 'REQUESTED';
 
         setEditValues(prevValues => ({
           ...prevValues,
