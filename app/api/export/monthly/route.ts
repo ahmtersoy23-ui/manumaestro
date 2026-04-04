@@ -64,6 +64,13 @@ export async function GET(request: NextRequest) {
     });
 
 
+    // Fetch produced values from MonthSnapshot
+    const snapshots = await prisma.monthSnapshot.findMany({
+      where: { month },
+      select: { iwasku: true, produced: true },
+    });
+    const producedMap = new Map(snapshots.map(s => [s.iwasku, s.produced]));
+
     // Format data for export
     const exportData = requests.map((request) => ({
       iwasku: request.iwasku,
@@ -72,7 +79,7 @@ export async function GET(request: NextRequest) {
       marketplace: request.marketplace.name,
       region: request.marketplace.region,
       requestedQty: request.quantity,
-      producedQty: request.producedQuantity || 0,
+      producedQty: producedMap.get(request.iwasku) ?? 0,
       productSize: request.productSize || 0,
       totalDesi: (request.productSize || 0) * request.quantity,
       status: formatStatusForExcel(request.status),

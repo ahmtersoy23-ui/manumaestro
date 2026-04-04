@@ -82,6 +82,16 @@ export async function GET(request: NextRequest) {
     });
 
 
+    // Fetch produced values from MonthSnapshot
+    const productionMonth = month || requests[0]?.productionMonth;
+    const snapshots = productionMonth
+      ? await prisma.monthSnapshot.findMany({
+          where: { month: productionMonth },
+          select: { iwasku: true, produced: true },
+        })
+      : [];
+    const producedMap = new Map(snapshots.map(s => [s.iwasku, s.produced]));
+
     // Aggregate data by IWASKU (group marketplace requests)
     const aggregatedData = new Map<string, AggregatedProduct>();
 
@@ -101,7 +111,7 @@ export async function GET(request: NextRequest) {
           productCategory: request.productCategory,
           marketplaces: request.marketplace.name,
           totalRequestedQty: request.quantity,
-          producedQty: request.producedQuantity || 0,
+          producedQty: producedMap.get(request.iwasku) ?? 0,
           productSize: request.productSize || 0,
           totalDesi: (request.productSize || 0) * request.quantity,
           status: formatStatusForExcel(request.status),

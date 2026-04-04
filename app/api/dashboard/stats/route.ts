@@ -92,6 +92,16 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Get MonthSnapshot.produced for all months (single source of truth)
+    const allSnapshots = await prisma.monthSnapshot.findMany({
+      where: { month: { in: months } },
+      select: { month: true, iwasku: true, produced: true },
+    });
+    const snapshotProducedMap = new Map<string, number>(); // "month|iwasku" → produced
+    for (const s of allSnapshots) {
+      snapshotProducedMap.set(`${s.month}|${s.iwasku}`, s.produced);
+    }
+
     // Aggregate in a single pass over the result set
     for (const r of requests) {
       const entry = statsMap.get(r.productionMonth)!;
@@ -102,16 +112,14 @@ export async function GET(request: NextRequest) {
         entry.itemsWithoutSize += 1;
       }
 
-      // Track unique products for produced quantity calculation
+      // Track unique products — produced from MonthSnapshot
       const existing = entry.productMap.get(r.iwasku);
       if (!existing) {
         entry.productMap.set(r.iwasku, {
-          producedQty: r.producedQuantity || 0,
+          producedQty: snapshotProducedMap.get(`${r.productionMonth}|${r.iwasku}`) ?? 0,
           productSize: r.productSize || 0,
         });
       }
-      // Only use the first occurrence's producedQuantity per product per month
-      // (matches the existing monthly endpoint logic)
     }
 
     // Build the response

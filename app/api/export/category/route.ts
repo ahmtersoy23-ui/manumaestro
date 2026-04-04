@@ -87,8 +87,10 @@ export async function GET(request: NextRequest) {
         })
       : [];
     const stockMap = new Map<string, number>();
+    const producedMap = new Map<string, number>();
     for (const s of snapshots) {
       stockMap.set(s.iwasku, s.warehouseStock);
+      producedMap.set(s.iwasku, s.produced);
     }
 
     // Aggregate by IWASKU (same pattern as manufacturer export)
@@ -117,7 +119,7 @@ export async function GET(request: NextRequest) {
           totalRequestedQty: r.quantity,
           warehouseStock: stock ?? null,
           netNeed: stock != null ? Math.max(0, r.quantity - stock) : null,
-          producedQty: r.producedQuantity || 0,
+          producedQty: producedMap.get(r.iwasku) ?? 0,
           productSize: r.productSize || 0,
           totalDesi: (r.productSize || 0) * r.quantity,
           status: formatStatusForExcel(r.status),

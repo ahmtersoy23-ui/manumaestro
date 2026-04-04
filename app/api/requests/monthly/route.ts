@@ -98,14 +98,23 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    // First, group by IWASKU to track production per product (not per request)
+    // Get MonthSnapshot.produced (single source of truth for production)
+    const iwaskuList = [...new Set(requests.map(r => r.iwasku))];
+    const snapshots = iwaskuList.length > 0
+      ? await prisma.monthSnapshot.findMany({
+          where: { month, iwasku: { in: iwaskuList } },
+          select: { iwasku: true, produced: true },
+        })
+      : [];
+    const producedMap = new Map(snapshots.map(s => [s.iwasku, s.produced]));
+
+    // Group by IWASKU
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const productMap = new Map<string, any>();
     requests.forEach((request) => {
       const existing = productMap.get(request.iwasku);
 
       if (existing) {
-        // Sum requested quantities across all marketplace requests for this product
         existing.totalRequestedQty += request.quantity;
         existing.requests.push(request);
       } else {
@@ -113,8 +122,7 @@ export async function GET(request: NextRequest) {
           iwasku: request.iwasku,
           productCategory: request.productCategory,
           productSize: request.productSize,
-          // Use the producedQuantity from the first request (they should all be the same for the same product)
-          producedQty: request.producedQuantity || 0,
+          producedQty: producedMap.get(request.iwasku) ?? 0,
           totalRequestedQty: request.quantity,
           requests: [request],
         });
