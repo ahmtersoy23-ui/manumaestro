@@ -45,33 +45,26 @@ const methodIcons: Record<string, typeof Anchor> = {
 const methodLabels: Record<string, string> = { sea: 'Deniz', road: 'Kara', air: 'Hava' };
 
 export default function ShipmentsPage() {
-  const { role } = useAuth();
+  useAuth(); // Session check
   const [activeTab, setActiveTab] = useState<Tab>('US');
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: '', shippingMethod: 'sea', plannedDate: '', notes: '' });
+  const [canCreate, setCanCreate] = useState(false);
 
   const fetchShipments = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/shipments?destinationTab=${activeTab}`);
       const data = await res.json();
-      if (data.success) setShipments(data.data);
+      if (data.success) { setShipments(data.data); setCanCreate(data.permissions?.canCreate ?? false); }
     } catch { /* ignore */ } finally { setLoading(false); }
   }, [activeTab]);
 
   useEffect(() => { fetchShipments(); }, [fetchShipments]);
 
-  if (role !== 'admin') {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <AlertCircle className="w-12 h-12 text-red-400 mx-auto" />
-        <p className="text-gray-600 ml-3">Bu sayfaya erisim yetkiniz yok.</p>
-      </div>
-    );
-  }
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,14 +124,16 @@ export default function ShipmentsPage() {
       </div>
 
       {/* Create Shipment */}
+      {canCreate && (
       <div className="flex gap-2">
         <button onClick={() => setShowCreate(!showCreate)}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
           <Plus className="w-4 h-4" /> Yeni Sevkiyat ({activeTab})
         </button>
       </div>
+      )}
 
-      {showCreate && (
+      {showCreate && canCreate && (
         <form onSubmit={handleCreate} className="bg-white border border-blue-200 rounded-xl p-5 space-y-4">
           <h3 className="font-semibold text-gray-900">Yeni Sevkiyat — {tabLabels[activeTab]}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

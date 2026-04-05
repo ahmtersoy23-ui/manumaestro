@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma, queryProductDb } from '@/lib/db/prisma';
 import { requireShipmentView, requireShipmentAction } from '@/lib/auth/requireShipmentRole';
+import { getShipmentRole, canDoAction, ShipmentAction } from '@/lib/auth/shipmentPermission';
 import { logAction } from '@/lib/auditLog';
 import { z } from 'zod';
 
@@ -114,9 +115,15 @@ export async function GET(request: NextRequest, { params }: Params) {
     };
   });
 
+  // Kullanicinin bu sevkiyat icin izinlerini hesapla
+  const userRole = await getShipmentRole(authResult.user.id, authResult.user.role, shipment.destinationTab);
+  const actions: ShipmentAction[] = ['view', 'createShipment', 'routeItems', 'deleteItems', 'setDestination', 'manageBoxes', 'packItems', 'sendItems', 'closeShipment'];
+  const permissions = Object.fromEntries(actions.map(a => [a, canDoAction(userRole, a)]));
+
   return NextResponse.json({
     success: true,
     data: { ...shipment, items: enrichedItems },
+    permissions,
   });
 }
 

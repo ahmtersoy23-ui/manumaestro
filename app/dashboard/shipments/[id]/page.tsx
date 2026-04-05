@@ -52,7 +52,7 @@ const BOX_ENTRY_METHODS = new Set(['sea']);
 const loadXLSX = () => import('xlsx');
 
 export default function ShipmentDetailPage() {
-  const { role } = useAuth();
+  useAuth(); // Session check
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [shipment, setShipment] = useState<ShipmentDetail | null>(null);
@@ -73,6 +73,9 @@ export default function ShipmentDetailPage() {
   const [bulkFbaText, setBulkFbaText] = useState('');
   const [bulkFbaResult, setBulkFbaResult] = useState<{ updated: number; notFound?: string[] } | null>(null);
 
+  // Permissions from API
+  const [perms, setPerms] = useState<Record<string, boolean>>({});
+
   // Edit mode
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ name: '', plannedDate: '', etaDate: '', notes: '' });
@@ -82,7 +85,7 @@ export default function ShipmentDetailPage() {
     try {
       const res = await fetch(`/api/shipments/${id}`);
       const data = await res.json();
-      if (data.success) setShipment(data.data);
+      if (data.success) { setShipment(data.data); if (data.permissions) setPerms(data.permissions); }
     } catch { /* */ } finally { setLoading(false); }
   }, [id]);
 
@@ -96,7 +99,7 @@ export default function ShipmentDetailPage() {
 
   useEffect(() => { fetchShipment(); fetchBoxes(); }, [fetchShipment, fetchBoxes]);
 
-  if (role !== 'admin') return <div className="flex items-center justify-center min-h-[60vh]"><AlertCircle className="w-12 h-12 text-red-400" /></div>;
+  // Izin kontrolu API uzerinden yapiliyor (permissions state)
   if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>;
   if (!shipment) return (
     <div className="text-center py-12"><AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-3" /><p className="text-gray-600">Sevkiyat bulunamadi</p>
@@ -106,6 +109,16 @@ export default function ShipmentDetailPage() {
   const MethodIcon = methodIcons[shipment.shippingMethod] ?? Anchor;
   const isActive = shipment.status === 'PLANNING' || shipment.status === 'LOADING';
   const isSea = BOX_ENTRY_METHODS.has(shipment.shippingMethod);
+
+  // Permission shortcuts
+  const canRoute = perms.routeItems ?? false;
+  const canDelete = perms.deleteItems ?? false;
+  const canBoxes = perms.manageBoxes ?? false;
+  const canPack = perms.packItems ?? false;
+  const canSend = perms.sendItems ?? false;
+  const canClose = perms.closeShipment ?? false;
+  const canDest = perms.setDestination ?? false;
+  const canEdit = perms.createShipment ?? false; // manager = edit shipment info
   const pendingItems = shipment.items.filter(i => !i.sentAt);
   const sentItems = shipment.items.filter(i => i.sentAt);
   const totalQty = shipment.items.reduce((s, i) => s + i.quantity, 0);
@@ -316,7 +329,7 @@ export default function ShipmentDetailPage() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold text-gray-900">{shipment.name}</h1>
-              {isActive && !editing && (
+              {isActive && canEdit && !editing && (
                 <button onClick={startEdit} className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded" title="Duzenle">
                   <Pencil className="w-4 h-4" />
                 </button>
@@ -330,7 +343,7 @@ export default function ShipmentDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          {isActive && isSea && pendingItems.length > 0 && (
+          {isActive && isSea && canClose && pendingItems.length > 0 && (
             <button onClick={handleCloseShipment} disabled={sending}
               className="px-3 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-2">
               {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ship className="w-4 h-4" />} Sevkiyati Kapat
@@ -444,7 +457,7 @@ export default function ShipmentDetailPage() {
       {activeTab === 'pending' && (
         <div className="space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
-            {isActive && (
+            {isActive && canRoute && (
               <button onClick={() => setShowAddItem(!showAddItem)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
                 <Plus className="w-4 h-4" /> Urun Ekle
               </button>
@@ -453,7 +466,7 @@ export default function ShipmentDetailPage() {
               <Download className="w-4 h-4" /> Excel
             </button>
             {/* Karayolu/hava: Gönder butonu */}
-            {!isSea && selectedPackedCount > 0 && (
+            {!isSea && canSend && selectedPackedCount > 0 && (
               <button onClick={handleSendSelected} disabled={sending}
                 className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50">
                 {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -482,7 +495,7 @@ export default function ShipmentDetailPage() {
                 <thead className="bg-gray-50 border-b">
                   <tr>
                     <th className="w-12 px-3 py-3">
-                      {isActive && !isSea && packedPendingCount > 0 && (
+                      {isActive && !isSea && canSend && packedPendingCount > 0 && (
                         <button onClick={handleSelectAllPacked} className="text-gray-600 hover:text-purple-600" title="Hazirlari sec">
                           {packedPendingCount > 0 && [...selectedIds].length >= packedPendingCount ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
                         </button>
@@ -507,6 +520,7 @@ export default function ShipmentDetailPage() {
                       <PendingItemRow key={item.id} item={item} itemDesi={itemDesi} itemBoxes={itemBoxes}
                         isSea={isSea} isActive={isActive} isExpanded={isExpanded}
                         isSelected={selectedIds.has(item.id)} togglingId={togglingId}
+                        canBoxes={canBoxes} canPack={canPack} canSend={canSend} canDelete={canDelete}
                         onTogglePacked={() => handleTogglePacked(item.id)}
                         onToggleSelect={() => handleToggleSelect(item.id)}
                         onToggleExpand={() => setExpandedItemId(isExpanded ? null : item.id)}
@@ -566,12 +580,12 @@ export default function ShipmentDetailPage() {
       {activeTab === 'boxes' && isSea && (
         <div className="space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
-            {isActive && (
+            {isActive && canBoxes && (
               <button onClick={() => setShowExtraBox(!showExtraBox)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
                 <Plus className="w-4 h-4" /> Ek Koli
               </button>
             )}
-            {boxes.length > 0 && (
+            {canDest && boxes.length > 0 && (
               <button onClick={() => setShowBulkFba(!showBulkFba)} className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600">
                 Toplu FBA Isaretle
               </button>
@@ -582,7 +596,7 @@ export default function ShipmentDetailPage() {
               </button>
             )}
             {/* Bulk FBA/DEPO toggle */}
-            {selectedBoxIds.size > 0 && (
+            {canDest && selectedBoxIds.size > 0 && (
               <>
                 <button onClick={() => handleSetDestination('FBA')} disabled={settingDest}
                   className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600 disabled:opacity-50">
@@ -685,7 +699,7 @@ export default function ShipmentDetailPage() {
                         <td className="text-center px-3 py-3 text-gray-600">{box.height ?? '—'}</td>
                         <td className="text-center px-3 py-3 text-gray-600">{box.weight ?? '—'}</td>
                         <td className="text-center px-3 py-3 font-medium text-gray-900">{boxDesi ? boxDesi.toFixed(1) : '—'}</td>
-                        <td className="px-2 py-3">{isActive && <button onClick={() => handleDeleteBox(box.id)} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>}</td>
+                        <td className="px-2 py-3">{isActive && canBoxes && <button onClick={() => handleDeleteBox(box.id)} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>}</td>
                       </tr>
                     );
                   })}
@@ -703,9 +717,11 @@ export default function ShipmentDetailPage() {
 
 // --- Pending Item Row ---
 function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded, isSelected, togglingId,
+  canBoxes, canPack, canSend, canDelete,
   onTogglePacked, onToggleSelect, onToggleExpand, onCreateBox, onDeleteBox, onDeleteItem }: {
   item: ShipmentItem; itemDesi: number; itemBoxes: ShipmentBox[];
   isSea: boolean; isActive: boolean; isExpanded: boolean; isSelected: boolean; togglingId: string | null;
+  canBoxes: boolean; canPack: boolean; canSend: boolean; canDelete: boolean;
   onTogglePacked: () => void; onToggleSelect: () => void; onToggleExpand: () => void;
   onCreateBox: (form: BoxFormData) => Promise<ShipmentBox | null>; onDeleteBox: (boxId: string) => void;
   onDeleteItem: () => void;
@@ -720,24 +736,22 @@ function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded
     <>
       <tr className={`hover:bg-gray-50 ${rowBg}`}>
         <td className="px-3 py-3 text-center">
-          {isActive && isSea ? (
-            // Deniz: sadece expand/collapse (koli girisi)
+          {isActive && isSea && canBoxes ? (
             <button onClick={onToggleExpand} className="hover:scale-110 transition-transform">
               {isExpanded ? <ChevronDown className="w-5 h-5 text-blue-600" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
             </button>
           ) : isActive && !isSea ? (
-            // Karayolu/hava: checkbox + packed toggle
             <div className="flex items-center gap-1 justify-center">
-              {item.packed && (
+              {item.packed && canSend && (
                 <button onClick={onToggleSelect} className="hover:scale-110 transition-transform">
                   {isSelected ? <CheckSquare className="w-5 h-5 text-purple-600" /> : <Square className="w-5 h-5 text-gray-300" />}
                 </button>
               )}
-              {togglingId === item.id ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" /> : (
+              {canPack && (togglingId === item.id ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" /> : (
                 <button onClick={onTogglePacked} className="hover:scale-110 transition-transform" title={item.packed ? 'Hazir' : 'Hazirla'}>
                   {item.packed ? <Check className="w-4 h-4 text-green-600" /> : <Package className="w-4 h-4 text-gray-300" />}
                 </button>
-              )}
+              ))}
             </div>
           ) : item.packed ? <Check className="w-5 h-5 text-green-600" /> : null}
         </td>
@@ -754,13 +768,13 @@ function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded
         <td className={`px-3 py-3 text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.marketplace?.code ?? '—'}</td>
         <td className={`text-center px-3 py-3 font-semibold ${item.packed ? 'text-green-800' : 'text-gray-900'}`}>{item.quantity}</td>
         <td className={`text-center px-3 py-3 font-medium ${item.packed ? 'text-green-800' : 'text-gray-900'}`}>{itemDesi > 0 ? Math.round(itemDesi).toLocaleString('tr-TR') : '—'}</td>
-        {isActive && (
+        {isActive && canDelete && (
           <td className="px-2 py-3 text-center">
             <button onClick={onDeleteItem} className="text-red-300 hover:text-red-600 transition-colors" title="Sevkiyattan cikar"><X className="w-4 h-4" /></button>
           </td>
         )}
       </tr>
-      {isExpanded && isActive && isSea && (
+      {isExpanded && isActive && isSea && canBoxes && (
         <tr><td colSpan={10} className="px-4 py-3 bg-blue-50/50 border-t border-blue-100">
           <BoxEntryPanel item={item} existingBoxes={itemBoxes} onCreateBox={onCreateBox} onDeleteBox={onDeleteBox} />
         </td></tr>

@@ -56,7 +56,13 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  return NextResponse.json({ success: true, data: shipmentsWithStats });
+  // Kullanicinin bu destinasyon icin createShipment izni var mi
+  const { getShipmentRole, canDoAction } = await import('@/lib/auth/shipmentPermission');
+  const destTab = destinationTab ?? 'US';
+  const userShipRole = await getShipmentRole(authResult.user.id, authResult.user.role, destTab);
+  const canCreate = canDoAction(userShipRole, 'createShipment');
+
+  return NextResponse.json({ success: true, data: shipmentsWithStats, permissions: { canCreate } });
 }
 
 export async function POST(request: NextRequest) {
