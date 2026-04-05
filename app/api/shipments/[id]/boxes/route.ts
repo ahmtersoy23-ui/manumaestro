@@ -15,7 +15,7 @@ function marketplaceToCountry(code: string | null | undefined): string | null {
   if (!code) return null;
   const map: Record<string, string> = {
     AMZN_US: 'US', AMZN_CA: 'CA', AMZN_UK: 'UK', AMZN_AU: 'AU',
-    AMZN_EU: 'DE', // EU FNSKU genelde DE üzerinden
+    AMZN_EU: 'FR', // EU FNSKU genelde DE üzerinden
   };
   return map[code] ?? null;
 }

@@ -76,7 +76,7 @@ export async function GET(request: NextRequest, { params }: Params) {
 
   // FNSKU lookup: iwasku + marketplace code → country_code → sku_master.fnsku
   const mktCodeToCountry: Record<string, string> = {
-    AMZN_US: 'US', AMZN_CA: 'CA', AMZN_UK: 'UK', AMZN_AU: 'AU', AMZN_EU: 'DE',
+    AMZN_US: 'US', AMZN_CA: 'CA', AMZN_UK: 'UK', AMZN_AU: 'AU', AMZN_EU: 'FR',
   };
   const fnskuMap = new Map<string, string>(); // key: "iwasku|countryCode"
   const fnskuLookups: Array<{ iwasku: string; countryCode: string }> = [];
