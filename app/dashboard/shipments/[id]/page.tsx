@@ -1,11 +1,13 @@
 /**
  * Shipment Detail Page
- * Two tabs: Items (with box entry for US) + Boxes (koli list + Excel export)
+ * 3 tabs: Bekleyen (pending) | Gonderilenler (sent) | Koliler (boxes, sea only)
+ * Sea: box entry + sevkiyat kapat
+ * Road/air: checkbox + parti gonderi
  */
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
@@ -21,9 +23,8 @@ interface ShipmentItem {
   marketplaceId: string | null;
   marketplace: { id: string; name: string; code: string } | null;
   productName: string; productCategory: string;
-  reserveId: string | null; packed: boolean; createdAt: string;
+  reserveId: string | null; packed: boolean; sentAt: string | null; createdAt: string;
 }
-
 interface ShipmentBox {
   id: string; shipmentItemId: string | null; boxNumber: string;
   iwasku: string | null; fnsku: string | null;
@@ -32,26 +33,22 @@ interface ShipmentBox {
   quantity: number; width: number | null; height: number | null;
   depth: number | null; weight: number | null; createdAt: string;
 }
-
 interface ShipmentDetail {
   id: string; name: string; destinationTab: string; shippingMethod: string;
   plannedDate: string; actualDate: string | null; etaDate: string | null;
   status: string; notes: string | null; items: ShipmentItem[];
 }
+interface BoxFormData {
+  iwasku?: string | null; fnsku?: string | null; productName?: string | null;
+  productCategory?: string | null; marketplaceCode?: string | null;
+  quantity: number; width?: number | null; height?: number | null;
+  depth?: number | null; weight?: number | null;
+}
 
-// --- Constants ---
-const statusConfig: Record<string, { label: string; color: string; bgColor: string }> = {
-  PLANNING: { label: 'Planlama', color: 'text-gray-600', bgColor: 'bg-gray-100' },
-  LOADING: { label: 'Yukleme', color: 'text-yellow-700', bgColor: 'bg-yellow-100' },
-  IN_TRANSIT: { label: 'Yolda', color: 'text-blue-700', bgColor: 'bg-blue-100' },
-  DELIVERED: { label: 'Teslim Edildi', color: 'text-green-700', bgColor: 'bg-green-100' },
-};
 const methodIcons: Record<string, typeof Anchor> = { sea: Anchor, road: TruckIcon, air: Plane };
 const methodLabels: Record<string, string> = { sea: 'Deniz', road: 'Karayolu', air: 'Hava' };
-const loadXLSX = () => import('xlsx');
-
-// Deniz gonderimlerinde box entry gerekli (US, AU, ZA)
 const BOX_ENTRY_METHODS = new Set(['sea']);
+const loadXLSX = () => import('xlsx');
 
 export default function ShipmentDetailPage() {
   const { role } = useAuth();
@@ -60,18 +57,14 @@ export default function ShipmentDetailPage() {
   const [shipment, setShipment] = useState<ShipmentDetail | null>(null);
   const [boxes, setBoxes] = useState<ShipmentBox[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'items' | 'boxes'>('items');
-
-  // Add item form
+  const [activeTab, setActiveTab] = useState<'pending' | 'sent' | 'boxes'>('pending');
   const [showAddItem, setShowAddItem] = useState(false);
   const [addForm, setAddForm] = useState({ iwasku: '', quantity: '', desi: '' });
   const [adding, setAdding] = useState(false);
-
-  // Box entry
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
-
-  // Extra box (non-production item)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [sending, setSending] = useState(false);
   const [showExtraBox, setShowExtraBox] = useState(false);
 
   const fetchShipment = useCallback(async () => {
@@ -79,7 +72,7 @@ export default function ShipmentDetailPage() {
       const res = await fetch(`/api/shipments/${id}`);
       const data = await res.json();
       if (data.success) setShipment(data.data);
-    } catch { /* ignore */ } finally { setLoading(false); }
+    } catch { /* */ } finally { setLoading(false); }
   }, [id]);
 
   const fetchBoxes = useCallback(async () => {
@@ -87,7 +80,7 @@ export default function ShipmentDetailPage() {
       const res = await fetch(`/api/shipments/${id}/boxes`);
       const data = await res.json();
       if (data.success) setBoxes(data.data);
-    } catch { /* ignore */ }
+    } catch { /* */ }
   }, [id]);
 
   useEffect(() => { fetchShipment(); fetchBoxes(); }, [fetchShipment, fetchBoxes]);
@@ -95,62 +88,85 @@ export default function ShipmentDetailPage() {
   if (role !== 'admin') return <div className="flex items-center justify-center min-h-[60vh]"><AlertCircle className="w-12 h-12 text-red-400" /></div>;
   if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>;
   if (!shipment) return (
-    <div className="text-center py-12">
-      <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-3" />
-      <p className="text-gray-600">Sevkiyat bulunamadi</p>
-      <Link href="/dashboard/shipments" className="text-blue-600 text-sm mt-2 inline-block">Geri don</Link>
-    </div>
+    <div className="text-center py-12"><AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-3" /><p className="text-gray-600">Sevkiyat bulunamadi</p>
+      <Link href="/dashboard/shipments" className="text-blue-600 text-sm mt-2 inline-block">Geri don</Link></div>
   );
 
-  const config = statusConfig[shipment.status] ?? statusConfig.PLANNING;
   const MethodIcon = methodIcons[shipment.shippingMethod] ?? Anchor;
+  const isActive = shipment.status === 'PLANNING' || shipment.status === 'LOADING';
+  const isSea = BOX_ENTRY_METHODS.has(shipment.shippingMethod);
+  const pendingItems = shipment.items.filter(i => !i.sentAt);
+  const sentItems = shipment.items.filter(i => i.sentAt);
   const totalQty = shipment.items.reduce((s, i) => s + i.quantity, 0);
   const totalDesi = shipment.items.reduce((s, i) => s + (i.desi ?? 0) * i.quantity, 0);
-  const packedCount = shipment.items.filter(i => i.packed).length;
-  const totalItems = shipment.items.length;
-  const allPacked = totalItems > 0 && packedCount === totalItems;
-  const isActive = shipment.status === 'PLANNING' || shipment.status === 'LOADING';
-  const needsBoxEntry = BOX_ENTRY_METHODS.has(shipment.shippingMethod);
+  const packedPendingCount = pendingItems.filter(i => i.packed).length;
+  const plannedDate = new Date(shipment.plannedDate).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
 
   // --- Handlers ---
-  const handleStatusChange = async (newStatus: string) => {
-    const labels: Record<string, string> = {
-      IN_TRANSIT: 'Sevkiyat gonderilsin mi? (Depo cikislari otomatik yapilacak)',
-      DELIVERED: 'Teslim edildi olarak isaretlensin mi?',
-    };
-    if (!confirm(labels[newStatus] ?? `${newStatus} olarak degissin mi?`)) return;
-    const res = await fetch(`/api/shipments/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus, ...(newStatus === 'IN_TRANSIT' ? { actualDate: new Date().toISOString() } : {}) }),
-    });
-    const data = await res.json();
-    if (data.success) fetchShipment();
-    else alert(data.error);
-  };
-
-  // Simple packed toggle (non-US destinations)
   const handleTogglePacked = async (itemId: string) => {
     setTogglingId(itemId);
     try {
       const res = await fetch(`/api/shipments/${id}/items/${itemId}`, { method: 'PATCH' });
       const data = await res.json();
-      if (data.success) {
-        setShipment(prev => prev ? {
-          ...prev,
-          items: prev.items.map(i => i.id === itemId ? { ...i, packed: data.data.packed } : i),
-        } : prev);
-      }
-    } catch { /* ignore */ } finally { setTogglingId(null); }
+      if (data.success) setShipment(prev => prev ? { ...prev, items: prev.items.map(i => i.id === itemId ? { ...i, packed: data.data.packed } : i) } : prev);
+    } catch { /* */ } finally { setTogglingId(null); }
+  };
+
+  const handleToggleSelect = (itemId: string) => {
+    const next = new Set(selectedIds);
+    next.has(itemId) ? next.delete(itemId) : next.add(itemId);
+    setSelectedIds(next);
+  };
+
+  const handleSelectAllPacked = () => {
+    const packedPendingIds = pendingItems.filter(i => i.packed).map(i => i.id);
+    if (packedPendingIds.every(id => selectedIds.has(id))) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(packedPendingIds));
+    }
+  };
+
+  // Karayolu/hava: seçili packed itemleri gönder
+  const handleSendSelected = async () => {
+    const toSend = [...selectedIds].filter(sid => {
+      const item = pendingItems.find(i => i.id === sid);
+      return item?.packed;
+    });
+    if (toSend.length === 0) return;
+    if (!confirm(`${toSend.length} urun gonderilsin mi?`)) return;
+    setSending(true);
+    try {
+      const res = await fetch(`/api/shipments/${id}/send`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemIds: toSend }),
+      });
+      const data = await res.json();
+      if (data.success) { setSelectedIds(new Set()); await fetchShipment(); }
+      else alert(data.error);
+    } catch { alert('Gonderim hatasi'); } finally { setSending(false); }
+  };
+
+  // Deniz: sevkiyatı kapat
+  const handleCloseShipment = async () => {
+    if (!confirm('Sevkiyat kapatilsin mi? Tum urunler gonderilmis olarak isaretlenecek.')) return;
+    setSending(true);
+    try {
+      const res = await fetch(`/api/shipments/${id}/send`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ closeShipment: true }),
+      });
+      const data = await res.json();
+      if (data.success) await fetchShipment();
+      else alert(data.error);
+    } catch { alert('Kapama hatasi'); } finally { setSending(false); }
   };
 
   const handleAddItem = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAdding(true);
+    e.preventDefault(); setAdding(true);
     try {
       const res = await fetch(`/api/shipments/${id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items: [{ iwasku: addForm.iwasku, quantity: parseInt(addForm.quantity), desi: addForm.desi ? parseFloat(addForm.desi) : undefined }] }),
       });
       const data = await res.json();
@@ -159,86 +175,51 @@ export default function ShipmentDetailPage() {
     } catch { alert('Hata'); } finally { setAdding(false); }
   };
 
-  // Create box for a shipment item
   const handleCreateBox = async (form: BoxFormData, shipmentItemId: string | null) => {
     const res = await fetch(`/api/shipments/${id}/boxes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...form, shipmentItemId }),
     });
     const data = await res.json();
-    if (data.success) {
-      await Promise.all([fetchBoxes(), fetchShipment()]);
-      return data.data as ShipmentBox;
-    } else {
-      alert(data.error); return null;
-    }
+    if (data.success) { await Promise.all([fetchBoxes(), fetchShipment()]); return data.data as ShipmentBox; }
+    else { alert(data.error); return null; }
   };
 
   const handleDeleteBox = async (boxId: string) => {
     if (!confirm('Bu koli silinsin mi?')) return;
     const res = await fetch(`/api/shipments/${id}/boxes?boxId=${boxId}`, { method: 'DELETE' });
-    const data = await res.json();
-    if (data.success) { await Promise.all([fetchBoxes(), fetchShipment()]); }
-    else alert(data.error);
+    if ((await res.json()).success) await Promise.all([fetchBoxes(), fetchShipment()]);
   };
 
-  // Excel export — boxes
   const handleExportBoxes = async () => {
     const XLSX = await loadXLSX();
-    const rows = boxes.map((b, idx) => ({
-      '#': idx + 1,
-      'Koli No': b.boxNumber,
-      'IWASKU': b.iwasku ?? '',
-      'FNSKU': b.fnsku ?? '',
-      'Urun Adi': b.productName ?? '',
-      'Kategori': b.productCategory ?? '',
-      'Pazar Yeri': b.marketplaceCode ?? '',
-      'Adet': b.quantity,
-      'En (cm)': b.width ?? '',
-      'Boy (cm)': b.depth ?? '',
-      'Yukseklik (cm)': b.height ?? '',
-      'Agirlik (kg)': b.weight ?? '',
-    }));
+    const rows = boxes.map((b, i) => ({ '#': i + 1, 'Koli No': b.boxNumber, 'IWASKU': b.iwasku ?? '', 'FNSKU': b.fnsku ?? '', 'Urun Adi': b.productName ?? '', 'Kategori': b.productCategory ?? '', 'Pazar Yeri': b.marketplaceCode ?? '', 'Adet': b.quantity, 'En': b.width ?? '', 'Boy': b.depth ?? '', 'Yuk.': b.height ?? '', 'Agr.': b.weight ?? '' }));
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{ wch: 4 }, { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 40 }, { wch: 20 }, { wch: 12 }, { wch: 6 }, { wch: 8 }, { wch: 8 }, { wch: 12 }, { wch: 10 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Koliler');
+    ws['!cols'] = [{ wch: 4 }, { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 40 }, { wch: 20 }, { wch: 12 }, { wch: 6 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }];
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Koliler');
     XLSX.writeFile(wb, `${shipment.name}-koliler-${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  // Excel export — items (packing list)
   const handleExportItems = async () => {
     const XLSX = await loadXLSX();
-    const rows = shipment.items.map((item, idx) => ({
-      '#': idx + 1, 'IWASKU': item.iwasku, 'Urun Adi': item.productName,
-      'Kategori': item.productCategory, 'Pazar Yeri': item.marketplace?.code ?? '',
-      'Miktar': item.quantity, 'Birim Desi': item.desi ?? '', 'Toplam Desi': item.desi ? Math.round(item.desi * item.quantity) : '',
-      'Hazir': item.packed ? 'Evet' : '',
-    }));
+    const rows = shipment.items.map((item, i) => ({ '#': i + 1, 'IWASKU': item.iwasku, 'Urun Adi': item.productName, 'Kategori': item.productCategory, 'Pazar Yeri': item.marketplace?.code ?? '', 'Miktar': item.quantity, 'Desi': item.desi ? Math.round(item.desi * item.quantity) : '', 'Durum': item.sentAt ? 'Gonderildi' : item.packed ? 'Hazir' : 'Bekliyor' }));
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{ wch: 4 }, { wch: 16 }, { wch: 40 }, { wch: 20 }, { wch: 12 }, { wch: 8 }, { wch: 10 }, { wch: 12 }, { wch: 6 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Paketleme Listesi');
-    XLSX.writeFile(wb, `${shipment.name}-paketleme-${new Date().toISOString().split('T')[0]}.xlsx`);
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Urunler');
+    XLSX.writeFile(wb, `${shipment.name}-urunler-${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  const plannedDate = new Date(shipment.plannedDate).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+  // Selected packed items count
+  const selectedPackedCount = [...selectedIds].filter(sid => pendingItems.find(i => i.id === sid)?.packed).length;
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <button onClick={() => router.push('/dashboard/shipments')} className="p-2 hover:bg-gray-100 rounded-lg">
-            <ArrowLeft className="w-5 h-5 text-gray-500" />
-          </button>
+          <button onClick={() => router.push('/dashboard/shipments')} className="p-2 hover:bg-gray-100 rounded-lg"><ArrowLeft className="w-5 h-5 text-gray-500" /></button>
           <MethodIcon className="w-6 h-6 text-blue-500" />
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-gray-900">{shipment.name}</h1>
-              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${config.bgColor} ${config.color}`}>{config.label}</span>
-            </div>
+            <h1 className="text-2xl font-bold text-gray-900">{shipment.name}</h1>
             <div className="flex items-center gap-3 text-sm text-gray-500">
               <span>{shipment.destinationTab}</span><span>·</span>
               <span>{methodLabels[shipment.shippingMethod]}</span><span>·</span>
@@ -247,21 +228,26 @@ export default function ShipmentDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          {isActive && allPacked && (
-            <button onClick={() => handleStatusChange('IN_TRANSIT')} className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 flex items-center gap-2">
-              <Send className="w-4 h-4" /> Gonder
+          {isActive && isSea && pendingItems.length > 0 && (
+            <button onClick={handleCloseShipment} disabled={sending}
+              className="px-3 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-2">
+              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ship className="w-4 h-4" />} Sevkiyati Kapat
             </button>
           )}
-          {shipment.status === 'IN_TRANSIT' && (
-            <button onClick={() => handleStatusChange('DELIVERED')} className="px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 flex items-center gap-2">Teslim Edildi</button>
+          {!isActive && shipment.status === 'IN_TRANSIT' && (
+            <button onClick={async () => {
+              if (!confirm('Teslim edildi?')) return;
+              const res = await fetch(`/api/shipments/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'DELIVERED' }) });
+              if ((await res.json()).success) fetchShipment();
+            }} className="px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 flex items-center gap-2">Teslim Edildi</button>
           )}
         </div>
       </div>
 
-      {/* Summary Cards */}
+      {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-white border rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-gray-900">{totalItems}</p><p className="text-xs text-gray-500">Urun Cesidi</p>
+          <p className="text-2xl font-bold text-gray-900">{shipment.items.length}</p><p className="text-xs text-gray-500">Toplam Urun</p>
         </div>
         <div className="bg-white border rounded-xl p-4 text-center">
           <p className="text-2xl font-bold text-gray-900">{totalQty.toLocaleString('tr-TR')}</p><p className="text-xs text-gray-500">Toplam Unite</p>
@@ -270,51 +256,47 @@ export default function ShipmentDetailPage() {
           <p className="text-2xl font-bold text-gray-900">{Math.round(totalDesi).toLocaleString('tr-TR')}</p><p className="text-xs text-gray-500">Toplam Desi</p>
         </div>
         <div className="bg-white border rounded-xl p-4 text-center">
-          <p className={`text-2xl font-bold ${allPacked ? 'text-green-600' : isActive ? 'text-orange-600' : 'text-gray-400'}`}>{packedCount}/{totalItems}</p>
-          <p className="text-xs text-gray-500">Hazirlanma</p>
+          <p className="text-2xl font-bold text-blue-600">{pendingItems.length}</p><p className="text-xs text-gray-500">Bekleyen</p>
+          {sentItems.length > 0 && <p className="text-xs text-green-600 mt-1">{sentItems.length} gonderildi</p>}
         </div>
       </div>
-
-      {/* Progress bar */}
-      {isActive && totalItems > 0 && (
-        <div className="bg-white border rounded-xl p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-700">Paketleme Durumu</span>
-            <span className="text-sm text-gray-500">{packedCount}/{totalItems} hazir</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-3">
-            <div className={`h-3 rounded-full transition-all duration-300 ${allPacked ? 'bg-green-500' : 'bg-blue-500'}`}
-              style={{ width: `${totalItems > 0 ? (packedCount / totalItems) * 100 : 0}%` }} />
-          </div>
-          {allPacked && <p className="mt-2 text-sm text-green-600 font-medium flex items-center gap-1"><Check className="w-4 h-4" /> Tum urunler hazir!</p>}
-        </div>
-      )}
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b">
-        <button onClick={() => setActiveTab('items')}
-          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'items' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-          Urunler ({totalItems})
+        <button onClick={() => setActiveTab('pending')}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'pending' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+          Bekleyen ({pendingItems.length})
         </button>
-        <button onClick={() => setActiveTab('boxes')}
-          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'boxes' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-          Koliler ({boxes.length})
+        <button onClick={() => setActiveTab('sent')}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'sent' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+          Gonderilenler ({sentItems.length})
         </button>
+        {isSea && (
+          <button onClick={() => setActiveTab('boxes')}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'boxes' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            Koliler ({boxes.length})
+          </button>
+        )}
       </div>
 
-      {/* Items Tab */}
-      {activeTab === 'items' && (
+      {/* === PENDING TAB === */}
+      {activeTab === 'pending' && (
         <div className="space-y-4">
-          {/* Actions */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             {isActive && (
               <button onClick={() => setShowAddItem(!showAddItem)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
                 <Plus className="w-4 h-4" /> Urun Ekle
               </button>
             )}
-            {totalItems > 0 && (
-              <button onClick={handleExportItems} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 border">
-                <Download className="w-4 h-4" /> Excel Liste
+            <button onClick={handleExportItems} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 border">
+              <Download className="w-4 h-4" /> Excel
+            </button>
+            {/* Karayolu/hava: Gönder butonu */}
+            {!isSea && selectedPackedCount > 0 && (
+              <button onClick={handleSendSelected} disabled={sending}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50">
+                {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                {selectedPackedCount} urun gonder
               </button>
             )}
           </div>
@@ -328,19 +310,24 @@ export default function ShipmentDetailPage() {
               <div><label className="block text-xs font-medium text-gray-600 mb-1">Desi</label>
                 <input type="number" step="0.1" value={addForm.desi} onChange={e => setAddForm(f => ({ ...f, desi: e.target.value }))} className="px-3 py-2 border rounded-lg text-sm w-24" /></div>
               <button type="submit" disabled={adding} className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
-                {adding && <Loader2 className="w-4 h-4 animate-spin" />} Ekle
-              </button>
+                {adding && <Loader2 className="w-4 h-4 animate-spin" />} Ekle</button>
             </form>
           )}
 
-          {/* Items Table */}
+          {/* Pending items table */}
           <div className="bg-white border rounded-xl overflow-hidden">
-            {totalItems > 0 ? (
+            {pendingItems.length > 0 ? (
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    {isActive && <th className="w-12 px-3 py-3"></th>}
-                    <th className="text-left px-4 py-3 font-semibold text-gray-700 text-xs uppercase">IWASKU</th>
+                    <th className="w-12 px-3 py-3">
+                      {!isSea && isActive && (
+                        <button onClick={handleSelectAllPacked} className="text-gray-600 hover:text-purple-600">
+                          {packedPendingCount > 0 && [...selectedIds].length >= packedPendingCount ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
+                        </button>
+                      )}
+                    </th>
+                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">IWASKU</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Urun Adi</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Kategori</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Pazar Yeri</th>
@@ -349,69 +336,84 @@ export default function ShipmentDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {shipment.items.map(item => {
-                    const itemTotalDesi = (item.desi ?? 0) * item.quantity;
+                  {pendingItems.map(item => {
+                    const itemDesi = (item.desi ?? 0) * item.quantity;
                     const isExpanded = expandedItemId === item.id;
                     const itemBoxes = boxes.filter(b => b.shipmentItemId === item.id);
-
                     return (
-                      <ItemRow
-                        key={item.id}
-                        item={item}
-                        itemTotalDesi={itemTotalDesi}
-                        itemBoxes={itemBoxes}
-                        isActive={isActive}
-                        needsBoxEntry={needsBoxEntry}
-                        isExpanded={isExpanded}
-                        togglingId={togglingId}
+                      <PendingItemRow key={item.id} item={item} itemDesi={itemDesi} itemBoxes={itemBoxes}
+                        isSea={isSea} isActive={isActive} isExpanded={isExpanded}
+                        isSelected={selectedIds.has(item.id)} togglingId={togglingId}
                         onTogglePacked={() => handleTogglePacked(item.id)}
+                        onToggleSelect={() => handleToggleSelect(item.id)}
                         onToggleExpand={() => setExpandedItemId(isExpanded ? null : item.id)}
                         onCreateBox={(form) => handleCreateBox(form, item.id)}
-                        onDeleteBox={handleDeleteBox}
-                      />
+                        onDeleteBox={handleDeleteBox} />
                     );
                   })}
                 </tbody>
-                <tfoot className="bg-gray-50 border-t">
-                  <tr className="font-semibold text-gray-900">
-                    {isActive && <td></td>}
-                    <td className="px-4 py-3">Toplam</td><td></td><td></td><td></td>
-                    <td className="text-center px-3 py-3">{totalQty.toLocaleString('tr-TR')}</td>
-                    <td className="text-center px-3 py-3">{Math.round(totalDesi).toLocaleString('tr-TR')}</td>
-                  </tr>
-                </tfoot>
               </table>
             ) : (
-              <div className="text-center py-12"><Ship className="w-10 h-10 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">Henuz urun eklenmedi</p></div>
+              <div className="text-center py-12"><Check className="w-10 h-10 text-green-300 mx-auto mb-3" /><p className="text-gray-500">Bekleyen urun yok</p></div>
             )}
           </div>
         </div>
       )}
 
-      {/* Boxes Tab */}
-      {activeTab === 'boxes' && (
+      {/* === SENT TAB === */}
+      {activeTab === 'sent' && (
+        <div className="bg-white border rounded-xl overflow-hidden">
+          {sentItems.length > 0 ? (
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-700 text-xs uppercase">IWASKU</th>
+                  <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Urun Adi</th>
+                  <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Kategori</th>
+                  <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Pazar Yeri</th>
+                  <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Miktar</th>
+                  <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Gonderim</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {sentItems.map(item => (
+                  <tr key={item.id} className="bg-green-50/30">
+                    <td className="px-4 py-3 font-mono text-sm text-gray-900">{item.iwasku}</td>
+                    <td className="px-3 py-3 text-xs text-gray-700 line-clamp-1">{item.productName || '—'}</td>
+                    <td className="px-3 py-3 text-sm text-gray-600">{item.productCategory || '—'}</td>
+                    <td className="px-3 py-3 text-sm text-gray-600">{item.marketplace?.code ?? '—'}</td>
+                    <td className="text-center px-3 py-3 font-semibold text-gray-900">{item.quantity}</td>
+                    <td className="text-center px-3 py-3 text-xs text-green-700">
+                      {item.sentAt ? new Date(item.sentAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="text-center py-12"><Ship className="w-10 h-10 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">Henuz gonderilen urun yok</p></div>
+          )}
+        </div>
+      )}
+
+      {/* === BOXES TAB === */}
+      {activeTab === 'boxes' && isSea && (
         <div className="space-y-4">
           <div className="flex items-center gap-3">
-            <button onClick={() => setShowExtraBox(!showExtraBox)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
-              <Plus className="w-4 h-4" /> Ek Koli (Uretim Disi)
-            </button>
+            {isActive && (
+              <button onClick={() => setShowExtraBox(!showExtraBox)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
+                <Plus className="w-4 h-4" /> Ek Koli
+              </button>
+            )}
             {boxes.length > 0 && (
               <button onClick={handleExportBoxes} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 border">
                 <Download className="w-4 h-4" /> Excel Koli Listesi
               </button>
             )}
           </div>
-
           {showExtraBox && (
-            <ExtraBoxForm
-              onSubmit={async (form) => {
-                const result = await handleCreateBox(form, null);
-                if (result) setShowExtraBox(false);
-              }}
-              onCancel={() => setShowExtraBox(false)}
-            />
+            <ExtraBoxForm onSubmit={async (form) => { const r = await handleCreateBox(form, null); if (r) setShowExtraBox(false); }} onCancel={() => setShowExtraBox(false)} />
           )}
-
           <div className="bg-white border rounded-xl overflow-hidden">
             {boxes.length > 0 ? (
               <table className="w-full text-sm">
@@ -426,7 +428,7 @@ export default function ShipmentDetailPage() {
                     <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Boy</th>
                     <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Yuk.</th>
                     <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Agr.</th>
-                    <th className="w-12 px-3 py-3"></th>
+                    <th className="w-10"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -441,11 +443,7 @@ export default function ShipmentDetailPage() {
                       <td className="text-center px-3 py-3 text-gray-600">{box.depth ?? '—'}</td>
                       <td className="text-center px-3 py-3 text-gray-600">{box.height ?? '—'}</td>
                       <td className="text-center px-3 py-3 text-gray-600">{box.weight ?? '—'}</td>
-                      <td className="px-3 py-3 text-center">
-                        {isActive && (
-                          <button onClick={() => handleDeleteBox(box.id)} className="text-red-400 hover:text-red-600 transition-colors"><X className="w-4 h-4" /></button>
-                        )}
-                      </td>
+                      <td className="px-2 py-3">{isActive && <button onClick={() => handleDeleteBox(box.id)} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -460,108 +458,75 @@ export default function ShipmentDetailPage() {
   );
 }
 
-// --- Box form data type ---
-interface BoxFormData {
-  iwasku?: string | null; fnsku?: string | null; productName?: string | null;
-  productCategory?: string | null; marketplaceCode?: string | null;
-  quantity: number; width?: number | null; height?: number | null;
-  depth?: number | null; weight?: number | null;
-}
-
-// --- Item Row with expandable box entry ---
-function ItemRow({ item, itemTotalDesi, itemBoxes, isActive, needsBoxEntry, isExpanded, togglingId,
-  onTogglePacked, onToggleExpand, onCreateBox, onDeleteBox }: {
-  item: ShipmentItem; itemTotalDesi: number; itemBoxes: ShipmentBox[];
-  isActive: boolean; needsBoxEntry: boolean; isExpanded: boolean; togglingId: string | null;
-  onTogglePacked: () => void; onToggleExpand: () => void;
-  onCreateBox: (form: BoxFormData) => Promise<ShipmentBox | null>;
-  onDeleteBox: (boxId: string) => void;
+// --- Pending Item Row ---
+function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded, isSelected, togglingId,
+  onTogglePacked, onToggleSelect, onToggleExpand, onCreateBox, onDeleteBox }: {
+  item: ShipmentItem; itemDesi: number; itemBoxes: ShipmentBox[];
+  isSea: boolean; isActive: boolean; isExpanded: boolean; isSelected: boolean; togglingId: string | null;
+  onTogglePacked: () => void; onToggleSelect: () => void; onToggleExpand: () => void;
+  onCreateBox: (form: BoxFormData) => Promise<ShipmentBox | null>; onDeleteBox: (boxId: string) => void;
 }) {
   return (
     <>
       <tr className={`hover:bg-gray-50 ${item.packed ? 'bg-green-50/50' : ''}`}>
-        {isActive && (
-          <td className="px-3 py-3 text-center">
-            {needsBoxEntry ? (
-              // US: expand to add box
-              <button onClick={onToggleExpand} className="hover:scale-110 transition-transform">
-                {item.packed
-                  ? <CheckSquare className="w-5 h-5 text-green-600" />
-                  : isExpanded ? <ChevronDown className="w-5 h-5 text-blue-600" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
+        <td className="px-3 py-3 text-center">
+          {isActive && isSea ? (
+            <button onClick={onToggleExpand} className="hover:scale-110 transition-transform">
+              {item.packed ? <CheckSquare className="w-5 h-5 text-green-600" />
+                : isExpanded ? <ChevronDown className="w-5 h-5 text-blue-600" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
+            </button>
+          ) : isActive && !isSea ? (
+            <div className="flex items-center gap-1">
+              <button onClick={onToggleSelect} className="hover:scale-110 transition-transform">
+                {isSelected ? <CheckSquare className="w-5 h-5 text-purple-600" /> : <Square className="w-5 h-5 text-gray-300" />}
               </button>
-            ) : (
-              // Non-US: simple toggle
-              togglingId === item.id
-                ? <Loader2 className="w-5 h-5 text-gray-400 animate-spin mx-auto" />
-                : <button onClick={onTogglePacked} className="hover:scale-110 transition-transform">
-                    {item.packed ? <CheckSquare className="w-5 h-5 text-green-600" /> : <Square className="w-5 h-5 text-gray-400" />}
-                  </button>
-            )}
-          </td>
-        )}
-        <td className={`px-4 py-3 font-mono text-sm ${item.packed ? 'text-green-800' : 'text-gray-900'}`}>{item.iwasku}</td>
+              {togglingId === item.id ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" /> : (
+                <button onClick={onTogglePacked} className="hover:scale-110 transition-transform ml-1" title={item.packed ? 'Hazir' : 'Hazirla'}>
+                  {item.packed ? <Check className="w-4 h-4 text-green-600" /> : <Package className="w-4 h-4 text-gray-300" />}
+                </button>
+              )}
+            </div>
+          ) : item.packed ? <Check className="w-5 h-5 text-green-600" /> : null}
+        </td>
+        <td className={`px-3 py-3 font-mono text-sm ${item.packed ? 'text-green-800' : 'text-gray-900'}`}>{item.iwasku}</td>
         <td className="px-3 py-3"><div className={`text-xs leading-tight line-clamp-2 ${item.packed ? 'text-green-700' : 'text-gray-700'}`}>{item.productName || '—'}</div></td>
         <td className={`px-3 py-3 text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.productCategory || '—'}</td>
         <td className={`px-3 py-3 text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.marketplace?.code ?? '—'}</td>
         <td className={`text-center px-3 py-3 font-semibold ${item.packed ? 'text-green-800' : 'text-gray-900'}`}>{item.quantity}</td>
-        <td className={`text-center px-3 py-3 font-medium ${item.packed ? 'text-green-800' : 'text-gray-900'}`}>
-          {itemTotalDesi > 0 ? Math.round(itemTotalDesi).toLocaleString('tr-TR') : '—'}
-        </td>
+        <td className={`text-center px-3 py-3 font-medium ${item.packed ? 'text-green-800' : 'text-gray-900'}`}>{itemDesi > 0 ? Math.round(itemDesi).toLocaleString('tr-TR') : '—'}</td>
       </tr>
-      {/* Expanded box entry (US) */}
-      {isExpanded && isActive && needsBoxEntry && (
-        <tr>
-          <td colSpan={8} className="px-4 py-3 bg-blue-50/50 border-t border-blue-100">
-            <BoxEntryPanel
-              item={item}
-              existingBoxes={itemBoxes}
-              onCreateBox={onCreateBox}
-              onDeleteBox={onDeleteBox}
-            />
-          </td>
-        </tr>
+      {isExpanded && isActive && isSea && (
+        <tr><td colSpan={8} className="px-4 py-3 bg-blue-50/50 border-t border-blue-100">
+          <BoxEntryPanel item={item} existingBoxes={itemBoxes} onCreateBox={onCreateBox} onDeleteBox={onDeleteBox} />
+        </td></tr>
       )}
     </>
   );
 }
 
-// --- Box Entry Panel (inline under item row) ---
+// --- Box Entry Panel ---
 function BoxEntryPanel({ item, existingBoxes, onCreateBox, onDeleteBox }: {
   item: ShipmentItem; existingBoxes: ShipmentBox[];
-  onCreateBox: (form: BoxFormData) => Promise<ShipmentBox | null>;
-  onDeleteBox: (boxId: string) => void;
+  onCreateBox: (form: BoxFormData) => Promise<ShipmentBox | null>; onDeleteBox: (boxId: string) => void;
 }) {
   const [quantity, setQuantity] = useState(String(item.quantity));
-  const [width, setWidth] = useState('');
-  const [height, setHeight] = useState('');
-  const [depth, setDepth] = useState('');
-  const [weight, setWeight] = useState('');
+  const [width, setWidth] = useState(''); const [height, setHeight] = useState('');
+  const [depth, setDepth] = useState(''); const [weight, setWeight] = useState('');
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
+    e.preventDefault(); setSaving(true);
     try {
-      await onCreateBox({
-        iwasku: item.iwasku,
-        productName: item.productName,
-        productCategory: item.productCategory,
-        marketplaceCode: item.marketplace?.code ?? null,
-        quantity: parseInt(quantity) || 1,
-        width: width ? parseFloat(width) : null,
-        height: height ? parseFloat(height) : null,
-        depth: depth ? parseFloat(depth) : null,
-        weight: weight ? parseFloat(weight) : null,
-      });
-      // Reset for next box
-      setQuantity(String(item.quantity));
-      setWidth(''); setHeight(''); setDepth(''); setWeight('');
+      await onCreateBox({ iwasku: item.iwasku, productName: item.productName, productCategory: item.productCategory,
+        marketplaceCode: item.marketplace?.code ?? null, quantity: parseInt(quantity) || 1,
+        width: width ? parseFloat(width) : null, height: height ? parseFloat(height) : null,
+        depth: depth ? parseFloat(depth) : null, weight: weight ? parseFloat(weight) : null });
+      setQuantity(String(item.quantity)); setWidth(''); setHeight(''); setDepth(''); setWeight('');
     } finally { setSaving(false); }
   };
 
   return (
     <div className="space-y-3">
-      {/* Existing boxes for this item */}
       {existingBoxes.length > 0 && (
         <div className="space-y-1">
           <p className="text-xs font-medium text-gray-500 mb-1">Mevcut koliler:</p>
@@ -576,85 +541,50 @@ function BoxEntryPanel({ item, existingBoxes, onCreateBox, onDeleteBox }: {
           ))}
         </div>
       )}
-
-      {/* New box form */}
       <form onSubmit={handleSubmit} className="flex flex-wrap gap-2 items-end">
-        <div><label className="block text-xs text-gray-500 mb-0.5">Adet</label>
-          <input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-16" required /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">En (cm)</label>
-          <input type="number" step="0.1" value={width} onChange={e => setWidth(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Boy (cm)</label>
-          <input type="number" step="0.1" value={depth} onChange={e => setDepth(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Yukseklik (cm)</label>
-          <input type="number" step="0.1" value={height} onChange={e => setHeight(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Agirlik (kg)</label>
-          <input type="number" step="0.01" value={weight} onChange={e => setWeight(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Adet</label><input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-16" required /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">En</label><input type="number" step="0.1" value={width} onChange={e => setWidth(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Boy</label><input type="number" step="0.1" value={depth} onChange={e => setDepth(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Yukseklik</label><input type="number" step="0.1" value={height} onChange={e => setHeight(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Agirlik</label><input type="number" step="0.01" value={weight} onChange={e => setWeight(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
         <button type="submit" disabled={saving} className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5">
-          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-          Koli Ekle
-        </button>
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />} Koli Ekle</button>
       </form>
     </div>
   );
 }
 
-// --- Extra Box Form (non-production item) ---
+// --- Extra Box Form ---
 function ExtraBoxForm({ onSubmit, onCancel }: { onSubmit: (form: BoxFormData) => Promise<void>; onCancel: () => void }) {
-  const [iwasku, setIwasku] = useState('');
-  const [productName, setProductName] = useState('');
-  const [productCategory, setProductCategory] = useState('');
-  const [marketplaceCode, setMarketplaceCode] = useState('');
-  const [quantity, setQuantity] = useState('1');
-  const [width, setWidth] = useState('');
-  const [height, setHeight] = useState('');
-  const [depth, setDepth] = useState('');
-  const [weight, setWeight] = useState('');
+  const [f, setF] = useState({ iwasku: '', productName: '', productCategory: '', marketplaceCode: '', quantity: '1', width: '', height: '', depth: '', weight: '' });
   const [saving, setSaving] = useState(false);
-
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
+    e.preventDefault(); setSaving(true);
     try {
-      await onSubmit({
-        iwasku: iwasku || null, productName: productName || null,
-        productCategory: productCategory || null, marketplaceCode: marketplaceCode || null,
-        quantity: parseInt(quantity) || 1,
-        width: width ? parseFloat(width) : null, height: height ? parseFloat(height) : null,
-        depth: depth ? parseFloat(depth) : null, weight: weight ? parseFloat(weight) : null,
-      });
+      await onSubmit({ iwasku: f.iwasku || null, productName: f.productName || null, productCategory: f.productCategory || null,
+        marketplaceCode: f.marketplaceCode || null, quantity: parseInt(f.quantity) || 1,
+        width: f.width ? parseFloat(f.width) : null, height: f.height ? parseFloat(f.height) : null,
+        depth: f.depth ? parseFloat(f.depth) : null, weight: f.weight ? parseFloat(f.weight) : null });
     } finally { setSaving(false); }
   };
-
   return (
     <form onSubmit={handleSubmit} className="bg-white border border-blue-200 rounded-xl p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-900">Ek Koli (Uretim Listesi Disi)</h3>
-        <button type="button" onClick={onCancel} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+      <div className="flex items-center justify-between"><h3 className="text-sm font-semibold text-gray-900">Ek Koli (Uretim Disi)</h3>
+        <button type="button" onClick={onCancel} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button></div>
+      <div className="flex flex-wrap gap-3">
+        <div><label className="block text-xs text-gray-500 mb-0.5">IWASKU</label><input type="text" value={f.iwasku} onChange={e => setF(p => ({ ...p, iwasku: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-40" /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Urun Adi</label><input type="text" value={f.productName} onChange={e => setF(p => ({ ...p, productName: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-48" /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Kategori</label><input type="text" value={f.productCategory} onChange={e => setF(p => ({ ...p, productCategory: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-36" /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Pazar Yeri</label><input type="text" value={f.marketplaceCode} onChange={e => setF(p => ({ ...p, marketplaceCode: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-24" /></div>
       </div>
       <div className="flex flex-wrap gap-3">
-        <div><label className="block text-xs text-gray-500 mb-0.5">IWASKU</label>
-          <input type="text" value={iwasku} onChange={e => setIwasku(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-40" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Urun Adi</label>
-          <input type="text" value={productName} onChange={e => setProductName(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-48" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Kategori</label>
-          <input type="text" value={productCategory} onChange={e => setProductCategory(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-36" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Pazar Yeri</label>
-          <input type="text" value={marketplaceCode} onChange={e => setMarketplaceCode(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-24" /></div>
-      </div>
-      <div className="flex flex-wrap gap-3">
-        <div><label className="block text-xs text-gray-500 mb-0.5">Adet</label>
-          <input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-16" required /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">En (cm)</label>
-          <input type="number" step="0.1" value={width} onChange={e => setWidth(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Boy (cm)</label>
-          <input type="number" step="0.1" value={depth} onChange={e => setDepth(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Yukseklik (cm)</label>
-          <input type="number" step="0.1" value={height} onChange={e => setHeight(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Agirlik (kg)</label>
-          <input type="number" step="0.01" value={weight} onChange={e => setWeight(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Adet</label><input type="number" value={f.quantity} onChange={e => setF(p => ({ ...p, quantity: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-16" required /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">En</label><input type="number" step="0.1" value={f.width} onChange={e => setF(p => ({ ...p, width: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Boy</label><input type="number" step="0.1" value={f.depth} onChange={e => setF(p => ({ ...p, depth: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Yukseklik</label><input type="number" step="0.1" value={f.height} onChange={e => setF(p => ({ ...p, height: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Agirlik</label><input type="number" step="0.01" value={f.weight} onChange={e => setF(p => ({ ...p, weight: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
         <button type="submit" disabled={saving} className="self-end px-4 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5">
-          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />} Koli Ekle
-        </button>
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />} Koli Ekle</button>
       </div>
     </form>
   );

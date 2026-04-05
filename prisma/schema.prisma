@@ -469,6 +469,7 @@ model ShipmentItem {
   reserveId            String?
   productionRequestId  String?   // Yönlendirilen ProductionRequest bağlantısı
   packed               Boolean   @default(false) // Depo: hazırlandı/paketlendi
+  sentAt               DateTime? // Gönderildi tarihi (null = bekleyen)
 
   createdAt            DateTime  @default(now())
 
