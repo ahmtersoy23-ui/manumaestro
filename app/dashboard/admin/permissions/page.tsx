@@ -33,7 +33,7 @@ type CatPermMap = Map<string, { canView: boolean; canEdit: boolean }>;
 
 export default function AdminPermissionsPage() {
   const { role } = useAuth();
-  const [activeTab, setActiveTab] = useState<'marketplace' | 'category' | 'stock'>('marketplace');
+  const [activeTab, setActiveTab] = useState<'marketplace' | 'category' | 'stock' | 'shipment'>('marketplace');
 
   // Marketplace tab state
   const [users, setUsers] = useState<OperatorUser[]>([]);
@@ -356,7 +356,7 @@ export default function AdminPermissionsPage() {
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900">İzin Yönetimi</h1>
           </div>
           <p className="text-sm md:text-base text-gray-600">
-            OPERATOR kullanıcılarının pazar yeri ve kategori erişimlerini yönetin.
+            Pazar yeri, kategori, depo ve sevkiyat erisimlerini yonetin.
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">
@@ -405,7 +405,17 @@ export default function AdminPermissionsPage() {
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
-            Stok İzinleri
+            Stok Izinleri
+          </button>
+          <button
+            onClick={() => setActiveTab('shipment')}
+            className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'shipment'
+                ? 'border-purple-600 text-purple-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Sevkiyat Izinleri
           </button>
         </nav>
       </div>
@@ -687,8 +697,10 @@ export default function AdminPermissionsPage() {
         </>
       )}
 
-      {/* === SEVKIYAT IZINLERI === */}
-      <ShipmentPermissionsSection />
+      {/* Shipment Tab */}
+      {activeTab === 'shipment' && (
+        <ShipmentPermissionsSection availableUsers={users.map(u => ({ id: u.id, name: u.name, email: u.email }))} />
+      )}
     </div>
   );
 }
@@ -712,9 +724,8 @@ interface ShipPerm {
   user: { id: string; name: string; email: string };
 }
 
-function ShipmentPermissionsSection() {
+function ShipmentPermissionsSection({ availableUsers }: { availableUsers: { id: string; name: string; email: string }[] }) {
   const [perms, setPerms] = useState<ShipPerm[]>([]);
-  const [allUsers, setAllUsers] = useState<{ id: string; name: string; email: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [addForm, setAddForm] = useState({ userId: '', destinationTab: 'US', role: 'VIEWER' });
   const [saving, setSaving] = useState(false);
@@ -727,15 +738,7 @@ function ShipmentPermissionsSection() {
     } catch { /* */ } finally { setLoading(false); }
   }, []);
 
-  const fetchUsers = useCallback(async () => {
-    try {
-      const res = await fetch('/api/admin/users');
-      const data = await res.json();
-      if (data.success) setAllUsers(data.data.filter((u: { role: string }) => u.role !== 'admin'));
-    } catch { /* */ }
-  }, []);
-
-  useEffect(() => { fetchPerms(); fetchUsers(); }, [fetchPerms, fetchUsers]);
+  useEffect(() => { fetchPerms(); }, [fetchPerms]);
 
   const handleAdd = async () => {
     if (!addForm.userId) return;
@@ -774,7 +777,7 @@ function ShipmentPermissionsSection() {
           <select value={addForm.userId} onChange={e => setAddForm(f => ({ ...f, userId: e.target.value }))}
             className="px-3 py-2 border rounded-lg text-sm w-48">
             <option value="">Sec...</option>
-            {allUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+            {availableUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
         </div>
         <div>
