@@ -83,7 +83,7 @@ export default function ShipmentsPage() {
         body: JSON.stringify({
           name: form.name, destinationTab: activeTab,
           shippingMethod: form.shippingMethod,
-          plannedDate: new Date(form.plannedDate).toISOString(),
+          plannedDate: form.plannedDate ? new Date(form.plannedDate).toISOString() : undefined,
           notes: form.notes || undefined,
         }),
       });
@@ -163,7 +163,7 @@ export default function ShipmentsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Planlanan Tarih</label>
-              <input type="date" required value={form.plannedDate}
+              <input type="date" value={form.plannedDate}
                 onChange={e => setForm(f => ({ ...f, plannedDate: e.target.value }))}
                 className="w-full px-3 py-2 border rounded-lg text-sm" />
             </div>
@@ -224,7 +224,7 @@ export default function ShipmentsPage() {
 function ShipmentCard({ shipment }: { shipment: Shipment }) {
   const MethodIcon = methodIcons[shipment.shippingMethod] ?? Anchor;
   const label = methodLabels[shipment.shippingMethod] ?? '';
-  const date = new Date(shipment.plannedDate).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' });
+  const date = shipment.plannedDate ? new Date(shipment.plannedDate).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
 
   return (
     <Link href={`/dashboard/shipments/${shipment.id}`}
@@ -235,7 +235,7 @@ function ShipmentCard({ shipment }: { shipment: Shipment }) {
           <h3 className="font-semibold text-gray-900">{shipment.name}</h3>
           <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
             <span>{label}</span>
-            <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{date}</span>
+            {date && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{date}</span>}
             <span>{shipment.stats.itemCount} urun</span>
             <span>{shipment.stats.totalQty.toLocaleString('tr-TR')} unite</span>
             <span>{shipment.stats.totalDesi.toLocaleString('tr-TR')} desi</span>

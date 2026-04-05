@@ -14,7 +14,7 @@ const CreateShipmentSchema = z.object({
   name: z.string().min(1).max(100),
   destinationTab: z.enum(['US', 'UK', 'EU', 'NL', 'AU', 'ZA']),
   shippingMethod: z.enum(['sea', 'road', 'air']),
-  plannedDate: z.string().datetime(),
+  plannedDate: z.string().datetime().optional(),
   etaDate: z.string().datetime().optional(),
   notes: z.string().optional(),
 });
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       },
       _count: { select: { items: true } },
     },
-    orderBy: { plannedDate: 'desc' },
+    orderBy: { createdAt: 'desc' },
     take: 100,
   });
 
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
       name: data.name,
       destinationTab: data.destinationTab,
       shippingMethod: data.shippingMethod,
-      plannedDate: new Date(data.plannedDate),
+      plannedDate: data.plannedDate ? new Date(data.plannedDate) : null,
       etaDate: data.etaDate ? new Date(data.etaDate) : null,
       notes: data.notes,
       createdById: user.id,

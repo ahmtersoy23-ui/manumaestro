@@ -440,7 +440,7 @@ model Shipment {
   destinationTab  String         // "US", "UK", "EU", "NL", "AU", "ZA"
   shippingMethod  String         // "sea", "road", "air"
 
-  plannedDate     DateTime
+  plannedDate     DateTime?
   actualDate      DateTime?
   etaDate         DateTime?
 

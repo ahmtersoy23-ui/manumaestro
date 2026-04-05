@@ -12,7 +12,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  ArrowLeft, Plus, Send, Loader2, AlertCircle,
+  ArrowLeft, Plus, Send, Loader2, AlertCircle, Pencil,
   Package, Calendar, Anchor, Truck as TruckIcon, Plane,
   Check, Square, CheckSquare, Download, Ship, X, ChevronDown, ChevronRight,
 } from 'lucide-react';
@@ -67,6 +67,11 @@ export default function ShipmentDetailPage() {
   const [sending, setSending] = useState(false);
   const [showExtraBox, setShowExtraBox] = useState(false);
 
+  // Edit mode
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({ name: '', plannedDate: '', etaDate: '', notes: '' });
+  const [saving, setSaving] = useState(false);
+
   const fetchShipment = useCallback(async () => {
     try {
       const res = await fetch(`/api/shipments/${id}`);
@@ -100,7 +105,36 @@ export default function ShipmentDetailPage() {
   const totalQty = shipment.items.reduce((s, i) => s + i.quantity, 0);
   const totalDesi = shipment.items.reduce((s, i) => s + (i.desi ?? 0) * i.quantity, 0);
   const packedPendingCount = pendingItems.filter(i => i.packed).length;
-  const plannedDate = new Date(shipment.plannedDate).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+  const plannedDate = shipment.plannedDate
+    ? new Date(shipment.plannedDate).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
+    : null;
+
+  const startEdit = () => {
+    setEditForm({
+      name: shipment.name,
+      plannedDate: shipment.plannedDate ? new Date(shipment.plannedDate).toISOString().split('T')[0] : '',
+      etaDate: shipment.etaDate ? new Date(shipment.etaDate).toISOString().split('T')[0] : '',
+      notes: shipment.notes ?? '',
+    });
+    setEditing(true);
+  };
+
+  const handleSaveEdit = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/shipments/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          notes: editForm.notes || undefined,
+          ...(editForm.plannedDate ? { plannedDate: new Date(editForm.plannedDate).toISOString() } : {}),
+          ...(editForm.etaDate ? { etaDate: new Date(editForm.etaDate).toISOString() } : {}),
+        }),
+      });
+      const data = await res.json();
+      if (data.success) { setEditing(false); await fetchShipment(); }
+      else alert(data.error);
+    } catch { alert('Kaydetme hatasi'); } finally { setSaving(false); }
+  };
 
   // --- Handlers ---
   const handleTogglePacked = async (itemId: string) => {
@@ -219,11 +253,18 @@ export default function ShipmentDetailPage() {
           <button onClick={() => router.push('/dashboard/shipments')} className="p-2 hover:bg-gray-100 rounded-lg"><ArrowLeft className="w-5 h-5 text-gray-500" /></button>
           <MethodIcon className="w-6 h-6 text-blue-500" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{shipment.name}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-gray-900">{shipment.name}</h1>
+              {isActive && !editing && (
+                <button onClick={startEdit} className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded" title="Duzenle">
+                  <Pencil className="w-4 h-4" />
+                </button>
+              )}
+            </div>
             <div className="flex items-center gap-3 text-sm text-gray-500">
               <span>{shipment.destinationTab}</span><span>·</span>
-              <span>{methodLabels[shipment.shippingMethod]}</span><span>·</span>
-              <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{plannedDate}</span>
+              <span>{methodLabels[shipment.shippingMethod]}</span>
+              {plannedDate && <><span>·</span><span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{plannedDate}</span></>}
             </div>
           </div>
         </div>
@@ -243,6 +284,41 @@ export default function ShipmentDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Edit Panel */}
+      {editing && (
+        <div className="bg-white border border-blue-200 rounded-xl p-5 space-y-4">
+          <h3 className="font-semibold text-gray-900">Sevkiyat Bilgilerini Duzenle</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Isim</label>
+              <input type="text" value={editForm.name} disabled className="w-full px-3 py-2 border rounded-lg text-sm bg-gray-50 text-gray-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Planlanan Tarih</label>
+              <input type="date" value={editForm.plannedDate} onChange={e => setEditForm(f => ({ ...f, plannedDate: e.target.value }))}
+                className="w-full px-3 py-2 border rounded-lg text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Tahmini Varis (ETA)</label>
+              <input type="date" value={editForm.etaDate} onChange={e => setEditForm(f => ({ ...f, etaDate: e.target.value }))}
+                className="w-full px-3 py-2 border rounded-lg text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Not</label>
+              <input type="text" value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
+                className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Sevkiyat notu..." />
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={handleSaveEdit} disabled={saving}
+              className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />} Kaydet
+            </button>
+            <button onClick={() => setEditing(false)} className="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">Iptal</button>
+          </div>
+        </div>
+      )}
 
       {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
