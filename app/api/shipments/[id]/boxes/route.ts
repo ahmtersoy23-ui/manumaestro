@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma, queryProductDb } from '@/lib/db/prisma';
-import { requireRole } from '@/lib/auth/verify';
+import { requireShipmentView, requireShipmentAction } from '@/lib/auth/requireShipmentRole';
 import { z } from 'zod';
 
 /** Marketplace code → sku_master country_code */
@@ -55,7 +55,7 @@ function getShipmentPrefix(name: string): string {
 
 // --- GET: List boxes ---
 export async function GET(request: NextRequest, { params }: Params) {
-  const authResult = await requireRole(request, ['admin']);
+  const authResult = await requireShipmentView(request);
   if (authResult instanceof NextResponse) return authResult;
 
   const { id } = await params;
@@ -85,11 +85,7 @@ const CreateBoxSchema = z.object({
 });
 
 export async function POST(request: NextRequest, { params }: Params) {
-  const authResult = await requireRole(request, ['admin']);
-  if (authResult instanceof NextResponse) return authResult;
-
   const { id } = await params;
-
   const shipment = await prisma.shipment.findUnique({ where: { id } });
   if (!shipment) {
     return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadi' }, { status: 404 });
@@ -103,6 +99,9 @@ export async function POST(request: NextRequest, { params }: Params) {
       { status: 400 }
     );
   }
+
+  const authResult = await requireShipmentAction(request, shipment.destinationTab, 'manageBoxes');
+  if (authResult instanceof NextResponse) return authResult;
 
   const data = validation.data;
   const prefix = getShipmentPrefix(shipment.name);
@@ -169,10 +168,11 @@ export async function POST(request: NextRequest, { params }: Params) {
 
 // --- DELETE: Remove box ---
 export async function DELETE(request: NextRequest, { params }: Params) {
-  const authResult = await requireRole(request, ['admin']);
-  if (authResult instanceof NextResponse) return authResult;
-
   const { id } = await params;
+  const shipmentForAuth = await prisma.shipment.findUnique({ where: { id }, select: { destinationTab: true } });
+  if (!shipmentForAuth) return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadi' }, { status: 404 });
+  const authResult = await requireShipmentAction(request, shipmentForAuth.destinationTab, 'manageBoxes');
+  if (authResult instanceof NextResponse) return authResult;
   const boxId = request.nextUrl.searchParams.get('boxId');
   if (!boxId) {
     return NextResponse.json({ success: false, error: 'boxId parametresi gerekli' }, { status: 400 });
@@ -211,10 +211,11 @@ const SetDestinationSchema = z.object({
 });
 
 export async function PATCH(request: NextRequest, { params }: Params) {
-  const authResult = await requireRole(request, ['admin']);
-  if (authResult instanceof NextResponse) return authResult;
-
   const { id } = await params;
+  const shipmentForAuth = await prisma.shipment.findUnique({ where: { id }, select: { destinationTab: true } });
+  if (!shipmentForAuth) return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadi' }, { status: 404 });
+  const authResult = await requireShipmentAction(request, shipmentForAuth.destinationTab, 'setDestination');
+  if (authResult instanceof NextResponse) return authResult;
   const body = await request.json();
   const validation = SetDestinationSchema.safeParse(body);
   if (!validation.success) {

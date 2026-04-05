@@ -6,15 +6,16 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { requireRole } from '@/lib/auth/verify';
+import { requireShipmentAction } from '@/lib/auth/requireShipmentRole';
 
 type Params = { params: Promise<{ id: string; itemId: string }> };
 
 export async function PATCH(request: NextRequest, { params }: Params) {
-  const authResult = await requireRole(request, ['admin']);
-  if (authResult instanceof NextResponse) return authResult;
-
   const { id, itemId } = await params;
+  const shipmentForAuth = await prisma.shipment.findUnique({ where: { id }, select: { destinationTab: true } });
+  if (!shipmentForAuth) return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadi' }, { status: 404 });
+  const authResult = await requireShipmentAction(request, shipmentForAuth.destinationTab, 'packItems');
+  if (authResult instanceof NextResponse) return authResult;
 
   const item = await prisma.shipmentItem.findFirst({
     where: { id: itemId, shipmentId: id },
@@ -36,10 +37,11 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(request: NextRequest, { params }: Params) {
-  const authResult = await requireRole(request, ['admin']);
-  if (authResult instanceof NextResponse) return authResult;
-
   const { id, itemId } = await params;
+  const shipmentForAuth = await prisma.shipment.findUnique({ where: { id }, select: { destinationTab: true } });
+  if (!shipmentForAuth) return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadi' }, { status: 404 });
+  const authResult = await requireShipmentAction(request, shipmentForAuth.destinationTab, 'deleteItems');
+  if (authResult instanceof NextResponse) return authResult;
 
   const item = await prisma.shipmentItem.findFirst({
     where: { id: itemId, shipmentId: id, sentAt: null },

@@ -5,12 +5,12 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { requireRole } from '@/lib/auth/verify';
+import { requireShipmentView } from '@/lib/auth/requireShipmentRole';
 import { errorResponse } from '@/lib/api/response';
 
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await requireRole(request, ['admin']);
+    const authResult = await requireShipmentView(request);
     if (authResult instanceof NextResponse) return authResult;
 
     const marketplaceId = request.nextUrl.searchParams.get('marketplaceId');

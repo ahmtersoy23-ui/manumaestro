@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma, queryProductDb } from '@/lib/db/prisma';
-import { requireRole } from '@/lib/auth/verify';
+import { requireShipmentView, requireShipmentAction } from '@/lib/auth/requireShipmentRole';
 import { logAction } from '@/lib/auditLog';
 import { z } from 'zod';
 
@@ -15,7 +15,7 @@ type Params = { params: Promise<{ id: string }> };
 
 // --- GET: Detail ---
 export async function GET(request: NextRequest, { params }: Params) {
-  const authResult = await requireRole(request, ['admin']);
+  const authResult = await requireShipmentView(request);
   if (authResult instanceof NextResponse) return authResult;
 
   const { id } = await params;
@@ -130,10 +130,13 @@ const UpdateShipmentSchema = z.object({
 });
 
 export async function PATCH(request: NextRequest, { params }: Params) {
-  const authResult = await requireRole(request, ['admin']);
+  const { id } = await params;
+  // Shipment'in destinasyonunu bul
+  const shipmentForAuth = await prisma.shipment.findUnique({ where: { id }, select: { destinationTab: true } });
+  if (!shipmentForAuth) return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadi' }, { status: 404 });
+  const authResult = await requireShipmentAction(request, shipmentForAuth.destinationTab, 'createShipment');
   if (authResult instanceof NextResponse) return authResult;
   const { user } = authResult;
-  const { id } = await params;
 
   const body = await request.json();
   const validation = UpdateShipmentSchema.safeParse(body);
@@ -210,15 +213,14 @@ const AddItemSchema = z.object({
 });
 
 export async function POST(request: NextRequest, { params }: Params) {
-  const authResult = await requireRole(request, ['admin']);
-  if (authResult instanceof NextResponse) return authResult;
-  const { user } = authResult;
   const { id } = await params;
-
   const shipment = await prisma.shipment.findUnique({ where: { id } });
   if (!shipment) {
-    return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadı' }, { status: 404 });
+    return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadi' }, { status: 404 });
   }
+  const authResult = await requireShipmentAction(request, shipment.destinationTab, 'routeItems');
+  if (authResult instanceof NextResponse) return authResult;
+  const { user } = authResult;
   if (shipment.status === 'IN_TRANSIT' || shipment.status === 'DELIVERED') {
     return NextResponse.json({ success: false, error: 'Gönderilmiş sevkiyata ürün eklenemez' }, { status: 400 });
   }

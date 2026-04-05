@@ -27,6 +27,7 @@ model User {
   permissions           UserMarketplacePermission[]
   categoryPermissions   UserCategoryPermission[]
   stockPermission       UserStockPermission?
+  shipmentPermissions   UserShipmentPermission[]
   requests              ProductionRequest[]
   createdMarketplaces   Marketplace[]             @relation("CreatedBy")
   auditLogs             AuditLog[]
@@ -241,6 +242,30 @@ enum AuditAction {
   UPDATE_STOCK
   ACCESS_DENIED
   ROUTE_TO_SHIPMENT
+}
+
+// ============================================
+// SHIPMENT PERMISSIONS
+// ============================================
+
+model UserShipmentPermission {
+  id              String          @id @default(uuid())
+  userId          String
+  destinationTab  String          // "US", "UK", "EU", "NL", "AU", "ZA" veya "*" (hepsi)
+  role            ShipmentRole    @default(VIEWER)
+
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, destinationTab])
+  @@index([userId])
+  @@map("user_shipment_permissions")
+}
+
+enum ShipmentRole {
+  VIEWER    // Sadece goruntuleme
+  ROUTER    // Talep yonlendirme + silme + FBA isaretleme (pazar yeri sorumlusu)
+  PACKER    // Koli olusturma + check + gonder (depo elemani)
+  MANAGER   // Hepsi (sevkiyat olusturma dahil)
 }
 
 // ============================================

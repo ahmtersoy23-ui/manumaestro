@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { requireRole } from '@/lib/auth/verify';
+import { requireShipmentView, requireShipmentAction } from '@/lib/auth/requireShipmentRole';
 import { logAction } from '@/lib/auditLog';
 import { z } from 'zod';
 
@@ -20,7 +20,7 @@ const CreateShipmentSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-  const authResult = await requireRole(request, ['admin']);
+  const authResult = await requireShipmentView(request);
   if (authResult instanceof NextResponse) return authResult;
 
   const { searchParams } = new URL(request.url);
@@ -60,10 +60,6 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const authResult = await requireRole(request, ['admin']);
-  if (authResult instanceof NextResponse) return authResult;
-  const { user } = authResult;
-
   const body = await request.json();
   const validation = CreateShipmentSchema.safeParse(body);
   if (!validation.success) {
@@ -74,6 +70,10 @@ export async function POST(request: NextRequest) {
   }
 
   const data = validation.data;
+
+  const authResult2 = await requireShipmentAction(request, data.destinationTab, 'createShipment');
+  if (authResult2 instanceof NextResponse) return authResult2;
+  const { user } = authResult2;
 
   const shipment = await prisma.shipment.create({
     data: {

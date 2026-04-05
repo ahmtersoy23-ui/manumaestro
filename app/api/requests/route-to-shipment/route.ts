@@ -5,17 +5,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma, queryProductDb } from '@/lib/db/prisma';
-import { requireRole } from '@/lib/auth/verify';
+import { requireShipmentAction } from '@/lib/auth/requireShipmentRole';
 import { RouteToShipmentSchema, formatValidationError } from '@/lib/validation/schemas';
 import { errorResponse } from '@/lib/api/response';
 import { logAction } from '@/lib/auditLog';
 
 export async function POST(request: NextRequest) {
   try {
-    const authResult = await requireRole(request, ['admin']);
-    if (authResult instanceof NextResponse) return authResult;
-    const { user } = authResult;
-
     const body = await request.json();
     const validation = RouteToShipmentSchema.safeParse(body);
     if (!validation.success) {
@@ -53,10 +49,14 @@ export async function POST(request: NextRequest) {
     const shipment = await prisma.shipment.findUnique({ where: { id: shipmentId } });
     if (!shipment) {
       return NextResponse.json(
-        { success: false, error: 'Sevkiyat bulunamadı' },
+        { success: false, error: 'Sevkiyat bulunamadi' },
         { status: 404 }
       );
     }
+
+    const authResult = await requireShipmentAction(request, shipment.destinationTab, 'routeItems');
+    if (authResult instanceof NextResponse) return authResult;
+    const { user } = authResult;
     if (shipment.status === 'IN_TRANSIT' || shipment.status === 'DELIVERED') {
       return NextResponse.json(
         { success: false, error: 'Gönderilmiş veya teslim edilmiş sevkiyata yönlendirme yapılamaz' },

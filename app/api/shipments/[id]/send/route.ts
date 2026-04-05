@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { requireRole } from '@/lib/auth/verify';
+import { requireShipmentAction } from '@/lib/auth/requireShipmentRole';
 import { logAction } from '@/lib/auditLog';
 import { z } from 'zod';
 
@@ -19,9 +19,6 @@ const SendItemsSchema = z.object({
 });
 
 export async function POST(request: NextRequest, { params }: Params) {
-  const authResult = await requireRole(request, ['admin']);
-  if (authResult instanceof NextResponse) return authResult;
-  const { user } = authResult;
   const { id } = await params;
 
   const body = await request.json();
@@ -40,6 +37,12 @@ export async function POST(request: NextRequest, { params }: Params) {
   if (!shipment) {
     return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadi' }, { status: 404 });
   }
+
+  // izin kontrolu: closeShipment → closeShipment, aksi halde sendItems
+  const action = closeShipment ? 'closeShipment' : 'sendItems';
+  const authResult = await requireShipmentAction(request, shipment.destinationTab, action);
+  if (authResult instanceof NextResponse) return authResult;
+  const { user } = authResult;
 
   const now = new Date();
 
