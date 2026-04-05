@@ -158,6 +158,12 @@ export default function ShipmentDetailPage() {
     setSelectedIds(next);
   };
 
+  const handleDeleteItem = async (itemId: string) => {
+    if (!confirm('Bu urun sevkiyattan cikarilsin mi?')) return;
+    const res = await fetch(`/api/shipments/${id}/items/${itemId}`, { method: 'DELETE' });
+    if ((await res.json()).success) await Promise.all([fetchShipment(), fetchBoxes()]);
+  };
+
   const handleSelectAllPacked = () => {
     const packedPendingIds = pendingItems.filter(i => i.packed).map(i => i.id);
     if (packedPendingIds.every(id => selectedIds.has(id))) {
@@ -392,6 +398,28 @@ export default function ShipmentDetailPage() {
         </div>
       </div>
 
+      {/* FNSKU Eksik Uyarisi */}
+      {(() => {
+        const missingFnsku = pendingItems.filter(i => !i.fnsku);
+        if (missingFnsku.length === 0) return null;
+        return (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-amber-800">{missingFnsku.length} urunde FNSKU eksik</p>
+                <p className="text-xs text-amber-600 mt-1">FBA listing olusturulmali. Koli girisinde manuel FNSKU girilebilir.</p>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {missingFnsku.map(i => (
+                    <span key={i.id} className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded text-xs font-mono">{i.iwasku}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b">
         <button onClick={() => setActiveTab('pending')}
@@ -465,6 +493,7 @@ export default function ShipmentDetailPage() {
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Pazar Yeri</th>
                     <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Miktar</th>
                     <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">T. Desi</th>
+                    {isActive && <th className="w-10"></th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -480,7 +509,8 @@ export default function ShipmentDetailPage() {
                         onToggleSelect={() => handleToggleSelect(item.id)}
                         onToggleExpand={() => setExpandedItemId(isExpanded ? null : item.id)}
                         onCreateBox={(form) => handleCreateBox(form, item.id)}
-                        onDeleteBox={handleDeleteBox} />
+                        onDeleteBox={handleDeleteBox}
+                        onDeleteItem={() => handleDeleteItem(item.id)} />
                     );
                   })}
                 </tbody>
@@ -671,11 +701,12 @@ export default function ShipmentDetailPage() {
 
 // --- Pending Item Row ---
 function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded, isSelected, togglingId,
-  onTogglePacked, onToggleSelect, onToggleExpand, onCreateBox, onDeleteBox }: {
+  onTogglePacked, onToggleSelect, onToggleExpand, onCreateBox, onDeleteBox, onDeleteItem }: {
   item: ShipmentItem; itemDesi: number; itemBoxes: ShipmentBox[];
   isSea: boolean; isActive: boolean; isExpanded: boolean; isSelected: boolean; togglingId: string | null;
   onTogglePacked: () => void; onToggleSelect: () => void; onToggleExpand: () => void;
   onCreateBox: (form: BoxFormData) => Promise<ShipmentBox | null>; onDeleteBox: (boxId: string) => void;
+  onDeleteItem: () => void;
 }) {
   return (
     <>
@@ -700,15 +731,24 @@ function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded
           ) : item.packed ? <Check className="w-5 h-5 text-green-600" /> : null}
         </td>
         <td className={`px-3 py-3 font-mono text-sm ${item.packed ? 'text-green-800' : 'text-gray-900'}`}>{item.iwasku}</td>
-        <td className={`px-3 py-3 font-mono text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.fnsku || '—'}</td>
+        <td className="px-3 py-3">
+          {item.fnsku
+            ? <span className={`font-mono text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.fnsku}</span>
+            : <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-xs font-medium">Eksik</span>}
+        </td>
         <td className="px-3 py-3"><div className={`text-xs leading-tight line-clamp-2 ${item.packed ? 'text-green-700' : 'text-gray-700'}`}>{item.productName || '—'}</div></td>
         <td className={`px-3 py-3 text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.productCategory || '—'}</td>
         <td className={`px-3 py-3 text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.marketplace?.code ?? '—'}</td>
         <td className={`text-center px-3 py-3 font-semibold ${item.packed ? 'text-green-800' : 'text-gray-900'}`}>{item.quantity}</td>
         <td className={`text-center px-3 py-3 font-medium ${item.packed ? 'text-green-800' : 'text-gray-900'}`}>{itemDesi > 0 ? Math.round(itemDesi).toLocaleString('tr-TR') : '—'}</td>
+        {isActive && (
+          <td className="px-2 py-3 text-center">
+            <button onClick={onDeleteItem} className="text-red-300 hover:text-red-600 transition-colors" title="Sevkiyattan cikar"><X className="w-4 h-4" /></button>
+          </td>
+        )}
       </tr>
       {isExpanded && isActive && isSea && (
-        <tr><td colSpan={9} className="px-4 py-3 bg-blue-50/50 border-t border-blue-100">
+        <tr><td colSpan={10} className="px-4 py-3 bg-blue-50/50 border-t border-blue-100">
           <BoxEntryPanel item={item} existingBoxes={itemBoxes} onCreateBox={onCreateBox} onDeleteBox={onDeleteBox} />
         </td></tr>
       )}
@@ -721,6 +761,7 @@ function BoxEntryPanel({ item, existingBoxes, onCreateBox, onDeleteBox }: {
   item: ShipmentItem; existingBoxes: ShipmentBox[];
   onCreateBox: (form: BoxFormData) => Promise<ShipmentBox | null>; onDeleteBox: (boxId: string) => void;
 }) {
+  const [fnsku, setFnsku] = useState(item.fnsku ?? '');
   const [quantity, setQuantity] = useState(String(item.quantity));
   const [width, setWidth] = useState(''); const [height, setHeight] = useState('');
   const [depth, setDepth] = useState(''); const [weight, setWeight] = useState('');
@@ -729,7 +770,7 @@ function BoxEntryPanel({ item, existingBoxes, onCreateBox, onDeleteBox }: {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true);
     try {
-      await onCreateBox({ iwasku: item.iwasku, fnsku: item.fnsku, productName: item.productName, productCategory: item.productCategory,
+      await onCreateBox({ iwasku: item.iwasku, fnsku: fnsku || null, productName: item.productName, productCategory: item.productCategory,
         marketplaceCode: item.marketplace?.code ?? null, quantity: parseInt(quantity) || 1,
         width: width ? parseFloat(width) : null, height: height ? parseFloat(height) : null,
         depth: depth ? parseFloat(depth) : null, weight: weight ? parseFloat(weight) : null });
@@ -754,6 +795,8 @@ function BoxEntryPanel({ item, existingBoxes, onCreateBox, onDeleteBox }: {
         </div>
       )}
       <form onSubmit={handleSubmit} className="flex flex-wrap gap-2 items-end">
+        <div><label className={`block text-xs mb-0.5 ${!fnsku ? 'text-amber-600 font-medium' : 'text-gray-500'}`}>FNSKU {!fnsku && '(eksik)'}</label>
+          <input type="text" value={fnsku} onChange={e => setFnsku(e.target.value)} placeholder="X00..." className={`px-2 py-1.5 border rounded text-sm w-28 font-mono ${!fnsku ? 'border-amber-300 bg-amber-50' : ''}`} /></div>
         <div><label className="block text-xs text-gray-500 mb-0.5">Adet</label><input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-16" required /></div>
         <div><label className="block text-xs text-gray-500 mb-0.5">En</label><input type="number" step="0.1" value={width} onChange={e => setWidth(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
         <div><label className="block text-xs text-gray-500 mb-0.5">Boy</label><input type="number" step="0.1" value={depth} onChange={e => setDepth(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>

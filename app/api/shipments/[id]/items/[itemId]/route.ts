@@ -1,6 +1,7 @@
 /**
  * Shipment Item API
- * PATCH: Toggle packed status (depo elemanı hazırladı/paketledi)
+ * PATCH: Toggle packed status
+ * DELETE: Remove item from shipment (+ ilgili kolileri sil)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -32,4 +33,25 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     success: true,
     data: { id: updated.id, packed: updated.packed },
   });
+}
+
+export async function DELETE(request: NextRequest, { params }: Params) {
+  const authResult = await requireRole(request, ['admin']);
+  if (authResult instanceof NextResponse) return authResult;
+
+  const { id, itemId } = await params;
+
+  const item = await prisma.shipmentItem.findFirst({
+    where: { id: itemId, shipmentId: id, sentAt: null },
+  });
+
+  if (!item) {
+    return NextResponse.json({ success: false, error: 'Item bulunamadi veya zaten gonderilmis' }, { status: 404 });
+  }
+
+  // İlgili kolileri de sil
+  await prisma.shipmentBox.deleteMany({ where: { shipmentItemId: itemId } });
+  await prisma.shipmentItem.delete({ where: { id: itemId } });
+
+  return NextResponse.json({ success: true });
 }
