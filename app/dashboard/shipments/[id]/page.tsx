@@ -404,6 +404,7 @@ export default function ShipmentDetailPage() {
                       )}
                     </th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">IWASKU</th>
+                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">FNSKU</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Urun Adi</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Kategori</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Pazar Yeri</th>
@@ -444,6 +445,7 @@ export default function ShipmentDetailPage() {
               <thead className="bg-gray-50 border-b">
                 <tr>
                   <th className="text-left px-4 py-3 font-semibold text-gray-700 text-xs uppercase">IWASKU</th>
+                  <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">FNSKU</th>
                   <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Urun Adi</th>
                   <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Kategori</th>
                   <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Pazar Yeri</th>
@@ -455,6 +457,7 @@ export default function ShipmentDetailPage() {
                 {sentItems.map(item => (
                   <tr key={item.id} className="bg-green-50/30">
                     <td className="px-4 py-3 font-mono text-sm text-gray-900">{item.iwasku}</td>
+                    <td className="px-3 py-3 font-mono text-sm text-gray-600">{item.fnsku || '—'}</td>
                     <td className="px-3 py-3 text-xs text-gray-700 line-clamp-1">{item.productName || '—'}</td>
                     <td className="px-3 py-3 text-sm text-gray-600">{item.productCategory || '—'}</td>
                     <td className="px-3 py-3 text-sm text-gray-600">{item.marketplace?.code ?? '—'}</td>
@@ -497,6 +500,7 @@ export default function ShipmentDetailPage() {
                   <tr>
                     <th className="text-left px-4 py-3 font-semibold text-gray-700 text-xs uppercase">Koli No</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">IWASKU</th>
+                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">FNSKU</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Urun Adi</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Pazar Yeri</th>
                     <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Adet</th>
@@ -512,6 +516,7 @@ export default function ShipmentDetailPage() {
                     <tr key={box.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 font-mono text-sm font-semibold text-gray-900">{box.boxNumber}</td>
                       <td className="px-3 py-3 font-mono text-sm text-gray-700">{box.iwasku || '—'}</td>
+                      <td className="px-3 py-3 font-mono text-sm text-gray-600">{box.fnsku || '—'}</td>
                       <td className="px-3 py-3 text-xs text-gray-700 line-clamp-1">{box.productName || '—'}</td>
                       <td className="px-3 py-3 text-sm text-gray-600">{box.marketplaceCode || '—'}</td>
                       <td className="text-center px-3 py-3 font-semibold">{box.quantity}</td>
@@ -565,6 +570,7 @@ function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded
           ) : item.packed ? <Check className="w-5 h-5 text-green-600" /> : null}
         </td>
         <td className={`px-3 py-3 font-mono text-sm ${item.packed ? 'text-green-800' : 'text-gray-900'}`}>{item.iwasku}</td>
+        <td className={`px-3 py-3 font-mono text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.fnsku || '—'}</td>
         <td className="px-3 py-3"><div className={`text-xs leading-tight line-clamp-2 ${item.packed ? 'text-green-700' : 'text-gray-700'}`}>{item.productName || '—'}</div></td>
         <td className={`px-3 py-3 text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.productCategory || '—'}</td>
         <td className={`px-3 py-3 text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.marketplace?.code ?? '—'}</td>
@@ -572,7 +578,7 @@ function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded
         <td className={`text-center px-3 py-3 font-medium ${item.packed ? 'text-green-800' : 'text-gray-900'}`}>{itemDesi > 0 ? Math.round(itemDesi).toLocaleString('tr-TR') : '—'}</td>
       </tr>
       {isExpanded && isActive && isSea && (
-        <tr><td colSpan={8} className="px-4 py-3 bg-blue-50/50 border-t border-blue-100">
+        <tr><td colSpan={9} className="px-4 py-3 bg-blue-50/50 border-t border-blue-100">
           <BoxEntryPanel item={item} existingBoxes={itemBoxes} onCreateBox={onCreateBox} onDeleteBox={onDeleteBox} />
         </td></tr>
       )}
