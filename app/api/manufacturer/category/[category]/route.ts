@@ -115,6 +115,7 @@ export async function GET(
       iwasku: r.iwasku,
       productName: r.productName,
       productCategory: r.productCategory,
+      productSize: r.productSize ?? null,
       marketplaceName: r.marketplace.name,
       marketplaceColorTag: r.marketplace.colorTag,
       quantity: r.quantity,

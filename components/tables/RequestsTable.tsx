@@ -20,8 +20,10 @@ const SSO_URL = process.env.NEXT_PUBLIC_SSO_URL || 'https://apps.iwa.web.tr';
 export interface RequestSummary {
   total: number;
   totalQty: number;
+  totalDesi: number;
   completed: number;
   completedQty: number;
+  completedDesi: number;
   partial: number;
   requested: number;
 }
@@ -42,6 +44,7 @@ interface Request {
   iwasku: string;
   productName: string;
   productCategory: string;
+  productSize: number | null;
   quantity: number;
   status: string;
   priority: string;
@@ -120,11 +123,15 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
           const sorted = [...data.data].sort((a: Request, b: Request) => a.iwasku.localeCompare(b.iwasku));
           setRequests(sorted);
           if (onSummary) {
+            const desiCalc = (arr: Request[]) => arr.reduce((s, r) => s + r.quantity * (r.productSize ?? 0), 0);
+            const completedArr = sorted.filter((r: Request) => r.status === 'COMPLETED');
             onSummary({
               total: sorted.length,
               totalQty: sorted.reduce((s: number, r: Request) => s + r.quantity, 0),
-              completed: sorted.filter((r: Request) => r.status === 'COMPLETED').length,
-              completedQty: sorted.filter((r: Request) => r.status === 'COMPLETED').reduce((s: number, r: Request) => s + r.quantity, 0),
+              totalDesi: desiCalc(sorted),
+              completed: completedArr.length,
+              completedQty: completedArr.reduce((s: number, r: Request) => s + r.quantity, 0),
+              completedDesi: desiCalc(completedArr),
               partial: sorted.filter((r: Request) => r.status === 'PARTIALLY_PRODUCED').length,
               requested: sorted.filter((r: Request) => r.status === 'REQUESTED').length,
             });

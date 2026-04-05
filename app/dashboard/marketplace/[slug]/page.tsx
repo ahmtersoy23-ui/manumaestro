@@ -283,16 +283,16 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
                 <Package className="w-4 h-4 text-blue-500" />
                 <span className="text-xs text-gray-500">Toplam</span>
               </div>
-              <p className="text-lg font-bold text-gray-900 mt-1">{summary.total} <span className="text-sm font-normal text-gray-500">urun</span></p>
-              <p className="text-xs text-gray-400">{summary.totalQty.toLocaleString('tr-TR')} adet</p>
+              <p className="text-lg font-bold text-gray-900 mt-1">{summary.totalQty.toLocaleString('tr-TR')} <span className="text-sm font-normal text-gray-500">adet</span></p>
+              <p className="text-[10px] text-gray-400">{Math.round(summary.totalDesi).toLocaleString('tr-TR')} desi</p>
             </div>
             <div className="bg-white border rounded-lg px-4 py-3">
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-green-500" />
                 <span className="text-xs text-gray-500">Tamamlandi</span>
               </div>
-              <p className="text-lg font-bold text-green-600 mt-1">{summary.completed}</p>
-              <p className="text-xs text-gray-400">{summary.completedQty.toLocaleString('tr-TR')} adet</p>
+              <p className="text-lg font-bold text-green-600 mt-1">{summary.completedQty.toLocaleString('tr-TR')} <span className="text-sm font-normal text-gray-400">adet</span></p>
+              <p className="text-[10px] text-green-400">{Math.round(summary.completedDesi).toLocaleString('tr-TR')} desi</p>
             </div>
             <div className="bg-white border rounded-lg px-4 py-3">
               <div className="flex items-center gap-2">

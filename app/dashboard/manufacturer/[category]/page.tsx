@@ -49,6 +49,7 @@ interface Request {
   iwasku: string;
   productName: string;
   productCategory: string;
+  productSize: number | null;
   marketplaceName: string;
   marketplaceColorTag?: string | null;
   quantity: number;
@@ -63,6 +64,7 @@ interface Request {
 interface GroupedRequest {
   iwasku: string;
   productName: string;
+  productSize: number | null;
   totalQuantity: number;
   warehouseStock: number | null;
   netNeed: number;
@@ -157,6 +159,7 @@ export default function ManufacturerCategoryPage() {
               acc.push({
                 iwasku: request.iwasku,
                 productName: request.productName,
+                productSize: request.productSize,
                 totalQuantity: request.quantity,
                 warehouseStock: stock,
                 netNeed: Math.max(0, request.quantity - (stock ?? 0)),
@@ -437,13 +440,19 @@ export default function ManufacturerCategoryPage() {
       {groupedRequests.length > 0 && (() => {
         const totals = groupedRequests.reduce((acc, g) => {
           const produced = editValues[g.iwasku]?.producedQuantity || 0;
+          const desi = g.productSize ?? 0;
           acc.talep += g.totalQuantity;
+          acc.talepDesi += g.totalQuantity * desi;
           acc.stok += g.warehouseStock ?? 0;
+          acc.stokDesi += (g.warehouseStock ?? 0) * desi;
           acc.netIhtiyac += g.netNeed;
+          acc.netDesi += g.netNeed * desi;
           acc.uretilen += produced;
+          acc.uretilenDesi += produced * desi;
           acc.kalan += Math.max(0, g.netNeed - produced);
+          acc.kalanDesi += Math.max(0, g.netNeed - produced) * desi;
           return acc;
-        }, { talep: 0, stok: 0, netIhtiyac: 0, uretilen: 0, kalan: 0 });
+        }, { talep: 0, talepDesi: 0, stok: 0, stokDesi: 0, netIhtiyac: 0, netDesi: 0, uretilen: 0, uretilenDesi: 0, kalan: 0, kalanDesi: 0 });
         const pct = totals.netIhtiyac > 0 ? Math.round((totals.uretilen / totals.netIhtiyac) * 100) : 0;
         return (
           <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -451,25 +460,30 @@ export default function ManufacturerCategoryPage() {
               <div>
                 <p className="text-xs text-gray-500">Talep</p>
                 <p className="text-lg font-bold text-gray-900">{totals.talep.toLocaleString('tr-TR')}</p>
+                <p className="text-[10px] text-gray-400">{Math.round(totals.talepDesi).toLocaleString('tr-TR')} desi</p>
               </div>
               <div>
                 <p className="text-xs text-emerald-600">Stok</p>
                 <p className="text-lg font-bold text-emerald-700">{totals.stok.toLocaleString('tr-TR')}</p>
+                <p className="text-[10px] text-emerald-400">{Math.round(totals.stokDesi).toLocaleString('tr-TR')} desi</p>
               </div>
               <div>
-                <p className="text-xs text-blue-600">Net İhtiyaç</p>
+                <p className="text-xs text-blue-600">Net Ihtiyac</p>
                 <p className="text-lg font-bold text-blue-700">{totals.netIhtiyac.toLocaleString('tr-TR')}</p>
+                <p className="text-[10px] text-blue-400">{Math.round(totals.netDesi).toLocaleString('tr-TR')} desi</p>
               </div>
               <div>
-                <p className="text-xs text-gray-500">Üretilen</p>
+                <p className="text-xs text-gray-500">Uretilen</p>
                 <p className="text-lg font-bold text-gray-900">{totals.uretilen.toLocaleString('tr-TR')}</p>
+                <p className="text-[10px] text-gray-400">{Math.round(totals.uretilenDesi).toLocaleString('tr-TR')} desi</p>
               </div>
               <div>
                 <p className="text-xs text-red-500">Kalan</p>
                 <p className={`text-lg font-bold ${totals.kalan === 0 ? 'text-green-600' : 'text-red-600'}`}>{totals.kalan.toLocaleString('tr-TR')}</p>
+                <p className={`text-[10px] ${totals.kalan === 0 ? 'text-green-400' : 'text-red-400'}`}>{Math.round(totals.kalanDesi).toLocaleString('tr-TR')} desi</p>
               </div>
               <div>
-                <p className="text-xs text-gray-500">İlerleme</p>
+                <p className="text-xs text-gray-500">Ilerleme</p>
                 <p className={`text-lg font-bold ${pct >= 100 ? 'text-green-600' : 'text-gray-900'}`}>{pct}%</p>
               </div>
             </div>

@@ -101,6 +101,23 @@ export default function MonthDetailPage() {
   const [editMarketplace, setEditMarketplace] = useState<{ id: string; name: string; region: string } | null>(null);
   const [refreshMarketplaces, setRefreshMarketplaces] = useState(0);
 
+  // Collapsible sections — localStorage ile hatirla (default kapali)
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = localStorage.getItem('mm-sections');
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
+  const toggleSection = (key: string) => {
+    setOpenSections(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      try { localStorage.setItem('mm-sections', JSON.stringify(next)); } catch { /* */ }
+      return next;
+    });
+  };
+  const isSectionOpen = (key: string) => !!openSections[key];
+
   // Snapshot state
   interface SnapshotItem {
     iwasku: string;
@@ -521,16 +538,17 @@ export default function MonthDetailPage() {
                 emerald: { bg: 'bg-emerald-100', hoverBg: 'group-hover:bg-emerald-200', text: 'text-emerald-600', border: 'hover:border-emerald-500', value: 'text-emerald-600' },
               };
               const colors = colorMap[group.color as keyof typeof colorMap];
+              const sectionKey = `prod-${group.key}`;
               return (
                 <div key={group.key}>
-                  <div className="flex items-center gap-2 mb-3">
+                  <button onClick={() => toggleSection(sectionKey)} className="flex items-center gap-2 mb-3 w-full text-left hover:opacity-80 transition-opacity">
                     <GroupIcon className={`w-5 h-5 ${colors.text}`} />
                     <h3 className="text-lg font-semibold text-gray-800">{group.label}</h3>
-                    <span className="text-sm text-gray-500">
-                      ({groupCats.length} kategori)
-                    </span>
-                  </div>
+                    <span className="text-sm text-gray-500">({groupCats.length} kategori)</span>
+                    <ChevronDown className={`w-4 h-4 text-gray-400 ml-auto transition-transform ${isSectionOpen(sectionKey) ? 'rotate-180' : ''}`} />
+                  </button>
 
+                  {!isSectionOpen(sectionKey) ? null : (<>
                   {/* Group summary */}
                   {(() => {
                     const hasStock = categoryStockMap.size > 0;
@@ -669,6 +687,7 @@ export default function MonthDetailPage() {
                       );
                     })}
                   </div>
+                  </>)}
                 </div>
               );
             })}
@@ -678,14 +697,15 @@ export default function MonthDetailPage() {
 
       {/* Marketplaces Section - Request Entry */}
       <div>
-        <div className="flex items-center gap-3 mb-4">
+        <button onClick={() => toggleSection('marketplaces')} className="flex items-center gap-3 mb-4 w-full text-left hover:opacity-80 transition-opacity">
           <ShoppingCart className="w-6 h-6 text-gray-700" />
-          <h2 className="text-2xl font-semibold text-gray-900">
-            Pazar Yerleri
-          </h2>
-        </div>
+          <h2 className="text-2xl font-semibold text-gray-900">Pazar Yerleri</h2>
+          <ChevronDown className={`w-5 h-5 text-gray-400 ml-auto transition-transform ${isSectionOpen('marketplaces') ? 'rotate-180' : ''}`} />
+        </button>
+
+        {isSectionOpen('marketplaces') && (<>
         <p className="text-gray-600 mb-6">
-          Her pazar yeri için yeni üretim talebi girin
+          Her pazar yeri icin yeni uretim talebi girin
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -783,6 +803,7 @@ export default function MonthDetailPage() {
             </div>
           </button>
         </div>
+        </>)}
       </div>
 
       {/* Marketplace Priority — Admin only */}
