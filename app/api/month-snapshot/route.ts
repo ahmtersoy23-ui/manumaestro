@@ -128,9 +128,11 @@ export async function GET(request: NextRequest) {
       desi: productMap[s.iwasku]?.desi || null,
     }));
 
-    const totalRequested = snapshots.reduce((sum, s) => sum + s.totalRequested, 0);
-    const totalStock = snapshots.reduce((sum, s) => sum + s.warehouseStock, 0);
-    const totalNet = snapshots.reduce((sum, s) => sum + s.netProduction, 0);
+    // Özet: sadece talep edilen ürünlerin stoku (talepsiz depodakiler dahil değil)
+    const requested = snapshots.filter(s => s.totalRequested > 0);
+    const totalRequested = requested.reduce((sum, s) => sum + s.totalRequested, 0);
+    const totalStock = requested.reduce((sum, s) => sum + s.warehouseStock, 0);
+    const totalNet = requested.reduce((sum, s) => sum + s.netProduction, 0);
 
     return NextResponse.json({
       success: true,

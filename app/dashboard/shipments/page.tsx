@@ -10,7 +10,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  Ship, Plus, Settings, AlertCircle, Loader2, Home,
+  Ship, Plus, Settings, AlertCircle, Loader2,
   Anchor, Truck as TruckIcon, Plane, ChevronDown, Calendar,
 } from 'lucide-react';
 
@@ -104,9 +104,6 @@ export default function ShipmentsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="p-2 hover:bg-gray-100 rounded-lg" title="Ana Sayfa">
-            <Home className="w-5 h-5 text-gray-400" />
-          </Link>
           <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
             <Ship className="w-5 h-5 text-blue-600" />
           </div>

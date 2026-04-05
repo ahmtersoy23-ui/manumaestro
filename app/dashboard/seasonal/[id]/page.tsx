@@ -11,7 +11,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  Home, Upload, Package, TrendingUp, Truck, AlertCircle,
+  Upload, Package, TrendingUp, Truck, AlertCircle,
   Loader2, CheckCircle2, XCircle, BarChart3, Calendar, FileSpreadsheet,
   CalendarRange, Eye, ThumbsUp, Lock, Send, Edit2, X, Warehouse, Trash2,
 } from 'lucide-react';
@@ -428,9 +428,6 @@ export default function PoolDetailPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="p-2 hover:bg-gray-100 rounded-lg" title="Ana Sayfa">
-            <Home className="w-5 h-5 text-gray-400" />
-          </Link>
           <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
             <CalendarRange className="w-5 h-5 text-purple-600" />
           </div>

@@ -17,12 +17,22 @@ import { createLogger } from '@/lib/logger';
 const logger = createLogger('RequestsTable');
 const SSO_URL = process.env.NEXT_PUBLIC_SSO_URL || 'https://apps.iwa.web.tr';
 
+export interface RequestSummary {
+  total: number;
+  totalQty: number;
+  completed: number;
+  completedQty: number;
+  partial: number;
+  requested: number;
+}
+
 interface RequestsTableProps {
   marketplaceId: string;
   month?: string;
   refreshTrigger?: number;
   onDelete?: () => void;
   archiveMode?: boolean;
+  onSummary?: (summary: RequestSummary) => void;
 }
 
 interface RoutedShipment { id: string; name: string; }
@@ -78,7 +88,7 @@ const METHOD_LABEL: Record<string, string> = { sea: 'Deniz', road: 'Kara', air: 
 
 const PAGE_SIZE = 30;
 
-export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, archiveMode = false }: RequestsTableProps) {
+export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, archiveMode = false, onSummary }: RequestsTableProps) {
   const { hasRole } = useAuth();
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
@@ -107,7 +117,18 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
         const res = await fetch(`/api/requests?marketplaceId=${marketplaceId}&limit=5000${archiveParam}${monthParam}`);
         const data = await res.json();
         if (data.success) {
-          setRequests([...data.data].sort((a: Request, b: Request) => a.iwasku.localeCompare(b.iwasku)));
+          const sorted = [...data.data].sort((a: Request, b: Request) => a.iwasku.localeCompare(b.iwasku));
+          setRequests(sorted);
+          if (onSummary) {
+            onSummary({
+              total: sorted.length,
+              totalQty: sorted.reduce((s: number, r: Request) => s + r.quantity, 0),
+              completed: sorted.filter((r: Request) => r.status === 'COMPLETED').length,
+              completedQty: sorted.filter((r: Request) => r.status === 'COMPLETED').reduce((s: number, r: Request) => s + r.quantity, 0),
+              partial: sorted.filter((r: Request) => r.status === 'PARTIALLY_PRODUCED').length,
+              requested: sorted.filter((r: Request) => r.status === 'REQUESTED').length,
+            });
+          }
         }
       } catch (error) {
         logger.error('Failed to fetch requests:', error);

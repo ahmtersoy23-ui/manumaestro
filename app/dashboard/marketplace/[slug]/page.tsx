@@ -11,8 +11,8 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ManualEntryForm } from '@/components/forms/ManualEntryForm';
 import { ExcelUpload } from '@/components/forms/ExcelUpload';
-import { RequestsTable } from '@/components/tables/RequestsTable';
-import { Download, Upload, PlusCircle, Clock, Archive, ArrowLeft } from 'lucide-react';
+import { RequestsTable, RequestSummary } from '@/components/tables/RequestsTable';
+import { Download, Upload, PlusCircle, Clock, Archive, ArrowLeft, Package, Check, AlertCircle } from 'lucide-react';
 import { parseMonthValue, getActiveMonths } from '@/lib/monthUtils';
 import { createLogger } from '@/lib/logger';
 
@@ -45,6 +45,7 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
   const [slug, setSlug] = useState<string>('');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [exporting, setExporting] = useState(false);
+  const [summary, setSummary] = useState<RequestSummary | null>(null);
 
   // Month tabs - get active months
   const [availableMonths, setAvailableMonths] = useState<Array<{ value: string; label: string; locked: boolean }>>([]);
@@ -276,12 +277,49 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
             {exporting ? 'Aktarılıyor...' : 'Dışa Aktar'}
           </button>
         </div>
+        {/* Ozet Kartlari */}
+        {summary && summary.total > 0 && selectedMonth !== 'archive' && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            <div className="bg-white border rounded-lg px-4 py-3">
+              <div className="flex items-center gap-2">
+                <Package className="w-4 h-4 text-blue-500" />
+                <span className="text-xs text-gray-500">Toplam</span>
+              </div>
+              <p className="text-lg font-bold text-gray-900 mt-1">{summary.total} <span className="text-sm font-normal text-gray-500">urun</span></p>
+              <p className="text-xs text-gray-400">{summary.totalQty.toLocaleString('tr-TR')} adet</p>
+            </div>
+            <div className="bg-white border rounded-lg px-4 py-3">
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-green-500" />
+                <span className="text-xs text-gray-500">Tamamlandi</span>
+              </div>
+              <p className="text-lg font-bold text-green-600 mt-1">{summary.completed}</p>
+              <p className="text-xs text-gray-400">{summary.completedQty.toLocaleString('tr-TR')} adet</p>
+            </div>
+            <div className="bg-white border rounded-lg px-4 py-3">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-yellow-500" />
+                <span className="text-xs text-gray-500">Kismen</span>
+              </div>
+              <p className="text-lg font-bold text-yellow-600 mt-1">{summary.partial}</p>
+            </div>
+            <div className="bg-white border rounded-lg px-4 py-3">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-blue-500" />
+                <span className="text-xs text-gray-500">Bekleyen</span>
+              </div>
+              <p className="text-lg font-bold text-blue-600 mt-1">{summary.requested}</p>
+            </div>
+          </div>
+        )}
+
         <RequestsTable
           marketplaceId={marketplace.id}
           month={selectedMonth !== 'archive' ? selectedMonth : undefined}
           refreshTrigger={refreshTrigger}
           onDelete={() => setRefreshTrigger(prev => prev + 1)}
           archiveMode={selectedMonth === 'archive'}
+          onSummary={setSummary}
         />
       </div>
     </div>
