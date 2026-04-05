@@ -421,7 +421,7 @@ export default function ShipmentDetailPage() {
               <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-semibold text-amber-800">{missingFnsku.length} urunde FNSKU eksik</p>
-                <p className="text-xs text-amber-600 mt-1">FBA listing olusturulmali. Koli girisinde manuel FNSKU girilebilir.</p>
+                <p className="text-xs text-amber-600 mt-1">Tabloda &quot;Eksik&quot; yazan hucreye tiklayarak FNSKU girebilirsiniz.</p>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {missingFnsku.map(i => (
                     <span key={i.id} className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded text-xs font-mono">{i.iwasku}</span>
@@ -526,7 +526,13 @@ export default function ShipmentDetailPage() {
                         onToggleExpand={() => setExpandedItemId(isExpanded ? null : item.id)}
                         onCreateBox={(form) => handleCreateBox(form, item.id)}
                         onDeleteBox={handleDeleteBox}
-                        onDeleteItem={() => handleDeleteItem(item.id)} />
+                        onDeleteItem={() => handleDeleteItem(item.id)}
+                        onFnskuSaved={(itemId, fnsku) => {
+                          setShipment(prev => prev ? {
+                            ...prev,
+                            items: prev.items.map(i => i.id === itemId ? { ...i, fnsku } : i),
+                          } : prev);
+                        }} />
                     );
                   })}
                 </tbody>
@@ -715,16 +721,90 @@ export default function ShipmentDetailPage() {
   );
 }
 
+// --- Inline FNSKU Input ---
+const MKT_CODE_TO_COUNTRY: Record<string, string> = {
+  AMZN_US: 'US', AMZN_CA: 'CA', AMZN_UK: 'UK', AMZN_AU: 'AU', AMZN_EU: 'FR',
+};
+
+function InlineFnskuInput({ item, onSaved }: { item: ShipmentItem; onSaved: (itemId: string, fnsku: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSave = async () => {
+    const fnsku = value.trim();
+    if (!fnsku) { setEditing(false); return; }
+    const countryCode = item.marketplace?.code ? MKT_CODE_TO_COUNTRY[item.marketplace.code] : null;
+    if (!countryCode) { setError('Marketplace eslestirilemedi'); return; }
+
+    setSaving(true); setError('');
+    try {
+      const res = await fetch('/api/sku-master/fnsku', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shipmentItemId: item.id, iwasku: item.iwasku, countryCode, fnsku }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        onSaved(item.id, data.data.fnsku ?? fnsku);
+        setEditing(false);
+      } else {
+        setError(data.error || 'Hata');
+      }
+    } catch { setError('Baglanti hatasi'); } finally { setSaving(false); }
+  };
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => { setEditing(true); setValue(''); setError(''); }}
+        className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-xs font-medium hover:bg-amber-200 transition-colors cursor-pointer"
+        title="FNSKU girmek icin tikla"
+      >
+        Eksik
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="flex items-center gap-1">
+        <input
+          type="text"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditing(false); }}
+          autoFocus
+          placeholder="FNSKU"
+          disabled={saving}
+          className="px-1.5 py-0.5 border border-amber-300 rounded text-xs font-mono w-28 focus:outline-none focus:ring-1 focus:ring-amber-400"
+        />
+        {saving ? (
+          <Loader2 className="w-3.5 h-3.5 text-amber-500 animate-spin" />
+        ) : (
+          <>
+            <button onClick={handleSave} className="text-green-600 hover:text-green-800"><Check className="w-3.5 h-3.5" /></button>
+            <button onClick={() => setEditing(false)} className="text-gray-400 hover:text-gray-600"><X className="w-3.5 h-3.5" /></button>
+          </>
+        )}
+      </div>
+      {error && <span className="text-[10px] text-red-500">{error}</span>}
+    </div>
+  );
+}
+
 // --- Pending Item Row ---
 function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded, isSelected, togglingId,
   canBoxes, canPack, canSend, canDelete,
-  onTogglePacked, onToggleSelect, onToggleExpand, onCreateBox, onDeleteBox, onDeleteItem }: {
+  onTogglePacked, onToggleSelect, onToggleExpand, onCreateBox, onDeleteBox, onDeleteItem, onFnskuSaved }: {
   item: ShipmentItem; itemDesi: number; itemBoxes: ShipmentBox[];
   isSea: boolean; isActive: boolean; isExpanded: boolean; isSelected: boolean; togglingId: string | null;
   canBoxes: boolean; canPack: boolean; canSend: boolean; canDelete: boolean;
   onTogglePacked: () => void; onToggleSelect: () => void; onToggleExpand: () => void;
   onCreateBox: (form: BoxFormData) => Promise<ShipmentBox | null>; onDeleteBox: (boxId: string) => void;
   onDeleteItem: () => void;
+  onFnskuSaved: (itemId: string, fnsku: string) => void;
 }) {
   // Deniz renk kodlama: kolilerdeki toplam adet vs item miktar
   const boxQtyTotal = itemBoxes.reduce((s, b) => s + b.quantity, 0);
@@ -760,7 +840,7 @@ function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded
           {item.fnsku
             ? <span className={`font-mono text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.fnsku}</span>
             : item.marketplace?.code?.startsWith('AMZN')
-              ? <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-xs font-medium">Eksik</span>
+              ? <InlineFnskuInput item={item} onSaved={onFnskuSaved} />
               : <span className="text-gray-300">—</span>}
         </td>
         <td className="px-3 py-3"><div className={`text-xs leading-tight line-clamp-2 ${item.packed ? 'text-green-700' : 'text-gray-700'}`}>{item.productName || '—'}</div></td>

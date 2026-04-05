@@ -105,7 +105,9 @@ export async function GET(request: NextRequest, { params }: Params) {
     const fallback = productMap.get(item.iwasku);
     const mkt = item.marketplaceId ? mktMap.get(item.marketplaceId) ?? null : null;
     const cc = mkt ? mktCodeToCountry[mkt.code] : null;
-    const fnsku = cc ? fnskuMap.get(`${item.iwasku}|${cc}`) ?? null : null;
+    const skuMasterFnsku = cc ? fnskuMap.get(`${item.iwasku}|${cc}`) ?? null : null;
+    // ShipmentItem.fnsku (manuel giris) oncelikli, sonra sku_master lookup
+    const fnsku = item.fnsku || skuMasterFnsku;
     return {
       ...item,
       marketplace: mkt,
