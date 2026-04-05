@@ -74,14 +74,43 @@ export async function GET(request: NextRequest, { params }: Params) {
     }
   }
 
+  // FNSKU lookup: iwasku + marketplace code → country_code → sku_master.fnsku
+  const mktCodeToCountry: Record<string, string> = {
+    AMZN_US: 'US', AMZN_CA: 'CA', AMZN_UK: 'UK', AMZN_AU: 'AU', AMZN_EU: 'DE',
+  };
+  const fnskuMap = new Map<string, string>(); // key: "iwasku|countryCode"
+  const fnskuLookups: Array<{ iwasku: string; countryCode: string }> = [];
+  for (const item of shipment.items) {
+    const mkt = item.marketplaceId ? mktMap.get(item.marketplaceId) : null;
+    const cc = mkt ? mktCodeToCountry[mkt.code] : null;
+    if (cc && item.iwasku) fnskuLookups.push({ iwasku: item.iwasku, countryCode: cc });
+  }
+  if (fnskuLookups.length > 0) {
+    const uniquePairs = [...new Map(fnskuLookups.map(l => [`${l.iwasku}|${l.countryCode}`, l])).values()];
+    // Batch query: OR conditions
+    const conditions = uniquePairs.map((_, i) => `(iwasku = $${i * 2 + 1} AND country_code = $${i * 2 + 2})`).join(' OR ');
+    const params = uniquePairs.flatMap(p => [p.iwasku, p.countryCode]);
+    const rows = await queryProductDb(
+      `SELECT DISTINCT ON (iwasku, country_code) iwasku, country_code, fnsku FROM sku_master WHERE (${conditions}) AND fnsku IS NOT NULL AND fnsku != ''`,
+      params
+    );
+    for (const row of rows) {
+      fnskuMap.set(`${row.iwasku}|${row.country_code}`, row.fnsku);
+    }
+  }
+
   const enrichedItems = shipment.items.map(item => {
     const pr = item.productionRequestId ? prMap.get(item.productionRequestId) : null;
     const fallback = productMap.get(item.iwasku);
+    const mkt = item.marketplaceId ? mktMap.get(item.marketplaceId) ?? null : null;
+    const cc = mkt ? mktCodeToCountry[mkt.code] : null;
+    const fnsku = cc ? fnskuMap.get(`${item.iwasku}|${cc}`) ?? null : null;
     return {
       ...item,
-      marketplace: item.marketplaceId ? mktMap.get(item.marketplaceId) ?? null : null,
+      marketplace: mkt,
       productName: pr?.productName ?? fallback?.name ?? '',
       productCategory: pr?.productCategory ?? fallback?.category ?? '',
+      fnsku,
     };
   });
 

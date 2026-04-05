@@ -6,9 +6,19 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db/prisma';
+import { prisma, queryProductDb } from '@/lib/db/prisma';
 import { requireRole } from '@/lib/auth/verify';
 import { z } from 'zod';
+
+/** Marketplace code → sku_master country_code */
+function marketplaceToCountry(code: string | null | undefined): string | null {
+  if (!code) return null;
+  const map: Record<string, string> = {
+    AMZN_US: 'US', AMZN_CA: 'CA', AMZN_UK: 'UK', AMZN_AU: 'AU',
+    AMZN_EU: 'DE', // EU FNSKU genelde DE üzerinden
+  };
+  return map[code] ?? null;
+}
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -119,13 +129,26 @@ export async function POST(request: NextRequest, { params }: Params) {
 
   const boxNumber = `${prefix}-${categoryDigit}${String(nextSeq).padStart(3, '0')}`;
 
+  // FNSKU auto-lookup: iwasku + marketplace → sku_master
+  let fnsku = data.fnsku ?? null;
+  if (!fnsku && data.iwasku && data.marketplaceCode) {
+    const countryCode = marketplaceToCountry(data.marketplaceCode);
+    if (countryCode) {
+      const rows = await queryProductDb(
+        `SELECT fnsku FROM sku_master WHERE iwasku = $1 AND country_code = $2 AND fnsku IS NOT NULL AND fnsku != '' LIMIT 1`,
+        [data.iwasku, countryCode]
+      );
+      if (rows.length > 0) fnsku = rows[0].fnsku;
+    }
+  }
+
   const box = await prisma.shipmentBox.create({
     data: {
       shipmentId: id,
       shipmentItemId: data.shipmentItemId ?? null,
       boxNumber,
       iwasku: data.iwasku ?? null,
-      fnsku: data.fnsku ?? null,
+      fnsku,
       productName: data.productName ?? null,
       productCategory: data.productCategory ?? null,
       marketplaceCode: data.marketplaceCode ?? null,

@@ -22,7 +22,7 @@ interface ShipmentItem {
   id: string; iwasku: string; quantity: number; desi: number | null;
   marketplaceId: string | null;
   marketplace: { id: string; name: string; code: string } | null;
-  productName: string; productCategory: string;
+  productName: string; productCategory: string; fnsku: string | null;
   reserveId: string | null; packed: boolean; sentAt: string | null; createdAt: string;
 }
 interface ShipmentBox {
@@ -236,7 +236,7 @@ export default function ShipmentDetailPage() {
 
   const handleExportItems = async () => {
     const XLSX = await loadXLSX();
-    const rows = shipment.items.map((item, i) => ({ '#': i + 1, 'IWASKU': item.iwasku, 'Urun Adi': item.productName, 'Kategori': item.productCategory, 'Pazar Yeri': item.marketplace?.code ?? '', 'Miktar': item.quantity, 'Desi': item.desi ? Math.round(item.desi * item.quantity) : '', 'Durum': item.sentAt ? 'Gonderildi' : item.packed ? 'Hazir' : 'Bekliyor' }));
+    const rows = shipment.items.map((item, i) => ({ '#': i + 1, 'IWASKU': item.iwasku, 'FNSKU': item.fnsku ?? '', 'Urun Adi': item.productName, 'Kategori': item.productCategory, 'Pazar Yeri': item.marketplace?.code ?? '', 'Miktar': item.quantity, 'Desi': item.desi ? Math.round(item.desi * item.quantity) : '', 'Durum': item.sentAt ? 'Gonderildi' : item.packed ? 'Hazir' : 'Bekliyor' }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Urunler');
     XLSX.writeFile(wb, `${shipment.name}-urunler-${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -593,7 +593,7 @@ function BoxEntryPanel({ item, existingBoxes, onCreateBox, onDeleteBox }: {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true);
     try {
-      await onCreateBox({ iwasku: item.iwasku, productName: item.productName, productCategory: item.productCategory,
+      await onCreateBox({ iwasku: item.iwasku, fnsku: item.fnsku, productName: item.productName, productCategory: item.productCategory,
         marketplaceCode: item.marketplace?.code ?? null, quantity: parseInt(quantity) || 1,
         width: width ? parseFloat(width) : null, height: height ? parseFloat(height) : null,
         depth: depth ? parseFloat(depth) : null, weight: weight ? parseFloat(weight) : null });
