@@ -50,8 +50,8 @@ const methodIcons: Record<string, typeof Anchor> = { sea: Anchor, road: TruckIco
 const methodLabels: Record<string, string> = { sea: 'Deniz', road: 'Karayolu', air: 'Hava' };
 const loadXLSX = () => import('xlsx');
 
-// US/CA destinations need box entry
-const NEEDS_BOX_ENTRY = ['US'];
+// Deniz gonderimlerinde box entry gerekli (US, AU, ZA)
+const BOX_ENTRY_METHODS = new Set(['sea']);
 
 export default function ShipmentDetailPage() {
   const { role } = useAuth();
@@ -109,14 +109,12 @@ export default function ShipmentDetailPage() {
   const packedCount = shipment.items.filter(i => i.packed).length;
   const totalItems = shipment.items.length;
   const allPacked = totalItems > 0 && packedCount === totalItems;
-  const canEdit = shipment.status === 'PLANNING' || shipment.status === 'LOADING';
-  const isLoading = shipment.status === 'LOADING';
-  const needsBoxEntry = NEEDS_BOX_ENTRY.includes(shipment.destinationTab);
+  const isActive = shipment.status === 'PLANNING' || shipment.status === 'LOADING';
+  const needsBoxEntry = BOX_ENTRY_METHODS.has(shipment.shippingMethod);
 
   // --- Handlers ---
   const handleStatusChange = async (newStatus: string) => {
     const labels: Record<string, string> = {
-      LOADING: 'Yukleme baslasin mi?',
       IN_TRANSIT: 'Sevkiyat gonderilsin mi? (Depo cikislari otomatik yapilacak)',
       DELIVERED: 'Teslim edildi olarak isaretlensin mi?',
     };
@@ -249,12 +247,7 @@ export default function ShipmentDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          {shipment.status === 'PLANNING' && totalItems > 0 && (
-            <button onClick={() => handleStatusChange('LOADING')} className="px-3 py-2 bg-yellow-500 text-white text-sm rounded-lg hover:bg-yellow-600 flex items-center gap-2">
-              <Package className="w-4 h-4" /> Yukleme Baslat
-            </button>
-          )}
-          {shipment.status === 'LOADING' && allPacked && (
+          {isActive && allPacked && (
             <button onClick={() => handleStatusChange('IN_TRANSIT')} className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 flex items-center gap-2">
               <Send className="w-4 h-4" /> Gonder
             </button>
@@ -277,13 +270,13 @@ export default function ShipmentDetailPage() {
           <p className="text-2xl font-bold text-gray-900">{Math.round(totalDesi).toLocaleString('tr-TR')}</p><p className="text-xs text-gray-500">Toplam Desi</p>
         </div>
         <div className="bg-white border rounded-xl p-4 text-center">
-          <p className={`text-2xl font-bold ${allPacked ? 'text-green-600' : isLoading ? 'text-orange-600' : 'text-gray-400'}`}>{packedCount}/{totalItems}</p>
+          <p className={`text-2xl font-bold ${allPacked ? 'text-green-600' : isActive ? 'text-orange-600' : 'text-gray-400'}`}>{packedCount}/{totalItems}</p>
           <p className="text-xs text-gray-500">Hazirlanma</p>
         </div>
       </div>
 
       {/* Progress bar */}
-      {isLoading && totalItems > 0 && (
+      {isActive && totalItems > 0 && (
         <div className="bg-white border rounded-xl p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-gray-700">Paketleme Durumu</span>
@@ -314,7 +307,7 @@ export default function ShipmentDetailPage() {
         <div className="space-y-4">
           {/* Actions */}
           <div className="flex items-center gap-3">
-            {canEdit && (
+            {isActive && (
               <button onClick={() => setShowAddItem(!showAddItem)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
                 <Plus className="w-4 h-4" /> Urun Ekle
               </button>
@@ -346,7 +339,7 @@ export default function ShipmentDetailPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    {isLoading && <th className="w-12 px-3 py-3"></th>}
+                    {isActive && <th className="w-12 px-3 py-3"></th>}
                     <th className="text-left px-4 py-3 font-semibold text-gray-700 text-xs uppercase">IWASKU</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Urun Adi</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Kategori</th>
@@ -367,7 +360,7 @@ export default function ShipmentDetailPage() {
                         item={item}
                         itemTotalDesi={itemTotalDesi}
                         itemBoxes={itemBoxes}
-                        isLoading={isLoading}
+                        isActive={isActive}
                         needsBoxEntry={needsBoxEntry}
                         isExpanded={isExpanded}
                         togglingId={togglingId}
@@ -381,7 +374,7 @@ export default function ShipmentDetailPage() {
                 </tbody>
                 <tfoot className="bg-gray-50 border-t">
                   <tr className="font-semibold text-gray-900">
-                    {isLoading && <td></td>}
+                    {isActive && <td></td>}
                     <td className="px-4 py-3">Toplam</td><td></td><td></td><td></td>
                     <td className="text-center px-3 py-3">{totalQty.toLocaleString('tr-TR')}</td>
                     <td className="text-center px-3 py-3">{Math.round(totalDesi).toLocaleString('tr-TR')}</td>
@@ -449,7 +442,7 @@ export default function ShipmentDetailPage() {
                       <td className="text-center px-3 py-3 text-gray-600">{box.height ?? '—'}</td>
                       <td className="text-center px-3 py-3 text-gray-600">{box.weight ?? '—'}</td>
                       <td className="px-3 py-3 text-center">
-                        {canEdit && (
+                        {isActive && (
                           <button onClick={() => handleDeleteBox(box.id)} className="text-red-400 hover:text-red-600 transition-colors"><X className="w-4 h-4" /></button>
                         )}
                       </td>
@@ -476,10 +469,10 @@ interface BoxFormData {
 }
 
 // --- Item Row with expandable box entry ---
-function ItemRow({ item, itemTotalDesi, itemBoxes, isLoading, needsBoxEntry, isExpanded, togglingId,
+function ItemRow({ item, itemTotalDesi, itemBoxes, isActive, needsBoxEntry, isExpanded, togglingId,
   onTogglePacked, onToggleExpand, onCreateBox, onDeleteBox }: {
   item: ShipmentItem; itemTotalDesi: number; itemBoxes: ShipmentBox[];
-  isLoading: boolean; needsBoxEntry: boolean; isExpanded: boolean; togglingId: string | null;
+  isActive: boolean; needsBoxEntry: boolean; isExpanded: boolean; togglingId: string | null;
   onTogglePacked: () => void; onToggleExpand: () => void;
   onCreateBox: (form: BoxFormData) => Promise<ShipmentBox | null>;
   onDeleteBox: (boxId: string) => void;
@@ -487,7 +480,7 @@ function ItemRow({ item, itemTotalDesi, itemBoxes, isLoading, needsBoxEntry, isE
   return (
     <>
       <tr className={`hover:bg-gray-50 ${item.packed ? 'bg-green-50/50' : ''}`}>
-        {isLoading && (
+        {isActive && (
           <td className="px-3 py-3 text-center">
             {needsBoxEntry ? (
               // US: expand to add box
@@ -516,7 +509,7 @@ function ItemRow({ item, itemTotalDesi, itemBoxes, isLoading, needsBoxEntry, isE
         </td>
       </tr>
       {/* Expanded box entry (US) */}
-      {isExpanded && isLoading && needsBoxEntry && (
+      {isExpanded && isActive && needsBoxEntry && (
         <tr>
           <td colSpan={8} className="px-4 py-3 bg-blue-50/50 border-t border-blue-100">
             <BoxEntryPanel
