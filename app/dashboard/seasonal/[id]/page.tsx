@@ -151,7 +151,7 @@ export default function PoolDetailPage() {
       <div className="text-center py-12">
         <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-3" />
         <p className="text-gray-600">Havuz bulunamadı</p>
-        <Link href="/dashboard" className="text-purple-600 text-sm mt-2 inline-block">Ana sayfaya dön</Link>
+        <Link href="/dashboard/seasonal" className="text-purple-600 text-sm mt-2 inline-block">Sezon listesine don</Link>
       </div>
     );
   }

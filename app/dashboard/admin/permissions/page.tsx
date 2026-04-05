@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Shield, ChevronDown, AlertTriangle, CheckSquare, Square, ArrowLeft, RefreshCw } from 'lucide-react';
+import { Shield, ChevronDown, AlertTriangle, CheckSquare, Square, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
 
@@ -347,13 +347,6 @@ export default function AdminPermissionsPage() {
 
   return (
     <div className="space-y-8">
-      <Link
-        href="/dashboard"
-        className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Ana sayfaya dön
-      </Link>
 
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">

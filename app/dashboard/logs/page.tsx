@@ -6,8 +6,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { FileText, Filter, RefreshCw, ArrowLeft } from 'lucide-react';
+import { FileText, Filter, RefreshCw } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('AuditLogsPage');
@@ -91,14 +90,6 @@ export default function AuditLogsPage() {
 
   return (
     <div className="space-y-6">
-      <Link
-        href="/dashboard"
-        className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Ana sayfaya dön
-      </Link>
-
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
