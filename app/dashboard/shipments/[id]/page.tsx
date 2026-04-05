@@ -400,7 +400,7 @@ export default function ShipmentDetailPage() {
 
       {/* FNSKU Eksik Uyarisi */}
       {(() => {
-        const missingFnsku = pendingItems.filter(i => !i.fnsku);
+        const missingFnsku = pendingItems.filter(i => !i.fnsku && i.marketplace?.code?.startsWith('AMZN'));
         if (missingFnsku.length === 0) return null;
         return (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
@@ -747,7 +747,9 @@ function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded
         <td className="px-3 py-3">
           {item.fnsku
             ? <span className={`font-mono text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.fnsku}</span>
-            : <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-xs font-medium">Eksik</span>}
+            : item.marketplace?.code?.startsWith('AMZN')
+              ? <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-xs font-medium">Eksik</span>
+              : <span className="text-gray-300">—</span>}
         </td>
         <td className="px-3 py-3"><div className={`text-xs leading-tight line-clamp-2 ${item.packed ? 'text-green-700' : 'text-gray-700'}`}>{item.productName || '—'}</div></td>
         <td className={`px-3 py-3 text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.productCategory || '—'}</td>
