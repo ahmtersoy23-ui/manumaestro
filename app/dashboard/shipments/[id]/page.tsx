@@ -450,8 +450,8 @@ export default function ShipmentDetailPage() {
             <button onClick={handleExportItems} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 border">
               <Download className="w-4 h-4" /> Excel
             </button>
-            {/* Karayolu/hava: Gönder butonu */}
-            {!isSea && selectedPackedCount > 0 && (
+            {/* Gönder butonu — packed seçili itemler için */}
+            {selectedPackedCount > 0 && (
               <button onClick={handleSendSelected} disabled={sending}
                 className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50">
                 {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -480,8 +480,8 @@ export default function ShipmentDetailPage() {
                 <thead className="bg-gray-50 border-b">
                   <tr>
                     <th className="w-12 px-3 py-3">
-                      {!isSea && isActive && (
-                        <button onClick={handleSelectAllPacked} className="text-gray-600 hover:text-purple-600">
+                      {isActive && packedPendingCount > 0 && (
+                        <button onClick={handleSelectAllPacked} className="text-gray-600 hover:text-purple-600" title="Hazirlari sec">
                           {packedPendingCount > 0 && [...selectedIds].length >= packedPendingCount ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
                         </button>
                       )}
@@ -712,20 +712,33 @@ function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded
     <>
       <tr className={`hover:bg-gray-50 ${item.packed ? 'bg-green-50/50' : ''}`}>
         <td className="px-3 py-3 text-center">
-          {isActive && isSea ? (
-            <button onClick={onToggleExpand} className="hover:scale-110 transition-transform">
-              {item.packed ? <CheckSquare className="w-5 h-5 text-green-600" />
-                : isExpanded ? <ChevronDown className="w-5 h-5 text-blue-600" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
-            </button>
-          ) : isActive && !isSea ? (
-            <div className="flex items-center gap-1">
-              <button onClick={onToggleSelect} className="hover:scale-110 transition-transform">
-                {isSelected ? <CheckSquare className="w-5 h-5 text-purple-600" /> : <Square className="w-5 h-5 text-gray-300" />}
-              </button>
-              {togglingId === item.id ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" /> : (
-                <button onClick={onTogglePacked} className="hover:scale-110 transition-transform ml-1" title={item.packed ? 'Hazir' : 'Hazirla'}>
-                  {item.packed ? <Check className="w-4 h-4 text-green-600" /> : <Package className="w-4 h-4 text-gray-300" />}
+          {isActive ? (
+            <div className="flex items-center gap-1 justify-center">
+              {/* Gonderim icin secim checkbox'i (packed olanlar icin) */}
+              {item.packed && (
+                <button onClick={onToggleSelect} className="hover:scale-110 transition-transform">
+                  {isSelected ? <CheckSquare className="w-5 h-5 text-purple-600" /> : <Square className="w-5 h-5 text-gray-300" />}
                 </button>
+              )}
+              {/* Deniz: koli girisi icin expand */}
+              {isSea && !item.packed && (
+                <button onClick={onToggleExpand} className="hover:scale-110 transition-transform">
+                  {isExpanded ? <ChevronDown className="w-5 h-5 text-blue-600" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
+                </button>
+              )}
+              {/* Deniz: packed olsa da expand edebilsin (ilave koli icin) */}
+              {isSea && item.packed && (
+                <button onClick={onToggleExpand} className="hover:scale-110 transition-transform">
+                  {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-300" />}
+                </button>
+              )}
+              {/* Karayolu/hava: packed toggle */}
+              {!isSea && (
+                togglingId === item.id ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" /> : (
+                  <button onClick={onTogglePacked} className="hover:scale-110 transition-transform" title={item.packed ? 'Hazir' : 'Hazirla'}>
+                    {item.packed ? <Check className="w-4 h-4 text-green-600" /> : <Package className="w-4 h-4 text-gray-300" />}
+                  </button>
+                )
               )}
             </div>
           ) : item.packed ? <Check className="w-5 h-5 text-green-600" /> : null}
