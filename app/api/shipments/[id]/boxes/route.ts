@@ -76,7 +76,9 @@ const CreateBoxSchema = z.object({
   productName: z.string().optional().nullable(),
   productCategory: z.string().optional().nullable(),
   marketplaceCode: z.string().optional().nullable(),
+  destination: z.enum(['FBA', 'DEPO']).optional().default('DEPO'),
   quantity: z.number().int().positive().default(1),
+  count: z.number().int().positive().max(500).optional().default(1), // Toplu: kaç koli oluşturulacak
   width: z.number().positive().optional().nullable(),
   height: z.number().positive().optional().nullable(),
   depth: z.number().positive().optional().nullable(),
@@ -104,16 +106,14 @@ export async function POST(request: NextRequest, { params }: Params) {
   }
 
   const data = validation.data;
+  const boxCount = data.count ?? 1;
   const prefix = getShipmentPrefix(shipment.name);
   const categoryDigit = getCategoryDigit(data.productCategory);
 
-  // Sıradaki box numarasını bul: aynı prefix + aynı kategori digit
+  // Sıradaki box numarasını bul
   const rangeStart = `${prefix}-${categoryDigit}`;
   const existingBoxes = await prisma.shipmentBox.findMany({
-    where: {
-      shipmentId: id,
-      boxNumber: { startsWith: rangeStart },
-    },
+    where: { shipmentId: id, boxNumber: { startsWith: rangeStart } },
     select: { boxNumber: true },
     orderBy: { boxNumber: 'desc' },
     take: 1,
@@ -121,15 +121,11 @@ export async function POST(request: NextRequest, { params }: Params) {
 
   let nextSeq = 1;
   if (existingBoxes.length > 0) {
-    const lastNum = existingBoxes[0].boxNumber;
-    const seqPart = lastNum.split('-').pop() ?? '0000';
-    const lastSeq = parseInt(seqPart.slice(1), 10); // "0005" → 5
-    nextSeq = lastSeq + 1;
+    const seqPart = existingBoxes[0].boxNumber.split('-').pop() ?? '0000';
+    nextSeq = parseInt(seqPart.slice(1), 10) + 1;
   }
 
-  const boxNumber = `${prefix}-${categoryDigit}${String(nextSeq).padStart(3, '0')}`;
-
-  // FNSKU auto-lookup: iwasku + marketplace → sku_master
+  // FNSKU auto-lookup
   let fnsku = data.fnsku ?? null;
   if (!fnsku && data.iwasku && data.marketplaceCode) {
     const countryCode = marketplaceToCountry(data.marketplaceCode);
@@ -142,25 +138,27 @@ export async function POST(request: NextRequest, { params }: Params) {
     }
   }
 
-  const box = await prisma.shipmentBox.create({
-    data: {
-      shipmentId: id,
-      shipmentItemId: data.shipmentItemId ?? null,
-      boxNumber,
-      iwasku: data.iwasku ?? null,
-      fnsku,
-      productName: data.productName ?? null,
-      productCategory: data.productCategory ?? null,
-      marketplaceCode: data.marketplaceCode ?? null,
-      quantity: data.quantity,
-      width: data.width ?? null,
-      height: data.height ?? null,
-      depth: data.depth ?? null,
-      weight: data.weight ?? null,
-    },
-  });
+  // N koli oluştur (count=1 ise tek koli, >1 ise toplu)
+  const boxData = Array.from({ length: boxCount }, (_, i) => ({
+    shipmentId: id,
+    shipmentItemId: data.shipmentItemId ?? null,
+    boxNumber: `${prefix}-${categoryDigit}${String(nextSeq + i).padStart(3, '0')}`,
+    iwasku: data.iwasku ?? null,
+    fnsku,
+    productName: data.productName ?? null,
+    productCategory: data.productCategory ?? null,
+    marketplaceCode: data.marketplaceCode ?? null,
+    destination: data.destination ?? 'DEPO',
+    quantity: data.quantity,
+    width: data.width ?? null,
+    height: data.height ?? null,
+    depth: data.depth ?? null,
+    weight: data.weight ?? null,
+  }));
 
-  // Eger shipmentItemId varsa, o item'i packed olarak isaretle
+  const result = await prisma.shipmentBox.createMany({ data: boxData });
+
+  // İlk koli oluştuğunda item'i packed yap
   if (data.shipmentItemId) {
     await prisma.shipmentItem.update({
       where: { id: data.shipmentItemId },
@@ -168,7 +166,10 @@ export async function POST(request: NextRequest, { params }: Params) {
     });
   }
 
-  return NextResponse.json({ success: true, data: box }, { status: 201 });
+  return NextResponse.json({
+    success: true,
+    data: { created: result.count, firstBoxNumber: boxData[0].boxNumber, lastBoxNumber: boxData[boxData.length - 1].boxNumber },
+  }, { status: 201 });
 }
 
 // --- DELETE: Remove box ---
