@@ -467,6 +467,7 @@ model ShipmentItem {
   marketplaceId        String?
   reserveId            String?
   productionRequestId  String?   // Yönlendirilen ProductionRequest bağlantısı
+  packed               Boolean   @default(false) // Depo: hazırlandı/paketlendi
 
   createdAt            DateTime  @default(now())
 

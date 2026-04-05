@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db/prisma';
+import { prisma, queryProductDb } from '@/lib/db/prisma';
 import { requireRole } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
 import { z } from 'zod';
@@ -32,33 +32,63 @@ export async function GET(request: NextRequest, { params }: Params) {
     },
   });
 
-  // Marketplace bilgilerini çöz (items'taki marketplaceId'lerden)
-  if (shipment) {
-    const mktIds = [...new Set(shipment.items.map(i => i.marketplaceId).filter(Boolean))] as string[];
-    const marketplaces = mktIds.length > 0
-      ? await prisma.marketplace.findMany({
-          where: { id: { in: mktIds } },
-          select: { id: true, name: true, code: true },
-        })
-      : [];
-    const mktMap = new Map(marketplaces.map(m => [m.id, m]));
-
-    const enrichedItems = shipment.items.map(item => ({
-      ...item,
-      marketplace: item.marketplaceId ? mktMap.get(item.marketplaceId) ?? null : null,
-    }));
-
-    return NextResponse.json({
-      success: true,
-      data: { ...shipment, items: enrichedItems },
-    });
-  }
-
   if (!shipment) {
     return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadı' }, { status: 404 });
   }
 
-  return NextResponse.json({ success: true, data: shipment });
+  // Marketplace bilgilerini çöz
+  const mktIds = [...new Set(shipment.items.map(i => i.marketplaceId).filter(Boolean))] as string[];
+  const marketplaces = mktIds.length > 0
+    ? await prisma.marketplace.findMany({
+        where: { id: { in: mktIds } },
+        select: { id: true, name: true, code: true },
+      })
+    : [];
+  const mktMap = new Map(marketplaces.map(m => [m.id, m]));
+
+  // Ürün adı/kategori: ProductionRequest'ten veya pricelab_db'den
+  const prIds = shipment.items.map(i => i.productionRequestId).filter(Boolean) as string[];
+  const prodReqs = prIds.length > 0
+    ? await prisma.productionRequest.findMany({
+        where: { id: { in: prIds } },
+        select: { id: true, productName: true, productCategory: true },
+      })
+    : [];
+  const prMap = new Map(prodReqs.map(p => [p.id, p]));
+
+  // ProductionRequest'i olmayan item'lar için pricelab_db fallback
+  const missingNameIwaskus = shipment.items
+    .filter(i => !i.productionRequestId || !prMap.has(i.productionRequestId))
+    .map(i => i.iwasku);
+  const uniqueMissing = [...new Set(missingNameIwaskus)];
+
+  const productMap = new Map<string, { name: string; category: string }>();
+  if (uniqueMissing.length > 0) {
+    const placeholders = uniqueMissing.map((_, i) => `$${i + 1}`).join(',');
+    const rows = await queryProductDb(
+      `SELECT DISTINCT ON (iwasku) iwasku, title AS name, product_group AS category FROM sku_master WHERE iwasku IN (${placeholders})`,
+      uniqueMissing
+    );
+    for (const row of rows) {
+      productMap.set(row.iwasku, { name: row.name ?? '', category: row.category ?? '' });
+    }
+  }
+
+  const enrichedItems = shipment.items.map(item => {
+    const pr = item.productionRequestId ? prMap.get(item.productionRequestId) : null;
+    const fallback = productMap.get(item.iwasku);
+    return {
+      ...item,
+      marketplace: item.marketplaceId ? mktMap.get(item.marketplaceId) ?? null : null,
+      productName: pr?.productName ?? fallback?.name ?? '',
+      productCategory: pr?.productCategory ?? fallback?.category ?? '',
+    };
+  });
+
+  return NextResponse.json({
+    success: true,
+    data: { ...shipment, items: enrichedItems },
+  });
 }
 
 // --- PATCH: Update status/dates ---
