@@ -206,3 +206,30 @@ export async function DELETE(request: NextRequest, { params }: Params) {
 
   return NextResponse.json({ success: true });
 }
+
+// --- PATCH: Bulk set destination (FBA/DEPO) ---
+const SetDestinationSchema = z.object({
+  boxIds: z.array(z.string().uuid()).min(1),
+  destination: z.enum(['FBA', 'DEPO']),
+});
+
+export async function PATCH(request: NextRequest, { params }: Params) {
+  const authResult = await requireRole(request, ['admin']);
+  if (authResult instanceof NextResponse) return authResult;
+
+  const { id } = await params;
+  const body = await request.json();
+  const validation = SetDestinationSchema.safeParse(body);
+  if (!validation.success) {
+    return NextResponse.json({ success: false, error: 'Dogrulama hatasi' }, { status: 400 });
+  }
+
+  const { boxIds, destination } = validation.data;
+
+  const result = await prisma.shipmentBox.updateMany({
+    where: { id: { in: boxIds }, shipmentId: id },
+    data: { destination },
+  });
+
+  return NextResponse.json({ success: true, data: { updated: result.count, destination } });
+}

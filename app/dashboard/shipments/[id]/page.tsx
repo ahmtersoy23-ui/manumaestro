@@ -29,7 +29,7 @@ interface ShipmentBox {
   id: string; shipmentItemId: string | null; boxNumber: string;
   iwasku: string | null; fnsku: string | null;
   productName: string | null; productCategory: string | null;
-  marketplaceCode: string | null;
+  marketplaceCode: string | null; destination: string;
   quantity: number; width: number | null; height: number | null;
   depth: number | null; weight: number | null; createdAt: string;
 }
@@ -66,6 +66,8 @@ export default function ShipmentDetailPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState(false);
   const [showExtraBox, setShowExtraBox] = useState(false);
+  const [selectedBoxIds, setSelectedBoxIds] = useState<Set<string>>(new Set());
+  const [settingDest, setSettingDest] = useState(false);
 
   // Edit mode
   const [editing, setEditing] = useState(false);
@@ -225,11 +227,39 @@ export default function ShipmentDetailPage() {
     if ((await res.json()).success) await Promise.all([fetchBoxes(), fetchShipment()]);
   };
 
+  const handleSetDestination = async (destination: 'FBA' | 'DEPO') => {
+    const ids = [...selectedBoxIds];
+    if (ids.length === 0) return;
+    setSettingDest(true);
+    try {
+      const res = await fetch(`/api/shipments/${id}/boxes`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ boxIds: ids, destination }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBoxes(prev => prev.map(b => ids.includes(b.id) ? { ...b, destination } : b));
+        setSelectedBoxIds(new Set());
+      }
+    } catch { /* */ } finally { setSettingDest(false); }
+  };
+
+  const handleToggleBoxSelect = (boxId: string) => {
+    const next = new Set(selectedBoxIds);
+    next.has(boxId) ? next.delete(boxId) : next.add(boxId);
+    setSelectedBoxIds(next);
+  };
+
+  const handleSelectAllBoxes = () => {
+    if (selectedBoxIds.size === boxes.length) setSelectedBoxIds(new Set());
+    else setSelectedBoxIds(new Set(boxes.map(b => b.id)));
+  };
+
   const handleExportBoxes = async () => {
     const XLSX = await loadXLSX();
     const rows = boxes.map((b, i) => {
       const desi = (b.width && b.depth && b.height) ? (b.width * b.depth * b.height / 5000) : null;
-      return { '#': i + 1, 'Koli No': b.boxNumber, 'IWASKU': b.iwasku ?? '', 'FNSKU': b.fnsku ?? '', 'Urun Adi': b.productName ?? '', 'Kategori': b.productCategory ?? '', 'Pazar Yeri': b.marketplaceCode ?? '', 'Adet': b.quantity, 'En': b.width ?? '', 'Boy': b.depth ?? '', 'Yuk.': b.height ?? '', 'Agr.': b.weight ?? '', 'Desi': desi ? +desi.toFixed(1) : '' };
+      return { '#': i + 1, 'Koli No': b.boxNumber, 'IWASKU': b.iwasku ?? '', 'FNSKU': b.fnsku ?? '', 'Urun Adi': b.productName ?? '', 'Kategori': b.productCategory ?? '', 'Pazar Yeri': b.marketplaceCode ?? '', 'Hedef': b.destination, 'Adet': b.quantity, 'En': b.width ?? '', 'Boy': b.depth ?? '', 'Yuk.': b.height ?? '', 'Agr.': b.weight ?? '', 'Desi': desi ? +desi.toFixed(1) : '' };
     });
     const ws = XLSX.utils.json_to_sheet(rows);
     ws['!cols'] = [{ wch: 4 }, { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 40 }, { wch: 20 }, { wch: 12 }, { wch: 6 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }];
@@ -481,7 +511,7 @@ export default function ShipmentDetailPage() {
       {/* === BOXES TAB === */}
       {activeTab === 'boxes' && isSea && (
         <div className="space-y-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             {isActive && (
               <button onClick={() => setShowExtraBox(!showExtraBox)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
                 <Plus className="w-4 h-4" /> Ek Koli
@@ -492,6 +522,20 @@ export default function ShipmentDetailPage() {
                 <Download className="w-4 h-4" /> Excel Koli Listesi
               </button>
             )}
+            {/* Bulk FBA/DEPO toggle */}
+            {selectedBoxIds.size > 0 && (
+              <>
+                <button onClick={() => handleSetDestination('FBA')} disabled={settingDest}
+                  className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600 disabled:opacity-50">
+                  {settingDest ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  {selectedBoxIds.size} koli → FBA
+                </button>
+                <button onClick={() => handleSetDestination('DEPO')} disabled={settingDest}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 disabled:opacity-50">
+                  {selectedBoxIds.size} koli → Depo
+                </button>
+              </>
+            )}
           </div>
           {showExtraBox && (
             <ExtraBoxForm onSubmit={async (form) => { const r = await handleCreateBox(form, null); if (r) setShowExtraBox(false); }} onCancel={() => setShowExtraBox(false)} />
@@ -501,7 +545,13 @@ export default function ShipmentDetailPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-700 text-xs uppercase">Koli No</th>
+                    <th className="w-10 px-3 py-3">
+                      <button onClick={handleSelectAllBoxes} className="text-gray-600 hover:text-purple-600">
+                        {selectedBoxIds.size === boxes.length && boxes.length > 0 ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
+                      </button>
+                    </th>
+                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Koli No</th>
+                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Hedef</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">IWASKU</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">FNSKU</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Urun Adi</th>
@@ -518,9 +568,20 @@ export default function ShipmentDetailPage() {
                 <tbody className="divide-y divide-gray-100">
                   {boxes.map(box => {
                     const boxDesi = (box.width && box.depth && box.height) ? (box.width * box.depth * box.height / 5000) : null;
+                    const isFba = box.destination === 'FBA';
                     return (
-                      <tr key={box.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 font-mono text-sm font-semibold text-gray-900">{box.boxNumber}</td>
+                      <tr key={box.id} className={`hover:bg-gray-50 ${isFba ? 'bg-orange-50/40' : ''}`}>
+                        <td className="px-3 py-3 text-center">
+                          <button onClick={() => handleToggleBoxSelect(box.id)} className="hover:scale-110 transition-transform">
+                            {selectedBoxIds.has(box.id) ? <CheckSquare className="w-5 h-5 text-purple-600" /> : <Square className="w-5 h-5 text-gray-300" />}
+                          </button>
+                        </td>
+                        <td className="px-3 py-3 font-mono text-sm font-semibold text-gray-900">{box.boxNumber}</td>
+                        <td className="px-3 py-3">
+                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${isFba ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'}`}>
+                            {isFba ? 'FBA' : 'Depo'}
+                          </span>
+                        </td>
                         <td className="px-3 py-3 font-mono text-sm text-gray-700">{box.iwasku || '—'}</td>
                         <td className="px-3 py-3 font-mono text-sm text-gray-600">{box.fnsku || '—'}</td>
                         <td className="px-3 py-3 text-xs text-gray-700 line-clamp-1">{box.productName || '—'}</td>

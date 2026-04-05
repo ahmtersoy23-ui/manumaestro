@@ -491,6 +491,7 @@ model ShipmentBox {
   productName      String?
   productCategory  String?
   marketplaceCode  String?
+  destination      String    @default("DEPO") // "FBA" veya "DEPO"
   quantity         Int       @default(1)
   width            Float?    // cm
   height           Float?    // cm
