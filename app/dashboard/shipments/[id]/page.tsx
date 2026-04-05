@@ -41,7 +41,7 @@ interface ShipmentDetail {
 interface BoxFormData {
   iwasku?: string | null; fnsku?: string | null; productName?: string | null;
   productCategory?: string | null; marketplaceCode?: string | null;
-  destination?: string; count?: number;
+  destination?: string;
   quantity: number; width?: number | null; height?: number | null;
   depth?: number | null; weight?: number | null;
 }
@@ -69,6 +69,9 @@ export default function ShipmentDetailPage() {
   const [showExtraBox, setShowExtraBox] = useState(false);
   const [selectedBoxIds, setSelectedBoxIds] = useState<Set<string>>(new Set());
   const [settingDest, setSettingDest] = useState(false);
+  const [showBulkFba, setShowBulkFba] = useState(false);
+  const [bulkFbaText, setBulkFbaText] = useState('');
+  const [bulkFbaResult, setBulkFbaResult] = useState<{ updated: number; notFound?: string[] } | null>(null);
 
   // Edit mode
   const [editing, setEditing] = useState(false);
@@ -241,6 +244,24 @@ export default function ShipmentDetailPage() {
       if (data.success) {
         setBoxes(prev => prev.map(b => ids.includes(b.id) ? { ...b, destination } : b));
         setSelectedBoxIds(new Set());
+      }
+    } catch { /* */ } finally { setSettingDest(false); }
+  };
+
+  const handleBulkFbaSubmit = async (dest: 'FBA' | 'DEPO') => {
+    const numbers = bulkFbaText.split(/[\n,;\t]+/).map(s => s.trim()).filter(Boolean);
+    if (numbers.length === 0) return;
+    setSettingDest(true); setBulkFbaResult(null);
+    try {
+      const res = await fetch(`/api/shipments/${id}/boxes`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ boxNumbers: numbers, destination: dest }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBulkFbaResult(data.data);
+        await fetchBoxes();
+        if (data.data.updated > 0) setBulkFbaText('');
       }
     } catch { /* */ } finally { setSettingDest(false); }
   };
@@ -519,6 +540,11 @@ export default function ShipmentDetailPage() {
               </button>
             )}
             {boxes.length > 0 && (
+              <button onClick={() => setShowBulkFba(!showBulkFba)} className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600">
+                Toplu FBA Isaretle
+              </button>
+            )}
+            {boxes.length > 0 && (
               <button onClick={handleExportBoxes} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 border">
                 <Download className="w-4 h-4" /> Excel Koli Listesi
               </button>
@@ -540,6 +566,40 @@ export default function ShipmentDetailPage() {
           </div>
           {showExtraBox && (
             <ExtraBoxForm onSubmit={async (form) => { const r = await handleCreateBox(form, null); if (r) setShowExtraBox(false); }} onCancel={() => setShowExtraBox(false)} />
+          )}
+          {showBulkFba && (
+            <div className="bg-white border border-orange-200 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-900">Toplu FBA / Depo Isaretleme</h3>
+                <button onClick={() => { setShowBulkFba(false); setBulkFbaResult(null); }} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+              </div>
+              <p className="text-xs text-gray-500">Koli numaralarini alt alta, virgul veya tab ile ayirarak girin:</p>
+              <textarea
+                value={bulkFbaText}
+                onChange={e => setBulkFbaText(e.target.value)}
+                placeholder={"69-0001\n69-0002\n69-0003"}
+                rows={6}
+                className="w-full px-3 py-2 border rounded-lg text-sm font-mono resize-y"
+              />
+              <div className="flex items-center gap-3">
+                <button onClick={() => handleBulkFbaSubmit('FBA')} disabled={settingDest || !bulkFbaText.trim()}
+                  className="px-4 py-2 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600 disabled:opacity-50 flex items-center gap-2">
+                  {settingDest && <Loader2 className="w-4 h-4 animate-spin" />} FBA Olarak Isaretle
+                </button>
+                <button onClick={() => handleBulkFbaSubmit('DEPO')} disabled={settingDest || !bulkFbaText.trim()}
+                  className="px-4 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 disabled:opacity-50 flex items-center gap-2">
+                  Depo Olarak Isaretle
+                </button>
+              </div>
+              {bulkFbaResult && (
+                <div className="text-sm">
+                  <p className="text-green-700">{bulkFbaResult.updated} koli guncellendi.</p>
+                  {bulkFbaResult.notFound && bulkFbaResult.notFound.length > 0 && (
+                    <p className="text-red-600 mt-1">Bulunamayan: {bulkFbaResult.notFound.join(', ')}</p>
+                  )}
+                </div>
+              )}
+            </div>
           )}
           <div className="bg-white border rounded-xl overflow-hidden">
             {boxes.length > 0 ? (
@@ -661,8 +721,6 @@ function BoxEntryPanel({ item, existingBoxes, onCreateBox, onDeleteBox }: {
   item: ShipmentItem; existingBoxes: ShipmentBox[];
   onCreateBox: (form: BoxFormData) => Promise<ShipmentBox | null>; onDeleteBox: (boxId: string) => void;
 }) {
-  const [boxCount, setBoxCount] = useState('1');
-  const [destination, setDestination] = useState('DEPO');
   const [quantity, setQuantity] = useState(String(item.quantity));
   const [width, setWidth] = useState(''); const [height, setHeight] = useState('');
   const [depth, setDepth] = useState(''); const [weight, setWeight] = useState('');
@@ -672,11 +730,10 @@ function BoxEntryPanel({ item, existingBoxes, onCreateBox, onDeleteBox }: {
     e.preventDefault(); setSaving(true);
     try {
       await onCreateBox({ iwasku: item.iwasku, fnsku: item.fnsku, productName: item.productName, productCategory: item.productCategory,
-        marketplaceCode: item.marketplace?.code ?? null, destination, count: parseInt(boxCount) || 1,
-        quantity: parseInt(quantity) || 1,
+        marketplaceCode: item.marketplace?.code ?? null, quantity: parseInt(quantity) || 1,
         width: width ? parseFloat(width) : null, height: height ? parseFloat(height) : null,
         depth: depth ? parseFloat(depth) : null, weight: weight ? parseFloat(weight) : null });
-      setBoxCount('1'); setQuantity(String(item.quantity)); setWidth(''); setHeight(''); setDepth(''); setWeight('');
+      setQuantity(String(item.quantity)); setWidth(''); setHeight(''); setDepth(''); setWeight('');
     } finally { setSaving(false); }
   };
 
@@ -697,19 +754,13 @@ function BoxEntryPanel({ item, existingBoxes, onCreateBox, onDeleteBox }: {
         </div>
       )}
       <form onSubmit={handleSubmit} className="flex flex-wrap gap-2 items-end">
-        <div><label className="block text-xs text-gray-500 mb-0.5">Koli Sayisi</label><input type="number" min="1" max="500" value={boxCount} onChange={e => setBoxCount(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-16" required /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Hedef</label>
-          <select value={destination} onChange={e => setDestination(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20">
-            <option value="DEPO">Depo</option><option value="FBA">FBA</option>
-          </select></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Adet/Koli</label><input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-16" required /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Adet</label><input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-16" required /></div>
         <div><label className="block text-xs text-gray-500 mb-0.5">En</label><input type="number" step="0.1" value={width} onChange={e => setWidth(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
         <div><label className="block text-xs text-gray-500 mb-0.5">Boy</label><input type="number" step="0.1" value={depth} onChange={e => setDepth(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
         <div><label className="block text-xs text-gray-500 mb-0.5">Yukseklik</label><input type="number" step="0.1" value={height} onChange={e => setHeight(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
         <div><label className="block text-xs text-gray-500 mb-0.5">Agirlik</label><input type="number" step="0.01" value={weight} onChange={e => setWeight(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
         <button type="submit" disabled={saving} className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5">
-          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-          {parseInt(boxCount) > 1 ? `${boxCount} Koli Ekle` : 'Koli Ekle'}</button>
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />} Koli Ekle</button>
       </form>
     </div>
   );

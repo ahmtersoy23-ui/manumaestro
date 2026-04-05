@@ -78,7 +78,6 @@ const CreateBoxSchema = z.object({
   marketplaceCode: z.string().optional().nullable(),
   destination: z.enum(['FBA', 'DEPO']).optional().default('DEPO'),
   quantity: z.number().int().positive().default(1),
-  count: z.number().int().positive().max(500).optional().default(1), // Toplu: kaç koli oluşturulacak
   width: z.number().positive().optional().nullable(),
   height: z.number().positive().optional().nullable(),
   depth: z.number().positive().optional().nullable(),
@@ -106,7 +105,6 @@ export async function POST(request: NextRequest, { params }: Params) {
   }
 
   const data = validation.data;
-  const boxCount = data.count ?? 1;
   const prefix = getShipmentPrefix(shipment.name);
   const categoryDigit = getCategoryDigit(data.productCategory);
 
@@ -125,6 +123,8 @@ export async function POST(request: NextRequest, { params }: Params) {
     nextSeq = parseInt(seqPart.slice(1), 10) + 1;
   }
 
+  const boxNumber = `${prefix}-${categoryDigit}${String(nextSeq).padStart(3, '0')}`;
+
   // FNSKU auto-lookup
   let fnsku = data.fnsku ?? null;
   if (!fnsku && data.iwasku && data.marketplaceCode) {
@@ -138,27 +138,25 @@ export async function POST(request: NextRequest, { params }: Params) {
     }
   }
 
-  // N koli oluştur (count=1 ise tek koli, >1 ise toplu)
-  const boxData = Array.from({ length: boxCount }, (_, i) => ({
-    shipmentId: id,
-    shipmentItemId: data.shipmentItemId ?? null,
-    boxNumber: `${prefix}-${categoryDigit}${String(nextSeq + i).padStart(3, '0')}`,
-    iwasku: data.iwasku ?? null,
-    fnsku,
-    productName: data.productName ?? null,
-    productCategory: data.productCategory ?? null,
-    marketplaceCode: data.marketplaceCode ?? null,
-    destination: data.destination ?? 'DEPO',
-    quantity: data.quantity,
-    width: data.width ?? null,
-    height: data.height ?? null,
-    depth: data.depth ?? null,
-    weight: data.weight ?? null,
-  }));
+  const box = await prisma.shipmentBox.create({
+    data: {
+      shipmentId: id,
+      shipmentItemId: data.shipmentItemId ?? null,
+      boxNumber,
+      iwasku: data.iwasku ?? null,
+      fnsku,
+      productName: data.productName ?? null,
+      productCategory: data.productCategory ?? null,
+      marketplaceCode: data.marketplaceCode ?? null,
+      destination: data.destination ?? 'DEPO',
+      quantity: data.quantity,
+      width: data.width ?? null,
+      height: data.height ?? null,
+      depth: data.depth ?? null,
+      weight: data.weight ?? null,
+    },
+  });
 
-  const result = await prisma.shipmentBox.createMany({ data: boxData });
-
-  // İlk koli oluştuğunda item'i packed yap
   if (data.shipmentItemId) {
     await prisma.shipmentItem.update({
       where: { id: data.shipmentItemId },
@@ -166,10 +164,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     });
   }
 
-  return NextResponse.json({
-    success: true,
-    data: { created: result.count, firstBoxNumber: boxData[0].boxNumber, lastBoxNumber: boxData[boxData.length - 1].boxNumber },
-  }, { status: 201 });
+  return NextResponse.json({ success: true, data: box }, { status: 201 });
 }
 
 // --- DELETE: Remove box ---
@@ -208,9 +203,10 @@ export async function DELETE(request: NextRequest, { params }: Params) {
   return NextResponse.json({ success: true });
 }
 
-// --- PATCH: Bulk set destination (FBA/DEPO) ---
+// --- PATCH: Set destination by box IDs or box numbers ---
 const SetDestinationSchema = z.object({
-  boxIds: z.array(z.string().uuid()).min(1),
+  boxIds: z.array(z.string().uuid()).optional(),
+  boxNumbers: z.array(z.string()).optional(), // Koli no listesi ile toplu islem
   destination: z.enum(['FBA', 'DEPO']),
 });
 
@@ -225,12 +221,33 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return NextResponse.json({ success: false, error: 'Dogrulama hatasi' }, { status: 400 });
   }
 
-  const { boxIds, destination } = validation.data;
+  const { boxIds, boxNumbers, destination } = validation.data;
+
+  if (!boxIds?.length && !boxNumbers?.length) {
+    return NextResponse.json({ success: false, error: 'boxIds veya boxNumbers gerekli' }, { status: 400 });
+  }
+
+  // boxNumbers verilmişse ID'lere çevir
+  let targetIds = boxIds ?? [];
+  let notFound: string[] = [];
+
+  if (boxNumbers?.length) {
+    const found = await prisma.shipmentBox.findMany({
+      where: { shipmentId: id, boxNumber: { in: boxNumbers } },
+      select: { id: true, boxNumber: true },
+    });
+    const foundNumbers = new Set(found.map(b => b.boxNumber));
+    notFound = boxNumbers.filter(n => !foundNumbers.has(n));
+    targetIds = [...targetIds, ...found.map(b => b.id)];
+  }
 
   const result = await prisma.shipmentBox.updateMany({
-    where: { id: { in: boxIds }, shipmentId: id },
+    where: { id: { in: targetIds }, shipmentId: id },
     data: { destination },
   });
 
-  return NextResponse.json({ success: true, data: { updated: result.count, destination } });
+  return NextResponse.json({
+    success: true,
+    data: { updated: result.count, destination, ...(notFound.length > 0 ? { notFound } : {}) },
+  });
 }
