@@ -227,7 +227,10 @@ export default function ShipmentDetailPage() {
 
   const handleExportBoxes = async () => {
     const XLSX = await loadXLSX();
-    const rows = boxes.map((b, i) => ({ '#': i + 1, 'Koli No': b.boxNumber, 'IWASKU': b.iwasku ?? '', 'FNSKU': b.fnsku ?? '', 'Urun Adi': b.productName ?? '', 'Kategori': b.productCategory ?? '', 'Pazar Yeri': b.marketplaceCode ?? '', 'Adet': b.quantity, 'En': b.width ?? '', 'Boy': b.depth ?? '', 'Yuk.': b.height ?? '', 'Agr.': b.weight ?? '' }));
+    const rows = boxes.map((b, i) => {
+      const desi = (b.width && b.depth && b.height) ? (b.width * b.depth * b.height / 5000) : null;
+      return { '#': i + 1, 'Koli No': b.boxNumber, 'IWASKU': b.iwasku ?? '', 'FNSKU': b.fnsku ?? '', 'Urun Adi': b.productName ?? '', 'Kategori': b.productCategory ?? '', 'Pazar Yeri': b.marketplaceCode ?? '', 'Adet': b.quantity, 'En': b.width ?? '', 'Boy': b.depth ?? '', 'Yuk.': b.height ?? '', 'Agr.': b.weight ?? '', 'Desi': desi ? +desi.toFixed(1) : '' };
+    });
     const ws = XLSX.utils.json_to_sheet(rows);
     ws['!cols'] = [{ wch: 4 }, { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 40 }, { wch: 20 }, { wch: 12 }, { wch: 6 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }];
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Koliler');
@@ -508,25 +511,30 @@ export default function ShipmentDetailPage() {
                     <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Boy</th>
                     <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Yuk.</th>
                     <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Agr.</th>
+                    <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Desi</th>
                     <th className="w-10"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {boxes.map(box => (
-                    <tr key={box.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-mono text-sm font-semibold text-gray-900">{box.boxNumber}</td>
-                      <td className="px-3 py-3 font-mono text-sm text-gray-700">{box.iwasku || '—'}</td>
-                      <td className="px-3 py-3 font-mono text-sm text-gray-600">{box.fnsku || '—'}</td>
-                      <td className="px-3 py-3 text-xs text-gray-700 line-clamp-1">{box.productName || '—'}</td>
-                      <td className="px-3 py-3 text-sm text-gray-600">{box.marketplaceCode || '—'}</td>
-                      <td className="text-center px-3 py-3 font-semibold">{box.quantity}</td>
-                      <td className="text-center px-3 py-3 text-gray-600">{box.width ?? '—'}</td>
-                      <td className="text-center px-3 py-3 text-gray-600">{box.depth ?? '—'}</td>
-                      <td className="text-center px-3 py-3 text-gray-600">{box.height ?? '—'}</td>
-                      <td className="text-center px-3 py-3 text-gray-600">{box.weight ?? '—'}</td>
-                      <td className="px-2 py-3">{isActive && <button onClick={() => handleDeleteBox(box.id)} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>}</td>
-                    </tr>
-                  ))}
+                  {boxes.map(box => {
+                    const boxDesi = (box.width && box.depth && box.height) ? (box.width * box.depth * box.height / 5000) : null;
+                    return (
+                      <tr key={box.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-mono text-sm font-semibold text-gray-900">{box.boxNumber}</td>
+                        <td className="px-3 py-3 font-mono text-sm text-gray-700">{box.iwasku || '—'}</td>
+                        <td className="px-3 py-3 font-mono text-sm text-gray-600">{box.fnsku || '—'}</td>
+                        <td className="px-3 py-3 text-xs text-gray-700 line-clamp-1">{box.productName || '—'}</td>
+                        <td className="px-3 py-3 text-sm text-gray-600">{box.marketplaceCode || '—'}</td>
+                        <td className="text-center px-3 py-3 font-semibold">{box.quantity}</td>
+                        <td className="text-center px-3 py-3 text-gray-600">{box.width ?? '—'}</td>
+                        <td className="text-center px-3 py-3 text-gray-600">{box.depth ?? '—'}</td>
+                        <td className="text-center px-3 py-3 text-gray-600">{box.height ?? '—'}</td>
+                        <td className="text-center px-3 py-3 text-gray-600">{box.weight ?? '—'}</td>
+                        <td className="text-center px-3 py-3 font-medium text-gray-900">{boxDesi ? boxDesi.toFixed(1) : '—'}</td>
+                        <td className="px-2 py-3">{isActive && <button onClick={() => handleDeleteBox(box.id)} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             ) : (
