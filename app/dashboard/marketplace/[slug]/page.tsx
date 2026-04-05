@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { ManualEntryForm } from '@/components/forms/ManualEntryForm';
 import { ExcelUpload } from '@/components/forms/ExcelUpload';
 import { RequestsTable, RequestSummary } from '@/components/tables/RequestsTable';
-import { Download, Upload, PlusCircle, Clock, Archive, ArrowLeft, Package, Check, AlertCircle } from 'lucide-react';
+import { Download, Upload, PlusCircle, Clock, Archive, ArrowLeft, Package, Check, AlertCircle, ChevronDown } from 'lucide-react';
 import { parseMonthValue, getActiveMonths } from '@/lib/monthUtils';
 import { createLogger } from '@/lib/logger';
 
@@ -46,6 +46,7 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [summary, setSummary] = useState<RequestSummary | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
 
   // Month tabs - get active months
   const [availableMonths, setAvailableMonths] = useState<Array<{ value: string; label: string; locked: boolean }>>([]);
@@ -196,47 +197,44 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
         </div>
       </div>
 
-      {/* Entry Methods - Tabs */}
+      {/* Entry Methods - Collapsible */}
       <div className="bg-white rounded-xl border border-gray-200">
-        <div className="border-b border-gray-200">
-          <nav className="flex gap-4 px-6" aria-label="Entry methods">
-            <button
-              onClick={() => setActiveTab('manual')}
-              className={`py-4 px-2 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors ${
-                activeTab === 'manual'
-                  ? 'border-purple-600 text-purple-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <PlusCircle className="w-4 h-4" />
-              Manuel Giriş
-            </button>
-            <button
-              onClick={() => setActiveTab('excel')}
-              className={`py-4 px-2 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors ${
-                activeTab === 'excel'
-                  ? 'border-purple-600 text-purple-600'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Upload className="w-4 h-4" />
-              Excel Yükleme
-            </button>
-          </nav>
-        </div>
-
-        {/* Tab Content */}
-        <div className="p-6">
-          {activeTab === 'manual' ? (
-            <ManualEntryForm
-              marketplaceId={marketplace.id}
-              marketplaceName={marketplace.name}
-              onSuccess={() => setRefreshTrigger(prev => prev + 1)}
-            />
-          ) : (
-            <ExcelUpload marketplaceId={marketplace.id} marketplaceName={marketplace.name} />
-          )}
-        </div>
+        <button onClick={() => setFormOpen(!formOpen)}
+          className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors">
+          <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <PlusCircle className="w-4 h-4" />
+            Talep Girisi
+          </div>
+          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${formOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {formOpen && (
+          <>
+            <div className="border-t border-gray-200">
+              <nav className="flex gap-4 px-6" aria-label="Entry methods">
+                <button onClick={() => setActiveTab('manual')}
+                  className={`py-3 px-2 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors ${
+                    activeTab === 'manual' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-600 hover:text-gray-900'
+                  }`}>
+                  <PlusCircle className="w-4 h-4" /> Manuel Giris
+                </button>
+                <button onClick={() => setActiveTab('excel')}
+                  className={`py-3 px-2 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors ${
+                    activeTab === 'excel' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-600 hover:text-gray-900'
+                  }`}>
+                  <Upload className="w-4 h-4" /> Excel Yukleme
+                </button>
+              </nav>
+            </div>
+            <div className="p-6">
+              {activeTab === 'manual' ? (
+                <ManualEntryForm marketplaceId={marketplace.id} marketplaceName={marketplace.name}
+                  onSuccess={() => setRefreshTrigger(prev => prev + 1)} />
+              ) : (
+                <ExcelUpload marketplaceId={marketplace.id} marketplaceName={marketplace.name} />
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Requests - Month Tabs */}

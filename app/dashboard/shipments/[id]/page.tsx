@@ -424,12 +424,14 @@ export default function ShipmentDetailPage() {
       <div className="flex items-center gap-1 border-b">
         <button onClick={() => setActiveTab('pending')}
           className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'pending' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-          Bekleyen ({pendingItems.length})
+          {isSea ? `Urunler (${pendingItems.length})` : `Bekleyen (${pendingItems.length})`}
         </button>
-        <button onClick={() => setActiveTab('sent')}
-          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'sent' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-          Gonderilenler ({sentItems.length})
-        </button>
+        {!isSea && (
+          <button onClick={() => setActiveTab('sent')}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'sent' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            Gonderilenler ({sentItems.length})
+          </button>
+        )}
         {isSea && (
           <button onClick={() => setActiveTab('boxes')}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'boxes' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
@@ -450,8 +452,8 @@ export default function ShipmentDetailPage() {
             <button onClick={handleExportItems} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 border">
               <Download className="w-4 h-4" /> Excel
             </button>
-            {/* Gönder butonu — packed seçili itemler için */}
-            {selectedPackedCount > 0 && (
+            {/* Karayolu/hava: Gönder butonu */}
+            {!isSea && selectedPackedCount > 0 && (
               <button onClick={handleSendSelected} disabled={sending}
                 className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50">
                 {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -480,7 +482,7 @@ export default function ShipmentDetailPage() {
                 <thead className="bg-gray-50 border-b">
                   <tr>
                     <th className="w-12 px-3 py-3">
-                      {isActive && packedPendingCount > 0 && (
+                      {isActive && !isSea && packedPendingCount > 0 && (
                         <button onClick={handleSelectAllPacked} className="text-gray-600 hover:text-purple-600" title="Hazirlari sec">
                           {packedPendingCount > 0 && [...selectedIds].length >= packedPendingCount ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
                         </button>
@@ -708,37 +710,33 @@ function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded
   onCreateBox: (form: BoxFormData) => Promise<ShipmentBox | null>; onDeleteBox: (boxId: string) => void;
   onDeleteItem: () => void;
 }) {
+  // Deniz renk kodlama: kolilerdeki toplam adet vs item miktar
+  const boxQtyTotal = itemBoxes.reduce((s, b) => s + b.quantity, 0);
+  const rowBg = isSea
+    ? (itemBoxes.length === 0 ? '' : boxQtyTotal >= item.quantity ? 'bg-green-50' : 'bg-amber-50/60')
+    : (item.packed ? 'bg-green-50/50' : '');
+
   return (
     <>
-      <tr className={`hover:bg-gray-50 ${item.packed ? 'bg-green-50/50' : ''}`}>
+      <tr className={`hover:bg-gray-50 ${rowBg}`}>
         <td className="px-3 py-3 text-center">
-          {isActive ? (
+          {isActive && isSea ? (
+            // Deniz: sadece expand/collapse (koli girisi)
+            <button onClick={onToggleExpand} className="hover:scale-110 transition-transform">
+              {isExpanded ? <ChevronDown className="w-5 h-5 text-blue-600" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
+            </button>
+          ) : isActive && !isSea ? (
+            // Karayolu/hava: checkbox + packed toggle
             <div className="flex items-center gap-1 justify-center">
-              {/* Gonderim icin secim checkbox'i (packed olanlar icin) */}
               {item.packed && (
                 <button onClick={onToggleSelect} className="hover:scale-110 transition-transform">
                   {isSelected ? <CheckSquare className="w-5 h-5 text-purple-600" /> : <Square className="w-5 h-5 text-gray-300" />}
                 </button>
               )}
-              {/* Deniz: koli girisi icin expand */}
-              {isSea && !item.packed && (
-                <button onClick={onToggleExpand} className="hover:scale-110 transition-transform">
-                  {isExpanded ? <ChevronDown className="w-5 h-5 text-blue-600" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
+              {togglingId === item.id ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" /> : (
+                <button onClick={onTogglePacked} className="hover:scale-110 transition-transform" title={item.packed ? 'Hazir' : 'Hazirla'}>
+                  {item.packed ? <Check className="w-4 h-4 text-green-600" /> : <Package className="w-4 h-4 text-gray-300" />}
                 </button>
-              )}
-              {/* Deniz: packed olsa da expand edebilsin (ilave koli icin) */}
-              {isSea && item.packed && (
-                <button onClick={onToggleExpand} className="hover:scale-110 transition-transform">
-                  {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-300" />}
-                </button>
-              )}
-              {/* Karayolu/hava: packed toggle */}
-              {!isSea && (
-                togglingId === item.id ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" /> : (
-                  <button onClick={onTogglePacked} className="hover:scale-110 transition-transform" title={item.packed ? 'Hazir' : 'Hazirla'}>
-                    {item.packed ? <Check className="w-4 h-4 text-green-600" /> : <Package className="w-4 h-4 text-gray-300" />}
-                  </button>
-                )
               )}
             </div>
           ) : item.packed ? <Check className="w-5 h-5 text-green-600" /> : null}
@@ -776,7 +774,6 @@ function BoxEntryPanel({ item, existingBoxes, onCreateBox, onDeleteBox }: {
   item: ShipmentItem; existingBoxes: ShipmentBox[];
   onCreateBox: (form: BoxFormData) => Promise<ShipmentBox | null>; onDeleteBox: (boxId: string) => void;
 }) {
-  const [fnsku, setFnsku] = useState(item.fnsku ?? '');
   const [quantity, setQuantity] = useState(String(item.quantity));
   const [width, setWidth] = useState(''); const [height, setHeight] = useState('');
   const [depth, setDepth] = useState(''); const [weight, setWeight] = useState('');
@@ -785,7 +782,7 @@ function BoxEntryPanel({ item, existingBoxes, onCreateBox, onDeleteBox }: {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true);
     try {
-      await onCreateBox({ iwasku: item.iwasku, fnsku: fnsku || null, productName: item.productName, productCategory: item.productCategory,
+      await onCreateBox({ iwasku: item.iwasku, fnsku: item.fnsku, productName: item.productName, productCategory: item.productCategory,
         marketplaceCode: item.marketplace?.code ?? null, quantity: parseInt(quantity) || 1,
         width: width ? parseFloat(width) : null, height: height ? parseFloat(height) : null,
         depth: depth ? parseFloat(depth) : null, weight: weight ? parseFloat(weight) : null });
@@ -810,8 +807,6 @@ function BoxEntryPanel({ item, existingBoxes, onCreateBox, onDeleteBox }: {
         </div>
       )}
       <form onSubmit={handleSubmit} className="flex flex-wrap gap-2 items-end">
-        <div><label className={`block text-xs mb-0.5 ${!fnsku ? 'text-amber-600 font-medium' : 'text-gray-500'}`}>FNSKU {!fnsku && '(eksik)'}</label>
-          <input type="text" value={fnsku} onChange={e => setFnsku(e.target.value)} placeholder="X00..." className={`px-2 py-1.5 border rounded text-sm w-28 font-mono ${!fnsku ? 'border-amber-300 bg-amber-50' : ''}`} /></div>
         <div><label className="block text-xs text-gray-500 mb-0.5">Adet</label><input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-16" required /></div>
         <div><label className="block text-xs text-gray-500 mb-0.5">En</label><input type="number" step="0.1" value={width} onChange={e => setWidth(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
         <div><label className="block text-xs text-gray-500 mb-0.5">Boy</label><input type="number" step="0.1" value={depth} onChange={e => setDepth(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
@@ -826,35 +821,60 @@ function BoxEntryPanel({ item, existingBoxes, onCreateBox, onDeleteBox }: {
 
 // --- Extra Box Form ---
 function ExtraBoxForm({ onSubmit, onCancel }: { onSubmit: (form: BoxFormData) => Promise<void>; onCancel: () => void }) {
-  const [f, setF] = useState({ iwasku: '', productName: '', productCategory: '', marketplaceCode: '', quantity: '1', width: '', height: '', depth: '', weight: '' });
+  const [f, setF] = useState({ iwasku: '', fnsku: '', productName: '', productCategory: '', marketplaceCode: '', quantity: '1', count: '1', width: '', height: '', depth: '', weight: '' });
   const [saving, setSaving] = useState(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true);
     try {
-      await onSubmit({ iwasku: f.iwasku || null, productName: f.productName || null, productCategory: f.productCategory || null,
-        marketplaceCode: f.marketplaceCode || null, quantity: parseInt(f.quantity) || 1,
-        width: f.width ? parseFloat(f.width) : null, height: f.height ? parseFloat(f.height) : null,
-        depth: f.depth ? parseFloat(f.depth) : null, weight: f.weight ? parseFloat(f.weight) : null });
+      const count = parseInt(f.count) || 1;
+      for (let i = 0; i < count; i++) {
+        await onSubmit({
+          iwasku: f.iwasku || null, fnsku: f.fnsku || null,
+          productName: f.productName || null, productCategory: f.productCategory || null,
+          marketplaceCode: f.marketplaceCode || null, quantity: parseInt(f.quantity) || 1,
+          width: f.width ? parseFloat(f.width) : null, height: f.height ? parseFloat(f.height) : null,
+          depth: f.depth ? parseFloat(f.depth) : null, weight: f.weight ? parseFloat(f.weight) : null,
+        });
+      }
     } finally { setSaving(false); }
   };
+
   return (
     <form onSubmit={handleSubmit} className="bg-white border border-blue-200 rounded-xl p-4 space-y-3">
-      <div className="flex items-center justify-between"><h3 className="text-sm font-semibold text-gray-900">Ek Koli (Uretim Disi)</h3>
-        <button type="button" onClick={onCancel} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button></div>
-      <div className="flex flex-wrap gap-3">
-        <div><label className="block text-xs text-gray-500 mb-0.5">IWASKU</label><input type="text" value={f.iwasku} onChange={e => setF(p => ({ ...p, iwasku: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-40" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Urun Adi</label><input type="text" value={f.productName} onChange={e => setF(p => ({ ...p, productName: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-48" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Kategori</label><input type="text" value={f.productCategory} onChange={e => setF(p => ({ ...p, productCategory: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-36" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Pazar Yeri</label><input type="text" value={f.marketplaceCode} onChange={e => setF(p => ({ ...p, marketplaceCode: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-24" /></div>
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-gray-900">Ek Koli (Uretim Disi)</h3>
+        <button type="button" onClick={onCancel} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
       </div>
       <div className="flex flex-wrap gap-3">
-        <div><label className="block text-xs text-gray-500 mb-0.5">Adet</label><input type="number" value={f.quantity} onChange={e => setF(p => ({ ...p, quantity: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-16" required /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">En</label><input type="number" step="0.1" value={f.width} onChange={e => setF(p => ({ ...p, width: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Boy</label><input type="number" step="0.1" value={f.depth} onChange={e => setF(p => ({ ...p, depth: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Yukseklik</label><input type="number" step="0.1" value={f.height} onChange={e => setF(p => ({ ...p, height: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Agirlik</label><input type="number" step="0.01" value={f.weight} onChange={e => setF(p => ({ ...p, weight: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">IWASKU</label>
+          <input type="text" value={f.iwasku} onChange={e => setF(p => ({ ...p, iwasku: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-40" /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">FNSKU</label>
+          <input type="text" value={f.fnsku} onChange={e => setF(p => ({ ...p, fnsku: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-32 font-mono" /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Urun Adi</label>
+          <input type="text" value={f.productName} onChange={e => setF(p => ({ ...p, productName: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-48" /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Kategori</label>
+          <input type="text" value={f.productCategory} onChange={e => setF(p => ({ ...p, productCategory: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-36" /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Pazar Yeri</label>
+          <input type="text" value={f.marketplaceCode} onChange={e => setF(p => ({ ...p, marketplaceCode: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-24" /></div>
+      </div>
+      <div className="flex flex-wrap gap-3">
+        <div><label className="block text-xs text-gray-500 mb-0.5">Adet/Koli</label>
+          <input type="number" value={f.quantity} onChange={e => setF(p => ({ ...p, quantity: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-16" required /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">En</label>
+          <input type="number" step="0.1" value={f.width} onChange={e => setF(p => ({ ...p, width: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Boy</label>
+          <input type="number" step="0.1" value={f.depth} onChange={e => setF(p => ({ ...p, depth: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Yukseklik</label>
+          <input type="number" step="0.1" value={f.height} onChange={e => setF(p => ({ ...p, height: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Agirlik</label>
+          <input type="number" step="0.01" value={f.weight} onChange={e => setF(p => ({ ...p, weight: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Cogalt</label>
+          <input type="number" min="1" max="200" value={f.count} onChange={e => setF(p => ({ ...p, count: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-16" /></div>
         <button type="submit" disabled={saving} className="self-end px-4 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5">
-          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />} Koli Ekle</button>
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+          {parseInt(f.count) > 1 ? `${f.count} Koli Ekle` : 'Koli Ekle'}
+        </button>
       </div>
     </form>
   );
