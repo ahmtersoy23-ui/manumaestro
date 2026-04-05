@@ -452,6 +452,7 @@ model Shipment {
   updatedAt       DateTime       @updatedAt
 
   items           ShipmentItem[]
+  boxes           ShipmentBox[]
 
   @@index([destinationTab])
   @@index([status])
@@ -477,6 +478,30 @@ model ShipmentItem {
   @@index([iwasku])
   @@index([productionRequestId])
   @@map("shipment_items")
+}
+
+model ShipmentBox {
+  id               String    @id @default(uuid())
+  shipmentId       String
+  shipmentItemId   String?   // null: üretim dışı ek ürün
+  boxNumber        String    // "69-0001", "69-1001"
+  iwasku           String?
+  fnsku            String?
+  productName      String?
+  productCategory  String?
+  marketplaceCode  String?
+  quantity         Int       @default(1)
+  width            Float?    // cm
+  height           Float?    // cm
+  depth            Float?    // cm
+  weight           Float?    // kg
+  createdAt        DateTime  @default(now())
+
+  shipment         Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId])
+  @@index([boxNumber])
+  @@map("shipment_boxes")
 }
 
 enum ShipmentStatus {
