@@ -69,39 +69,40 @@ export function Header() {
               </Link>
             )}
 
+            <Link
+              href="/dashboard/seasonal"
+              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              title="Sezon Planlamasi"
+            >
+              <CalendarRange className="w-4 h-4" />
+              <span className="hidden lg:inline">Sezon</span>
+            </Link>
+            <Link
+              href="/dashboard/shipments"
+              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              title="Sevkiyat"
+            >
+              <Ship className="w-4 h-4" />
+              <span className="hidden lg:inline">Sevkiyat</span>
+            </Link>
+
             {role === 'admin' && (
               <>
                 <Link
-                  href="/dashboard/seasonal"
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                  title="Sezon Planlaması"
-                >
-                  <CalendarRange className="w-4 h-4" />
-                  <span className="hidden lg:inline">Sezon</span>
-                </Link>
-                <Link
-                  href="/dashboard/shipments"
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                  title="Sevkiyat"
-                >
-                  <Ship className="w-4 h-4" />
-                  <span className="hidden lg:inline">Sevkiyat</span>
-                </Link>
-                <Link
                   href="/dashboard/admin/permissions"
                   className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                  title="Pazar Yeri İzinleri"
+                  title="Izinler"
                 >
                   <Shield className="w-4 h-4" />
-                  <span className="hidden lg:inline">İzinler</span>
+                  <span className="hidden lg:inline">Izinler</span>
                 </Link>
                 <Link
                   href="/dashboard/logs"
                   className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                  title="İşlem Geçmişi"
+                  title="Gecmis"
                 >
                   <FileText className="w-4 h-4" />
-                  <span className="hidden lg:inline">Geçmiş</span>
+                  <span className="hidden lg:inline">Gecmis</span>
                 </Link>
               </>
             )}
@@ -180,39 +181,24 @@ export function Header() {
               </Link>
             )}
 
+            <Link href="/dashboard/seasonal" onClick={() => setMenuOpen(false)}
+              className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">
+              <CalendarRange className="w-4 h-4" /> Sezon
+            </Link>
+            <Link href="/dashboard/shipments" onClick={() => setMenuOpen(false)}
+              className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">
+              <Ship className="w-4 h-4" /> Sevkiyat
+            </Link>
+
             {role === 'admin' && (
               <>
-                <Link
-                  href="/dashboard/seasonal"
-                  onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
-                >
-                  <CalendarRange className="w-4 h-4" />
-                  Sezon Planlaması
+                <Link href="/dashboard/admin/permissions" onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">
+                  <Shield className="w-4 h-4" /> Izin Yonetimi
                 </Link>
-                <Link
-                  href="/dashboard/shipments"
-                  onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
-                >
-                  <Ship className="w-4 h-4" />
-                  Sevkiyat
-                </Link>
-                <Link
-                  href="/dashboard/admin/permissions"
-                  onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
-                >
-                  <Shield className="w-4 h-4" />
-                  İzin Yönetimi
-                </Link>
-                <Link
-                  href="/dashboard/logs"
-                  onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
-                >
-                  <FileText className="w-4 h-4" />
-                  İşlem Geçmişi
+                <Link href="/dashboard/logs" onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">
+                  <FileText className="w-4 h-4" /> Gecmis
                 </Link>
               </>
             )}

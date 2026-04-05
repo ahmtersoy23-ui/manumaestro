@@ -130,13 +130,7 @@ export default function PoolDetailPage() {
 
   useEffect(() => { fetchPool(); }, [fetchPool]);
 
-  if (role !== 'admin') {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <AlertCircle className="w-12 h-12 text-red-400 mx-auto" />
-      </div>
-    );
-  }
+  const isAdmin = role === 'admin';
 
   if (loading) {
     return (
@@ -232,6 +226,18 @@ export default function PoolDetailPage() {
 
   // Marketplace sheets to parse
   const MARKETPLACE_SHEETS = ['US', 'EU', 'UK', 'CA', 'AU'];
+
+  // Template indirme — bos Excel, her marketplace bir sheet
+  const handleDownloadTemplate = async () => {
+    const XLSX = await loadXLSX();
+    const wb = XLSX.utils.book_new();
+    for (const mp of MARKETPLACE_SHEETS) {
+      const ws = XLSX.utils.aoa_to_sheet([['iwasku', 'kategori', 'desi', 'q4 26', 'q1 27']]);
+      ws['!cols'] = [{ wch: 16 }, { wch: 20 }, { wch: 8 }, { wch: 10 }, { wch: 10 }];
+      XLSX.utils.book_append_sheet(wb, ws, mp);
+    }
+    XLSX.writeFile(wb, `sezon-template.xlsx`);
+  };
 
   const handleExcelImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -540,12 +546,17 @@ export default function PoolDetailPage() {
                 </summary>
                 <div className="mt-3 space-y-4">
                   <div className="flex items-center gap-3">
-                    <label className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 cursor-pointer">
-                      <FileSpreadsheet className="w-4 h-4" />
-                      Excel Yükle (.xlsx)
-                      <input type="file" accept=".xlsx,.xls" onChange={handleExcelImport} className="hidden" />
-                    </label>
-                    <span className="text-xs text-gray-500">Sheet başına ülke (US/EU/UK/CA/AU), kolonlar: iwasku, kategori, desi, q4 26, q1 27</span>
+                    <button onClick={handleDownloadTemplate} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 border">
+                      <FileSpreadsheet className="w-4 h-4" /> Template Indir
+                    </button>
+                    {isAdmin && (
+                      <label className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 cursor-pointer">
+                        <FileSpreadsheet className="w-4 h-4" />
+                        Excel Yukle (.xlsx)
+                        <input type="file" accept=".xlsx,.xls" onChange={handleExcelImport} className="hidden" />
+                      </label>
+                    )}
+                    <span className="text-xs text-gray-500">Sheet = ulke (US/EU/UK/CA/AU), kolonlar: iwasku, kategori, desi, q4 26, q1 27</span>
                     {importing && <Loader2 className="w-4 h-4 animate-spin text-purple-500" />}
                   </div>
                   <details className="text-xs">

@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Shield, ChevronDown, AlertTriangle, CheckSquare, Square, RefreshCw } from 'lucide-react';
+import { Shield, ChevronDown, AlertTriangle, CheckSquare, Square, RefreshCw, Ship, Plus, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
 
@@ -686,6 +686,153 @@ export default function AdminPermissionsPage() {
           )}
         </>
       )}
+
+      {/* === SEVKIYAT IZINLERI === */}
+      <ShipmentPermissionsSection />
+    </div>
+  );
+}
+
+// --- Sevkiyat Izin Yonetimi ---
+const DEST_TABS = ['US', 'UK', 'EU', 'NL', 'AU', 'ZA', '*'] as const;
+const DEST_LABELS: Record<string, string> = { US: 'US', UK: 'UK', EU: 'EU', NL: 'NL', AU: 'AU', ZA: 'ZA', '*': 'Tumu' };
+const ROLE_OPTIONS = ['VIEWER', 'ROUTER', 'PACKER', 'MANAGER'] as const;
+const ROLE_LABELS: Record<string, { label: string; color: string }> = {
+  VIEWER: { label: 'Viewer', color: 'bg-gray-100 text-gray-600' },
+  ROUTER: { label: 'Router', color: 'bg-blue-100 text-blue-700' },
+  PACKER: { label: 'Packer', color: 'bg-orange-100 text-orange-700' },
+  MANAGER: { label: 'Manager', color: 'bg-purple-100 text-purple-700' },
+};
+
+interface ShipPerm {
+  id: string;
+  userId: string;
+  destinationTab: string;
+  role: string;
+  user: { id: string; name: string; email: string };
+}
+
+function ShipmentPermissionsSection() {
+  const [perms, setPerms] = useState<ShipPerm[]>([]);
+  const [allUsers, setAllUsers] = useState<{ id: string; name: string; email: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [addForm, setAddForm] = useState({ userId: '', destinationTab: 'US', role: 'VIEWER' });
+  const [saving, setSaving] = useState(false);
+
+  const fetchPerms = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/shipment-permissions');
+      const data = await res.json();
+      if (data.success) setPerms(data.data);
+    } catch { /* */ } finally { setLoading(false); }
+  }, []);
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/users');
+      const data = await res.json();
+      if (data.success) setAllUsers(data.data.filter((u: { role: string }) => u.role !== 'admin'));
+    } catch { /* */ }
+  }, []);
+
+  useEffect(() => { fetchPerms(); fetchUsers(); }, [fetchPerms, fetchUsers]);
+
+  const handleAdd = async () => {
+    if (!addForm.userId) return;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/shipment-permissions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(addForm),
+      });
+      if ((await res.json()).success) {
+        await fetchPerms();
+        setAddForm(f => ({ ...f, userId: '' }));
+      }
+    } finally { setSaving(false); }
+  };
+
+  const handleDelete = async (id: string) => {
+    const res = await fetch(`/api/admin/shipment-permissions?id=${id}`, { method: 'DELETE' });
+    if ((await res.json()).success) fetchPerms();
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <Ship className="w-6 h-6 text-blue-600" />
+        <h2 className="text-xl font-bold text-gray-900">Sevkiyat Izinleri</h2>
+      </div>
+      <p className="text-sm text-gray-500">
+        Viewer: goruntuleme · Router: talep yonlendirme/silme/FBA (PY sorumlusu) · Packer: koli/check/gonder (depo) · Manager: hepsi
+      </p>
+
+      {/* Ekle */}
+      <div className="flex flex-wrap gap-2 items-end bg-white border rounded-xl p-4">
+        <div>
+          <label className="block text-xs text-gray-500 mb-0.5">Kullanici</label>
+          <select value={addForm.userId} onChange={e => setAddForm(f => ({ ...f, userId: e.target.value }))}
+            className="px-3 py-2 border rounded-lg text-sm w-48">
+            <option value="">Sec...</option>
+            {allUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-0.5">Destinasyon</label>
+          <select value={addForm.destinationTab} onChange={e => setAddForm(f => ({ ...f, destinationTab: e.target.value }))}
+            className="px-3 py-2 border rounded-lg text-sm">
+            {DEST_TABS.map(d => <option key={d} value={d}>{DEST_LABELS[d]}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-0.5">Rol</label>
+          <select value={addForm.role} onChange={e => setAddForm(f => ({ ...f, role: e.target.value }))}
+            className="px-3 py-2 border rounded-lg text-sm">
+            {ROLE_OPTIONS.map(r => <option key={r} value={r}>{ROLE_LABELS[r].label}</option>)}
+          </select>
+        </div>
+        <button onClick={handleAdd} disabled={!addForm.userId || saving}
+          className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5">
+          <Plus className="w-4 h-4" /> Ekle
+        </button>
+      </div>
+
+      {/* Liste */}
+      <div className="bg-white border rounded-xl overflow-hidden">
+        {loading ? (
+          <div className="p-8 text-center text-gray-400">Yukleniyor...</div>
+        ) : perms.length === 0 ? (
+          <div className="p-8 text-center text-gray-400">Henuz sevkiyat izni atanmamis</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b">
+              <tr>
+                <th className="text-left px-4 py-3 font-semibold text-gray-700 text-xs uppercase">Kullanici</th>
+                <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Destinasyon</th>
+                <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Rol</th>
+                <th className="w-10"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {perms.map(p => (
+                <tr key={p.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-gray-900">{p.user.name}</p>
+                    <p className="text-xs text-gray-400">{p.user.email}</p>
+                  </td>
+                  <td className="px-3 py-3 font-semibold">{DEST_LABELS[p.destinationTab] ?? p.destinationTab}</td>
+                  <td className="px-3 py-3">
+                    <span className={`px-2 py-0.5 rounded text-xs font-semibold ${ROLE_LABELS[p.role]?.color ?? ''}`}>
+                      {ROLE_LABELS[p.role]?.label ?? p.role}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3"><button onClick={() => handleDelete(p.id)} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }

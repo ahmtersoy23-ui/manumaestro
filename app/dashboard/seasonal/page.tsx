@@ -17,7 +17,7 @@ export default function SeasonalPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (role !== 'admin') return;
+    if (!role) return;
 
     (async () => {
       try {
@@ -35,7 +35,8 @@ export default function SeasonalPage() {
           return;
         }
 
-        // No active pool — create one automatically
+        // No active pool — admin creates automatically, others see error
+        if (role !== 'admin') { setError('Aktif sezon havuzu yok'); return; }
         const createRes = await fetch('/api/stock-pools', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -57,13 +58,6 @@ export default function SeasonalPage() {
     })();
   }, [role, router]);
 
-  if (role !== 'admin') {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <AlertCircle className="w-12 h-12 text-red-400" />
-      </div>
-    );
-  }
 
   if (error) {
     return (
