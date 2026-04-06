@@ -313,8 +313,8 @@ export default function ShipmentDetailPage() {
       import('jsbarcode').then(m => m.default),
       import('jspdf'),
     ]);
-    // 4x6 cm = 40x60 mm
-    const W = 60, H = 40;
+    // 4x6 cm = 40mm genislik x 60mm yukseklik (portrait, termal yazici)
+    const W = 40, H = 60;
     const doc = new jsPDF({ unit: 'mm', format: [W, H] });
     let pageAdded = false;
 
@@ -332,40 +332,47 @@ export default function ShipmentDetailPage() {
         const canvas = document.createElement('canvas');
         JsBarcode(canvas, code, {
           format: 'CODE128',
-          width: 1.5,
-          height: 50,
+          width: 2,
+          height: 60,
           displayValue: false,
           margin: 0,
         });
         const barcodeImg = canvas.toDataURL('image/png');
 
-        // Layout: centered on 60x40mm
-        const barcodeW = 50, barcodeH = 14;
+        // Layout: portrait 40x60mm, ortalanmis
+        const barcodeW = 34, barcodeH = 18;
         const barcodeX = (W - barcodeW) / 2;
 
-        // Barcode image
-        doc.addImage(barcodeImg, 'PNG', barcodeX, 5, barcodeW, barcodeH);
+        // Barcode image (ust kisim)
+        doc.addImage(barcodeImg, 'PNG', barcodeX, 6, barcodeW, barcodeH);
 
         // Code text under barcode
         doc.setFont('courier', 'normal');
         doc.setFontSize(9);
-        doc.text(code, W / 2, 22, { align: 'center' });
+        doc.text(code, W / 2, 28, { align: 'center' });
 
         // Label type
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(7);
-        doc.text(label, W / 2, 26, { align: 'center' });
+        doc.setFontSize(8);
+        doc.text(label, W / 2, 33, { align: 'center' });
 
-        // Product name (truncated)
-        const truncName = name.length > 35 ? name.substring(0, 35) + '...' : name;
+        // Product name (truncated, wrap if needed)
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(7);
-        doc.text(truncName, W / 2, 31, { align: 'center' });
+        const maxChars = 22;
+        if (name.length <= maxChars) {
+          doc.text(name, W / 2, 39, { align: 'center' });
+        } else {
+          const line1 = name.substring(0, maxChars);
+          const line2 = name.substring(maxChars, maxChars * 2);
+          doc.text(line1, W / 2, 39, { align: 'center' });
+          doc.text(line2, W / 2, 43, { align: 'center' });
+        }
 
-        // Box number
-        doc.setFontSize(6);
-        doc.setTextColor(128);
-        doc.text(box.boxNumber, W / 2, 36, { align: 'center' });
+        // Box number (alt kisim)
+        doc.setFontSize(7);
+        doc.setTextColor(100);
+        doc.text(box.boxNumber, W / 2, 52, { align: 'center' });
         doc.setTextColor(0);
       }
     }
