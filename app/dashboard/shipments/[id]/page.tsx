@@ -14,7 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   ArrowLeft, Plus, Send, Loader2, AlertCircle, Pencil,
   Package, Calendar, Anchor, Truck as TruckIcon, Plane,
-  Check, Square, CheckSquare, Download, Ship, X, ChevronDown, ChevronRight,
+  Check, Square, CheckSquare, Download, Ship, X, ChevronDown, ChevronRight, Printer,
 } from 'lucide-react';
 
 // --- Types ---
@@ -308,6 +308,75 @@ export default function ShipmentDetailPage() {
     XLSX.writeFile(wb, `${shipment.name}-koliler-${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
+  const handlePrintLabels = async () => {
+    const [JsBarcode, { jsPDF }] = await Promise.all([
+      import('jsbarcode').then(m => m.default),
+      import('jspdf'),
+    ]);
+    // 4x6 cm = 40x60 mm
+    const W = 60, H = 40;
+    const doc = new jsPDF({ unit: 'mm', format: [W, H] });
+    let pageAdded = false;
+
+    for (const box of boxes) {
+      const code = box.fnsku || box.iwasku;
+      if (!code) continue;
+      const label = box.fnsku ? 'FNSKU' : 'IWASKU';
+      const name = box.productName || '';
+
+      for (let i = 0; i < box.quantity; i++) {
+        if (pageAdded) doc.addPage([W, H]);
+        pageAdded = true;
+
+        // Generate barcode as canvas → image
+        const canvas = document.createElement('canvas');
+        JsBarcode(canvas, code, {
+          format: 'CODE128',
+          width: 1.5,
+          height: 50,
+          displayValue: false,
+          margin: 0,
+        });
+        const barcodeImg = canvas.toDataURL('image/png');
+
+        // Layout: centered on 60x40mm
+        const barcodeW = 50, barcodeH = 14;
+        const barcodeX = (W - barcodeW) / 2;
+
+        // Barcode image
+        doc.addImage(barcodeImg, 'PNG', barcodeX, 5, barcodeW, barcodeH);
+
+        // Code text under barcode
+        doc.setFont('courier', 'normal');
+        doc.setFontSize(9);
+        doc.text(code, W / 2, 22, { align: 'center' });
+
+        // Label type
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7);
+        doc.text(label, W / 2, 26, { align: 'center' });
+
+        // Product name (truncated)
+        const truncName = name.length > 35 ? name.substring(0, 35) + '...' : name;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.text(truncName, W / 2, 31, { align: 'center' });
+
+        // Box number
+        doc.setFontSize(6);
+        doc.setTextColor(128);
+        doc.text(box.boxNumber, W / 2, 36, { align: 'center' });
+        doc.setTextColor(0);
+      }
+    }
+
+    if (!pageAdded) {
+      alert('Etiket basılacak koli bulunamadı (FNSKU veya IWASKU gerekli)');
+      return;
+    }
+    doc.save(`${shipment.name}-etiketler.pdf`);
+  };
+
   const handleExportItems = async () => {
     const XLSX = await loadXLSX();
     const rows = shipment.items.map((item, i) => ({ '#': i + 1, 'IWASKU': item.iwasku, 'FNSKU': item.fnsku ?? '', 'Urun Adi': item.productName, 'Kategori': item.productCategory, 'Pazar Yeri': item.marketplace?.code ?? '', 'Miktar': item.quantity, 'Desi': item.desi ? Math.round(item.desi * item.quantity) : '', 'Durum': item.sentAt ? 'Gonderildi' : item.packed ? 'Hazir' : 'Bekliyor' }));
@@ -597,9 +666,14 @@ export default function ShipmentDetailPage() {
               </button>
             )}
             {boxes.length > 0 && (
-              <button onClick={handleExportBoxes} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 border">
-                <Download className="w-4 h-4" /> Excel Koli Listesi
-              </button>
+              <>
+                <button onClick={handleExportBoxes} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 border">
+                  <Download className="w-4 h-4" /> Excel Koli Listesi
+                </button>
+                <button onClick={handlePrintLabels} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 border">
+                  <Printer className="w-4 h-4" /> Etiket Yazdir
+                </button>
+              </>
             )}
             {/* Bulk FBA/DEPO toggle */}
             {canDest && selectedBoxIds.size > 0 && (
