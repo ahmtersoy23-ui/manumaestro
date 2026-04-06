@@ -313,69 +313,140 @@ export default function ShipmentDetailPage() {
       import('jsbarcode').then(m => m.default),
       import('jspdf'),
     ]);
-    // Turkce → ASCII (jsPDF default fontlari Turkce desteklemez)
-    const trToAscii = (s: string) => s
-      .replace(/ş/g, 's').replace(/Ş/g, 'S')
-      .replace(/ı/g, 'i').replace(/İ/g, 'I')
-      .replace(/ö/g, 'o').replace(/Ö/g, 'O')
-      .replace(/ü/g, 'u').replace(/Ü/g, 'U')
-      .replace(/ç/g, 'c').replace(/Ç/g, 'C')
-      .replace(/ğ/g, 'g').replace(/Ğ/g, 'G');
 
-    // 4x6 cm = 60mm genislik x 40mm yukseklik (landscape, termal yazici)
-    const W = 60, H = 40;
-    const doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: 'landscape' });
+    // Canvas ile etiket render (Turkce karakter destegi)
+    const PX_PER_MM = 8; // 8px/mm ≈ 200dpi
+    const W_MM = 60, H_MM = 40;
+    const CW = W_MM * PX_PER_MM, CH = H_MM * PX_PER_MM;
+
+    const renderCanvasLabel = (draw: (ctx: CanvasRenderingContext2D) => void) => {
+      const c = document.createElement('canvas');
+      c.width = CW; c.height = CH;
+      const ctx = c.getContext('2d')!;
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, CW, CH);
+      ctx.fillStyle = '#000';
+      draw(ctx);
+      return c.toDataURL('image/png');
+    };
+
+    // Word-wrap helper
+    const wrapText = (ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] => {
+      const words = text.split(' ');
+      const lines: string[] = [];
+      let line = '';
+      for (const word of words) {
+        const test = line ? `${line} ${word}` : word;
+        if (ctx.measureText(test).width > maxWidth && line) {
+          lines.push(line);
+          line = word;
+        } else {
+          line = test;
+        }
+      }
+      if (line) lines.push(line);
+      return lines;
+    };
+
+    const doc = new jsPDF({ unit: 'mm', format: [W_MM, H_MM], orientation: 'landscape' });
     let pageAdded = false;
 
     for (const box of boxes) {
       const code = box.fnsku || box.iwasku;
       if (!code) continue;
       const label = box.fnsku ? 'FNSKU' : 'IWASKU';
-      const name = trToAscii(box.productName || '');
+      const name = box.productName || '';
+      const marketplace = box.marketplaceCode || '';
 
+      // === SAYFA 1: Koli etiketi ===
+      if (pageAdded) doc.addPage([W_MM, H_MM], 'landscape');
+      pageAdded = true;
+
+      const boxLabelImg = renderCanvasLabel((ctx) => {
+        // Büyük koli numarası
+        ctx.font = 'bold 100px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(box.boxNumber, CW / 2, 115);
+
+        // Çizgi
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(24, 135);
+        ctx.lineTo(CW - 24, 135);
+        ctx.stroke();
+
+        // Adet + ürün adı
+        ctx.font = 'bold 36px Arial';
+        ctx.textAlign = 'center';
+        const fullText = `${box.quantity} adet`;
+        ctx.fillText(fullText, CW / 2, 175);
+
+        ctx.font = '30px Arial';
+        const nameLines = wrapText(ctx, name, CW - 60);
+        let y = 210;
+        for (const ln of nameLines.slice(0, 3)) {
+          ctx.fillText(ln, CW / 2, y);
+          y += 36;
+        }
+
+        // Alt: hedef + marketplace
+        ctx.font = '22px Arial';
+        ctx.fillStyle = '#666';
+        ctx.textAlign = 'left';
+        ctx.fillText(box.destination, 24, CH - 16);
+        ctx.textAlign = 'right';
+        ctx.fillText(marketplace, CW - 24, CH - 16);
+      });
+      doc.addImage(boxLabelImg, 'PNG', 0, 0, W_MM, H_MM);
+
+      // === SAYFA 2+: Barkod etiketleri (quantity kadar) ===
       for (let i = 0; i < box.quantity; i++) {
-        if (pageAdded) doc.addPage([W, H], 'landscape');
-        pageAdded = true;
+        doc.addPage([W_MM, H_MM], 'landscape');
 
-        // Generate barcode as canvas → image
-        const canvas = document.createElement('canvas');
-        JsBarcode(canvas, code, {
-          format: 'CODE128',
-          width: 2,
-          height: 50,
-          displayValue: false,
-          margin: 0,
+        // Barkod canvas
+        const bcCanvas = document.createElement('canvas');
+        JsBarcode(bcCanvas, code, {
+          format: 'CODE128', width: 2, height: 50, displayValue: false, margin: 0,
         });
-        const barcodeImg = canvas.toDataURL('image/png');
+        const barcodeDataUrl = bcCanvas.toDataURL('image/png');
 
-        // Layout: landscape 60x40mm
-        const barcodeW = 50, barcodeH = 14;
-        const barcodeX = (W - barcodeW) / 2;
+        const barcodeImg = renderCanvasLabel((ctx) => {
+          // Barkod image
+          const img = new Image();
+          img.src = barcodeDataUrl;
+          const bw = 400, bh = 110;
+          ctx.drawImage(bcCanvas, (CW - bw) / 2, 16, bw, bh);
 
-        // Barcode image (ust kisim)
-        doc.addImage(barcodeImg, 'PNG', barcodeX, 3, barcodeW, barcodeH);
+          // Kod text
+          ctx.font = 'bold 32px Courier New';
+          ctx.textAlign = 'center';
+          ctx.fillText(code, CW / 2, 160);
 
-        // Code text under barcode
-        doc.setFont('courier', 'normal');
-        doc.setFontSize(10);
-        doc.text(code, W / 2, 20, { align: 'center' });
+          // Etiket tipi
+          ctx.font = 'bold 26px Arial';
+          ctx.fillText(label, CW / 2, 192);
 
-        // Label type
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8);
-        doc.text(label, W / 2, 25, { align: 'center' });
+          // Ürün adı (wrap)
+          ctx.font = '22px Arial';
+          const lines = wrapText(ctx, name, CW - 48);
+          let y = 222;
+          for (const ln of lines.slice(0, 2)) {
+            ctx.fillText(ln, CW / 2, y);
+            y += 28;
+          }
 
-        // Product name (truncated)
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(7);
-        const truncName = name.length > 40 ? name.substring(0, 40) + '...' : name;
-        doc.text(truncName, W / 2, 30, { align: 'center' });
+          // Sol alt: koli no
+          ctx.font = '20px Courier New';
+          ctx.fillStyle = '#888';
+          ctx.textAlign = 'left';
+          ctx.fillText(box.boxNumber, 16, CH - 12);
 
-        // Box number
-        doc.setFontSize(7);
-        doc.setTextColor(100);
-        doc.text(box.boxNumber, W / 2, 36, { align: 'center' });
-        doc.setTextColor(0);
+          // Sağ alt: pazar yeri
+          ctx.textAlign = 'right';
+          ctx.fillText(marketplace, CW - 16, CH - 12);
+        });
+        doc.addImage(barcodeImg, 'PNG', 0, 0, W_MM, H_MM);
       }
     }
 
