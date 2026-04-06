@@ -856,10 +856,10 @@ export default function ShipmentDetailPage() {
                         <td className="px-3 py-3 text-xs text-gray-700 line-clamp-1">{box.productName || '—'}</td>
                         <td className="px-3 py-3 text-sm text-gray-600">{(box.marketplaceCode && mktCodeToName.get(box.marketplaceCode)) || box.marketplaceCode || '—'}</td>
                         <td className="text-center px-3 py-3 font-semibold">{box.quantity}</td>
-                        <td className="text-center px-3 py-3 text-gray-600">{box.width ?? '—'}</td>
-                        <td className="text-center px-3 py-3 text-gray-600">{box.depth ?? '—'}</td>
-                        <td className="text-center px-3 py-3 text-gray-600">{box.height ?? '—'}</td>
-                        <td className="text-center px-3 py-3 text-gray-600">{box.weight ?? '—'}</td>
+                        <EditableBoxCell boxId={box.id} shipmentId={id} field="width" value={box.width} canEdit={isActive && canBoxes} onUpdated={fetchBoxes} />
+                        <EditableBoxCell boxId={box.id} shipmentId={id} field="depth" value={box.depth} canEdit={isActive && canBoxes} onUpdated={fetchBoxes} />
+                        <EditableBoxCell boxId={box.id} shipmentId={id} field="height" value={box.height} canEdit={isActive && canBoxes} onUpdated={fetchBoxes} />
+                        <EditableBoxCell boxId={box.id} shipmentId={id} field="weight" value={box.weight} canEdit={isActive && canBoxes} onUpdated={fetchBoxes} />
                         <td className="text-center px-3 py-3 font-medium text-gray-900">{boxDesi ? boxDesi.toFixed(1) : '—'}</td>
                         <td className="px-2 py-3">{isActive && canBoxes && <button onClick={() => handleDeleteBox(box.id)} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>}</td>
                       </tr>
@@ -874,6 +874,62 @@ export default function ShipmentDetailPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// --- Editable Box Cell (dimensions/weight) ---
+function EditableBoxCell({ boxId, shipmentId, field, value, canEdit, onUpdated }: {
+  boxId: string; shipmentId: string; field: 'width' | 'height' | 'depth' | 'weight';
+  value: number | null; canEdit: boolean; onUpdated: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [inputVal, setInputVal] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    const num = inputVal.trim() ? parseFloat(inputVal) : null;
+    if (num !== null && (isNaN(num) || num <= 0)) { setEditing(false); return; }
+    if (num === value) { setEditing(false); return; }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/shipments/${shipmentId}/boxes`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ boxId, [field]: num }),
+      });
+      if ((await res.json()).success) onUpdated();
+    } catch { /* */ }
+    finally { setSaving(false); setEditing(false); }
+  };
+
+  if (!canEdit) {
+    return <td className="text-center px-3 py-3 text-gray-600">{value ?? '—'}</td>;
+  }
+
+  if (editing) {
+    return (
+      <td className="text-center px-1 py-1">
+        <input
+          type="number" step="0.1" autoFocus
+          value={inputVal}
+          onChange={e => setInputVal(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditing(false); }}
+          onBlur={handleSave}
+          disabled={saving}
+          className="w-14 px-1 py-0.5 border border-blue-300 rounded text-center text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+        />
+      </td>
+    );
+  }
+
+  return (
+    <td
+      className="text-center px-3 py-3 text-gray-600 cursor-pointer hover:bg-blue-50 hover:text-blue-700 transition-colors"
+      onClick={() => { setInputVal(value?.toString() ?? ''); setEditing(true); }}
+      title="Düzenlemek için tıkla"
+    >
+      {value ?? '—'}
+    </td>
   );
 }
 

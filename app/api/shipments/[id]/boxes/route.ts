@@ -252,3 +252,34 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     data: { updated: result.count, destination, ...(notFound.length > 0 ? { notFound } : {}) },
   });
 }
+
+// --- PUT: Update box dimensions/weight ---
+const UpdateBoxSchema = z.object({
+  boxId: z.string().uuid(),
+  width: z.number().positive().nullable().optional(),
+  height: z.number().positive().nullable().optional(),
+  depth: z.number().positive().nullable().optional(),
+  weight: z.number().positive().nullable().optional(),
+});
+
+export async function PUT(request: NextRequest, { params }: Params) {
+  const { id } = await params;
+  const shipmentForAuth = await prisma.shipment.findUnique({ where: { id }, select: { destinationTab: true } });
+  if (!shipmentForAuth) return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadi' }, { status: 404 });
+  const authResult = await requireShipmentAction(request, shipmentForAuth.destinationTab, 'manageBoxes');
+  if (authResult instanceof NextResponse) return authResult;
+
+  const body = await request.json();
+  const validation = UpdateBoxSchema.safeParse(body);
+  if (!validation.success) {
+    return NextResponse.json({ success: false, error: 'Dogrulama hatasi', details: validation.error.flatten().fieldErrors }, { status: 400 });
+  }
+
+  const { boxId, ...data } = validation.data;
+  const box = await prisma.shipmentBox.update({
+    where: { id: boxId, shipmentId: id },
+    data,
+  });
+
+  return NextResponse.json({ success: true, data: box });
+}
