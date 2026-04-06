@@ -323,6 +323,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
       );
     }
 
+    if (!isAdmin) return <span className="text-xs text-gray-400">Bekliyor</span>;
     if (!shipmentsLoaded) return <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin" />;
     if (availableShipments.length === 0) return <span className="text-xs text-gray-400">Rota yok</span>;
     if (routingId === request.id) return <Loader2 className="w-3.5 h-3.5 text-purple-600 animate-spin" />;
@@ -479,7 +480,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Miktar</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Oncelik</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Durum</th>
-                {isAdmin && <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Sevkiyat</th>}
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Sevkiyat</th>
                 {isEditor && <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase">Sil</th>}
               </tr>
             </thead>
@@ -525,9 +526,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                       {STATUS_LABELS[request.status]}
                     </span>
                   </td>
-                  {isAdmin && (
-                    <td className="px-4 py-3">{renderShipmentCell(request)}</td>
-                  )}
+                  <td className="px-4 py-3">{renderShipmentCell(request)}</td>
                   {isEditor && (
                     <td className="px-4 py-3 whitespace-nowrap text-right">
                       <button
