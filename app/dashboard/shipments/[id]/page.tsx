@@ -124,6 +124,16 @@ export default function ShipmentDetailPage() {
   const totalQty = shipment.items.reduce((s, i) => s + i.quantity, 0);
   const totalDesi = shipment.items.reduce((s, i) => s + (i.desi ?? 0) * i.quantity, 0);
   const packedPendingCount = pendingItems.filter(i => i.packed).length;
+  // Marketplace code → name mapping (koliler tablosu icin)
+  const mktCodeToName = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of shipment.items) {
+      if (item.marketplace?.code && item.marketplace.name) {
+        map.set(item.marketplace.code, item.marketplace.name);
+      }
+    }
+    return map;
+  }, [shipment.items]);
   const plannedDate = shipment.plannedDate
     ? new Date(shipment.plannedDate).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
     : null;
@@ -708,7 +718,7 @@ export default function ShipmentDetailPage() {
                     <td className="px-3 py-3 font-mono text-sm text-gray-600">{item.fnsku || '—'}</td>
                     <td className="px-3 py-3 text-xs text-gray-700 line-clamp-1">{item.productName || '—'}</td>
                     <td className="px-3 py-3 text-sm text-gray-600">{item.productCategory || '—'}</td>
-                    <td className="px-3 py-3 text-sm text-gray-600">{item.marketplace?.code ?? '—'}</td>
+                    <td className="px-3 py-3 text-sm text-gray-600">{item.marketplace?.name ?? '—'}</td>
                     <td className="text-center px-3 py-3 font-semibold text-gray-900">{item.quantity}</td>
                     <td className="text-center px-3 py-3 text-xs text-green-700">
                       {item.sentAt ? new Date(item.sentAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }) : '—'}
@@ -844,7 +854,7 @@ export default function ShipmentDetailPage() {
                         <td className="px-3 py-3 font-mono text-sm text-gray-700">{box.iwasku || '—'}</td>
                         <td className="px-3 py-3 font-mono text-sm text-gray-600">{box.fnsku || '—'}</td>
                         <td className="px-3 py-3 text-xs text-gray-700 line-clamp-1">{box.productName || '—'}</td>
-                        <td className="px-3 py-3 text-sm text-gray-600">{box.marketplaceCode || '—'}</td>
+                        <td className="px-3 py-3 text-sm text-gray-600">{(box.marketplaceCode && mktCodeToName.get(box.marketplaceCode)) || box.marketplaceCode || '—'}</td>
                         <td className="text-center px-3 py-3 font-semibold">{box.quantity}</td>
                         <td className="text-center px-3 py-3 text-gray-600">{box.width ?? '—'}</td>
                         <td className="text-center px-3 py-3 text-gray-600">{box.depth ?? '—'}</td>
@@ -991,7 +1001,7 @@ function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded
         </td>
         <td className="px-3 py-3"><div className={`text-xs leading-tight line-clamp-2 ${item.packed ? 'text-green-700' : 'text-gray-700'}`}>{item.productName || '—'}</div></td>
         <td className={`px-3 py-3 text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.productCategory || '—'}</td>
-        <td className={`px-3 py-3 text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.marketplace?.code ?? '—'}</td>
+        <td className={`px-3 py-3 text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.marketplace?.name ?? '—'}</td>
         <td className={`text-center px-3 py-3 font-semibold ${item.packed ? 'text-green-800' : 'text-gray-900'}`}>{item.quantity}</td>
         <td className={`text-center px-3 py-3 font-medium ${item.packed ? 'text-green-800' : 'text-gray-900'}`}>{itemDesi > 0 ? Math.round(itemDesi).toLocaleString('tr-TR') : '—'}</td>
         {isActive && canDelete && (
