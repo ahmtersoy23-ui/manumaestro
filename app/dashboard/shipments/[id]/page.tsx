@@ -99,6 +99,19 @@ export default function ShipmentDetailPage() {
 
   useEffect(() => { fetchShipment(); fetchBoxes(); }, [fetchShipment, fetchBoxes]);
 
+  // Marketplace code → name mapping (koliler tablosu icin) — hook, early return'den once olmali
+  const mktCodeToName = useMemo(() => {
+    const map = new Map<string, string>();
+    if (shipment) {
+      for (const item of shipment.items) {
+        if (item.marketplace?.code && item.marketplace.name) {
+          map.set(item.marketplace.code, item.marketplace.name);
+        }
+      }
+    }
+    return map;
+  }, [shipment]);
+
   // Izin kontrolu API uzerinden yapiliyor (permissions state)
   if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>;
   if (!shipment) return (
@@ -124,16 +137,6 @@ export default function ShipmentDetailPage() {
   const totalQty = shipment.items.reduce((s, i) => s + i.quantity, 0);
   const totalDesi = shipment.items.reduce((s, i) => s + (i.desi ?? 0) * i.quantity, 0);
   const packedPendingCount = pendingItems.filter(i => i.packed).length;
-  // Marketplace code → name mapping (koliler tablosu icin)
-  const mktCodeToName = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const item of shipment.items) {
-      if (item.marketplace?.code && item.marketplace.name) {
-        map.set(item.marketplace.code, item.marketplace.name);
-      }
-    }
-    return map;
-  }, [shipment.items]);
   const plannedDate = shipment.plannedDate
     ? new Date(shipment.plannedDate).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
     : null;
