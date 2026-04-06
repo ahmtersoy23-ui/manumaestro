@@ -390,11 +390,9 @@ export default function ShipmentDetailPage() {
           y += 36;
         }
 
-        // Alt: hedef + marketplace
+        // Alt sağ: marketplace
         ctx.font = '22px Arial';
         ctx.fillStyle = '#666';
-        ctx.textAlign = 'left';
-        ctx.fillText(box.destination, 24, CH - 16);
         ctx.textAlign = 'right';
         ctx.fillText(marketplace, CW - 24, CH - 16);
       });
@@ -412,39 +410,33 @@ export default function ShipmentDetailPage() {
         const barcodeDataUrl = bcCanvas.toDataURL('image/png');
 
         const barcodeImg = renderCanvasLabel((ctx) => {
-          // Barkod image
-          const img = new Image();
-          img.src = barcodeDataUrl;
-          const bw = 400, bh = 110;
-          ctx.drawImage(bcCanvas, (CW - bw) / 2, 16, bw, bh);
+          // Barkod image — büyük (üst yarı)
+          const bw = 430, bh = 140;
+          ctx.drawImage(bcCanvas, (CW - bw) / 2, 10, bw, bh);
 
-          // Kod text
-          ctx.font = 'bold 32px Courier New';
+          // Kod text + etiket tipi (tek satır)
+          ctx.font = 'bold 28px Courier New';
           ctx.textAlign = 'center';
-          ctx.fillText(code, CW / 2, 160);
+          ctx.fillText(`${code}  (${label})`, CW / 2, 178);
 
-          // Etiket tipi
-          ctx.font = 'bold 26px Arial';
-          ctx.fillText(label, CW / 2, 192);
-
-          // Ürün adı (wrap)
-          ctx.font = '22px Arial';
-          const lines = wrapText(ctx, name, CW - 48);
-          let y = 222;
+          // Ürün adı (küçük, wrap)
+          ctx.font = '18px Arial';
+          const lines = wrapText(ctx, name, CW - 40);
+          let y = 204;
           for (const ln of lines.slice(0, 2)) {
             ctx.fillText(ln, CW / 2, y);
-            y += 28;
+            y += 22;
           }
 
           // Sol alt: koli no
-          ctx.font = '20px Courier New';
+          ctx.font = '18px Courier New';
           ctx.fillStyle = '#888';
           ctx.textAlign = 'left';
-          ctx.fillText(box.boxNumber, 16, CH - 12);
+          ctx.fillText(box.boxNumber, 16, CH - 10);
 
           // Sağ alt: pazar yeri
           ctx.textAlign = 'right';
-          ctx.fillText(marketplace, CW - 16, CH - 12);
+          ctx.fillText(marketplace, CW - 16, CH - 10);
         });
         doc.addImage(barcodeImg, 'PNG', 0, 0, W_MM, H_MM);
       }
