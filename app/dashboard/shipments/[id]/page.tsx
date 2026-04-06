@@ -313,19 +313,28 @@ export default function ShipmentDetailPage() {
       import('jsbarcode').then(m => m.default),
       import('jspdf'),
     ]);
-    // 4x6 cm = 40mm genislik x 60mm yukseklik (portrait, termal yazici)
-    const W = 40, H = 60;
-    const doc = new jsPDF({ unit: 'mm', format: [W, H] });
+    // Turkce → ASCII (jsPDF default fontlari Turkce desteklemez)
+    const trToAscii = (s: string) => s
+      .replace(/ş/g, 's').replace(/Ş/g, 'S')
+      .replace(/ı/g, 'i').replace(/İ/g, 'I')
+      .replace(/ö/g, 'o').replace(/Ö/g, 'O')
+      .replace(/ü/g, 'u').replace(/Ü/g, 'U')
+      .replace(/ç/g, 'c').replace(/Ç/g, 'C')
+      .replace(/ğ/g, 'g').replace(/Ğ/g, 'G');
+
+    // 4x6 cm = 60mm genislik x 40mm yukseklik (landscape, termal yazici)
+    const W = 60, H = 40;
+    const doc = new jsPDF({ unit: 'mm', format: [W, H], orientation: 'landscape' });
     let pageAdded = false;
 
     for (const box of boxes) {
       const code = box.fnsku || box.iwasku;
       if (!code) continue;
       const label = box.fnsku ? 'FNSKU' : 'IWASKU';
-      const name = box.productName || '';
+      const name = trToAscii(box.productName || '');
 
       for (let i = 0; i < box.quantity; i++) {
-        if (pageAdded) doc.addPage([W, H]);
+        if (pageAdded) doc.addPage([W, H], 'landscape');
         pageAdded = true;
 
         // Generate barcode as canvas → image
@@ -333,46 +342,39 @@ export default function ShipmentDetailPage() {
         JsBarcode(canvas, code, {
           format: 'CODE128',
           width: 2,
-          height: 60,
+          height: 50,
           displayValue: false,
           margin: 0,
         });
         const barcodeImg = canvas.toDataURL('image/png');
 
-        // Layout: portrait 40x60mm, ortalanmis
-        const barcodeW = 34, barcodeH = 18;
+        // Layout: landscape 60x40mm
+        const barcodeW = 50, barcodeH = 14;
         const barcodeX = (W - barcodeW) / 2;
 
         // Barcode image (ust kisim)
-        doc.addImage(barcodeImg, 'PNG', barcodeX, 6, barcodeW, barcodeH);
+        doc.addImage(barcodeImg, 'PNG', barcodeX, 3, barcodeW, barcodeH);
 
         // Code text under barcode
         doc.setFont('courier', 'normal');
-        doc.setFontSize(9);
-        doc.text(code, W / 2, 28, { align: 'center' });
+        doc.setFontSize(10);
+        doc.text(code, W / 2, 20, { align: 'center' });
 
         // Label type
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(8);
-        doc.text(label, W / 2, 33, { align: 'center' });
+        doc.text(label, W / 2, 25, { align: 'center' });
 
-        // Product name (truncated, wrap if needed)
+        // Product name (truncated)
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(7);
-        const maxChars = 22;
-        if (name.length <= maxChars) {
-          doc.text(name, W / 2, 39, { align: 'center' });
-        } else {
-          const line1 = name.substring(0, maxChars);
-          const line2 = name.substring(maxChars, maxChars * 2);
-          doc.text(line1, W / 2, 39, { align: 'center' });
-          doc.text(line2, W / 2, 43, { align: 'center' });
-        }
+        const truncName = name.length > 40 ? name.substring(0, 40) + '...' : name;
+        doc.text(truncName, W / 2, 30, { align: 'center' });
 
-        // Box number (alt kisim)
+        // Box number
         doc.setFontSize(7);
         doc.setTextColor(100);
-        doc.text(box.boxNumber, W / 2, 52, { align: 'center' });
+        doc.text(box.boxNumber, W / 2, 36, { align: 'center' });
         doc.setTextColor(0);
       }
     }
