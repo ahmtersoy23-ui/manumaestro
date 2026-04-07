@@ -236,11 +236,29 @@ export async function POST(request: NextRequest, { params }: Params) {
     );
   }
 
+  // sku_master'dan birim desi (size) çek → T. Desi = quantity × size
+  const iwaskus = [...new Set(validation.data.items.map(i => i.iwasku))];
+  const sizeMap = new Map<string, number>();
+  if (iwaskus.length > 0) {
+    const placeholders = iwaskus.map((_, i) => `$${i + 1}`).join(',');
+    const rows = await queryProductDb(
+      `SELECT DISTINCT ON (iwasku) iwasku, size FROM sku_master WHERE iwasku IN (${placeholders}) AND size IS NOT NULL`,
+      iwaskus
+    );
+    for (const row of rows) {
+      sizeMap.set(row.iwasku, parseFloat(row.size));
+    }
+  }
+
   const created = await prisma.shipmentItem.createMany({
-    data: validation.data.items.map(item => ({
-      shipmentId: id,
-      ...item,
-    })),
+    data: validation.data.items.map(item => {
+      const unitDesi = sizeMap.get(item.iwasku);
+      return {
+        shipmentId: id,
+        ...item,
+        desi: item.desi ?? (unitDesi ? Math.round(item.quantity * unitDesi * 100) / 100 : undefined),
+      };
+    }),
   });
 
   await logAction({
