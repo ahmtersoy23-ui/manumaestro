@@ -31,15 +31,17 @@ export async function POST(request: NextRequest, { params }: Params) {
   }
 
   // sendItems veya closeShipment izni olan kullanıcı çıkış da onaylayabilir
+  let authUser;
   const authResult = await requireShipmentAction(request, shipment.destinationTab, 'sendItems');
   if (authResult instanceof NextResponse) {
     // sendItems izni yoksa closeShipment dene
     const authResult2 = await requireShipmentAction(request, shipment.destinationTab, 'closeShipment');
     if (authResult2 instanceof NextResponse) return authResult2;
-    var user = authResult2.user;
+    authUser = authResult2.user;
   } else {
-    var user = authResult.user;
+    authUser = authResult.user;
   }
+  const user = authUser;
 
   const body = await request.json();
   const validation = WarehouseExitSchema.safeParse(body);
