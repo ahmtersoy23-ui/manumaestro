@@ -166,23 +166,16 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadı' }, { status: 404 });
   }
 
-  // If dispatching (IN_TRANSIT), process warehouse cikis + reserve shipping
+  // If dispatching (IN_TRANSIT), process reserve shipping (depo çıkışı ayrı onay modalından)
   if (data.status === 'IN_TRANSIT' && shipment.status !== 'IN_TRANSIT') {
     await prisma.$transaction(async (tx) => {
       for (const item of shipment.items) {
-        // Update warehouse cikis
-        await tx.warehouseProduct.updateMany({
-          where: { iwasku: item.iwasku },
-          data: { cikis: { increment: item.quantity } },
-        });
-
-        // Update reserve shippedQuantity if linked
         if (item.reserveId) {
           await tx.stockReserve.update({
             where: { id: item.reserveId },
             data: {
               shippedQuantity: { increment: item.quantity },
-              status: 'SHIPPED', // Will be checked if fully shipped
+              status: 'SHIPPED',
             },
           });
         }

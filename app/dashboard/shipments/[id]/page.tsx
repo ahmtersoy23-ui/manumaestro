@@ -73,6 +73,12 @@ export default function ShipmentDetailPage() {
   const [bulkFbaText, setBulkFbaText] = useState('');
   const [bulkFbaResult, setBulkFbaResult] = useState<{ updated: number; notFound?: string[] } | null>(null);
 
+  // Depo çıkış onay modalı
+  const [showExitModal, setShowExitModal] = useState(false);
+  const [exitItems, setExitItems] = useState<{ iwasku: string; name: string; quantity: number }[]>([]);
+  const [exitWeek, setExitWeek] = useState('');
+  const [exitSaving, setExitSaving] = useState(false);
+
   // Permissions from API
   const [perms, setPerms] = useState<Record<string, boolean>>({});
 
@@ -199,6 +205,49 @@ export default function ShipmentDetailPage() {
     }
   };
 
+  // Pazartesi hesapla (bugünün haftası)
+  const getMonday = (d: Date) => {
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const mon = new Date(d);
+    mon.setDate(diff);
+    return mon.toISOString().split('T')[0];
+  };
+
+  // Depo çıkış modalını aç (gönderilen item'lar ile)
+  const openExitModal = (sentItems: { iwasku: string; productName: string; quantity: number }[]) => {
+    // IWASKU bazlı grupla
+    const grouped = new Map<string, { iwasku: string; name: string; quantity: number }>();
+    for (const item of sentItems) {
+      const existing = grouped.get(item.iwasku);
+      if (existing) {
+        existing.quantity += item.quantity;
+      } else {
+        grouped.set(item.iwasku, { iwasku: item.iwasku, name: item.productName || item.iwasku, quantity: item.quantity });
+      }
+    }
+    setExitItems([...grouped.values()]);
+    setExitWeek(getMonday(new Date()));
+    setShowExitModal(true);
+  };
+
+  // Depo çıkış onayı
+  const handleConfirmExit = async () => {
+    setExitSaving(true);
+    try {
+      const res = await fetch(`/api/shipments/${id}/warehouse-exit`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: exitItems.map(i => ({ iwasku: i.iwasku, quantity: i.quantity })),
+          weekStart: exitWeek,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) setShowExitModal(false);
+      else alert(data.error);
+    } catch { alert('Cikis kayit hatasi'); } finally { setExitSaving(false); }
+  };
+
   // Karayolu/hava: seçili packed itemleri gönder
   const handleSendSelected = async () => {
     const toSend = [...selectedIds].filter(sid => {
@@ -214,8 +263,13 @@ export default function ShipmentDetailPage() {
         body: JSON.stringify({ itemIds: toSend }),
       });
       const data = await res.json();
-      if (data.success) { setSelectedIds(new Set()); await fetchShipment(); }
-      else alert(data.error);
+      if (data.success) {
+        // Gönderilen item'ları al ve modal aç
+        const sentItemDetails = toSend.map(sid => pendingItems.find(i => i.id === sid)!).filter(Boolean);
+        setSelectedIds(new Set());
+        await fetchShipment();
+        openExitModal(sentItemDetails);
+      } else alert(data.error);
     } catch { alert('Gonderim hatasi'); } finally { setSending(false); }
   };
 
@@ -229,8 +283,12 @@ export default function ShipmentDetailPage() {
         body: JSON.stringify({ closeShipment: true }),
       });
       const data = await res.json();
-      if (data.success) await fetchShipment();
-      else alert(data.error);
+      if (data.success) {
+        // Tüm pending item'ları al ve modal aç
+        const allPending = [...pendingItems];
+        await fetchShipment();
+        openExitModal(allPending);
+      } else alert(data.error);
     } catch { alert('Kapama hatasi'); } finally { setSending(false); }
   };
 
@@ -873,6 +931,59 @@ export default function ShipmentDetailPage() {
             ) : (
               <div className="text-center py-12"><Package className="w-10 h-10 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">Henuz koli eklenmedi</p></div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* === DEPO ÇIKIŞ ONAY MODALI === */}
+      {showExitModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <h3 className="text-lg font-bold text-gray-900">Depo Cikisi</h3>
+              <button onClick={() => setShowExitModal(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Hafta (Pazartesi)</label>
+                <input type="date" value={exitWeek} onChange={e => setExitWeek(e.target.value)}
+                  className="px-3 py-2 border rounded-lg text-sm w-44" />
+              </div>
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th className="text-left px-4 py-2 text-xs font-semibold text-gray-600">IWASKU</th>
+                      <th className="text-left px-4 py-2 text-xs font-semibold text-gray-600">Urun Adi</th>
+                      <th className="text-right px-4 py-2 text-xs font-semibold text-gray-600">Adet</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {exitItems.map(item => (
+                      <tr key={item.iwasku}>
+                        <td className="px-4 py-2 font-mono text-sm">{item.iwasku}</td>
+                        <td className="px-4 py-2 text-sm text-gray-700 truncate max-w-[200px]">{item.name}</td>
+                        <td className="px-4 py-2 text-sm font-semibold text-right">{item.quantity}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-sm text-gray-500">
+                Toplam: <span className="font-semibold text-gray-900">{exitItems.reduce((s, i) => s + i.quantity, 0)}</span> adet
+                ({exitItems.length} urun)
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t bg-gray-50 rounded-b-2xl">
+              <button onClick={() => setShowExitModal(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+                Atla
+              </button>
+              <button onClick={handleConfirmExit} disabled={exitSaving || !exitWeek}
+                className="flex items-center gap-2 px-5 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700 disabled:opacity-50">
+                {exitSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                Onayla
+              </button>
+            </div>
           </div>
         </div>
       )}

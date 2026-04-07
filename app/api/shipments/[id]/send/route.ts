@@ -59,12 +59,8 @@ export async function POST(request: NextRequest, { params }: Params) {
         });
       }
 
-      // Depo çıkışları (sadece henüz sentAt'ı olmayan itemler için)
+      // Reserve güncelleme (depo çıkışı artık ayrı onay modalından yapılıyor)
       for (const item of unsentItems) {
-        await tx.warehouseProduct.updateMany({
-          where: { iwasku: item.iwasku },
-          data: { cikis: { increment: item.quantity } },
-        });
         if (item.reserveId) {
           await tx.stockReserve.update({
             where: { id: item.reserveId },
@@ -106,12 +102,8 @@ export async function POST(request: NextRequest, { params }: Params) {
       data: { sentAt: now },
     });
 
-    // Depo çıkışları
+    // Reserve güncelleme (depo çıkışı artık ayrı onay modalından yapılıyor)
     for (const item of itemsToSend) {
-      await tx.warehouseProduct.updateMany({
-        where: { iwasku: item.iwasku },
-        data: { cikis: { increment: item.quantity } },
-      });
       if (item.reserveId) {
         await tx.stockReserve.update({
           where: { id: item.reserveId },
