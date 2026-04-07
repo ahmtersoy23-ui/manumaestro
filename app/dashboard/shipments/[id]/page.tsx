@@ -60,7 +60,8 @@ export default function ShipmentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'pending' | 'sent' | 'boxes'>('pending');
   const [showAddItem, setShowAddItem] = useState(false);
-  const [addForm, setAddForm] = useState({ iwasku: '', quantity: '', desi: '' });
+  const [addForm, setAddForm] = useState({ iwasku: '', quantity: '', marketplaceId: '' });
+  const [allMarketplaces, setAllMarketplaces] = useState<{ id: string; name: string; code: string }[]>([]);
   const [adding, setAdding] = useState(false);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
@@ -104,6 +105,13 @@ export default function ShipmentDetailPage() {
   }, [id]);
 
   useEffect(() => { fetchShipment(); fetchBoxes(); }, [fetchShipment, fetchBoxes]);
+
+  // Marketplace listesini çek (ürün ekleme formu için)
+  useEffect(() => {
+    fetch('/api/marketplaces').then(r => r.json()).then(data => {
+      if (data.success) setAllMarketplaces(data.data);
+    }).catch(() => {});
+  }, []);
 
   // Marketplace code → name mapping (koliler tablosu icin) — hook, early return'den once olmali
   const mktCodeToName = useMemo(() => {
@@ -297,10 +305,10 @@ export default function ShipmentDetailPage() {
     try {
       const res = await fetch(`/api/shipments/${id}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: [{ iwasku: addForm.iwasku, quantity: parseInt(addForm.quantity), desi: addForm.desi ? parseFloat(addForm.desi) : undefined }] }),
+        body: JSON.stringify({ items: [{ iwasku: addForm.iwasku, quantity: parseInt(addForm.quantity), marketplaceId: addForm.marketplaceId || undefined }] }),
       });
       const data = await res.json();
-      if (data.success) { setAddForm({ iwasku: '', quantity: '', desi: '' }); setShowAddItem(false); fetchShipment(); }
+      if (data.success) { setAddForm({ iwasku: '', quantity: '', marketplaceId: '' }); setShowAddItem(false); fetchShipment(); }
       else alert(data.error);
     } catch { alert('Hata'); } finally { setAdding(false); }
   };
@@ -693,8 +701,12 @@ export default function ShipmentDetailPage() {
                 <input type="text" required value={addForm.iwasku} onChange={e => setAddForm(f => ({ ...f, iwasku: e.target.value }))} className="px-3 py-2 border rounded-lg text-sm w-48" /></div>
               <div><label className="block text-xs font-medium text-gray-600 mb-1">Miktar</label>
                 <input type="number" required value={addForm.quantity} onChange={e => setAddForm(f => ({ ...f, quantity: e.target.value }))} className="px-3 py-2 border rounded-lg text-sm w-24" /></div>
-              <div><label className="block text-xs font-medium text-gray-600 mb-1">Desi</label>
-                <input type="number" step="0.1" value={addForm.desi} onChange={e => setAddForm(f => ({ ...f, desi: e.target.value }))} className="px-3 py-2 border rounded-lg text-sm w-24" /></div>
+              <div><label className="block text-xs font-medium text-gray-600 mb-1">Pazaryeri</label>
+                <select required value={addForm.marketplaceId} onChange={e => setAddForm(f => ({ ...f, marketplaceId: e.target.value }))}
+                  className="px-3 py-2 border rounded-lg text-sm w-48">
+                  <option value="">Seçiniz</option>
+                  {allMarketplaces.map(mp => <option key={mp.id} value={mp.id}>{mp.name}</option>)}
+                </select></div>
               <button type="submit" disabled={adding} className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
                 {adding && <Loader2 className="w-4 h-4 animate-spin" />} Ekle</button>
             </form>

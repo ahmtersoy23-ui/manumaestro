@@ -153,7 +153,7 @@ function RouteRow({
 
   return (
     <tr className="hover:bg-gray-50">
-      <td className="px-4 py-3 font-medium">{marketplace.name}</td>
+      <td className="px-4 py-3 font-medium text-gray-900">{marketplace.name}</td>
       <td className="px-3 py-3 text-gray-500 text-xs">{marketplace.region}</td>
       <td className="px-3 py-3">
         <select value={tab} onChange={e => setTab(e.target.value)}
