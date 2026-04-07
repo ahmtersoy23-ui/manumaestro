@@ -67,7 +67,7 @@ export async function GET(request: NextRequest, { params }: Params) {
   if (uniqueMissing.length > 0) {
     const placeholders = uniqueMissing.map((_, i) => `$${i + 1}`).join(',');
     const rows = await queryProductDb(
-      `SELECT DISTINCT ON (iwasku) iwasku, title AS name, product_group AS category FROM sku_master WHERE iwasku IN (${placeholders})`,
+      `SELECT DISTINCT ON (iwasku) iwasku, name, category FROM sku_master WHERE iwasku IN (${placeholders})`,
       uniqueMissing
     );
     for (const row of rows) {
