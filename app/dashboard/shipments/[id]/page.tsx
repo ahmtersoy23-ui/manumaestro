@@ -66,7 +66,9 @@ export default function ShipmentDetailPage() {
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedSentIds, setSelectedSentIds] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState(false);
+  const [unsending, setUnsending] = useState(false);
   const [showExtraBox, setShowExtraBox] = useState(false);
   const [selectedBoxIds, setSelectedBoxIds] = useState<Set<string>>(new Set());
   const [settingDest, setSettingDest] = useState(false);
@@ -144,6 +146,7 @@ export default function ShipmentDetailPage() {
   const canPack = perms.packItems ?? false;
   const canSend = perms.sendItems ?? false;
   const canClose = perms.closeShipment ?? false;
+  const canUnsend = perms.unsendItems ?? false;
   const canDest = perms.setDestination ?? false;
   const canEdit = perms.createShipment ?? false; // manager = edit shipment info
   const pendingItems = shipment.items.filter(i => !i.sentAt);
@@ -279,6 +282,33 @@ export default function ShipmentDetailPage() {
         openExitModal(sentItemDetails);
       } else alert(data.error);
     } catch { alert('Gonderim hatasi'); } finally { setSending(false); }
+  };
+
+  // Gönderilmişleri geri al
+  const handleUnsendSelected = async () => {
+    const toUnsend = [...selectedSentIds];
+    if (toUnsend.length === 0) return;
+    if (!confirm(`${toUnsend.length} urunun gonderimi geri alinsin mi?`)) return;
+    setUnsending(true);
+    try {
+      const res = await fetch(`/api/shipments/${id}/unsend`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemIds: toUnsend }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSelectedSentIds(new Set());
+        await fetchShipment();
+      } else alert(data.error);
+    } catch { alert('Geri alma hatasi'); } finally { setUnsending(false); }
+  };
+
+  // Gönderilenleri depo çıkışı modalına gönder
+  const handleExitForSent = () => {
+    const items = [...selectedSentIds].map(sid => sentItems.find(i => i.id === sid)!).filter(Boolean);
+    if (items.length === 0) return;
+    openExitModal(items);
+    setSelectedSentIds(new Set());
   };
 
   // Deniz: sevkiyatı kapat
@@ -770,39 +800,81 @@ export default function ShipmentDetailPage() {
 
       {/* === SENT TAB === */}
       {activeTab === 'sent' && (
-        <div className="bg-white border rounded-xl overflow-hidden">
-          {sentItems.length > 0 ? (
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-700 text-xs uppercase">IWASKU</th>
-                  <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">FNSKU</th>
-                  <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Urun Adi</th>
-                  <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Kategori</th>
-                  <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Pazar Yeri</th>
-                  <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Miktar</th>
-                  <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Gonderim</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {sentItems.map(item => (
-                  <tr key={item.id} className="bg-green-50/30">
-                    <td className="px-4 py-3 font-mono text-sm text-gray-900">{item.iwasku}</td>
-                    <td className="px-3 py-3 font-mono text-sm text-gray-600">{item.fnsku || '—'}</td>
-                    <td className="px-3 py-3 text-xs text-gray-700 line-clamp-1">{item.productName || '—'}</td>
-                    <td className="px-3 py-3 text-sm text-gray-600">{item.productCategory || '—'}</td>
-                    <td className="px-3 py-3 text-sm text-gray-600">{item.marketplace?.name ?? '—'}</td>
-                    <td className="text-center px-3 py-3 font-semibold text-gray-900">{item.quantity}</td>
-                    <td className="text-center px-3 py-3 text-xs text-green-700">
-                      {item.sentAt ? new Date(item.sentAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }) : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="text-center py-12"><Ship className="w-10 h-10 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">Henuz gonderilen urun yok</p></div>
+        <div className="space-y-4">
+          {/* Sent tab action buttons */}
+          {sentItems.length > 0 && (canSend || canUnsend) && (
+            <div className="flex items-center gap-3 flex-wrap">
+              {canSend && selectedSentIds.size > 0 && (
+                <button onClick={handleExitForSent}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700">
+                  <Package className="w-4 h-4" />
+                  {selectedSentIds.size} urun — Depo Cikisi Kaydet
+                </button>
+              )}
+              {canUnsend && selectedSentIds.size > 0 && (
+                <button onClick={handleUnsendSelected} disabled={unsending}
+                  className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700 disabled:opacity-50">
+                  {unsending ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                  {selectedSentIds.size} urun — Gonderimi Geri Al
+                </button>
+              )}
+            </div>
           )}
+          <div className="bg-white border rounded-xl overflow-hidden">
+            {sentItems.length > 0 ? (
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    {(canSend || canUnsend) && (
+                      <th className="w-12 px-3 py-3">
+                        <button onClick={() => {
+                          if (selectedSentIds.size === sentItems.length) setSelectedSentIds(new Set());
+                          else setSelectedSentIds(new Set(sentItems.map(i => i.id)));
+                        }} className="text-gray-600 hover:text-purple-600" title="Tumunu sec">
+                          {selectedSentIds.size === sentItems.length && sentItems.length > 0 ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
+                        </button>
+                      </th>
+                    )}
+                    <th className="text-left px-4 py-3 font-semibold text-gray-700 text-xs uppercase">IWASKU</th>
+                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">FNSKU</th>
+                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Urun Adi</th>
+                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Kategori</th>
+                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Pazar Yeri</th>
+                    <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Miktar</th>
+                    <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Gonderim</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {sentItems.map(item => (
+                    <tr key={item.id} className={`${selectedSentIds.has(item.id) ? 'bg-blue-50/50' : 'bg-green-50/30'}`}>
+                      {(canSend || canUnsend) && (
+                        <td className="px-3 py-3">
+                          <button onClick={() => {
+                            const next = new Set(selectedSentIds);
+                            next.has(item.id) ? next.delete(item.id) : next.add(item.id);
+                            setSelectedSentIds(next);
+                          }} className="text-gray-500 hover:text-purple-600">
+                            {selectedSentIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-purple-600" /> : <Square className="w-5 h-5" />}
+                          </button>
+                        </td>
+                      )}
+                      <td className="px-4 py-3 font-mono text-sm text-gray-900">{item.iwasku}</td>
+                      <td className="px-3 py-3 font-mono text-sm text-gray-600">{item.fnsku || '—'}</td>
+                      <td className="px-3 py-3 text-xs text-gray-700 line-clamp-1">{item.productName || '—'}</td>
+                      <td className="px-3 py-3 text-sm text-gray-600">{item.productCategory || '—'}</td>
+                      <td className="px-3 py-3 text-sm text-gray-600">{item.marketplace?.name ?? '—'}</td>
+                      <td className="text-center px-3 py-3 font-semibold text-gray-900">{item.quantity}</td>
+                      <td className="text-center px-3 py-3 text-xs text-green-700">
+                        {item.sentAt ? new Date(item.sentAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="text-center py-12"><Ship className="w-10 h-10 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">Henuz gonderilen urun yok</p></div>
+            )}
+          </div>
         </div>
       )}
 

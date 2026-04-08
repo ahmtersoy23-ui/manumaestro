@@ -24,23 +24,24 @@ const ROLE_CAN: Record<ShipmentRoleLevel, {
   manageBoxes: boolean;
   packItems: boolean;
   sendItems: boolean;
+  unsendItems: boolean;
   closeShipment: boolean;
 }> = {
   VIEWER: {
     view: true, createShipment: false, routeItems: false, deleteItems: false,
-    setDestination: false, manageBoxes: false, packItems: false, sendItems: false, closeShipment: false,
+    setDestination: false, manageBoxes: false, packItems: false, sendItems: false, unsendItems: false, closeShipment: false,
   },
   ROUTER: {
     view: true, createShipment: false, routeItems: true, deleteItems: true,
-    setDestination: true, manageBoxes: false, packItems: false, sendItems: false, closeShipment: false,
+    setDestination: true, manageBoxes: false, packItems: false, sendItems: false, unsendItems: false, closeShipment: false,
   },
   PACKER: {
     view: true, createShipment: false, routeItems: false, deleteItems: false,
-    setDestination: false, manageBoxes: true, packItems: true, sendItems: true, closeShipment: false,
+    setDestination: false, manageBoxes: true, packItems: true, sendItems: true, unsendItems: true, closeShipment: false,
   },
   MANAGER: {
     view: true, createShipment: true, routeItems: true, deleteItems: true,
-    setDestination: true, manageBoxes: true, packItems: true, sendItems: true, closeShipment: true,
+    setDestination: true, manageBoxes: true, packItems: true, sendItems: true, unsendItems: true, closeShipment: true,
   },
 };
 

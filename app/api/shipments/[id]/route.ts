@@ -119,7 +119,7 @@ export async function GET(request: NextRequest, { params }: Params) {
 
   // Kullanicinin bu sevkiyat icin izinlerini hesapla
   const userRole = await getShipmentRole(authResult.user.id, authResult.user.role, shipment.destinationTab);
-  const actions: ShipmentAction[] = ['view', 'createShipment', 'routeItems', 'deleteItems', 'setDestination', 'manageBoxes', 'packItems', 'sendItems', 'closeShipment'];
+  const actions: ShipmentAction[] = ['view', 'createShipment', 'routeItems', 'deleteItems', 'setDestination', 'manageBoxes', 'packItems', 'sendItems', 'unsendItems', 'closeShipment'];
   const permissions = Object.fromEntries(actions.map(a => [a, canDoAction(userRole, a)]));
 
   return NextResponse.json({
