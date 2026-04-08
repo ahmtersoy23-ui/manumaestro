@@ -152,7 +152,7 @@ export default function ShipmentDetailPage() {
   const pendingItems = shipment.items.filter(i => !i.sentAt);
   const sentItems = shipment.items.filter(i => i.sentAt);
   const totalQty = shipment.items.reduce((s, i) => s + i.quantity, 0);
-  const totalDesi = shipment.items.reduce((s, i) => s + (i.desi ?? 0) * i.quantity, 0);
+  const totalDesi = shipment.items.reduce((s, i) => s + (i.desi ?? 0), 0);
   const packedPendingCount = pendingItems.filter(i => i.packed).length;
   const plannedDate = shipment.plannedDate
     ? new Date(shipment.plannedDate).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -560,7 +560,7 @@ export default function ShipmentDetailPage() {
 
   const handleExportItems = async () => {
     const XLSX = await loadXLSX();
-    const rows = shipment.items.map((item, i) => ({ '#': i + 1, 'IWASKU': item.iwasku, 'FNSKU': item.fnsku ?? '', 'Urun Adi': item.productName, 'Kategori': item.productCategory, 'Pazar Yeri': item.marketplace?.code ?? '', 'Miktar': item.quantity, 'Desi': item.desi ? Math.round(item.desi * item.quantity) : '', 'Durum': item.sentAt ? 'Gonderildi' : item.packed ? 'Hazir' : 'Bekliyor' }));
+    const rows = shipment.items.map((item, i) => ({ '#': i + 1, 'IWASKU': item.iwasku, 'FNSKU': item.fnsku ?? '', 'Urun Adi': item.productName, 'Kategori': item.productCategory, 'Pazar Yeri': item.marketplace?.code ?? '', 'Miktar': item.quantity, 'Desi': item.desi ? Math.round(item.desi) : '', 'Durum': item.sentAt ? 'Gonderildi' : item.packed ? 'Hazir' : 'Bekliyor' }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Urunler');
     XLSX.writeFile(wb, `${shipment.name}-urunler-${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -767,7 +767,7 @@ export default function ShipmentDetailPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {pendingItems.map(item => {
-                    const itemDesi = (item.desi ?? 0) * item.quantity;
+                    const itemDesi = item.desi ?? 0;
                     const isExpanded = expandedItemId === item.id;
                     const itemBoxes = boxes.filter(b => b.shipmentItemId === item.id);
                     return (
