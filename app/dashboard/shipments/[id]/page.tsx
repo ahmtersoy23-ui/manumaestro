@@ -76,9 +76,14 @@ export default function ShipmentDetailPage() {
   const [bulkFbaText, setBulkFbaText] = useState('');
   const [bulkFbaResult, setBulkFbaResult] = useState<{ updated: number; notFound?: string[] } | null>(null);
 
-  // Search states
+  // Search & filter states
   const [itemSearch, setItemSearch] = useState('');
   const [boxSearch, setBoxSearch] = useState('');
+  const [itemCategoryFilter, setItemCategoryFilter] = useState('');
+  const [itemMarketFilter, setItemMarketFilter] = useState('');
+  const [boxCategoryFilter, setBoxCategoryFilter] = useState('');
+  const [boxDestFilter, setBoxDestFilter] = useState('');
+  const [boxMarketFilter, setBoxMarketFilter] = useState('');
   // Track printed box IDs
   const [printedBoxIds, setPrintedBoxIds] = useState<Set<string>>(new Set());
 
@@ -134,34 +139,43 @@ export default function ShipmentDetailPage() {
     return map;
   }, [shipment]);
 
-  // Filtered items (search) — hook'lar early return'den once olmali
+  // Filtered items (search + dropdowns) — hook'lar early return'den once olmali
   const filteredPendingItems = useMemo(() => {
-    const pending = shipment?.items.filter(i => !i.sentAt) ?? [];
-    if (!itemSearch.trim()) return pending;
-    const q = itemSearch.toLowerCase();
-    return pending.filter(i =>
-      i.iwasku.toLowerCase().includes(q) ||
-      (i.fnsku && i.fnsku.toLowerCase().includes(q)) ||
-      (i.productName && i.productName.toLowerCase().includes(q)) ||
-      (i.productCategory && i.productCategory.toLowerCase().includes(q)) ||
-      (i.marketplace?.name && i.marketplace.name.toLowerCase().includes(q)) ||
-      (i.marketplace?.code && i.marketplace.code.toLowerCase().includes(q))
-    );
-  }, [shipment, itemSearch]);
+    let result = shipment?.items.filter(i => !i.sentAt) ?? [];
+    if (itemSearch.trim()) {
+      const q = itemSearch.toLowerCase();
+      result = result.filter(i =>
+        i.iwasku.toLowerCase().includes(q) ||
+        (i.fnsku && i.fnsku.toLowerCase().includes(q)) ||
+        (i.productName && i.productName.toLowerCase().includes(q))
+      );
+    }
+    if (itemCategoryFilter) result = result.filter(i => i.productCategory === itemCategoryFilter);
+    if (itemMarketFilter) result = result.filter(i => i.marketplace?.code === itemMarketFilter);
+    return result;
+  }, [shipment, itemSearch, itemCategoryFilter, itemMarketFilter]);
 
   const filteredBoxes = useMemo(() => {
-    if (!boxSearch.trim()) return boxes;
-    const q = boxSearch.toLowerCase();
-    return boxes.filter(b =>
-      b.boxNumber.toLowerCase().includes(q) ||
-      (b.iwasku && b.iwasku.toLowerCase().includes(q)) ||
-      (b.fnsku && b.fnsku.toLowerCase().includes(q)) ||
-      (b.productName && b.productName.toLowerCase().includes(q)) ||
-      (b.productCategory && b.productCategory.toLowerCase().includes(q)) ||
-      (b.marketplaceCode && b.marketplaceCode.toLowerCase().includes(q)) ||
-      b.destination.toLowerCase().includes(q)
-    );
-  }, [boxes, boxSearch]);
+    let result = boxes;
+    if (boxSearch.trim()) {
+      const q = boxSearch.toLowerCase();
+      result = result.filter(b =>
+        b.boxNumber.toLowerCase().includes(q) ||
+        (b.iwasku && b.iwasku.toLowerCase().includes(q)) ||
+        (b.productName && b.productName.toLowerCase().includes(q))
+      );
+    }
+    if (boxCategoryFilter) result = result.filter(b => b.productCategory === boxCategoryFilter);
+    if (boxDestFilter) result = result.filter(b => b.destination === boxDestFilter);
+    if (boxMarketFilter) result = result.filter(b => b.marketplaceCode === boxMarketFilter);
+    return result;
+  }, [boxes, boxSearch, boxCategoryFilter, boxDestFilter, boxMarketFilter]);
+
+  // Unique values for dropdown filters
+  const itemCategories = useMemo(() => [...new Set((shipment?.items.filter(i => !i.sentAt) ?? []).map(i => i.productCategory).filter(Boolean))].sort(), [shipment]);
+  const itemMarkets = useMemo(() => [...new Set((shipment?.items.filter(i => !i.sentAt) ?? []).map(i => i.marketplace?.code).filter(Boolean) as string[])].sort(), [shipment]);
+  const boxCategories = useMemo(() => [...new Set(boxes.map(b => b.productCategory).filter(Boolean) as string[])].sort(), [boxes]);
+  const boxMarkets = useMemo(() => [...new Set(boxes.map(b => b.marketplaceCode).filter(Boolean) as string[])].sort(), [boxes]);
 
   // Izin kontrolu API uzerinden yapiliyor (permissions state)
   if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>;
@@ -453,7 +467,10 @@ export default function ShipmentDetailPage() {
   };
 
   const handlePrintBoxLabel = async (box: ShipmentBox) => {
-    const { jsPDF } = await import('jspdf');
+    const [JsBarcode, { jsPDF }] = await Promise.all([
+      import('jsbarcode').then(m => m.default),
+      import('jspdf'),
+    ]);
 
     const PX_PER_MM = 8;
     const W_MM = 60, H_MM = 40;
@@ -489,6 +506,7 @@ export default function ShipmentDetailPage() {
 
     const name = box.productName || '';
     const marketplace = box.marketplaceCode || '';
+    const code = box.fnsku || box.iwasku;
     const doc = new jsPDF({ unit: 'mm', format: [W_MM, H_MM], orientation: 'landscape' });
 
     // 5 adet koli no etiketi
@@ -525,6 +543,42 @@ export default function ShipmentDetailPage() {
         ctx.fillText(marketplace, CW - 24, CH - 16);
       });
       doc.addImage(boxLabelImg, 'PNG', 0, 0, W_MM, H_MM);
+    }
+
+    // Barkod etiketleri (quantity kadar, birer adet)
+    if (code) {
+      const label = box.fnsku ? 'FNSKU' : 'IWASKU';
+      const bcCanvas = document.createElement('canvas');
+      JsBarcode(bcCanvas, code, { format: 'CODE128', width: 2, height: 50, displayValue: false, margin: 0 });
+
+      for (let i = 0; i < box.quantity; i++) {
+        doc.addPage([W_MM, H_MM], 'landscape');
+
+        const barcodeImg = renderCanvasLabel((ctx) => {
+          const bw = 430, bh = 140;
+          ctx.drawImage(bcCanvas, (CW - bw) / 2, 10, bw, bh);
+
+          ctx.font = 'bold 28px Courier New';
+          ctx.textAlign = 'center';
+          ctx.fillText(`${code}  (${label})`, CW / 2, 178);
+
+          ctx.font = '18px Arial';
+          const lines = wrapText(ctx, name, CW - 40);
+          let y = 204;
+          for (const ln of lines.slice(0, 2)) {
+            ctx.fillText(ln, CW / 2, y);
+            y += 22;
+          }
+
+          ctx.font = '18px Courier New';
+          ctx.fillStyle = '#888';
+          ctx.textAlign = 'left';
+          ctx.fillText(box.boxNumber, 16, CH - 10);
+          ctx.textAlign = 'right';
+          ctx.fillText(marketplace, CW - 16, CH - 10);
+        });
+        doc.addImage(barcodeImg, 'PNG', 0, 0, W_MM, H_MM);
+      }
     }
 
     doc.save(`${box.boxNumber}.pdf`);
@@ -689,17 +743,33 @@ export default function ShipmentDetailPage() {
               <Download className="w-4 h-4" /> Excel
             </button>
             {isSea && pendingItems.length > 0 && (
-              <div className="relative">
-                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input type="text" value={itemSearch} onChange={e => setItemSearch(e.target.value)}
-                  placeholder="Ara (SKU, urun, kategori...)"
-                  className="pl-9 pr-3 py-2 border rounded-lg text-sm w-56 focus:outline-none focus:ring-1 focus:ring-blue-400" />
-                {itemSearch && (
-                  <button onClick={() => setItemSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+              <>
+                <div className="relative">
+                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input type="text" value={itemSearch} onChange={e => setItemSearch(e.target.value)}
+                    placeholder="SKU, urun adi..."
+                    className="pl-9 pr-3 py-2 border rounded-lg text-sm w-48 focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                  {itemSearch && (
+                    <button onClick={() => setItemSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                {itemCategories.length > 1 && (
+                  <select value={itemCategoryFilter} onChange={e => setItemCategoryFilter(e.target.value)}
+                    className="px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white">
+                    <option value="">Tum Kategoriler</option>
+                    {itemCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
                 )}
-              </div>
+                {itemMarkets.length > 1 && (
+                  <select value={itemMarketFilter} onChange={e => setItemMarketFilter(e.target.value)}
+                    className="px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white">
+                    <option value="">Tum Pazarlar</option>
+                    {itemMarkets.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                )}
+              </>
             )}
             {/* Karayolu/hava: Gönder butonu */}
             {!isSea && canSend && selectedPackedCount > 0 && (
@@ -884,17 +954,39 @@ export default function ShipmentDetailPage() {
               </button>
             )}
             {boxes.length > 0 && (
-              <div className="relative">
-                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input type="text" value={boxSearch} onChange={e => setBoxSearch(e.target.value)}
-                  placeholder="Ara (koli no, SKU, urun...)"
-                  className="pl-9 pr-3 py-2 border rounded-lg text-sm w-56 focus:outline-none focus:ring-1 focus:ring-blue-400" />
-                {boxSearch && (
-                  <button onClick={() => setBoxSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+              <>
+                <div className="relative">
+                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input type="text" value={boxSearch} onChange={e => setBoxSearch(e.target.value)}
+                    placeholder="Koli no, SKU, urun..."
+                    className="pl-9 pr-3 py-2 border rounded-lg text-sm w-48 focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                  {boxSearch && (
+                    <button onClick={() => setBoxSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                {boxCategories.length > 1 && (
+                  <select value={boxCategoryFilter} onChange={e => setBoxCategoryFilter(e.target.value)}
+                    className="px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white">
+                    <option value="">Tum Kategoriler</option>
+                    {boxCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
                 )}
-              </div>
+                <select value={boxDestFilter} onChange={e => setBoxDestFilter(e.target.value)}
+                  className="px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white">
+                  <option value="">Tum Hedefler</option>
+                  <option value="FBA">FBA</option>
+                  <option value="DEPO">Depo</option>
+                </select>
+                {boxMarkets.length > 1 && (
+                  <select value={boxMarketFilter} onChange={e => setBoxMarketFilter(e.target.value)}
+                    className="px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white">
+                    <option value="">Tum Pazarlar</option>
+                    {boxMarkets.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                )}
+              </>
             )}
             {/* Bulk FBA/DEPO toggle */}
             {canDest && selectedBoxIds.size > 0 && (
