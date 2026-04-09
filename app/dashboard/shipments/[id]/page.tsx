@@ -14,7 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   ArrowLeft, Plus, Send, Loader2, AlertCircle, Pencil,
   Package, Calendar, Anchor, Truck as TruckIcon, Plane,
-  Check, Square, CheckSquare, Download, Ship, X, ChevronDown, ChevronRight, Printer,
+  Check, Square, CheckSquare, Download, Ship, X, ChevronDown, ChevronRight, Printer, Search,
 } from 'lucide-react';
 
 // --- Types ---
@@ -75,6 +75,12 @@ export default function ShipmentDetailPage() {
   const [showBulkFba, setShowBulkFba] = useState(false);
   const [bulkFbaText, setBulkFbaText] = useState('');
   const [bulkFbaResult, setBulkFbaResult] = useState<{ updated: number; notFound?: string[] } | null>(null);
+
+  // Search states
+  const [itemSearch, setItemSearch] = useState('');
+  const [boxSearch, setBoxSearch] = useState('');
+  // Track printed box IDs
+  const [printedBoxIds, setPrintedBoxIds] = useState<Set<string>>(new Set());
 
   // Depo çıkış onay modalı
   const [showExitModal, setShowExitModal] = useState(false);
@@ -417,14 +423,10 @@ export default function ShipmentDetailPage() {
     XLSX.writeFile(wb, `${shipment.name}-koliler-${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  const handlePrintLabels = async () => {
-    const [JsBarcode, { jsPDF }] = await Promise.all([
-      import('jsbarcode').then(m => m.default),
-      import('jspdf'),
-    ]);
+  const handlePrintBoxLabel = async (box: ShipmentBox) => {
+    const { jsPDF } = await import('jspdf');
 
-    // Canvas ile etiket render (Turkce karakter destegi)
-    const PX_PER_MM = 8; // 8px/mm ≈ 200dpi
+    const PX_PER_MM = 8;
     const W_MM = 60, H_MM = 40;
     const CW = W_MM * PX_PER_MM, CH = H_MM * PX_PER_MM;
 
@@ -439,7 +441,6 @@ export default function ShipmentDetailPage() {
       return c.toDataURL('image/png');
     };
 
-    // Word-wrap helper
     const wrapText = (ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] => {
       const words = text.split(' ');
       const lines: string[] = [];
@@ -457,27 +458,19 @@ export default function ShipmentDetailPage() {
       return lines;
     };
 
+    const name = box.productName || '';
+    const marketplace = box.marketplaceCode || '';
     const doc = new jsPDF({ unit: 'mm', format: [W_MM, H_MM], orientation: 'landscape' });
-    let pageAdded = false;
 
-    for (const box of boxes) {
-      const code = box.fnsku || box.iwasku;
-      if (!code) continue;
-      const label = box.fnsku ? 'FNSKU' : 'IWASKU';
-      const name = box.productName || '';
-      const marketplace = box.marketplaceCode || '';
-
-      // === SAYFA 1: Koli etiketi ===
-      if (pageAdded) doc.addPage([W_MM, H_MM], 'landscape');
-      pageAdded = true;
+    // 5 adet koli no etiketi
+    for (let i = 0; i < 5; i++) {
+      if (i > 0) doc.addPage([W_MM, H_MM], 'landscape');
 
       const boxLabelImg = renderCanvasLabel((ctx) => {
-        // Büyük koli numarası
         ctx.font = 'bold 100px Arial';
         ctx.textAlign = 'center';
         ctx.fillText(box.boxNumber, CW / 2, 115);
 
-        // Çizgi
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -485,11 +478,9 @@ export default function ShipmentDetailPage() {
         ctx.lineTo(CW - 24, 135);
         ctx.stroke();
 
-        // Adet + ürün adı
         ctx.font = 'bold 36px Arial';
         ctx.textAlign = 'center';
-        const fullText = `${box.quantity} adet`;
-        ctx.fillText(fullText, CW / 2, 175);
+        ctx.fillText(`${box.quantity} adet`, CW / 2, 175);
 
         ctx.font = '30px Arial';
         const nameLines = wrapText(ctx, name, CW - 60);
@@ -499,63 +490,16 @@ export default function ShipmentDetailPage() {
           y += 36;
         }
 
-        // Alt sağ: marketplace
         ctx.font = '22px Arial';
         ctx.fillStyle = '#666';
         ctx.textAlign = 'right';
         ctx.fillText(marketplace, CW - 24, CH - 16);
       });
       doc.addImage(boxLabelImg, 'PNG', 0, 0, W_MM, H_MM);
-
-      // === SAYFA 2+: Barkod etiketleri (quantity kadar) ===
-      for (let i = 0; i < box.quantity; i++) {
-        doc.addPage([W_MM, H_MM], 'landscape');
-
-        // Barkod canvas
-        const bcCanvas = document.createElement('canvas');
-        JsBarcode(bcCanvas, code, {
-          format: 'CODE128', width: 2, height: 50, displayValue: false, margin: 0,
-        });
-        const barcodeDataUrl = bcCanvas.toDataURL('image/png');
-
-        const barcodeImg = renderCanvasLabel((ctx) => {
-          // Barkod image — büyük (üst yarı)
-          const bw = 430, bh = 140;
-          ctx.drawImage(bcCanvas, (CW - bw) / 2, 10, bw, bh);
-
-          // Kod text + etiket tipi (tek satır)
-          ctx.font = 'bold 28px Courier New';
-          ctx.textAlign = 'center';
-          ctx.fillText(`${code}  (${label})`, CW / 2, 178);
-
-          // Ürün adı (küçük, wrap)
-          ctx.font = '18px Arial';
-          const lines = wrapText(ctx, name, CW - 40);
-          let y = 204;
-          for (const ln of lines.slice(0, 2)) {
-            ctx.fillText(ln, CW / 2, y);
-            y += 22;
-          }
-
-          // Sol alt: koli no
-          ctx.font = '18px Courier New';
-          ctx.fillStyle = '#888';
-          ctx.textAlign = 'left';
-          ctx.fillText(box.boxNumber, 16, CH - 10);
-
-          // Sağ alt: pazar yeri
-          ctx.textAlign = 'right';
-          ctx.fillText(marketplace, CW - 16, CH - 10);
-        });
-        doc.addImage(barcodeImg, 'PNG', 0, 0, W_MM, H_MM);
-      }
     }
 
-    if (!pageAdded) {
-      alert('Etiket basılacak koli bulunamadı (FNSKU veya IWASKU gerekli)');
-      return;
-    }
-    doc.save(`${shipment.name}-etiketler.pdf`);
+    doc.save(`${box.boxNumber}.pdf`);
+    setPrintedBoxIds(prev => new Set(prev).add(box.id));
   };
 
   const handleExportItems = async () => {
@@ -565,6 +509,34 @@ export default function ShipmentDetailPage() {
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Urunler');
     XLSX.writeFile(wb, `${shipment.name}-urunler-${new Date().toISOString().split('T')[0]}.xlsx`);
   };
+
+  // Filtered items (search)
+  const filteredPendingItems = useMemo(() => {
+    if (!itemSearch.trim()) return pendingItems;
+    const q = itemSearch.toLowerCase();
+    return pendingItems.filter(i =>
+      i.iwasku.toLowerCase().includes(q) ||
+      (i.fnsku && i.fnsku.toLowerCase().includes(q)) ||
+      (i.productName && i.productName.toLowerCase().includes(q)) ||
+      (i.productCategory && i.productCategory.toLowerCase().includes(q)) ||
+      (i.marketplace?.name && i.marketplace.name.toLowerCase().includes(q)) ||
+      (i.marketplace?.code && i.marketplace.code.toLowerCase().includes(q))
+    );
+  }, [pendingItems, itemSearch]);
+
+  const filteredBoxes = useMemo(() => {
+    if (!boxSearch.trim()) return boxes;
+    const q = boxSearch.toLowerCase();
+    return boxes.filter(b =>
+      b.boxNumber.toLowerCase().includes(q) ||
+      (b.iwasku && b.iwasku.toLowerCase().includes(q)) ||
+      (b.fnsku && b.fnsku.toLowerCase().includes(q)) ||
+      (b.productName && b.productName.toLowerCase().includes(q)) ||
+      (b.productCategory && b.productCategory.toLowerCase().includes(q)) ||
+      (b.marketplaceCode && b.marketplaceCode.toLowerCase().includes(q)) ||
+      b.destination.toLowerCase().includes(q)
+    );
+  }, [boxes, boxSearch]);
 
   // Selected packed items count
   const selectedPackedCount = [...selectedIds].filter(sid => pendingItems.find(i => i.id === sid)?.packed).length;
@@ -715,6 +687,19 @@ export default function ShipmentDetailPage() {
             <button onClick={handleExportItems} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 border">
               <Download className="w-4 h-4" /> Excel
             </button>
+            {isSea && pendingItems.length > 0 && (
+              <div className="relative">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input type="text" value={itemSearch} onChange={e => setItemSearch(e.target.value)}
+                  placeholder="Ara (SKU, urun, kategori...)"
+                  className="pl-9 pr-3 py-2 border rounded-lg text-sm w-56 focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                {itemSearch && (
+                  <button onClick={() => setItemSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
             {/* Karayolu/hava: Gönder butonu */}
             {!isSea && canSend && selectedPackedCount > 0 && (
               <button onClick={handleSendSelected} disabled={sending}
@@ -766,7 +751,7 @@ export default function ShipmentDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {pendingItems.map(item => {
+                  {filteredPendingItems.map(item => {
                     const itemDesi = item.desi ?? 0;
                     const isExpanded = expandedItemId === item.id;
                     const itemBoxes = boxes.filter(b => b.shipmentItemId === item.id);
@@ -893,14 +878,22 @@ export default function ShipmentDetailPage() {
               </button>
             )}
             {boxes.length > 0 && (
-              <>
-                <button onClick={handleExportBoxes} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 border">
-                  <Download className="w-4 h-4" /> Excel Koli Listesi
-                </button>
-                <button onClick={handlePrintLabels} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 border">
-                  <Printer className="w-4 h-4" /> Etiket Yazdir
-                </button>
-              </>
+              <button onClick={handleExportBoxes} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 border">
+                <Download className="w-4 h-4" /> Excel Koli Listesi
+              </button>
+            )}
+            {boxes.length > 0 && (
+              <div className="relative">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input type="text" value={boxSearch} onChange={e => setBoxSearch(e.target.value)}
+                  placeholder="Ara (koli no, SKU, urun...)"
+                  className="pl-9 pr-3 py-2 border rounded-lg text-sm w-56 focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                {boxSearch && (
+                  <button onClick={() => setBoxSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             )}
             {/* Bulk FBA/DEPO toggle */}
             {canDest && selectedBoxIds.size > 0 && (
@@ -977,10 +970,11 @@ export default function ShipmentDetailPage() {
                     <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Agr.</th>
                     <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Desi</th>
                     <th className="w-10"></th>
+                    <th className="w-10"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {boxes.map(box => {
+                  {filteredBoxes.map(box => {
                     const boxDesi = (box.width && box.depth && box.height) ? (box.width * box.depth * box.height / 5000) : null;
                     const isFba = box.destination === 'FBA';
                     return (
@@ -1006,6 +1000,13 @@ export default function ShipmentDetailPage() {
                         <EditableBoxCell boxId={box.id} shipmentId={id} field="height" value={box.height} canEdit={isActive && canBoxes} onUpdated={fetchBoxes} />
                         <EditableBoxCell boxId={box.id} shipmentId={id} field="weight" value={box.weight} canEdit={isActive && canBoxes} onUpdated={fetchBoxes} />
                         <td className="text-center px-3 py-3 font-medium text-gray-900">{boxDesi ? boxDesi.toFixed(1) : '—'}</td>
+                        <td className="px-2 py-3 text-center">
+                          <button onClick={() => handlePrintBoxLabel(box)}
+                            className={`transition-colors ${printedBoxIds.has(box.id) ? 'text-green-500 hover:text-green-700' : 'text-gray-400 hover:text-blue-600'}`}
+                            title={printedBoxIds.has(box.id) ? 'Basildi — tekrar bas' : 'Etiket bas'}>
+                            <Printer className="w-4 h-4" />
+                          </button>
+                        </td>
                         <td className="px-2 py-3">{isActive && canBoxes && <button onClick={() => handleDeleteBox(box.id)} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>}</td>
                       </tr>
                     );
