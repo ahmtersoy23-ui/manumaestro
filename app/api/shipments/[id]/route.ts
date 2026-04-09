@@ -259,7 +259,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       return {
         shipmentId: id,
         ...item,
-        desi: item.desi ?? (unitDesi ? Math.round(item.quantity * unitDesi * 100) / 100 : undefined),
+        desi: item.desi ?? (unitDesi ? Math.round(unitDesi * 100) / 100 : undefined),
       };
     }),
   });

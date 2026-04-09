@@ -235,7 +235,11 @@ export default function ShipmentDetailPage() {
   const pendingItems = shipment.items.filter(i => !i.sentAt);
   const sentItems = shipment.items.filter(i => i.sentAt);
   const totalQty = shipment.items.reduce((s, i) => s + i.quantity, 0);
-  const totalDesi = shipment.items.reduce((s, i) => s + (i.desi ?? 0), 0);
+  const totalItemDesi = shipment.items.reduce((s, i) => s + (i.desi ?? 0) * i.quantity, 0);
+  const totalBoxDesi = boxes.reduce((s, b) => {
+    const d = (b.width && b.depth && b.height) ? (b.width * b.depth * b.height / 5000) : 0;
+    return s + d;
+  }, 0);
   const packedPendingCount = pendingItems.filter(i => i.packed).length;
   const plannedDate = shipment.plannedDate
     ? new Date(shipment.plannedDate).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -633,7 +637,7 @@ export default function ShipmentDetailPage() {
 
   const handleExportItems = async () => {
     const XLSX = await loadXLSX();
-    const rows = shipment.items.map((item, i) => ({ '#': i + 1, 'IWASKU': item.iwasku, 'FNSKU': item.fnsku ?? '', 'Ürün Adı': item.productName, 'Kategori': item.productCategory, 'Pazar Yeri': item.marketplace?.code ?? '', 'Miktar': item.quantity, 'Desi': item.desi ? Math.round(item.desi) : '', 'Durum': item.sentAt ? 'Gönderildi' : item.packed ? 'Hazır' : 'Bekliyor' }));
+    const rows = shipment.items.map((item, i) => ({ '#': i + 1, 'IWASKU': item.iwasku, 'FNSKU': item.fnsku ?? '', 'Ürün Adı': item.productName, 'Kategori': item.productCategory, 'Pazar Yeri': item.marketplace?.code ?? '', 'Miktar': item.quantity, 'Desi': item.desi ? Math.round(item.desi * item.quantity) : '', 'Durum': item.sentAt ? 'Gönderildi' : item.packed ? 'Hazır' : 'Bekliyor' }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Ürünler');
     XLSX.writeFile(wb, `${shipment.name}-urunler-${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -726,7 +730,11 @@ export default function ShipmentDetailPage() {
           <p className="text-2xl font-bold text-gray-900">{totalQty.toLocaleString('tr-TR')}</p><p className="text-xs text-gray-500">Toplam Ünite</p>
         </div>
         <div className="bg-white border rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-gray-900">{Math.round(totalDesi).toLocaleString('tr-TR')}</p><p className="text-xs text-gray-500">Toplam Desi</p>
+          <p className="text-2xl font-bold text-gray-900">{Math.round(totalItemDesi).toLocaleString('tr-TR')}</p>
+          <p className="text-xs text-gray-500">Ürün Desi</p>
+          {isSea && totalBoxDesi > 0 && (
+            <p className="text-xs text-blue-600 mt-1">{Math.round(totalBoxDesi).toLocaleString('tr-TR')} koli desi</p>
+          )}
         </div>
         <div className="bg-white border rounded-xl p-4 text-center">
           <p className="text-2xl font-bold text-blue-600">{pendingItems.length}</p><p className="text-xs text-gray-500">Bekleyen</p>
@@ -869,7 +877,7 @@ export default function ShipmentDetailPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filteredPendingItems.map(item => {
-                    const itemDesi = item.desi ?? 0;
+                    const itemDesi = (item.desi ?? 0) * item.quantity;
                     const isExpanded = expandedItemId === item.id;
                     const itemBoxes = boxes.filter(b => b.shipmentItemId === item.id);
                     return (
