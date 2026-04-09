@@ -25,7 +25,7 @@ export async function PUT(request: NextRequest) {
   const validation = UpdateFnskuSchema.safeParse(body);
   if (!validation.success) {
     return NextResponse.json(
-      { success: false, error: 'Dogrulama hatasi', details: validation.error.flatten().fieldErrors },
+      { success: false, error: 'Doğrulama hatası', details: validation.error.flatten().fieldErrors },
       { status: 400 }
     );
   }

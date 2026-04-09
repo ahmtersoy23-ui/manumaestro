@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const validation = UpsertSchema.safeParse(body);
   if (!validation.success) {
-    return NextResponse.json({ success: false, error: 'Dogrulama hatasi' }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Doğrulama hatası' }, { status: 400 });
   }
 
   const { userId, destinationTab, role } = validation.data;

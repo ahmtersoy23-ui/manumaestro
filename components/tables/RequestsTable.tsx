@@ -69,7 +69,7 @@ const PRIORITY_STYLE: Record<string, string> = {
   MEDIUM: 'bg-amber-100 text-amber-700',
   LOW: 'bg-blue-100 text-blue-700',
 };
-const PRIORITY_LABEL: Record<string, string> = { HIGH: 'Yuksek', MEDIUM: 'Orta', LOW: 'Dusuk' };
+const PRIORITY_LABEL: Record<string, string> = { HIGH: 'Yüksek', MEDIUM: 'Orta', LOW: 'Düşük' };
 
 const STATUS_COLORS: Record<string, string> = {
   REQUESTED: 'bg-blue-100 text-blue-700',
@@ -384,7 +384,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
             !statusFilter ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
           }`}
         >
-          Tumu ({requests.length})
+          Tümü ({requests.length})
         </button>
         {Object.entries(statusCounts).map(([status, count]) => (
           <button

@@ -44,7 +44,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   // Sadece sentAt !== null olan item'ları geri al
   const itemsToUnsend = shipment.items.filter(i => itemIds.includes(i.id) && i.sentAt);
   if (itemsToUnsend.length === 0) {
-    return NextResponse.json({ success: false, error: 'Geri alinacak gonderilmis item bulunamadi' }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Geri alınacak gönderilmiş item bulunamadı' }, { status: 400 });
   }
 
   await prisma.$transaction(async (tx) => {
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   await logAction({
     userId: user.id, userName: user.name, userEmail: user.email,
     action: 'ROUTE_TO_SHIPMENT', entityType: 'Shipment', entityId: id,
-    description: `${itemsToUnsend.length} item gonderimi geri alindi: ${shipment.name}`,
+    description: `${itemsToUnsend.length} item gönderimi geri alındı: ${shipment.name}`,
   });
 
   return NextResponse.json({ success: true, data: { unsent: itemsToUnsend.length } });

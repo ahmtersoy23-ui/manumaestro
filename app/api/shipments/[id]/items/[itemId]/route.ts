@@ -48,7 +48,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
   });
 
   if (!item) {
-    return NextResponse.json({ success: false, error: 'Item bulunamadi veya zaten gonderilmis' }, { status: 404 });
+    return NextResponse.json({ success: false, error: 'Item bulunamadı veya zaten gönderilmiş' }, { status: 404 });
   }
 
   // İlgili kolileri de sil

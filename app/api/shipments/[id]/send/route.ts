@@ -79,7 +79,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     await logAction({
       userId: user.id, userName: user.name, userEmail: user.email,
       action: 'ROUTE_TO_SHIPMENT', entityType: 'Shipment', entityId: id,
-      description: `Sevkiyat kapatildi: ${shipment.name} (${unsentItems.length} yeni item gonderildi)`,
+      description: `Sevkiyat kapatıldı: ${shipment.name} (${unsentItems.length} yeni item gönderildi)`,
     });
 
     return NextResponse.json({ success: true, data: { sent: unsentItems.length, closed: true } });
@@ -87,12 +87,12 @@ export async function POST(request: NextRequest, { params }: Params) {
 
   // Karayolu/hava — seçili itemleri gönder
   if (!itemIds || itemIds.length === 0) {
-    return NextResponse.json({ success: false, error: 'Gonderilecek item seciniz' }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Gönderilecek item seçiniz' }, { status: 400 });
   }
 
   const itemsToSend = shipment.items.filter(i => itemIds.includes(i.id) && i.packed && !i.sentAt);
   if (itemsToSend.length === 0) {
-    return NextResponse.json({ success: false, error: 'Gonderilecek hazir item bulunamadi' }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Gönderilecek hazır item bulunamadı' }, { status: 400 });
   }
 
   await prisma.$transaction(async (tx) => {
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   await logAction({
     userId: user.id, userName: user.name, userEmail: user.email,
     action: 'ROUTE_TO_SHIPMENT', entityType: 'Shipment', entityId: id,
-    description: `${itemsToSend.length} item gonderildi: ${shipment.name}`,
+    description: `${itemsToSend.length} item gönderildi: ${shipment.name}`,
   });
 
   return NextResponse.json({ success: true, data: { sent: itemsToSend.length } });

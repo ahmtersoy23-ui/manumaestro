@@ -95,7 +95,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   const validation = CreateBoxSchema.safeParse(body);
   if (!validation.success) {
     return NextResponse.json(
-      { success: false, error: 'Dogrulama hatasi', details: validation.error.flatten().fieldErrors },
+      { success: false, error: 'Doğrulama hatası', details: validation.error.flatten().fieldErrors },
       { status: 400 }
     );
   }
@@ -219,7 +219,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   const body = await request.json();
   const validation = SetDestinationSchema.safeParse(body);
   if (!validation.success) {
-    return NextResponse.json({ success: false, error: 'Dogrulama hatasi' }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Doğrulama hatası' }, { status: 400 });
   }
 
   const { boxIds, boxNumbers, destination } = validation.data;
@@ -272,7 +272,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
   const body = await request.json();
   const validation = UpdateBoxSchema.safeParse(body);
   if (!validation.success) {
-    return NextResponse.json({ success: false, error: 'Dogrulama hatasi', details: validation.error.flatten().fieldErrors }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Doğrulama hatası', details: validation.error.flatten().fieldErrors }, { status: 400 });
   }
 
   const { boxId, ...data } = validation.data;

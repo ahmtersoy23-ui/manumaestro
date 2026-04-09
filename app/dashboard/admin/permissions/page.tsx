@@ -405,7 +405,7 @@ export default function AdminPermissionsPage() {
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
-            Stok Izinleri
+            Stok İzinleri
           </button>
           <button
             onClick={() => setActiveTab('shipment')}
@@ -415,7 +415,7 @@ export default function AdminPermissionsPage() {
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
-            Sevkiyat Izinleri
+            Sevkiyat İzinleri
           </button>
         </nav>
       </div>
@@ -707,7 +707,7 @@ export default function AdminPermissionsPage() {
 
 // --- Sevkiyat Izin Yonetimi ---
 const DEST_TABS = ['US', 'UK', 'EU', 'NL', 'AU', 'ZA', '*'] as const;
-const DEST_LABELS: Record<string, string> = { US: 'US', UK: 'UK', EU: 'EU', NL: 'NL', AU: 'AU', ZA: 'ZA', '*': 'Tumu' };
+const DEST_LABELS: Record<string, string> = { US: 'US', UK: 'UK', EU: 'EU', NL: 'NL', AU: 'AU', ZA: 'ZA', '*': 'Tümü' };
 const ROLE_OPTIONS = ['VIEWER', 'ROUTER', 'PACKER', 'MANAGER'] as const;
 const ROLE_LABELS: Record<string, { label: string; color: string }> = {
   VIEWER: { label: 'Viewer', color: 'bg-gray-100 text-gray-600' },
@@ -764,7 +764,7 @@ function ShipmentPermissionsSection({ availableUsers }: { availableUsers: { id: 
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <Ship className="w-6 h-6 text-blue-600" />
-        <h2 className="text-xl font-bold text-gray-900">Sevkiyat Izinleri</h2>
+        <h2 className="text-xl font-bold text-gray-900">Sevkiyat İzinleri</h2>
       </div>
       <p className="text-sm text-gray-500">
         Viewer: goruntuleme · Router: talep yonlendirme/silme/FBA (PY sorumlusu) · Packer: koli/check/gonder (depo) · Manager: hepsi

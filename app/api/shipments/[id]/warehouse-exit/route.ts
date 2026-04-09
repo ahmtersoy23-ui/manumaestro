@@ -47,7 +47,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   const validation = WarehouseExitSchema.safeParse(body);
   if (!validation.success) {
     return NextResponse.json(
-      { success: false, error: 'Dogrulama hatasi', details: validation.error.flatten().fieldErrors },
+      { success: false, error: 'Doğrulama hatası', details: validation.error.flatten().fieldErrors },
       { status: 400 }
     );
   }
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   await logAction({
     userId: user.id, userName: user.name, userEmail: user.email,
     action: 'UPDATE_REQUEST', entityType: 'Shipment', entityId: id,
-    description: `Depo cikisi onaylandi: ${shipment.name} — ${items.length} urun, hafta ${weekStart}`,
+    description: `Depo çıkışı onaylandı: ${shipment.name} — ${items.length} urun, hafta ${weekStart}`,
   });
 
   return NextResponse.json({

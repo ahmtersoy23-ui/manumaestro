@@ -1,6 +1,6 @@
 /**
  * Shipment Detail Page
- * 3 tabs: Bekleyen (pending) | Gonderilenler (sent) | Koliler (boxes, sea only)
+ * 3 tabs: Bekleyen (pending) | Gönderilenler (sent) | Koliler (boxes, sea only)
  * Sea: box entry + sevkiyat kapat
  * Road/air: checkbox + parti gonderi
  */
@@ -84,6 +84,9 @@ export default function ShipmentDetailPage() {
   const [boxCategoryFilter, setBoxCategoryFilter] = useState('');
   const [boxDestFilter, setBoxDestFilter] = useState('');
   const [boxMarketFilter, setBoxMarketFilter] = useState('');
+  const [sentSearch, setSentSearch] = useState('');
+  const [sentCategoryFilter, setSentCategoryFilter] = useState('');
+  const [sentMarketFilter, setSentMarketFilter] = useState('');
   // Track printed box IDs
   const [printedBoxIds, setPrintedBoxIds] = useState<Set<string>>(new Set());
 
@@ -177,11 +180,28 @@ export default function ShipmentDetailPage() {
   const boxCategories = useMemo(() => [...new Set(boxes.map(b => b.productCategory).filter(Boolean) as string[])].sort(), [boxes]);
   const boxMarkets = useMemo(() => [...new Set(boxes.map(b => b.marketplaceCode).filter(Boolean) as string[])].sort(), [boxes]);
 
+  const filteredSentItems = useMemo(() => {
+    let result = shipment?.items.filter(i => i.sentAt) ?? [];
+    if (sentSearch.trim()) {
+      const q = sentSearch.toLowerCase();
+      result = result.filter(i =>
+        i.iwasku.toLowerCase().includes(q) ||
+        (i.fnsku && i.fnsku.toLowerCase().includes(q)) ||
+        (i.productName && i.productName.toLowerCase().includes(q))
+      );
+    }
+    if (sentCategoryFilter) result = result.filter(i => i.productCategory === sentCategoryFilter);
+    if (sentMarketFilter) result = result.filter(i => i.marketplace?.code === sentMarketFilter);
+    return result;
+  }, [shipment, sentSearch, sentCategoryFilter, sentMarketFilter]);
+  const sentCategories = useMemo(() => [...new Set((shipment?.items.filter(i => i.sentAt) ?? []).map(i => i.productCategory).filter(Boolean))].sort(), [shipment]);
+  const sentMarkets = useMemo(() => [...new Set((shipment?.items.filter(i => i.sentAt) ?? []).map(i => i.marketplace?.code).filter(Boolean) as string[])].sort(), [shipment]);
+
   // Izin kontrolu API uzerinden yapiliyor (permissions state)
   if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>;
   if (!shipment) return (
-    <div className="text-center py-12"><AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-3" /><p className="text-gray-600">Sevkiyat bulunamadi</p>
-      <Link href="/dashboard/shipments" className="text-blue-600 text-sm mt-2 inline-block">Geri don</Link></div>
+    <div className="text-center py-12"><AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-3" /><p className="text-gray-600">Sevkiyat bulunamadı</p>
+      <Link href="/dashboard/shipments" className="text-blue-600 text-sm mt-2 inline-block">Geri dön</Link></div>
   );
 
   const MethodIcon = methodIcons[shipment.shippingMethod] ?? Anchor;
@@ -231,7 +251,7 @@ export default function ShipmentDetailPage() {
       const data = await res.json();
       if (data.success) { setEditing(false); await fetchShipment(); }
       else alert(data.error);
-    } catch { alert('Kaydetme hatasi'); } finally { setSaving(false); }
+    } catch { alert('Kaydetme hatası'); } finally { setSaving(false); }
   };
 
   // --- Handlers ---
@@ -251,7 +271,7 @@ export default function ShipmentDetailPage() {
   };
 
   const handleDeleteItem = async (itemId: string) => {
-    if (!confirm('Bu urun sevkiyattan cikarilsin mi?')) return;
+    if (!confirm('Bu ürün sevkiyattan çıkarılsın mı?')) return;
     const res = await fetch(`/api/shipments/${id}/items/${itemId}`, { method: 'DELETE' });
     if ((await res.json()).success) await Promise.all([fetchShipment(), fetchBoxes()]);
   };
@@ -305,7 +325,7 @@ export default function ShipmentDetailPage() {
       const data = await res.json();
       if (data.success) setShowExitModal(false);
       else alert(data.error);
-    } catch { alert('Cikis kayit hatasi'); } finally { setExitSaving(false); }
+    } catch { alert('Çıkış kayıt hatası'); } finally { setExitSaving(false); }
   };
 
   // Karayolu/hava: seçili packed itemleri gönder
@@ -315,7 +335,7 @@ export default function ShipmentDetailPage() {
       return item?.packed;
     });
     if (toSend.length === 0) return;
-    if (!confirm(`${toSend.length} urun gonderilsin mi?`)) return;
+    if (!confirm(`${toSend.length} ürün gönderilsin mi?`)) return;
     setSending(true);
     try {
       const res = await fetch(`/api/shipments/${id}/send`, {
@@ -330,14 +350,14 @@ export default function ShipmentDetailPage() {
         await fetchShipment();
         openExitModal(sentItemDetails);
       } else alert(data.error);
-    } catch { alert('Gonderim hatasi'); } finally { setSending(false); }
+    } catch { alert('Gönderim hatası'); } finally { setSending(false); }
   };
 
   // Gönderilmişleri geri al
   const handleUnsendSelected = async () => {
     const toUnsend = [...selectedSentIds];
     if (toUnsend.length === 0) return;
-    if (!confirm(`${toUnsend.length} urunun gonderimi geri alinsin mi?`)) return;
+    if (!confirm(`${toUnsend.length} ürünün gönderimi geri alınsın mı?`)) return;
     setUnsending(true);
     try {
       const res = await fetch(`/api/shipments/${id}/unsend`, {
@@ -349,7 +369,7 @@ export default function ShipmentDetailPage() {
         setSelectedSentIds(new Set());
         await fetchShipment();
       } else alert(data.error);
-    } catch { alert('Geri alma hatasi'); } finally { setUnsending(false); }
+    } catch { alert('Geri alma hatası'); } finally { setUnsending(false); }
   };
 
   // Gönderilenleri depo çıkışı modalına gönder
@@ -362,7 +382,7 @@ export default function ShipmentDetailPage() {
 
   // Deniz: sevkiyatı kapat
   const handleCloseShipment = async () => {
-    if (!confirm('Sevkiyat kapatilsin mi? Tum urunler gonderilmis olarak isaretlenecek.')) return;
+    if (!confirm('Sevkiyat kapatılsın mı? Tüm ürünler gönderilmiş olarak işaretlenecek.')) return;
     setSending(true);
     try {
       const res = await fetch(`/api/shipments/${id}/send`, {
@@ -376,7 +396,7 @@ export default function ShipmentDetailPage() {
         await fetchShipment();
         openExitModal(allPending);
       } else alert(data.error);
-    } catch { alert('Kapama hatasi'); } finally { setSending(false); }
+    } catch { alert('Kapama hatası'); } finally { setSending(false); }
   };
 
   const handleAddItem = async (e: React.FormEvent) => {
@@ -458,7 +478,7 @@ export default function ShipmentDetailPage() {
     const XLSX = await loadXLSX();
     const rows = boxes.map((b, i) => {
       const desi = (b.width && b.depth && b.height) ? (b.width * b.depth * b.height / 5000) : null;
-      return { '#': i + 1, 'Koli No': b.boxNumber, 'IWASKU': b.iwasku ?? '', 'FNSKU': b.fnsku ?? '', 'Urun Adi': b.productName ?? '', 'Kategori': b.productCategory ?? '', 'Pazar Yeri': b.marketplaceCode ?? '', 'Hedef': b.destination, 'Adet': b.quantity, 'En': b.width ?? '', 'Boy': b.depth ?? '', 'Yuk.': b.height ?? '', 'Agr.': b.weight ?? '', 'Desi': desi ? +desi.toFixed(1) : '' };
+      return { '#': i + 1, 'Koli No': b.boxNumber, 'IWASKU': b.iwasku ?? '', 'FNSKU': b.fnsku ?? '', 'Ürün Adı': b.productName ?? '', 'Kategori': b.productCategory ?? '', 'Pazar Yeri': b.marketplaceCode ?? '', 'Hedef': b.destination, 'Adet': b.quantity, 'En': b.width ?? '', 'Boy': b.depth ?? '', 'Yuk.': b.height ?? '', 'Ağr.': b.weight ?? '', 'Desi': desi ? +desi.toFixed(1) : '' };
     });
     const ws = XLSX.utils.json_to_sheet(rows);
     ws['!cols'] = [{ wch: 4 }, { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 40 }, { wch: 20 }, { wch: 12 }, { wch: 6 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }];
@@ -587,9 +607,9 @@ export default function ShipmentDetailPage() {
 
   const handleExportItems = async () => {
     const XLSX = await loadXLSX();
-    const rows = shipment.items.map((item, i) => ({ '#': i + 1, 'IWASKU': item.iwasku, 'FNSKU': item.fnsku ?? '', 'Urun Adi': item.productName, 'Kategori': item.productCategory, 'Pazar Yeri': item.marketplace?.code ?? '', 'Miktar': item.quantity, 'Desi': item.desi ? Math.round(item.desi) : '', 'Durum': item.sentAt ? 'Gonderildi' : item.packed ? 'Hazir' : 'Bekliyor' }));
+    const rows = shipment.items.map((item, i) => ({ '#': i + 1, 'IWASKU': item.iwasku, 'FNSKU': item.fnsku ?? '', 'Ürün Adı': item.productName, 'Kategori': item.productCategory, 'Pazar Yeri': item.marketplace?.code ?? '', 'Miktar': item.quantity, 'Desi': item.desi ? Math.round(item.desi) : '', 'Durum': item.sentAt ? 'Gönderildi' : item.packed ? 'Hazır' : 'Bekliyor' }));
     const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Urunler');
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Ürünler');
     XLSX.writeFile(wb, `${shipment.name}-urunler-${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
@@ -607,7 +627,7 @@ export default function ShipmentDetailPage() {
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold text-gray-900">{shipment.name}</h1>
               {isActive && canEdit && !editing && (
-                <button onClick={startEdit} className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded" title="Duzenle">
+                <button onClick={startEdit} className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded" title="Düzenle">
                   <Pencil className="w-4 h-4" />
                 </button>
               )}
@@ -623,7 +643,7 @@ export default function ShipmentDetailPage() {
           {isActive && isSea && canClose && pendingItems.length > 0 && (
             <button onClick={handleCloseShipment} disabled={sending}
               className="px-3 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-2">
-              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ship className="w-4 h-4" />} Sevkiyati Kapat
+              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ship className="w-4 h-4" />} Sevkiyatı Kapat
             </button>
           )}
           {!isActive && shipment.status === 'IN_TRANSIT' && (
@@ -639,10 +659,10 @@ export default function ShipmentDetailPage() {
       {/* Edit Panel */}
       {editing && (
         <div className="bg-white border border-blue-200 rounded-xl p-5 space-y-4">
-          <h3 className="font-semibold text-gray-900">Sevkiyat Bilgilerini Duzenle</h3>
+          <h3 className="font-semibold text-gray-900">Sevkiyat Bilgilerini Düzenle</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Isim</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">İsim</label>
               <input type="text" value={editForm.name} disabled className="w-full px-3 py-2 border rounded-lg text-sm bg-gray-50 text-gray-500" />
             </div>
             <div>
@@ -651,7 +671,7 @@ export default function ShipmentDetailPage() {
                 className="w-full px-3 py-2 border rounded-lg text-sm" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tahmini Varis (ETA)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Tahmini Varış (ETA)</label>
               <input type="date" value={editForm.etaDate} onChange={e => setEditForm(f => ({ ...f, etaDate: e.target.value }))}
                 className="w-full px-3 py-2 border rounded-lg text-sm" />
             </div>
@@ -666,7 +686,7 @@ export default function ShipmentDetailPage() {
               className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />} Kaydet
             </button>
-            <button onClick={() => setEditing(false)} className="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">Iptal</button>
+            <button onClick={() => setEditing(false)} className="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">İptal</button>
           </div>
         </div>
       )}
@@ -674,17 +694,17 @@ export default function ShipmentDetailPage() {
       {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-white border rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-gray-900">{shipment.items.length}</p><p className="text-xs text-gray-500">Toplam Urun</p>
+          <p className="text-2xl font-bold text-gray-900">{shipment.items.length}</p><p className="text-xs text-gray-500">Toplam Ürün</p>
         </div>
         <div className="bg-white border rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-gray-900">{totalQty.toLocaleString('tr-TR')}</p><p className="text-xs text-gray-500">Toplam Unite</p>
+          <p className="text-2xl font-bold text-gray-900">{totalQty.toLocaleString('tr-TR')}</p><p className="text-xs text-gray-500">Toplam Ünite</p>
         </div>
         <div className="bg-white border rounded-xl p-4 text-center">
           <p className="text-2xl font-bold text-gray-900">{Math.round(totalDesi).toLocaleString('tr-TR')}</p><p className="text-xs text-gray-500">Toplam Desi</p>
         </div>
         <div className="bg-white border rounded-xl p-4 text-center">
           <p className="text-2xl font-bold text-blue-600">{pendingItems.length}</p><p className="text-xs text-gray-500">Bekleyen</p>
-          {sentItems.length > 0 && <p className="text-xs text-green-600 mt-1">{sentItems.length} gonderildi</p>}
+          {sentItems.length > 0 && <p className="text-xs text-green-600 mt-1">{sentItems.length} gönderildi</p>}
         </div>
       </div>
 
@@ -697,8 +717,8 @@ export default function ShipmentDetailPage() {
             <div className="flex items-start gap-2">
               <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-semibold text-amber-800">{missingFnsku.length} urunde FNSKU eksik</p>
-                <p className="text-xs text-amber-600 mt-1">Tabloda &quot;Eksik&quot; yazan hucreye tiklayarak FNSKU girebilirsiniz.</p>
+                <p className="text-sm font-semibold text-amber-800">{missingFnsku.length} üründe FNSKU eksik</p>
+                <p className="text-xs text-amber-600 mt-1">Tabloda &quot;Eksik&quot; yazan hücreye tıklayarak FNSKU girebilirsiniz.</p>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {missingFnsku.map(i => (
                     <span key={i.id} className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded text-xs font-mono">{i.iwasku}</span>
@@ -714,12 +734,12 @@ export default function ShipmentDetailPage() {
       <div className="flex items-center gap-1 border-b">
         <button onClick={() => setActiveTab('pending')}
           className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'pending' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-          {isSea ? `Urunler (${pendingItems.length})` : `Bekleyen (${pendingItems.length})`}
+          {isSea ? `Ürünler (${pendingItems.length})` : `Bekleyen (${pendingItems.length})`}
         </button>
         {!isSea && (
           <button onClick={() => setActiveTab('sent')}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'sent' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-            Gonderilenler ({sentItems.length})
+            Gönderilenler ({sentItems.length})
           </button>
         )}
         {isSea && (
@@ -736,18 +756,18 @@ export default function ShipmentDetailPage() {
           <div className="flex items-center gap-3 flex-wrap">
             {isActive && canRoute && (
               <button onClick={() => setShowAddItem(!showAddItem)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
-                <Plus className="w-4 h-4" /> Urun Ekle
+                <Plus className="w-4 h-4" /> Ürün Ekle
               </button>
             )}
             <button onClick={handleExportItems} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 border">
               <Download className="w-4 h-4" /> Excel
             </button>
-            {isSea && pendingItems.length > 0 && (
+            {pendingItems.length > 0 && (
               <>
                 <div className="relative">
                   <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input type="text" value={itemSearch} onChange={e => setItemSearch(e.target.value)}
-                    placeholder="SKU, urun adi..."
+                    placeholder="SKU, ürün adı..."
                     className="pl-9 pr-3 py-2 border rounded-lg text-sm w-48 focus:outline-none focus:ring-1 focus:ring-blue-400" />
                   {itemSearch && (
                     <button onClick={() => setItemSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -758,14 +778,14 @@ export default function ShipmentDetailPage() {
                 {itemCategories.length > 1 && (
                   <select value={itemCategoryFilter} onChange={e => setItemCategoryFilter(e.target.value)}
                     className="px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white">
-                    <option value="">Tum Kategoriler</option>
+                    <option value="">Tüm Kategoriler</option>
                     {itemCategories.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 )}
                 {itemMarkets.length > 1 && (
                   <select value={itemMarketFilter} onChange={e => setItemMarketFilter(e.target.value)}
                     className="px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white">
-                    <option value="">Tum Pazarlar</option>
+                    <option value="">Tüm Pazarlar</option>
                     {itemMarkets.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
                 )}
@@ -776,7 +796,7 @@ export default function ShipmentDetailPage() {
               <button onClick={handleSendSelected} disabled={sending}
                 className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50">
                 {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                {selectedPackedCount} urun gonder
+                {selectedPackedCount} ürün gönder
               </button>
             )}
           </div>
@@ -806,14 +826,14 @@ export default function ShipmentDetailPage() {
                   <tr>
                     <th className="w-12 px-3 py-3">
                       {isActive && !isSea && canSend && packedPendingCount > 0 && (
-                        <button onClick={handleSelectAllPacked} className="text-gray-600 hover:text-purple-600" title="Hazirlari sec">
+                        <button onClick={handleSelectAllPacked} className="text-gray-600 hover:text-purple-600" title="Hazırları seç">
                           {packedPendingCount > 0 && [...selectedIds].length >= packedPendingCount ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
                         </button>
                       )}
                     </th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">IWASKU</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">FNSKU</th>
-                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Urun Adi</th>
+                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Ürün Adı</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Kategori</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Pazar Yeri</th>
                     <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Miktar</th>
@@ -848,7 +868,7 @@ export default function ShipmentDetailPage() {
                 </tbody>
               </table>
             ) : (
-              <div className="text-center py-12"><Check className="w-10 h-10 text-green-300 mx-auto mb-3" /><p className="text-gray-500">Bekleyen urun yok</p></div>
+              <div className="text-center py-12"><Check className="w-10 h-10 text-green-300 mx-auto mb-3" /><p className="text-gray-500">Bekleyen ürün yok</p></div>
             )}
           </div>
         </div>
@@ -857,21 +877,46 @@ export default function ShipmentDetailPage() {
       {/* === SENT TAB === */}
       {activeTab === 'sent' && (
         <div className="space-y-4">
-          {/* Sent tab action buttons */}
-          {sentItems.length > 0 && (canSend || canUnsend) && (
+          {/* Sent tab search/filter + action buttons */}
+          {sentItems.length > 0 && (
             <div className="flex items-center gap-3 flex-wrap">
+              <div className="relative">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input type="text" value={sentSearch} onChange={e => setSentSearch(e.target.value)}
+                  placeholder="SKU, ürün adı..."
+                  className="pl-9 pr-3 py-2 border rounded-lg text-sm w-48 focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                {sentSearch && (
+                  <button onClick={() => setSentSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              {sentCategories.length > 1 && (
+                <select value={sentCategoryFilter} onChange={e => setSentCategoryFilter(e.target.value)}
+                  className="px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white">
+                  <option value="">Tüm Kategoriler</option>
+                  {sentCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              )}
+              {sentMarkets.length > 1 && (
+                <select value={sentMarketFilter} onChange={e => setSentMarketFilter(e.target.value)}
+                  className="px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white">
+                  <option value="">Tüm Pazarlar</option>
+                  {sentMarkets.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              )}
               {canSend && selectedSentIds.size > 0 && (
                 <button onClick={handleExitForSent}
                   className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700">
                   <Package className="w-4 h-4" />
-                  {selectedSentIds.size} urun — Depo Cikisi Kaydet
+                  {selectedSentIds.size} ürün — Depo Çıkışı Kaydet
                 </button>
               )}
               {canUnsend && selectedSentIds.size > 0 && (
                 <button onClick={handleUnsendSelected} disabled={unsending}
                   className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700 disabled:opacity-50">
                   {unsending ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-                  {selectedSentIds.size} urun — Gonderimi Geri Al
+                  {selectedSentIds.size} ürün — Gönderimi Geri Al
                 </button>
               )}
             </div>
@@ -886,22 +931,22 @@ export default function ShipmentDetailPage() {
                         <button onClick={() => {
                           if (selectedSentIds.size === sentItems.length) setSelectedSentIds(new Set());
                           else setSelectedSentIds(new Set(sentItems.map(i => i.id)));
-                        }} className="text-gray-600 hover:text-purple-600" title="Tumunu sec">
+                        }} className="text-gray-600 hover:text-purple-600" title="Tümünü seç">
                           {selectedSentIds.size === sentItems.length && sentItems.length > 0 ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
                         </button>
                       </th>
                     )}
                     <th className="text-left px-4 py-3 font-semibold text-gray-700 text-xs uppercase">IWASKU</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">FNSKU</th>
-                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Urun Adi</th>
+                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Ürün Adı</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Kategori</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Pazar Yeri</th>
                     <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Miktar</th>
-                    <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Gonderim</th>
+                    <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Gönderim</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {sentItems.map(item => (
+                  {filteredSentItems.map(item => (
                     <tr key={item.id} className={`${selectedSentIds.has(item.id) ? 'bg-blue-50/50' : 'bg-green-50/30'}`}>
                       {(canSend || canUnsend) && (
                         <td className="px-3 py-3">
@@ -928,7 +973,7 @@ export default function ShipmentDetailPage() {
                 </tbody>
               </table>
             ) : (
-              <div className="text-center py-12"><Ship className="w-10 h-10 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">Henuz gonderilen urun yok</p></div>
+              <div className="text-center py-12"><Ship className="w-10 h-10 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">Henüz gönderilen ürün yok</p></div>
             )}
           </div>
         </div>
@@ -945,7 +990,7 @@ export default function ShipmentDetailPage() {
             )}
             {canDest && boxes.length > 0 && (
               <button onClick={() => setShowBulkFba(!showBulkFba)} className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600">
-                Toplu FBA Isaretle
+                Toplu FBA İşaretle
               </button>
             )}
             {boxes.length > 0 && (
@@ -958,7 +1003,7 @@ export default function ShipmentDetailPage() {
                 <div className="relative">
                   <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input type="text" value={boxSearch} onChange={e => setBoxSearch(e.target.value)}
-                    placeholder="Koli no, SKU, urun..."
+                    placeholder="Koli no, SKU, ürün..."
                     className="pl-9 pr-3 py-2 border rounded-lg text-sm w-48 focus:outline-none focus:ring-1 focus:ring-blue-400" />
                   {boxSearch && (
                     <button onClick={() => setBoxSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -969,20 +1014,20 @@ export default function ShipmentDetailPage() {
                 {boxCategories.length > 1 && (
                   <select value={boxCategoryFilter} onChange={e => setBoxCategoryFilter(e.target.value)}
                     className="px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white">
-                    <option value="">Tum Kategoriler</option>
+                    <option value="">Tüm Kategoriler</option>
                     {boxCategories.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 )}
                 <select value={boxDestFilter} onChange={e => setBoxDestFilter(e.target.value)}
                   className="px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white">
-                  <option value="">Tum Hedefler</option>
+                  <option value="">Tüm Hedefler</option>
                   <option value="FBA">FBA</option>
                   <option value="DEPO">Depo</option>
                 </select>
                 {boxMarkets.length > 1 && (
                   <select value={boxMarketFilter} onChange={e => setBoxMarketFilter(e.target.value)}
                     className="px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white">
-                    <option value="">Tum Pazarlar</option>
+                    <option value="">Tüm Pazarlar</option>
                     {boxMarkets.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
                 )}
@@ -1009,10 +1054,10 @@ export default function ShipmentDetailPage() {
           {showBulkFba && (
             <div className="bg-white border border-orange-200 rounded-xl p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-gray-900">Toplu FBA / Depo Isaretleme</h3>
+                <h3 className="text-sm font-semibold text-gray-900">Toplu FBA / Depo İşaretleme</h3>
                 <button onClick={() => { setShowBulkFba(false); setBulkFbaResult(null); }} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
               </div>
-              <p className="text-xs text-gray-500">Koli numaralarini alt alta, virgul veya tab ile ayirarak girin:</p>
+              <p className="text-xs text-gray-500">Koli numaralarını alt alta, virgül veya tab ile ayırarak girin:</p>
               <textarea
                 value={bulkFbaText}
                 onChange={e => setBulkFbaText(e.target.value)}
@@ -1023,16 +1068,16 @@ export default function ShipmentDetailPage() {
               <div className="flex items-center gap-3">
                 <button onClick={() => handleBulkFbaSubmit('FBA')} disabled={settingDest || !bulkFbaText.trim()}
                   className="px-4 py-2 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600 disabled:opacity-50 flex items-center gap-2">
-                  {settingDest && <Loader2 className="w-4 h-4 animate-spin" />} FBA Olarak Isaretle
+                  {settingDest && <Loader2 className="w-4 h-4 animate-spin" />} FBA Olarak İşaretle
                 </button>
                 <button onClick={() => handleBulkFbaSubmit('DEPO')} disabled={settingDest || !bulkFbaText.trim()}
                   className="px-4 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 disabled:opacity-50 flex items-center gap-2">
-                  Depo Olarak Isaretle
+                  Depo Olarak İşaretle
                 </button>
               </div>
               {bulkFbaResult && (
                 <div className="text-sm">
-                  <p className="text-green-700">{bulkFbaResult.updated} koli guncellendi.</p>
+                  <p className="text-green-700">{bulkFbaResult.updated} koli güncellendi.</p>
                   {bulkFbaResult.notFound && bulkFbaResult.notFound.length > 0 && (
                     <p className="text-red-600 mt-1">Bulunamayan: {bulkFbaResult.notFound.join(', ')}</p>
                   )}
@@ -1054,7 +1099,7 @@ export default function ShipmentDetailPage() {
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Hedef</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">IWASKU</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">FNSKU</th>
-                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Urun Adi</th>
+                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Ürün Adı</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Pazar Yeri</th>
                     <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Adet</th>
                     <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">En</th>
@@ -1096,7 +1141,7 @@ export default function ShipmentDetailPage() {
                         <td className="px-2 py-3 text-center">
                           <button onClick={() => handlePrintBoxLabel(box)}
                             className={`transition-colors ${printedBoxIds.has(box.id) ? 'text-green-500 hover:text-green-700' : 'text-gray-400 hover:text-blue-600'}`}
-                            title={printedBoxIds.has(box.id) ? 'Basildi — tekrar bas' : 'Etiket bas'}>
+                            title={printedBoxIds.has(box.id) ? 'Basıldı — tekrar bas' : 'Etiket bas'}>
                             <Printer className="w-4 h-4" />
                           </button>
                         </td>
@@ -1107,7 +1152,7 @@ export default function ShipmentDetailPage() {
                 </tbody>
               </table>
             ) : (
-              <div className="text-center py-12"><Package className="w-10 h-10 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">Henuz koli eklenmedi</p></div>
+              <div className="text-center py-12"><Package className="w-10 h-10 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">Henüz koli eklenmedi</p></div>
             )}
           </div>
         </div>
@@ -1118,7 +1163,7 @@ export default function ShipmentDetailPage() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
             <div className="flex items-center justify-between px-6 py-4 border-b">
-              <h3 className="text-lg font-bold text-gray-900">Depo Cikisi</h3>
+              <h3 className="text-lg font-bold text-gray-900">Depo Çıkışı</h3>
               <button onClick={() => setShowExitModal(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
             </div>
             <div className="px-6 py-4 space-y-4">
@@ -1132,7 +1177,7 @@ export default function ShipmentDetailPage() {
                   <thead className="bg-gray-50 border-b">
                     <tr>
                       <th className="text-left px-4 py-2 text-xs font-semibold text-gray-600">IWASKU</th>
-                      <th className="text-left px-4 py-2 text-xs font-semibold text-gray-600">Urun Adi</th>
+                      <th className="text-left px-4 py-2 text-xs font-semibold text-gray-600">Ürün Adı</th>
                       <th className="text-right px-4 py-2 text-xs font-semibold text-gray-600">Adet</th>
                     </tr>
                   </thead>
@@ -1149,7 +1194,7 @@ export default function ShipmentDetailPage() {
               </div>
               <p className="text-sm text-gray-500">
                 Toplam: <span className="font-semibold text-gray-900">{exitItems.reduce((s, i) => s + i.quantity, 0)}</span> adet
-                ({exitItems.length} urun)
+                ({exitItems.length} ürün)
               </p>
             </div>
             <div className="flex items-center justify-end gap-3 px-6 py-4 border-t bg-gray-50 rounded-b-2xl">
@@ -1240,7 +1285,7 @@ function InlineFnskuInput({ item, onSaved }: { item: ShipmentItem; onSaved: (ite
     const fnsku = value.trim();
     if (!fnsku) { setEditing(false); return; }
     const countryCode = item.marketplace?.code ? MKT_CODE_TO_COUNTRY[item.marketplace.code] : null;
-    if (!countryCode) { setError('Marketplace eslestirilemedi'); return; }
+    if (!countryCode) { setError('Marketplace eşleştirilemedi'); return; }
 
     setSaving(true); setError('');
     try {
@@ -1256,7 +1301,7 @@ function InlineFnskuInput({ item, onSaved }: { item: ShipmentItem; onSaved: (ite
       } else {
         setError(data.error || 'Hata');
       }
-    } catch { setError('Baglanti hatasi'); } finally { setSaving(false); }
+    } catch { setError('Bağlantı hatası'); } finally { setSaving(false); }
   };
 
   if (!editing) {
@@ -1264,7 +1309,7 @@ function InlineFnskuInput({ item, onSaved }: { item: ShipmentItem; onSaved: (ite
       <button
         onClick={() => { setEditing(true); setValue(''); setError(''); }}
         className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-xs font-medium hover:bg-amber-200 transition-colors cursor-pointer"
-        title="FNSKU girmek icin tikla"
+        title="FNSKU girmek için tıkla"
       >
         Eksik
       </button>
@@ -1332,7 +1377,7 @@ function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded
                 </button>
               )}
               {canPack && (togglingId === item.id ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" /> : (
-                <button onClick={onTogglePacked} className="hover:scale-110 transition-transform" title={item.packed ? 'Hazir' : 'Hazirla'}>
+                <button onClick={onTogglePacked} className="hover:scale-110 transition-transform" title={item.packed ? 'Hazır' : 'Hazırla'}>
                   {item.packed ? <Check className="w-4 h-4 text-green-600" /> : <Package className="w-4 h-4 text-gray-300" />}
                 </button>
               ))}
@@ -1354,7 +1399,7 @@ function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded
         <td className={`text-center px-3 py-3 font-medium ${item.packed ? 'text-green-800' : 'text-gray-900'}`}>{itemDesi > 0 ? Math.round(itemDesi).toLocaleString('tr-TR') : '—'}</td>
         {isActive && canDelete && (
           <td className="px-2 py-3 text-center">
-            <button onClick={onDeleteItem} className="text-red-300 hover:text-red-600 transition-colors" title="Sevkiyattan cikar"><X className="w-4 h-4" /></button>
+            <button onClick={onDeleteItem} className="text-red-300 hover:text-red-600 transition-colors" title="Sevkiyattan çıkar"><X className="w-4 h-4" /></button>
           </td>
         )}
       </tr>
@@ -1408,8 +1453,8 @@ function BoxEntryPanel({ item, existingBoxes, onCreateBox, onDeleteBox }: {
         <div><label className="block text-xs text-gray-500 mb-0.5">Adet</label><input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-16" required /></div>
         <div><label className="block text-xs text-gray-500 mb-0.5">En</label><input type="number" step="0.1" value={width} onChange={e => setWidth(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
         <div><label className="block text-xs text-gray-500 mb-0.5">Boy</label><input type="number" step="0.1" value={depth} onChange={e => setDepth(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Yukseklik</label><input type="number" step="0.1" value={height} onChange={e => setHeight(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Agirlik</label><input type="number" step="0.01" value={weight} onChange={e => setWeight(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Yükseklik</label><input type="number" step="0.1" value={height} onChange={e => setHeight(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Ağırlık</label><input type="number" step="0.01" value={weight} onChange={e => setWeight(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
         <button type="submit" disabled={saving} className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5">
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />} Koli Ekle</button>
       </form>
@@ -1441,7 +1486,7 @@ function ExtraBoxForm({ onSubmit, onCancel }: { onSubmit: (form: BoxFormData) =>
   return (
     <form onSubmit={handleSubmit} className="bg-white border border-blue-200 rounded-xl p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-900">Ek Koli (Uretim Disi)</h3>
+        <h3 className="text-sm font-semibold text-gray-900">Ek Koli (Üretim Dışı)</h3>
         <button type="button" onClick={onCancel} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
       </div>
       <div className="flex flex-wrap gap-3">
@@ -1449,7 +1494,7 @@ function ExtraBoxForm({ onSubmit, onCancel }: { onSubmit: (form: BoxFormData) =>
           <input type="text" value={f.iwasku} onChange={e => setF(p => ({ ...p, iwasku: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-40" /></div>
         <div><label className="block text-xs text-gray-500 mb-0.5">FNSKU</label>
           <input type="text" value={f.fnsku} onChange={e => setF(p => ({ ...p, fnsku: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-32 font-mono" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Urun Adi</label>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Ürün Adı</label>
           <input type="text" value={f.productName} onChange={e => setF(p => ({ ...p, productName: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-48" /></div>
         <div><label className="block text-xs text-gray-500 mb-0.5">Kategori</label>
           <input type="text" value={f.productCategory} onChange={e => setF(p => ({ ...p, productCategory: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-36" /></div>
@@ -1463,11 +1508,11 @@ function ExtraBoxForm({ onSubmit, onCancel }: { onSubmit: (form: BoxFormData) =>
           <input type="number" step="0.1" value={f.width} onChange={e => setF(p => ({ ...p, width: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
         <div><label className="block text-xs text-gray-500 mb-0.5">Boy</label>
           <input type="number" step="0.1" value={f.depth} onChange={e => setF(p => ({ ...p, depth: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Yukseklik</label>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Yükseklik</label>
           <input type="number" step="0.1" value={f.height} onChange={e => setF(p => ({ ...p, height: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Agirlik</label>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Ağırlık</label>
           <input type="number" step="0.01" value={f.weight} onChange={e => setF(p => ({ ...p, weight: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Cogalt</label>
+        <div><label className="block text-xs text-gray-500 mb-0.5">Çoğalt</label>
           <input type="number" min="1" max="200" value={f.count} onChange={e => setF(p => ({ ...p, count: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-16" /></div>
         <button type="submit" disabled={saving} className="self-end px-4 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5">
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}

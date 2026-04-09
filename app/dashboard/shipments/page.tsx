@@ -86,7 +86,7 @@ export default function ShipmentsPage() {
         setForm({ name: '', shippingMethod: 'sea', plannedDate: '', notes: '' });
         fetchShipments();
       } else { alert(data.error); }
-    } catch { alert('Baglanti hatasi'); } finally { setCreating(false); }
+    } catch { alert('Bağlantı hatası'); } finally { setCreating(false); }
   };
 
   const openShipments = shipments.filter(s => s.status === 'PLANNING' || s.status === 'LOADING');

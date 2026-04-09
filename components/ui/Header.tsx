@@ -72,7 +72,7 @@ export function Header() {
             <Link
               href="/dashboard/seasonal"
               className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Sezon Planlamasi"
+              title="Sezon Planlaması"
             >
               <CalendarRange className="w-4 h-4" />
               <span className="hidden lg:inline">Sezon</span>
@@ -91,18 +91,18 @@ export function Header() {
                 <Link
                   href="/dashboard/admin/permissions"
                   className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                  title="Izinler"
+                  title="İzinler"
                 >
                   <Shield className="w-4 h-4" />
-                  <span className="hidden lg:inline">Izinler</span>
+                  <span className="hidden lg:inline">İzinler</span>
                 </Link>
                 <Link
                   href="/dashboard/logs"
                   className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                  title="Gecmis"
+                  title="Geçmiş"
                 >
                   <FileText className="w-4 h-4" />
-                  <span className="hidden lg:inline">Gecmis</span>
+                  <span className="hidden lg:inline">Geçmiş</span>
                 </Link>
               </>
             )}
@@ -194,11 +194,11 @@ export function Header() {
               <>
                 <Link href="/dashboard/admin/permissions" onClick={() => setMenuOpen(false)}
                   className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">
-                  <Shield className="w-4 h-4" /> Izin Yonetimi
+                  <Shield className="w-4 h-4" /> İzin Yönetimi
                 </Link>
                 <Link href="/dashboard/logs" onClick={() => setMenuOpen(false)}
                   className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">
-                  <FileText className="w-4 h-4" /> Gecmis
+                  <FileText className="w-4 h-4" /> Geçmiş
                 </Link>
               </>
             )}
