@@ -7,14 +7,14 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   ArrowLeft, Plus, Send, Loader2, AlertCircle, Pencil,
   Package, Calendar, Anchor, Truck as TruckIcon, Plane,
-  Check, Square, CheckSquare, Download, Ship, X, ChevronDown, ChevronRight, Printer, Search,
+  Check, Square, CheckSquare, Download, Ship, X, ChevronDown, ChevronRight, Printer, Search, Copy,
 } from 'lucide-react';
 
 // --- Types ---
@@ -89,6 +89,8 @@ export default function ShipmentDetailPage() {
   const [sentMarketFilter, setSentMarketFilter] = useState('');
   // Track printed box IDs
   const [printedBoxIds, setPrintedBoxIds] = useState<Set<string>>(new Set());
+  // Editable cell tab navigation
+  const [editingCell, setEditingCell] = useState<{ boxId: string; field: 'width' | 'depth' | 'height' | 'weight' } | null>(null);
 
   // Depo çıkış onay modalı
   const [showExitModal, setShowExitModal] = useState(false);
@@ -196,6 +198,18 @@ export default function ShipmentDetailPage() {
   }, [shipment, sentSearch, sentCategoryFilter, sentMarketFilter]);
   const sentCategories = useMemo(() => [...new Set((shipment?.items.filter(i => i.sentAt) ?? []).map(i => i.productCategory).filter(Boolean))].sort(), [shipment]);
   const sentMarkets = useMemo(() => [...new Set((shipment?.items.filter(i => i.sentAt) ?? []).map(i => i.marketplace?.code).filter(Boolean) as string[])].sort(), [shipment]);
+
+  // Donor map: iwasku+quantity → ilk dolu koli (ölçü kopyalama için)
+  const donorMap = useMemo(() => {
+    const map = new Map<string, ShipmentBox>();
+    for (const b of boxes) {
+      const key = `${b.iwasku}|${b.quantity}`;
+      if (b.width && b.depth && b.height && b.weight && !map.has(key)) {
+        map.set(key, b);
+      }
+    }
+    return map;
+  }, [boxes]);
 
   // Izin kontrolu API uzerinden yapiliyor (permissions state)
   if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>;
@@ -603,6 +617,18 @@ export default function ShipmentDetailPage() {
 
     doc.save(`${box.boxNumber}.pdf`);
     setPrintedBoxIds(prev => new Set(prev).add(box.id));
+  };
+
+  // Ölçü kopyalama: aynı iwasku+quantity olan dolu koliden kopyala
+  const handleCopyDimensions = async (targetBox: ShipmentBox, donorBox: ShipmentBox) => {
+    const updates = { boxId: targetBox.id, width: donorBox.width, depth: donorBox.depth, height: donorBox.height, weight: donorBox.weight };
+    try {
+      const res = await fetch(`/api/shipments/${id}/boxes`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if ((await res.json()).success) fetchBoxes();
+    } catch { /* */ }
   };
 
   const handleExportItems = async () => {
@@ -1107,6 +1133,7 @@ export default function ShipmentDetailPage() {
                     <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Yuk.</th>
                     <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Agr.</th>
                     <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Desi</th>
+                    <th className="w-8"></th>
                     <th className="w-10"></th>
                     <th className="w-10"></th>
                   </tr>
@@ -1133,11 +1160,31 @@ export default function ShipmentDetailPage() {
                         <td className="px-3 py-3 text-xs text-gray-700 line-clamp-1">{box.productName || '—'}</td>
                         <td className="px-3 py-3 text-sm text-gray-600">{(box.marketplaceCode && mktCodeToName.get(box.marketplaceCode)) || box.marketplaceCode || '—'}</td>
                         <td className="text-center px-3 py-3 font-semibold">{box.quantity}</td>
-                        <EditableBoxCell boxId={box.id} shipmentId={id} field="width" value={box.width} canEdit={isActive && canBoxes} onUpdated={fetchBoxes} />
-                        <EditableBoxCell boxId={box.id} shipmentId={id} field="depth" value={box.depth} canEdit={isActive && canBoxes} onUpdated={fetchBoxes} />
-                        <EditableBoxCell boxId={box.id} shipmentId={id} field="height" value={box.height} canEdit={isActive && canBoxes} onUpdated={fetchBoxes} />
-                        <EditableBoxCell boxId={box.id} shipmentId={id} field="weight" value={box.weight} canEdit={isActive && canBoxes} onUpdated={fetchBoxes} />
+                        <EditableBoxCell boxId={box.id} shipmentId={id} field="width" value={box.width} canEdit={isActive && canBoxes} onUpdated={fetchBoxes}
+                          editingCell={editingCell} setEditingCell={setEditingCell} visibleBoxes={filteredBoxes} />
+                        <EditableBoxCell boxId={box.id} shipmentId={id} field="depth" value={box.depth} canEdit={isActive && canBoxes} onUpdated={fetchBoxes}
+                          editingCell={editingCell} setEditingCell={setEditingCell} visibleBoxes={filteredBoxes} />
+                        <EditableBoxCell boxId={box.id} shipmentId={id} field="height" value={box.height} canEdit={isActive && canBoxes} onUpdated={fetchBoxes}
+                          editingCell={editingCell} setEditingCell={setEditingCell} visibleBoxes={filteredBoxes} />
+                        <EditableBoxCell boxId={box.id} shipmentId={id} field="weight" value={box.weight} canEdit={isActive && canBoxes} onUpdated={fetchBoxes}
+                          editingCell={editingCell} setEditingCell={setEditingCell} visibleBoxes={filteredBoxes} />
                         <td className="text-center px-3 py-3 font-medium text-gray-900">{boxDesi ? boxDesi.toFixed(1) : '—'}</td>
+                        {(() => {
+                          const donorKey = `${box.iwasku}|${box.quantity}`;
+                          const donor = donorMap.get(donorKey);
+                          const needsCopy = donor && donor.id !== box.id && (!box.width || !box.depth || !box.height || !box.weight);
+                          return (
+                            <td className="px-1 py-3 text-center">
+                              {isActive && canBoxes && needsCopy ? (
+                                <button onClick={() => handleCopyDimensions(box, donor)}
+                                  className="text-blue-400 hover:text-blue-600 transition-colors"
+                                  title={`Ölçüleri kopyala (${donor.width}×${donor.depth}×${donor.height}, ${donor.weight}kg)`}>
+                                  <Copy className="w-3.5 h-3.5" />
+                                </button>
+                              ) : null}
+                            </td>
+                          );
+                        })()}
                         <td className="px-2 py-3 text-center">
                           <button onClick={() => handlePrintBoxLabel(box)}
                             className={`transition-colors ${printedBoxIds.has(box.id) ? 'text-green-500 hover:text-green-700' : 'text-gray-400 hover:text-blue-600'}`}
@@ -1214,44 +1261,81 @@ export default function ShipmentDetailPage() {
   );
 }
 
-// --- Editable Box Cell (dimensions/weight) ---
-function EditableBoxCell({ boxId, shipmentId, field, value, canEdit, onUpdated }: {
+// --- Editable Box Cell (dimensions/weight) with Tab navigation ---
+const FIELD_ORDER: ('width' | 'depth' | 'height' | 'weight')[] = ['width', 'depth', 'height', 'weight'];
+
+function EditableBoxCell({ boxId, shipmentId, field, value, canEdit, onUpdated, editingCell, setEditingCell, visibleBoxes }: {
   boxId: string; shipmentId: string; field: 'width' | 'height' | 'depth' | 'weight';
   value: number | null; canEdit: boolean; onUpdated: () => void;
+  editingCell: { boxId: string; field: 'width' | 'depth' | 'height' | 'weight' } | null;
+  setEditingCell: (cell: { boxId: string; field: 'width' | 'depth' | 'height' | 'weight' } | null) => void;
+  visibleBoxes: ShipmentBox[];
 }) {
-  const [editing, setEditing] = useState(false);
   const [inputVal, setInputVal] = useState('');
   const [saving, setSaving] = useState(false);
+  const tabNavigating = useRef(false);
+  const isEditing = editingCell?.boxId === boxId && editingCell?.field === field;
 
-  const handleSave = async () => {
+  // Tab navigation ile açıldığında inputVal'ı set et
+  useEffect(() => {
+    if (isEditing) setInputVal(value?.toString() ?? '');
+  }, [isEditing, value]);
+
+  const navigateCell = (direction: 1 | -1) => {
+    const fieldIdx = FIELD_ORDER.indexOf(field);
+    const boxIdx = visibleBoxes.findIndex(b => b.id === boxId);
+    let nextField = fieldIdx + direction;
+    let nextBoxIdx = boxIdx;
+    if (nextField >= FIELD_ORDER.length) { nextField = 0; nextBoxIdx++; }
+    else if (nextField < 0) { nextField = FIELD_ORDER.length - 1; nextBoxIdx--; }
+    if (nextBoxIdx >= 0 && nextBoxIdx < visibleBoxes.length) {
+      setEditingCell({ boxId: visibleBoxes[nextBoxIdx].id, field: FIELD_ORDER[nextField] });
+    } else {
+      setEditingCell(null);
+    }
+  };
+
+  const handleSave = async (andNavigate?: 1 | -1) => {
     const num = inputVal.trim() ? parseFloat(inputVal) : null;
-    if (num !== null && (isNaN(num) || num <= 0)) { setEditing(false); return; }
-    if (num === value) { setEditing(false); return; }
+    if (num !== null && (isNaN(num) || num <= 0)) {
+      if (andNavigate) navigateCell(andNavigate); else setEditingCell(null);
+      return;
+    }
+    if (num === value) {
+      if (andNavigate) navigateCell(andNavigate); else setEditingCell(null);
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch(`/api/shipments/${shipmentId}/boxes`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ boxId, [field]: num }),
       });
       if ((await res.json()).success) onUpdated();
     } catch { /* */ }
-    finally { setSaving(false); setEditing(false); }
+    finally {
+      setSaving(false);
+      if (andNavigate) navigateCell(andNavigate); else setEditingCell(null);
+    }
   };
 
   if (!canEdit) {
     return <td className="text-center px-3 py-3 text-gray-600">{value ?? '—'}</td>;
   }
 
-  if (editing) {
+  if (isEditing) {
     return (
       <td className="text-center px-1 py-1">
         <input
           type="number" step="0.1" autoFocus
           value={inputVal}
           onChange={e => setInputVal(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditing(false); }}
-          onBlur={handleSave}
+          onKeyDown={e => {
+            if (e.key === 'Tab') { e.preventDefault(); tabNavigating.current = true; handleSave(e.shiftKey ? -1 : 1); }
+            else if (e.key === 'Enter') { tabNavigating.current = true; handleSave(1); }
+            else if (e.key === 'Escape') setEditingCell(null);
+          }}
+          onBlur={() => { if (!saving && !tabNavigating.current) handleSave(); tabNavigating.current = false; }}
           disabled={saving}
           className="w-14 px-1 py-0.5 border border-blue-300 rounded text-center text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
         />
@@ -1262,7 +1346,7 @@ function EditableBoxCell({ boxId, shipmentId, field, value, canEdit, onUpdated }
   return (
     <td
       className="text-center px-3 py-3 text-gray-600 cursor-pointer hover:bg-blue-50 hover:text-blue-700 transition-colors"
-      onClick={() => { setInputVal(value?.toString() ?? ''); setEditing(true); }}
+      onClick={() => setEditingCell({ boxId, field })}
       title="Düzenlemek için tıkla"
     >
       {value ?? '—'}
