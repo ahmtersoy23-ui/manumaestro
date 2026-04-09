@@ -134,6 +134,35 @@ export default function ShipmentDetailPage() {
     return map;
   }, [shipment]);
 
+  // Filtered items (search) — hook'lar early return'den once olmali
+  const filteredPendingItems = useMemo(() => {
+    const pending = shipment?.items.filter(i => !i.sentAt) ?? [];
+    if (!itemSearch.trim()) return pending;
+    const q = itemSearch.toLowerCase();
+    return pending.filter(i =>
+      i.iwasku.toLowerCase().includes(q) ||
+      (i.fnsku && i.fnsku.toLowerCase().includes(q)) ||
+      (i.productName && i.productName.toLowerCase().includes(q)) ||
+      (i.productCategory && i.productCategory.toLowerCase().includes(q)) ||
+      (i.marketplace?.name && i.marketplace.name.toLowerCase().includes(q)) ||
+      (i.marketplace?.code && i.marketplace.code.toLowerCase().includes(q))
+    );
+  }, [shipment, itemSearch]);
+
+  const filteredBoxes = useMemo(() => {
+    if (!boxSearch.trim()) return boxes;
+    const q = boxSearch.toLowerCase();
+    return boxes.filter(b =>
+      b.boxNumber.toLowerCase().includes(q) ||
+      (b.iwasku && b.iwasku.toLowerCase().includes(q)) ||
+      (b.fnsku && b.fnsku.toLowerCase().includes(q)) ||
+      (b.productName && b.productName.toLowerCase().includes(q)) ||
+      (b.productCategory && b.productCategory.toLowerCase().includes(q)) ||
+      (b.marketplaceCode && b.marketplaceCode.toLowerCase().includes(q)) ||
+      b.destination.toLowerCase().includes(q)
+    );
+  }, [boxes, boxSearch]);
+
   // Izin kontrolu API uzerinden yapiliyor (permissions state)
   if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>;
   if (!shipment) return (
@@ -509,34 +538,6 @@ export default function ShipmentDetailPage() {
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Urunler');
     XLSX.writeFile(wb, `${shipment.name}-urunler-${new Date().toISOString().split('T')[0]}.xlsx`);
   };
-
-  // Filtered items (search)
-  const filteredPendingItems = useMemo(() => {
-    if (!itemSearch.trim()) return pendingItems;
-    const q = itemSearch.toLowerCase();
-    return pendingItems.filter(i =>
-      i.iwasku.toLowerCase().includes(q) ||
-      (i.fnsku && i.fnsku.toLowerCase().includes(q)) ||
-      (i.productName && i.productName.toLowerCase().includes(q)) ||
-      (i.productCategory && i.productCategory.toLowerCase().includes(q)) ||
-      (i.marketplace?.name && i.marketplace.name.toLowerCase().includes(q)) ||
-      (i.marketplace?.code && i.marketplace.code.toLowerCase().includes(q))
-    );
-  }, [pendingItems, itemSearch]);
-
-  const filteredBoxes = useMemo(() => {
-    if (!boxSearch.trim()) return boxes;
-    const q = boxSearch.toLowerCase();
-    return boxes.filter(b =>
-      b.boxNumber.toLowerCase().includes(q) ||
-      (b.iwasku && b.iwasku.toLowerCase().includes(q)) ||
-      (b.fnsku && b.fnsku.toLowerCase().includes(q)) ||
-      (b.productName && b.productName.toLowerCase().includes(q)) ||
-      (b.productCategory && b.productCategory.toLowerCase().includes(q)) ||
-      (b.marketplaceCode && b.marketplaceCode.toLowerCase().includes(q)) ||
-      b.destination.toLowerCase().includes(q)
-    );
-  }, [boxes, boxSearch]);
 
   // Selected packed items count
   const selectedPackedCount = [...selectedIds].filter(sid => pendingItems.find(i => i.id === sid)?.packed).length;
