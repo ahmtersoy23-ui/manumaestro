@@ -234,7 +234,7 @@ export default function WarehouseStockPage() {
 
   // Export all data as Excel
   const handleExport = async () => {
-    const rows = products.map(p => {
+    const rows = filtered.map(p => {
       const row: Record<string, unknown> = {
         IWASKU: p.iwasku, 'Ürün Adı': p.productName, Kategori: p.productCategory,
         Desi: p.desi, 'Başlangıç Stoğu': p.eskiStok,
@@ -249,7 +249,8 @@ export default function WarehouseStockPage() {
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Depo Stoğu');
-    XLSX.writeFile(wb, `depo-stogu-${new Date().toISOString().split('T')[0]}.xlsx`);
+    const suffix = [categoryFilter, searchFilter].filter(Boolean).join('-').replace(/\s+/g, '_');
+    XLSX.writeFile(wb, `depo-stogu-${new Date().toISOString().split('T')[0]}${suffix ? `-${suffix}` : ''}.xlsx`);
   };
 
   // Fetch snapshot

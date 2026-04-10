@@ -260,6 +260,7 @@ const UpdateBoxSchema = z.object({
   height: z.number().positive().nullable().optional(),
   depth: z.number().positive().nullable().optional(),
   weight: z.number().positive().nullable().optional(),
+  labelPrinted: z.boolean().optional(),
 });
 
 export async function PUT(request: NextRequest, { params }: Params) {

@@ -31,7 +31,7 @@ interface ShipmentBox {
   productName: string | null; productCategory: string | null;
   marketplaceCode: string | null; destination: string;
   quantity: number; width: number | null; height: number | null;
-  depth: number | null; weight: number | null; createdAt: string;
+  depth: number | null; weight: number | null; labelPrinted: boolean; createdAt: string;
 }
 interface ShipmentDetail {
   id: string; name: string; destinationTab: string; shippingMethod: string;
@@ -87,8 +87,8 @@ export default function ShipmentDetailPage() {
   const [sentSearch, setSentSearch] = useState('');
   const [sentCategoryFilter, setSentCategoryFilter] = useState('');
   const [sentMarketFilter, setSentMarketFilter] = useState('');
-  // Track printed box IDs
-  const [printedBoxIds, setPrintedBoxIds] = useState<Set<string>>(new Set());
+  // Track printed box IDs (DB'den başlat)
+  const printedBoxIds = useMemo(() => new Set(boxes.filter(b => b.labelPrinted).map(b => b.id)), [boxes]);
   // Editable cell tab navigation
   const [editingCell, setEditingCell] = useState<{ boxId: string; field: 'width' | 'depth' | 'height' | 'weight' } | null>(null);
 
@@ -620,7 +620,15 @@ export default function ShipmentDetailPage() {
     }
 
     doc.save(`${box.boxNumber}.pdf`);
-    setPrintedBoxIds(prev => new Set(prev).add(box.id));
+    // DB'de labelPrinted işaretle
+    try {
+      await fetch(`/api/shipments/${id}/boxes`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ boxId: box.id, labelPrinted: true }),
+      });
+      fetchBoxes();
+    } catch { /* */ }
   };
 
   // Ölçü kopyalama: aynı iwasku+quantity olan dolu koliden kopyala

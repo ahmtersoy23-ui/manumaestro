@@ -523,6 +523,7 @@ model ShipmentBox {
   height           Float?    // cm
   depth            Float?    // cm
   weight           Float?    // kg
+  labelPrinted     Boolean   @default(false)
   createdAt        DateTime  @default(now())
 
   shipment         Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
