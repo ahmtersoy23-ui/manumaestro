@@ -510,16 +510,16 @@ export default function ShipmentDetailPage() {
     const XLSX = await loadXLSX();
     const rows = usBoxes.map(b => ({
       koli_no: b.boxNumber,
+      name: b.productName ?? '',
       fnsku: b.fnsku ?? '',
       quantity: b.quantity,
       weight: b.weight ?? '',
       length: b.depth ?? '',
       width: b.width ?? '',
       height: b.height ?? '',
-      product_name: b.productName ?? '',
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{ wch: 14 }, { wch: 16 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 40 }];
+    ws['!cols'] = [{ wch: 14 }, { wch: 50 }, { wch: 16 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }];
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Shipmate');
     XLSX.writeFile(wb, `${shipment.name}-shipmate-${new Date().toISOString().split('T')[0]}.xlsx`);
   };
