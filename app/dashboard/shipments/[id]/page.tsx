@@ -14,7 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   ArrowLeft, Plus, Send, Loader2, AlertCircle, Pencil,
   Package, Calendar, Anchor, Truck as TruckIcon, Plane,
-  Check, Square, CheckSquare, Download, Ship, X, ChevronDown, ChevronRight, Printer, Search, Copy,
+  Check, Square, CheckSquare, Download, Ship, X, ChevronDown, ChevronRight, Printer, Search, Copy, RefreshCw,
 } from 'lucide-react';
 
 // --- Types ---
@@ -100,6 +100,9 @@ export default function ShipmentDetailPage() {
 
   // Permissions from API
   const [perms, setPerms] = useState<Record<string, boolean>>({});
+
+  // FNSKU sync state
+  const [syncingFnskuBoxId, setSyncingFnskuBoxId] = useState<string | null>(null);
 
   // Edit mode
   const [editing, setEditing] = useState(false);
@@ -438,6 +441,22 @@ export default function ShipmentDetailPage() {
     const data = await res.json();
     if (data.success) { await Promise.all([fetchBoxes(), fetchShipment()]); return data.data as ShipmentBox; }
     else { alert(data.error); return null; }
+  };
+
+  const handleSyncFnsku = async (boxId: string) => {
+    setSyncingFnskuBoxId(boxId);
+    try {
+      const res = await fetch(`/api/shipments/${id}/boxes`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ boxId, syncFnsku: true }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBoxes(prev => prev.map(b => b.id === boxId ? { ...b, fnsku: data.data.fnsku } : b));
+      }
+    } finally {
+      setSyncingFnskuBoxId(null);
+    }
   };
 
   const handleDeleteBox = async (boxId: string) => {
@@ -1197,7 +1216,20 @@ export default function ShipmentDetailPage() {
                           </span>
                         </td>
                         <td className="px-3 py-3 font-mono text-sm text-gray-700">{box.iwasku || '—'}</td>
-                        <td className="px-3 py-3 font-mono text-sm text-gray-600">{box.fnsku || '—'}</td>
+                        <td className="px-3 py-3 font-mono text-sm text-gray-600">
+                          <span className="inline-flex items-center gap-1">
+                            {box.fnsku || '—'}
+                            {canBoxes && box.fnsku && (
+                              <button
+                                onClick={() => handleSyncFnsku(box.id)}
+                                disabled={syncingFnskuBoxId === box.id}
+                                className="text-gray-300 hover:text-blue-500 transition-colors"
+                                title="FNSKU güncelle (sku_master'dan)">
+                                <RefreshCw className={`w-3 h-3 ${syncingFnskuBoxId === box.id ? 'animate-spin text-blue-500' : ''}`} />
+                              </button>
+                            )}
+                          </span>
+                        </td>
                         <td className="px-3 py-3 text-xs text-gray-700 line-clamp-1">{box.productName || '—'}</td>
                         <td className="px-3 py-3 text-sm text-gray-600">{(box.marketplaceCode && mktCodeToName.get(box.marketplaceCode)) || box.marketplaceCode || '—'}</td>
                         <td className="text-center px-3 py-3 font-semibold">{box.quantity}</td>

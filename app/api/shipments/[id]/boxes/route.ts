@@ -253,7 +253,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   });
 }
 
-// --- PUT: Update box dimensions/weight ---
+// --- PUT: Update box dimensions/weight/fnsku ---
 const UpdateBoxSchema = z.object({
   boxId: z.string().uuid(),
   width: z.number().positive().nullable().optional(),
@@ -261,6 +261,7 @@ const UpdateBoxSchema = z.object({
   depth: z.number().positive().nullable().optional(),
   weight: z.number().positive().nullable().optional(),
   labelPrinted: z.boolean().optional(),
+  syncFnsku: z.boolean().optional(), // sku_master'dan güncel fnsku çek
 });
 
 export async function PUT(request: NextRequest, { params }: Params) {
@@ -276,7 +277,25 @@ export async function PUT(request: NextRequest, { params }: Params) {
     return NextResponse.json({ success: false, error: 'Doğrulama hatası', details: validation.error.flatten().fieldErrors }, { status: 400 });
   }
 
-  const { boxId, ...data } = validation.data;
+  const { boxId, syncFnsku, ...data } = validation.data;
+
+  // FNSKU sync: sku_master'dan güncel değeri çek
+  if (syncFnsku) {
+    const existing = await prisma.shipmentBox.findUnique({ where: { id: boxId }, select: { iwasku: true, marketplaceCode: true } });
+    if (existing?.iwasku && existing?.marketplaceCode) {
+      const countryCode = marketplaceToCountry(existing.marketplaceCode);
+      if (countryCode) {
+        const rows = await queryProductDb(
+          `SELECT fnsku FROM sku_master WHERE iwasku = $1 AND country_code = $2 AND fulfillment = 'FBA' AND fnsku IS NOT NULL AND fnsku != '' LIMIT 1`,
+          [existing.iwasku, countryCode]
+        );
+        if (rows.length > 0) {
+          (data as Record<string, unknown>).fnsku = rows[0].fnsku;
+        }
+      }
+    }
+  }
+
   const box = await prisma.shipmentBox.update({
     where: { id: boxId, shipmentId: id },
     data,
