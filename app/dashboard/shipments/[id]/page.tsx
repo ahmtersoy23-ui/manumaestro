@@ -504,6 +504,26 @@ export default function ShipmentDetailPage() {
     XLSX.writeFile(wb, `${shipment.name}-koliler-${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
+  const handleExportShipmate = async () => {
+    const usBoxes = boxes.filter(b => b.marketplaceCode === 'AMZN_US' && b.fnsku);
+    if (usBoxes.length === 0) return alert('Amazon US pazar yerine ait FNSKU\'lu koli bulunamadı.');
+    const XLSX = await loadXLSX();
+    const rows = usBoxes.map(b => ({
+      koli_no: b.boxNumber,
+      fnsku: b.fnsku ?? '',
+      quantity: b.quantity,
+      weight: b.weight ?? '',
+      length: b.depth ?? '',
+      width: b.width ?? '',
+      height: b.height ?? '',
+      product_name: b.productName ?? '',
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{ wch: 14 }, { wch: 16 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 40 }];
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Shipmate');
+    XLSX.writeFile(wb, `${shipment.name}-shipmate-${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   const handlePrintBoxLabel = async (box: ShipmentBox) => {
     const [JsBarcode, { jsPDF }] = await Promise.all([
       import('jsbarcode').then(m => m.default),
@@ -1038,6 +1058,11 @@ export default function ShipmentDetailPage() {
             {boxes.length > 0 && (
               <button onClick={handleExportBoxes} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 border">
                 <Download className="w-4 h-4" /> Excel Koli Listesi
+              </button>
+            )}
+            {canEdit && boxes.length > 0 && (
+              <button onClick={handleExportShipmate} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700">
+                <Download className="w-4 h-4" /> Shipmate İndir
               </button>
             )}
             {boxes.length > 0 && (
