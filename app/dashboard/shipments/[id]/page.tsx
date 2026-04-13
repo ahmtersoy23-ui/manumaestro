@@ -729,6 +729,103 @@ export default function ShipmentDetailPage() {
     } catch { /* */ }
   };
 
+  // Karayolu/hava: ürün satırından GPSR'lı FNSKU etiket bas
+  const handlePrintItemLabel = async (item: ShipmentItem, labelCount: number) => {
+    const code = item.fnsku || item.iwasku;
+    if (!code || labelCount < 1) return;
+
+    const [JsBarcode, { jsPDF }] = await Promise.all([
+      import('jsbarcode').then(m => m.default),
+      import('jspdf'),
+    ]);
+
+    const PX_PER_MM = 8;
+    const W_MM = 60, H_MM = 40;
+    const CW = W_MM * PX_PER_MM, CH = H_MM * PX_PER_MM;
+
+    const renderCanvas = (draw: (ctx: CanvasRenderingContext2D) => void) => {
+      const c = document.createElement('canvas');
+      c.width = CW; c.height = CH;
+      const ctx = c.getContext('2d')!;
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, CW, CH);
+      ctx.fillStyle = '#000';
+      draw(ctx);
+      return c.toDataURL('image/png');
+    };
+
+    const wrapLine = (ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] => {
+      const words = text.split(' ');
+      const lines: string[] = [];
+      let line = '';
+      for (const w of words) {
+        const test = line ? `${line} ${w}` : w;
+        if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; } else { line = test; }
+      }
+      if (line) lines.push(line);
+      return lines;
+    };
+
+    const label = item.fnsku ? 'FNSKU' : 'IWASKU';
+    const marketplace = item.marketplace?.code || '';
+    const itemName = item.productName || '';
+    const sn = itemName.split(' ')[0] || '';
+    const isEU = /^AMZN_(UK|EU|DE|FR|IT|ES|NL|SE|PL|BE)$/.test(marketplace);
+
+    const bcCanvas = document.createElement('canvas');
+    JsBarcode(bcCanvas, code, { format: 'CODE128', width: 2, height: 50, displayValue: false, margin: 0 });
+
+    const doc = new jsPDF({ unit: 'mm', format: [W_MM, H_MM], orientation: 'landscape' });
+
+    for (let i = 0; i < labelCount; i++) {
+      if (i > 0) doc.addPage([W_MM, H_MM], 'landscape');
+
+      const img = renderCanvas((ctx) => {
+        if (isEU) {
+          const bw = 420, bh = 120;
+          ctx.drawImage(bcCanvas, (CW - bw) / 2, 6, bw, bh);
+          ctx.font = 'bold 22px Courier New';
+          ctx.textAlign = 'center';
+          ctx.fillText(`${code}  (${label})`, CW / 2, 146);
+          ctx.font = '15px Arial';
+          const prodLine = wrapLine(ctx, itemName, CW - 30);
+          ctx.fillText(prodLine[0] || '', CW / 2, 166);
+          ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(12, 174); ctx.lineTo(CW - 12, 174); ctx.stroke();
+          ctx.fillStyle = '#000'; ctx.textAlign = 'left';
+          const gx = 16;
+          ctx.font = 'bold 14px Arial';
+          ctx.fillText('IWA Concept Ltd.Sti.', gx, 190);
+          ctx.font = '12px Arial';
+          ctx.fillText('Ankara/TR · iwaconcept.com', gx, 204);
+          ctx.fillText('RP: Emre Bedel · responsible@iwaconcept.com', gx, 218);
+          ctx.font = 'bold 13px Courier New';
+          ctx.fillText(`PN: ${item.iwasku || code}`, gx, 234);
+          if (sn) ctx.fillText(`SN: ${sn}`, gx + 240, 234);
+          ctx.font = '16px Courier New'; ctx.fillStyle = '#666';
+          ctx.textAlign = 'right';
+          ctx.fillText(marketplace, CW - 16, CH - 8);
+        } else {
+          const bw = 430, bh = 140;
+          ctx.drawImage(bcCanvas, (CW - bw) / 2, 10, bw, bh);
+          ctx.font = 'bold 28px Courier New';
+          ctx.textAlign = 'center';
+          ctx.fillText(`${code}  (${label})`, CW / 2, 178);
+          ctx.font = '18px Arial';
+          const lines = wrapLine(ctx, itemName, CW - 40);
+          let y = 204;
+          for (const ln of lines.slice(0, 2)) { ctx.fillText(ln, CW / 2, y); y += 22; }
+          ctx.font = '18px Courier New'; ctx.fillStyle = '#888';
+          ctx.textAlign = 'right';
+          ctx.fillText(marketplace, CW - 16, CH - 10);
+        }
+      });
+      doc.addImage(img, 'PNG', 0, 0, W_MM, H_MM);
+    }
+
+    doc.save(`${item.iwasku}-${label}-x${labelCount}.pdf`);
+  };
+
   // Ölçü kopyalama: aynı iwasku+quantity olan dolu koliden kopyala
   const handleCopyDimensions = async (targetBox: ShipmentBox, donorBox: ShipmentBox) => {
     const updates = { boxId: targetBox.id, width: donorBox.width, depth: donorBox.depth, height: donorBox.height, weight: donorBox.weight };
@@ -1002,7 +1099,8 @@ export default function ShipmentDetailPage() {
                             ...prev,
                             items: prev.items.map(i => i.id === itemId ? { ...i, fnsku } : i),
                           } : prev);
-                        }} />
+                        }}
+                        onPrintLabel={handlePrintItemLabel} />
                     );
                   })}
                 </tbody>
@@ -1571,7 +1669,8 @@ function InlineFnskuInput({ item, onSaved }: { item: ShipmentItem; onSaved: (ite
 // --- Pending Item Row ---
 function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded, isSelected, togglingId,
   canBoxes, canPack, canSend, canDelete,
-  onTogglePacked, onToggleSelect, onToggleExpand, onCreateBox, onDeleteBox, onDeleteItem, onFnskuSaved }: {
+  onTogglePacked, onToggleSelect, onToggleExpand, onCreateBox, onDeleteBox, onDeleteItem, onFnskuSaved,
+  onPrintLabel }: {
   item: ShipmentItem; itemDesi: number; itemBoxes: ShipmentBox[];
   isSea: boolean; isActive: boolean; isExpanded: boolean; isSelected: boolean; togglingId: string | null;
   canBoxes: boolean; canPack: boolean; canSend: boolean; canDelete: boolean;
@@ -1579,6 +1678,7 @@ function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded
   onCreateBox: (form: BoxFormData) => Promise<ShipmentBox | null>; onDeleteBox: (boxId: string) => void;
   onDeleteItem: () => void;
   onFnskuSaved: (itemId: string, fnsku: string) => void;
+  onPrintLabel: (item: ShipmentItem, count: number) => void;
 }) {
   // Deniz renk kodlama: kolilerdeki toplam adet vs item miktar
   const boxQtyTotal = itemBoxes.reduce((s, b) => s + b.quantity, 0);
@@ -1622,9 +1722,21 @@ function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded
         <td className={`px-3 py-3 text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.marketplace?.name ?? '—'}</td>
         <td className={`text-center px-3 py-3 font-semibold ${item.packed ? 'text-green-800' : 'text-gray-900'}`}>{item.quantity}</td>
         <td className={`text-center px-3 py-3 font-medium ${item.packed ? 'text-green-800' : 'text-gray-900'}`}>{itemDesi > 0 ? Math.round(itemDesi).toLocaleString('tr-TR') : '—'}</td>
-        {isActive && canDelete && (
+        {isActive && (
           <td className="px-2 py-3 text-center">
-            <button onClick={onDeleteItem} className="text-red-300 hover:text-red-600 transition-colors" title="Sevkiyattan çıkar"><X className="w-4 h-4" /></button>
+            <div className="flex items-center gap-1 justify-center">
+              {!isSea && (item.fnsku || item.iwasku) && (
+                <button onClick={() => {
+                  const input = prompt(`${item.iwasku} — Kaç etiket basılsın?`, String(item.quantity));
+                  if (input) { const n = parseInt(input); if (n > 0) onPrintLabel(item, n); }
+                }} className="text-gray-300 hover:text-blue-600 transition-colors" title="Etiket yazdır">
+                  <Printer className="w-4 h-4" />
+                </button>
+              )}
+              {canDelete && (
+                <button onClick={onDeleteItem} className="text-red-300 hover:text-red-600 transition-colors" title="Sevkiyattan çıkar"><X className="w-4 h-4" /></button>
+              )}
+            </div>
           </td>
         )}
       </tr>
