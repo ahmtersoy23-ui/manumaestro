@@ -707,6 +707,13 @@ export default function ShipmentDetailPage() {
             ctx.fillText(`PN: ${box.iwasku || code}`, gx, 246);
             if (sn) ctx.fillText(`SN: ${sn}`, gx + 200, 246);
 
+            // Sağ alt: Complies badge
+            ctx.font = 'bold 11px Arial';
+            ctx.fillStyle = '#000';
+            ctx.textAlign = 'right';
+            ctx.fillText('Complies with', CW - 16, 256);
+            ctx.fillText('GPSD / GPSR', CW - 16, 270);
+
             // Alt satır: koli no + marketplace
             ctx.font = '16px Courier New';
             ctx.fillStyle = '#666';
@@ -840,6 +847,11 @@ export default function ShipmentDetailPage() {
           ctx.font = 'bold 13px Courier New';
           ctx.fillText(`PN: ${item.iwasku || code}`, gx, 246);
           if (sn) ctx.fillText(`SN: ${sn}`, gx + 200, 246);
+          // Sağ alt: Complies badge
+          ctx.font = 'bold 11px Arial'; ctx.fillStyle = '#000';
+          ctx.textAlign = 'right';
+          ctx.fillText('Complies with', CW - 16, 256);
+          ctx.fillText('GPSD / GPSR', CW - 16, 270);
           ctx.font = '16px Courier New'; ctx.fillStyle = '#666';
           ctx.textAlign = 'right';
           ctx.fillText(marketplace, CW - 16, CH - 8);
