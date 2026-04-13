@@ -556,6 +556,14 @@ export default function ShipmentDetailPage() {
     XLSX.writeFile(wb, `${shipment.name}-shipmate-${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
+  const preloadImage = (src: string): Promise<HTMLImageElement> =>
+    new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(img); // devam et, boş çiz
+      img.src = src;
+    });
+
   const handlePrintBoxLabel = async (box: ShipmentBox) => {
     const [JsBarcode, { jsPDF }] = await Promise.all([
       import('jsbarcode').then(m => m.default),
@@ -643,6 +651,11 @@ export default function ShipmentDetailPage() {
       const bcCanvas = document.createElement('canvas');
       JsBarcode(bcCanvas, code, { format: 'CODE128', width: 2, height: 50, displayValue: false, margin: 0 });
 
+      // EU asset'leri preload
+      const [gpsrLogo, gpsrEurp, gpsrSymbols] = isEU
+        ? await Promise.all([preloadImage(GPSR_LOGO_B64), preloadImage(GPSR_EURP_B64), preloadImage(GPSR_SYMBOLS_B64)])
+        : [null, null, null];
+
       for (let i = 0; i < box.quantity; i++) {
         doc.addPage([W_MM, H_MM], 'landscape');
 
@@ -671,16 +684,10 @@ export default function ShipmentDetailPage() {
             // GPSR bilgileri — sol: logo + semboller, sağ: metin
             ctx.fillStyle = '#000';
 
-            // Sol: Logo (desen) + EURP ikonu + semboller
-            const logoImg = new Image();
-            logoImg.src = GPSR_LOGO_B64;
-            ctx.drawImage(logoImg, 12, 178, 48, 26);
-            const eurpImg = new Image();
-            eurpImg.src = GPSR_EURP_B64;
-            ctx.drawImage(eurpImg, 12, 206, 18, 28);
-            const symImg = new Image();
-            symImg.src = GPSR_SYMBOLS_B64;
-            ctx.drawImage(symImg, 12, 240, 90, 18);
+            // Sol: Logo (desen) + EURP ikonu + semboller (preloaded)
+            if (gpsrLogo) ctx.drawImage(gpsrLogo, 12, 178, 48, 26);
+            if (gpsrEurp) ctx.drawImage(gpsrEurp, 12, 206, 18, 28);
+            if (gpsrSymbols) ctx.drawImage(gpsrSymbols, 12, 240, 90, 18);
 
             // Sağ: metin bilgileri
             ctx.textAlign = 'left';
@@ -794,6 +801,11 @@ export default function ShipmentDetailPage() {
     const bcCanvas = document.createElement('canvas');
     JsBarcode(bcCanvas, code, { format: 'CODE128', width: 2, height: 50, displayValue: false, margin: 0 });
 
+    // EU asset'leri preload
+    const [gpsrLogo, gpsrEurp, gpsrSymbols] = isEU
+      ? await Promise.all([preloadImage(GPSR_LOGO_B64), preloadImage(GPSR_EURP_B64), preloadImage(GPSR_SYMBOLS_B64)])
+      : [null, null, null];
+
     const doc = new jsPDF({ unit: 'mm', format: [W_MM, H_MM], orientation: 'landscape' });
 
     for (let i = 0; i < labelCount; i++) {
@@ -812,13 +824,10 @@ export default function ShipmentDetailPage() {
           ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
           ctx.beginPath(); ctx.moveTo(12, 174); ctx.lineTo(CW - 12, 174); ctx.stroke();
           ctx.fillStyle = '#000';
-          // Sol: Logo + EURP + semboller
-          const li = new Image(); li.src = GPSR_LOGO_B64;
-          ctx.drawImage(li, 12, 178, 48, 26);
-          const ei = new Image(); ei.src = GPSR_EURP_B64;
-          ctx.drawImage(ei, 12, 206, 18, 28);
-          const si = new Image(); si.src = GPSR_SYMBOLS_B64;
-          ctx.drawImage(si, 12, 240, 90, 18);
+          // Sol: Logo + EURP + semboller (preloaded)
+          if (gpsrLogo) ctx.drawImage(gpsrLogo, 12, 178, 48, 26);
+          if (gpsrEurp) ctx.drawImage(gpsrEurp, 12, 206, 18, 28);
+          if (gpsrSymbols) ctx.drawImage(gpsrSymbols, 12, 240, 90, 18);
           // Sağ: metin
           ctx.textAlign = 'left';
           const gx = 68;
