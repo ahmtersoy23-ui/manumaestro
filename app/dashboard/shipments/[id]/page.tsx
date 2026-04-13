@@ -97,6 +97,7 @@ export default function ShipmentDetailPage() {
   const [exitItems, setExitItems] = useState<{ iwasku: string; name: string; quantity: number }[]>([]);
   const [exitWeek, setExitWeek] = useState('');
   const [exitSaving, setExitSaving] = useState(false);
+  const [exitPage, setExitPage] = useState(0);
 
   // Permissions from API
   const [perms, setPerms] = useState<Record<string, boolean>>({});
@@ -329,6 +330,7 @@ export default function ShipmentDetailPage() {
     }
     setExitItems([...grouped.values()]);
     setExitWeek(getMonday(new Date()));
+    setExitPage(0);
     setShowExitModal(true);
   };
 
@@ -412,10 +414,16 @@ export default function ShipmentDetailPage() {
       });
       const data = await res.json();
       if (data.success) {
-        // Tüm pending item'ları al ve modal aç
-        const allPending = [...pendingItems];
         await fetchShipment();
-        openExitModal(allPending);
+        // Koli toplamlarından depo çıkış modalını aç (talep değil, gerçek koli miktarları)
+        const boxRes = await fetch(`/api/shipments/${id}/boxes`);
+        const boxData = await boxRes.json();
+        if (boxData.success && boxData.data.length > 0) {
+          const boxItems = (boxData.data as ShipmentBox[])
+            .filter(b => b.iwasku)
+            .map(b => ({ iwasku: b.iwasku!, productName: b.productName || b.iwasku!, quantity: b.quantity }));
+          openExitModal(boxItems);
+        }
       } else alert(data.error);
     } catch { alert('Kapama hatası'); } finally { setSending(false); }
   };
@@ -625,6 +633,8 @@ export default function ShipmentDetailPage() {
     // Barkod etiketleri (quantity kadar, birer adet)
     if (code) {
       const label = box.fnsku ? 'FNSKU' : 'IWASKU';
+      const isEU = /^AMZN_(UK|EU|DE|FR|IT|ES|NL|SE|PL|BE)$/.test(marketplace);
+      const sn = (name.split(' ')[0]) || '';
       const bcCanvas = document.createElement('canvas');
       JsBarcode(bcCanvas, code, { format: 'CODE128', width: 2, height: 50, displayValue: false, margin: 0 });
 
@@ -632,27 +642,76 @@ export default function ShipmentDetailPage() {
         doc.addPage([W_MM, H_MM], 'landscape');
 
         const barcodeImg = renderCanvasLabel((ctx) => {
-          const bw = 430, bh = 140;
-          ctx.drawImage(bcCanvas, (CW - bw) / 2, 10, bw, bh);
+          if (isEU) {
+            // === EU/UK: FNSKU barcode + GPSR bilgisi ===
+            const bw = 420, bh = 120; // barcode min 1.5cm = 120px
+            ctx.drawImage(bcCanvas, (CW - bw) / 2, 6, bw, bh);
 
-          ctx.font = 'bold 28px Courier New';
-          ctx.textAlign = 'center';
-          ctx.fillText(`${code}  (${label})`, CW / 2, 178);
+            ctx.font = 'bold 22px Courier New';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${code}  (${label})`, CW / 2, 146);
 
-          ctx.font = '18px Arial';
-          const lines = wrapText(ctx, name, CW - 40);
-          let y = 204;
-          for (const ln of lines.slice(0, 2)) {
-            ctx.fillText(ln, CW / 2, y);
-            y += 22;
+            ctx.font = '15px Arial';
+            const prodLine = wrapText(ctx, name, CW - 30);
+            ctx.fillText(prodLine[0] || '', CW / 2, 166);
+
+            // Ayırıcı çizgi
+            ctx.strokeStyle = '#999';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(12, 174);
+            ctx.lineTo(CW - 12, 174);
+            ctx.stroke();
+
+            // GPSR bilgileri — sol logo placeholder, sağ metin
+            ctx.fillStyle = '#000';
+            ctx.textAlign = 'left';
+            const gx = 16; // metin başlangıç x
+
+            ctx.font = 'bold 14px Arial';
+            ctx.fillText('IWA Concept Ltd.Sti.', gx, 190);
+
+            ctx.font = '12px Arial';
+            ctx.fillText('Ankara/TR · iwaconcept.com', gx, 204);
+
+            ctx.font = '12px Arial';
+            ctx.fillText('RP: Emre Bedel · responsible@iwaconcept.com', gx, 218);
+
+            ctx.font = 'bold 13px Courier New';
+            ctx.fillText(`PN: ${box.iwasku || code}`, gx, 234);
+            if (sn) ctx.fillText(`SN: ${sn}`, gx + 240, 234);
+
+            // Alt satır: koli no + marketplace
+            ctx.font = '16px Courier New';
+            ctx.fillStyle = '#666';
+            ctx.textAlign = 'left';
+            ctx.fillText(box.boxNumber, 16, CH - 8);
+            ctx.textAlign = 'right';
+            ctx.fillText(marketplace, CW - 16, CH - 8);
+          } else {
+            // === US/CA/AU: Mevcut layout (GPSR yok) ===
+            const bw = 430, bh = 140;
+            ctx.drawImage(bcCanvas, (CW - bw) / 2, 10, bw, bh);
+
+            ctx.font = 'bold 28px Courier New';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${code}  (${label})`, CW / 2, 178);
+
+            ctx.font = '18px Arial';
+            const lines = wrapText(ctx, name, CW - 40);
+            let y = 204;
+            for (const ln of lines.slice(0, 2)) {
+              ctx.fillText(ln, CW / 2, y);
+              y += 22;
+            }
+
+            ctx.font = '18px Courier New';
+            ctx.fillStyle = '#888';
+            ctx.textAlign = 'left';
+            ctx.fillText(box.boxNumber, 16, CH - 10);
+            ctx.textAlign = 'right';
+            ctx.fillText(marketplace, CW - 16, CH - 10);
           }
-
-          ctx.font = '18px Courier New';
-          ctx.fillStyle = '#888';
-          ctx.textAlign = 'left';
-          ctx.fillText(box.boxNumber, 16, CH - 10);
-          ctx.textAlign = 'right';
-          ctx.fillText(marketplace, CW - 16, CH - 10);
         });
         doc.addImage(barcodeImg, 'PNG', 0, 0, W_MM, H_MM);
       }
@@ -1302,7 +1361,7 @@ export default function ShipmentDetailPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {exitItems.map(item => (
+                    {exitItems.slice(exitPage * 10, (exitPage + 1) * 10).map(item => (
                       <tr key={item.iwasku}>
                         <td className="px-4 py-2 font-mono text-sm">{item.iwasku}</td>
                         <td className="px-4 py-2 text-sm text-gray-700 truncate max-w-[200px]">{item.name}</td>
@@ -1312,6 +1371,15 @@ export default function ShipmentDetailPage() {
                   </tbody>
                 </table>
               </div>
+              {exitItems.length > 10 && (
+                <div className="flex items-center justify-between">
+                  <button onClick={() => setExitPage(p => Math.max(0, p - 1))} disabled={exitPage === 0}
+                    className="px-3 py-1 text-xs border rounded disabled:opacity-30">Önceki</button>
+                  <span className="text-xs text-gray-500">{exitPage + 1} / {Math.ceil(exitItems.length / 10)}</span>
+                  <button onClick={() => setExitPage(p => Math.min(Math.ceil(exitItems.length / 10) - 1, p + 1))} disabled={exitPage >= Math.ceil(exitItems.length / 10) - 1}
+                    className="px-3 py-1 text-xs border rounded disabled:opacity-30">Sonraki</button>
+                </div>
+              )}
               <p className="text-sm text-gray-500">
                 Toplam: <span className="font-semibold text-gray-900">{exitItems.reduce((s, i) => s + i.quantity, 0)}</span> adet
                 ({exitItems.length} ürün)
