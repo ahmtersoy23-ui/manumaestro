@@ -76,13 +76,39 @@ export async function POST(request: NextRequest, { params }: Params) {
       });
     });
 
+    // Kolileri arşivle
+    const boxes = await prisma.shipmentBox.findMany({ where: { shipmentId: id } });
+    if (boxes.length > 0) {
+      await prisma.shipmentBoxArchive.createMany({
+        data: boxes.map(b => ({
+          shipmentId: id,
+          shipmentName: shipment.name,
+          destinationTab: shipment.destinationTab,
+          shippingMethod: shipment.shippingMethod,
+          boxNumber: b.boxNumber,
+          iwasku: b.iwasku,
+          fnsku: b.fnsku,
+          productName: b.productName,
+          productCategory: b.productCategory,
+          marketplaceCode: b.marketplaceCode,
+          destination: b.destination,
+          quantity: b.quantity,
+          width: b.width,
+          height: b.height,
+          depth: b.depth,
+          weight: b.weight,
+          closedAt: now,
+        })),
+      });
+    }
+
     await logAction({
       userId: user.id, userName: user.name, userEmail: user.email,
       action: 'ROUTE_TO_SHIPMENT', entityType: 'Shipment', entityId: id,
-      description: `Sevkiyat kapatıldı: ${shipment.name} (${unsentItems.length} yeni item gönderildi)`,
+      description: `Sevkiyat kapatıldı: ${shipment.name} (${unsentItems.length} yeni item gönderildi, ${boxes.length} koli arşivlendi)`,
     });
 
-    return NextResponse.json({ success: true, data: { sent: unsentItems.length, closed: true } });
+    return NextResponse.json({ success: true, data: { sent: unsentItems.length, closed: true, archived: boxes.length } });
   }
 
   // Karayolu/hava — seçili itemleri gönder

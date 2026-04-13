@@ -533,6 +533,34 @@ model ShipmentBox {
   @@map("shipment_boxes")
 }
 
+model ShipmentBoxArchive {
+  id               String   @id @default(uuid())
+  shipmentId       String
+  shipmentName     String   // "Gemi 69"
+  destinationTab   String   // "US", "EU"
+  shippingMethod   String   // "sea", "road", "air"
+  boxNumber        String
+  iwasku           String?
+  fnsku            String?
+  productName      String?
+  productCategory  String?
+  marketplaceCode  String?
+  destination      String   // "FBA" / "DEPO"
+  quantity         Int
+  width            Float?
+  height           Float?
+  depth            Float?
+  weight           Float?
+  closedAt         DateTime
+  createdAt        DateTime @default(now())
+
+  @@index([shipmentId])
+  @@index([shipmentName])
+  @@index([iwasku])
+  @@index([closedAt])
+  @@map("shipment_box_archive")
+}
+
 enum ShipmentStatus {
   PLANNING
   LOADING
