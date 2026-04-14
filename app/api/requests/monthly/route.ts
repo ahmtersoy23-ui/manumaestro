@@ -73,17 +73,17 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Enrich missing productSize from pricelab products table
-    const missingSkus = [...new Set(requests.filter(r => !r.productSize).map(r => r.iwasku))];
-    if (missingSkus.length > 0) {
-      const placeholders = missingSkus.map((_, i) => `$${i + 1}`).join(',');
+    // Enrich productSize from pricelab products table (tek kaynak: pricelab_db)
+    const allSkus = [...new Set(requests.map(r => r.iwasku))];
+    if (allSkus.length > 0) {
+      const placeholders = allSkus.map((_, i) => `$${i + 1}`).join(',');
       const products = await queryProductDb(
         `SELECT product_sku, COALESCE(manual_size, size) as size FROM products WHERE product_sku IN (${placeholders}) AND COALESCE(manual_size, size) IS NOT NULL`,
-        missingSkus
+        allSkus
       );
       const sizeMap = new Map(products.map((p: { product_sku: string; size: number }) => [p.product_sku, p.size]));
       for (const r of requests) {
-        if (!r.productSize && sizeMap.has(r.iwasku)) {
+        if (sizeMap.has(r.iwasku)) {
           (r as { productSize: number | null }).productSize = sizeMap.get(r.iwasku)!;
         }
       }
