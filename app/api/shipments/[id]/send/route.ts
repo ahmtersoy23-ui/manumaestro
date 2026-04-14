@@ -134,10 +134,10 @@ export async function POST(request: NextRequest, { params }: Params) {
   await prisma.$transaction(async (tx) => {
     for (const item of itemsToSend) {
       const requestedQty = sendMap.get(item.id)!;
-      const sendQty = requestedQty === -1 ? item.quantity : Math.min(requestedQty, item.quantity);
+      const sendQty = requestedQty === -1 ? item.quantity : requestedQty;
 
       if (sendQty < item.quantity) {
-        // Kısmi gönderim: item miktarını güncelle + kalan için yeni item oluştur
+        // Kısmi gönderim: kalan için yeni pending item oluştur
         const remaining = item.quantity - sendQty;
         await tx.shipmentItem.update({
           where: { id: item.id },
@@ -155,10 +155,10 @@ export async function POST(request: NextRequest, { params }: Params) {
           },
         });
       } else {
-        // Tam gönderim
+        // Tam veya fazla gönderim: miktarı güncelle
         await tx.shipmentItem.update({
           where: { id: item.id },
-          data: { sentAt: now },
+          data: { quantity: sendQty, sentAt: now },
         });
       }
 
@@ -174,7 +174,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
   const totalSent = itemsToSend.reduce((s, item) => {
     const rq = sendMap.get(item.id)!;
-    return s + (rq === -1 ? item.quantity : Math.min(rq, item.quantity));
+    return s + (rq === -1 ? item.quantity : rq);
   }, 0);
 
   await logAction({

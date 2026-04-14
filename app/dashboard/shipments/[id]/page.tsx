@@ -384,9 +384,14 @@ export default function ShipmentDetailPage() {
       .map(sid => pendingItems.find(i => i.id === sid))
       .filter((item): item is ShipmentItem => !!item?.packed);
     if (toSend.length === 0) return;
+    const missingQty = toSend.filter(item => !sendQtyOverrides[item.id]);
+    if (missingQty.length > 0) {
+      alert(`${missingQty.length} ürün için gönderilecek miktar giriniz`);
+      return;
+    }
     const sendItems = toSend.map(item => ({
       id: item.id,
-      quantity: sendQtyOverrides[item.id] ?? item.quantity,
+      quantity: sendQtyOverrides[item.id],
     }));
     const totalQtySend = sendItems.reduce((s, i) => s + i.quantity, 0);
     if (!confirm(`${toSend.length} ürün, toplam ${totalQtySend} adet gönderilsin mi?`)) return;
@@ -401,7 +406,7 @@ export default function ShipmentDetailPage() {
         // Gönderilen miktarlarla modal aç
         const sentItemDetails = toSend.map(item => ({
           ...item,
-          quantity: sendQtyOverrides[item.id] ?? item.quantity,
+          quantity: sendQtyOverrides[item.id],
         }));
         setSelectedIds(new Set());
         // Gönderilen override'ları temizle
@@ -1206,7 +1211,7 @@ export default function ShipmentDetailPage() {
                           } : prev);
                         }}
                         onPrintLabel={handlePrintItemLabel}
-                        sendQty={!isSea ? (sendQtyOverrides[item.id] ?? item.quantity) : undefined}
+                        sendQty={!isSea ? sendQtyOverrides[item.id] : undefined}
                         onSendQtyChange={!isSea ? (qty) => setSendQtyOverrides(prev => ({ ...prev, [item.id]: qty })) : undefined} />
                     );
                   })}
@@ -1896,12 +1901,12 @@ function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded
               <input
                 type="number"
                 min={1}
-                max={item.quantity}
-                value={sendQty ?? item.quantity}
+                value={sendQty ?? ''}
                 onChange={e => {
-                  const val = Math.min(item.quantity, Math.max(1, parseInt(e.target.value) || 1));
-                  onSendQtyChange(val);
+                  const raw = parseInt(e.target.value);
+                  onSendQtyChange(isNaN(raw) ? 0 : Math.max(1, raw));
                 }}
+                placeholder="—"
                 className="w-16 px-2 py-1 text-sm text-center border rounded focus:outline-none focus:ring-1 focus:ring-emerald-400"
               />
             </td>
