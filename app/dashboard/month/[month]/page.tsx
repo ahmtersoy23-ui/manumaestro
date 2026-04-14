@@ -587,7 +587,7 @@ export default function MonthDetailPage() {
                         <div className="bg-emerald-50 rounded-lg py-2"><p className="text-emerald-600">Stok</p><p className="font-bold text-emerald-700">{Math.round(gStok).toLocaleString('tr-TR')}{suffix}</p></div>
                         <div className="bg-blue-50 rounded-lg py-2"><p className="text-blue-600">Net İhtiyaç</p><p className="font-bold text-blue-700">{Math.round(gNet).toLocaleString('tr-TR')}{suffix}</p></div>
                         <div className="bg-gray-50 rounded-lg py-2"><p className="text-gray-500">Üretilen</p><p className="font-bold text-gray-900">{Math.round(gUretilen).toLocaleString('tr-TR')}{suffix}</p></div>
-                        <div className={`${gKalan === 0 ? 'bg-green-50' : 'bg-red-50'} rounded-lg py-2`}><p className={gKalan === 0 ? 'text-green-600' : 'text-red-500'}>Kalan</p><p className={`font-bold ${gKalan === 0 ? 'text-green-700' : 'text-red-600'}`}>{gKalan === 0 ? '✓' : gKalan.toLocaleString('tr-TR')}{gKalan > 0 ? suffix : ''}</p></div>
+                        <div className={`${Math.round(gKalan) === 0 ? 'bg-green-50' : 'bg-red-50'} rounded-lg py-2`}><p className={Math.round(gKalan) === 0 ? 'text-green-600' : 'text-red-500'}>Kalan</p><p className={`font-bold ${Math.round(gKalan) === 0 ? 'text-green-700' : 'text-red-600'}`}>{Math.round(gKalan) === 0 ? '✓' : Math.round(gKalan).toLocaleString('tr-TR')}{Math.round(gKalan) > 0 ? suffix : ''}</p></div>
                       </div>
                     ) : null;
                   })()}
