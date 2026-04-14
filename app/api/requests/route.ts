@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma, EntryType, RequestStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
+import { enrichProductSize } from '@/lib/db/enrichProductSize';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { verifyAuth, requireRole, checkMarketplacePermission } from '@/lib/auth/verify';
 import { ProductionRequestSchema, formatValidationError } from '@/lib/validation/schemas';
@@ -203,6 +204,9 @@ export async function GET(request: NextRequest) {
     const routedMap = new Map(
       routedItems.map(i => [i.productionRequestId, i.shipment])
     );
+
+    // Enrich productSize from pricelab_db (tek kaynak)
+    await enrichProductSize(requests);
 
     const enrichedRequests = requests.map(r => ({
       ...r,
