@@ -1,7 +1,7 @@
 /**
  * Send Items API
  * POST: Mark selected packed items as sent (set sentAt)
- *   - Karayolu/hava: seçili itemleri gönder (parti halinde)
+ *   - Karayolu/hava: seçili itemleri gönder (parti halinde, kısmi miktar destekli)
  *   - Deniz: ?closeShipment=true ile tüm itemleri gönder + sevkiyatı kapat
  */
 
@@ -14,8 +14,12 @@ import { z } from 'zod';
 type Params = { params: Promise<{ id: string }> };
 
 const SendItemsSchema = z.object({
-  itemIds: z.array(z.string().uuid()).optional(), // Karayolu/hava: seçili itemler
-  closeShipment: z.boolean().optional(),          // Deniz: sevkiyatı kapat
+  itemIds: z.array(z.string().uuid()).optional(),       // Eski format (tam miktar)
+  items: z.array(z.object({                              // Yeni format (kısmi miktar)
+    id: z.string().uuid(),
+    quantity: z.number().int().positive(),
+  })).optional(),
+  closeShipment: z.boolean().optional(),
 });
 
 export async function POST(request: NextRequest, { params }: Params) {
@@ -27,7 +31,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     return NextResponse.json({ success: false, error: 'Dogrulama hatasi' }, { status: 400 });
   }
 
-  const { itemIds, closeShipment } = validation.data;
+  const { itemIds, items, closeShipment } = validation.data;
 
   const shipment = await prisma.shipment.findUnique({
     where: { id },
@@ -112,37 +116,71 @@ export async function POST(request: NextRequest, { params }: Params) {
   }
 
   // Karayolu/hava — seçili itemleri gönder
-  if (!itemIds || itemIds.length === 0) {
+  // Yeni format: items (kısmi miktar), eski format: itemIds (tam miktar)
+  const sendMap = new Map<string, number>();
+  if (items && items.length > 0) {
+    for (const i of items) sendMap.set(i.id, i.quantity);
+  } else if (itemIds && itemIds.length > 0) {
+    for (const iid of itemIds) sendMap.set(iid, -1); // -1 = tam miktar
+  } else {
     return NextResponse.json({ success: false, error: 'Gönderilecek item seçiniz' }, { status: 400 });
   }
 
-  const itemsToSend = shipment.items.filter(i => itemIds.includes(i.id) && i.packed && !i.sentAt);
+  const itemsToSend = shipment.items.filter(i => sendMap.has(i.id) && i.packed && !i.sentAt);
   if (itemsToSend.length === 0) {
     return NextResponse.json({ success: false, error: 'Gönderilecek hazır item bulunamadı' }, { status: 400 });
   }
 
   await prisma.$transaction(async (tx) => {
-    // sentAt ata
-    await tx.shipmentItem.updateMany({
-      where: { id: { in: itemsToSend.map(i => i.id) } },
-      data: { sentAt: now },
-    });
-
-    // Reserve güncelleme (depo çıkışı artık ayrı onay modalından yapılıyor)
     for (const item of itemsToSend) {
+      const requestedQty = sendMap.get(item.id)!;
+      const sendQty = requestedQty === -1 ? item.quantity : Math.min(requestedQty, item.quantity);
+
+      if (sendQty < item.quantity) {
+        // Kısmi gönderim: item miktarını güncelle + kalan için yeni item oluştur
+        const remaining = item.quantity - sendQty;
+        await tx.shipmentItem.update({
+          where: { id: item.id },
+          data: { quantity: sendQty, sentAt: now },
+        });
+        await tx.shipmentItem.create({
+          data: {
+            shipmentId: id,
+            iwasku: item.iwasku,
+            quantity: remaining,
+            desi: item.desi,
+            marketplaceId: item.marketplaceId,
+            reserveId: item.reserveId,
+            packed: false,
+          },
+        });
+      } else {
+        // Tam gönderim
+        await tx.shipmentItem.update({
+          where: { id: item.id },
+          data: { sentAt: now },
+        });
+      }
+
+      // Reserve güncelleme
       if (item.reserveId) {
         await tx.stockReserve.update({
           where: { id: item.reserveId },
-          data: { shippedQuantity: { increment: item.quantity }, status: 'SHIPPED' },
+          data: { shippedQuantity: { increment: sendQty }, status: 'SHIPPED' },
         });
       }
     }
   });
 
+  const totalSent = itemsToSend.reduce((s, item) => {
+    const rq = sendMap.get(item.id)!;
+    return s + (rq === -1 ? item.quantity : Math.min(rq, item.quantity));
+  }, 0);
+
   await logAction({
     userId: user.id, userName: user.name, userEmail: user.email,
     action: 'ROUTE_TO_SHIPMENT', entityType: 'Shipment', entityId: id,
-    description: `${itemsToSend.length} item gönderildi: ${shipment.name}`,
+    description: `${itemsToSend.length} item gönderildi (${totalSent} adet): ${shipment.name}`,
   });
 
   return NextResponse.json({ success: true, data: { sent: itemsToSend.length } });

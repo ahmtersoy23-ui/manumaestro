@@ -103,8 +103,11 @@ export default function ShipmentDetailPage() {
   const [exitWeek, setExitWeek] = useState('');
   const [exitSaving, setExitSaving] = useState(false);
   const [exitPage, setExitPage] = useState(0);
-  // Karayolu/hava: gönderilen miktarı override (Gönderilenler tabında düzenlenebilir)
-  const [sentQtyOverrides, setSentQtyOverrides] = useState<Record<string, number>>({});
+  // Karayolu/hava: Bekleyen tabında gönderilecek miktar override
+  const [sendQtyOverrides, setSendQtyOverrides] = useState<Record<string, number>>({});
+  // StockPulse export modalı
+  const [showSPExport, setShowSPExport] = useState(false);
+  const [spCopied, setSpCopied] = useState<'fba' | 'depo' | null>(null);
 
   // Permissions from API
   const [perms, setPerms] = useState<Record<string, boolean>>({});
@@ -220,6 +223,23 @@ export default function ShipmentDetailPage() {
       }
     }
     return map;
+  }, [boxes]);
+
+  // StockPulse export: kutuları FBA/DEPO olarak grupla, iwasku bazlı topla
+  const spExportData = useMemo(() => {
+    const fba = new Map<string, number>();
+    const depo = new Map<string, number>();
+    for (const box of boxes) {
+      if (!box.iwasku) continue;
+      const target = box.destination === 'FBA' ? fba : depo;
+      target.set(box.iwasku, (target.get(box.iwasku) ?? 0) + box.quantity);
+    }
+    const toTsv = (map: Map<string, number>) =>
+      [...map.entries()].map(([sku, qty]) => `${sku}\t${qty}`).join('\n');
+    return {
+      fba: { items: fba, tsv: toTsv(fba), total: [...fba.values()].reduce((s, v) => s + v, 0) },
+      depo: { items: depo, tsv: toTsv(depo), total: [...depo.values()].reduce((s, v) => s + v, 0) },
+    };
   }, [boxes]);
 
   // Izin kontrolu API uzerinden yapiliyor (permissions state)
@@ -358,25 +378,38 @@ export default function ShipmentDetailPage() {
     } catch { alert('Çıkış kayıt hatası'); } finally { setExitSaving(false); }
   };
 
-  // Karayolu/hava: seçili packed itemleri gönder
+  // Karayolu/hava: seçili packed itemleri gönder (kısmi miktar destekli)
   const handleSendSelected = async () => {
-    const toSend = [...selectedIds].filter(sid => {
-      const item = pendingItems.find(i => i.id === sid);
-      return item?.packed;
-    });
+    const toSend = [...selectedIds]
+      .map(sid => pendingItems.find(i => i.id === sid))
+      .filter((item): item is ShipmentItem => !!item?.packed);
     if (toSend.length === 0) return;
-    if (!confirm(`${toSend.length} ürün gönderilsin mi?`)) return;
+    const sendItems = toSend.map(item => ({
+      id: item.id,
+      quantity: sendQtyOverrides[item.id] ?? item.quantity,
+    }));
+    const totalQtySend = sendItems.reduce((s, i) => s + i.quantity, 0);
+    if (!confirm(`${toSend.length} ürün, toplam ${totalQtySend} adet gönderilsin mi?`)) return;
     setSending(true);
     try {
       const res = await fetch(`/api/shipments/${id}/send`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemIds: toSend }),
+        body: JSON.stringify({ items: sendItems }),
       });
       const data = await res.json();
       if (data.success) {
-        // Gönderilen item'ları al ve modal aç
-        const sentItemDetails = toSend.map(sid => pendingItems.find(i => i.id === sid)!).filter(Boolean);
+        // Gönderilen miktarlarla modal aç
+        const sentItemDetails = toSend.map(item => ({
+          ...item,
+          quantity: sendQtyOverrides[item.id] ?? item.quantity,
+        }));
         setSelectedIds(new Set());
+        // Gönderilen override'ları temizle
+        setSendQtyOverrides(prev => {
+          const next = { ...prev };
+          for (const item of toSend) delete next[item.id];
+          return next;
+        });
         await fetchShipment();
         openExitModal(sentItemDetails);
       } else alert(data.error);
@@ -402,15 +435,11 @@ export default function ShipmentDetailPage() {
     } catch { alert('Geri alma hatası'); } finally { setUnsending(false); }
   };
 
-  // Gönderilenleri depo çıkışı modalına gönder (override miktarlarıyla)
+  // Gönderilenleri depo çıkışı modalına gönder
   const handleExitForSent = () => {
     const items = [...selectedSentIds].map(sid => sentItems.find(i => i.id === sid)!).filter(Boolean);
     if (items.length === 0) return;
-    const overriddenItems = items.map(i => ({
-      ...i,
-      quantity: sentQtyOverrides[i.id] ?? i.quantity,
-    }));
-    openExitModal(overriddenItems);
+    openExitModal(items);
     setSelectedSentIds(new Set());
   };
 
@@ -894,6 +923,13 @@ export default function ShipmentDetailPage() {
     } catch { /* */ }
   };
 
+  const handleSPCopy = async (type: 'fba' | 'depo') => {
+    const text = type === 'fba' ? spExportData.fba.tsv : spExportData.depo.tsv;
+    await navigator.clipboard.writeText(text);
+    setSpCopied(type);
+    setTimeout(() => setSpCopied(null), 2000);
+  };
+
   const handleExportItems = async () => {
     const XLSX = await loadXLSX();
     const rows = shipment.items.map((item, i) => ({ '#': i + 1, 'IWASKU': item.iwasku, 'FNSKU': item.fnsku ?? '', 'Ürün Adı': item.productName, 'Kategori': item.productCategory, 'Pazar Yeri': item.marketplace?.code ?? '', 'Miktar': item.quantity, 'Desi': item.desi ? Math.round(item.desi * item.quantity) : '', 'Durum': item.sentAt ? 'Gönderildi' : item.packed ? 'Hazır' : 'Bekliyor' }));
@@ -941,6 +977,12 @@ export default function ShipmentDetailPage() {
               const res = await fetch(`/api/shipments/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'DELIVERED' }) });
               if ((await res.json()).success) fetchShipment();
             }} className="px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 flex items-center gap-2">Teslim Edildi</button>
+          )}
+          {!isActive && isSea && boxes.length > 0 && (
+            <button onClick={() => setShowSPExport(true)}
+              className="px-3 py-2 bg-cyan-600 text-white text-sm rounded-lg hover:bg-cyan-700 flex items-center gap-2">
+              <Ship className="w-4 h-4" /> StockPulse
+            </button>
           )}
         </div>
       </div>
@@ -1129,7 +1171,14 @@ export default function ShipmentDetailPage() {
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Ürün Adı</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Kategori</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Pazar Yeri</th>
-                    <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Miktar</th>
+                    {!isSea ? (
+                      <>
+                        <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Talep</th>
+                        <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Gönderilen</th>
+                      </>
+                    ) : (
+                      <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Miktar</th>
+                    )}
                     <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">T. Desi</th>
                     {isActive && <th className="w-10"></th>}
                   </tr>
@@ -1156,7 +1205,9 @@ export default function ShipmentDetailPage() {
                             items: prev.items.map(i => i.id === itemId ? { ...i, fnsku } : i),
                           } : prev);
                         }}
-                        onPrintLabel={handlePrintItemLabel} />
+                        onPrintLabel={handlePrintItemLabel}
+                        sendQty={!isSea ? (sendQtyOverrides[item.id] ?? item.quantity) : undefined}
+                        onSendQtyChange={!isSea ? (qty) => setSendQtyOverrides(prev => ({ ...prev, [item.id]: qty })) : undefined} />
                     );
                   })}
                 </tbody>
@@ -1235,14 +1286,7 @@ export default function ShipmentDetailPage() {
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Ürün Adı</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Kategori</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Pazar Yeri</th>
-                    {!isSea ? (
-                      <>
-                        <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Talep</th>
-                        <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Gönderilen</th>
-                      </>
-                    ) : (
-                      <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Miktar</th>
-                    )}
+                    <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Miktar</th>
                     <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Gönderim</th>
                   </tr>
                 </thead>
@@ -1265,26 +1309,7 @@ export default function ShipmentDetailPage() {
                       <td className="px-3 py-3 text-xs text-gray-700 line-clamp-1">{item.productName || '—'}</td>
                       <td className="px-3 py-3 text-sm text-gray-600">{item.productCategory || '—'}</td>
                       <td className="px-3 py-3 text-sm text-gray-600">{item.marketplace?.name ?? '—'}</td>
-                      {!isSea ? (
-                        <>
-                          <td className="text-center px-3 py-3 text-sm text-gray-500">{item.quantity}</td>
-                          <td className="text-center px-3 py-3">
-                            <input
-                              type="number"
-                              min={1}
-                              max={item.quantity}
-                              value={sentQtyOverrides[item.id] ?? item.quantity}
-                              onChange={e => {
-                                const val = Math.min(item.quantity, Math.max(1, parseInt(e.target.value) || 1));
-                                setSentQtyOverrides(prev => ({ ...prev, [item.id]: val }));
-                              }}
-                              className="w-16 px-2 py-1 text-sm text-center border rounded focus:outline-none focus:ring-1 focus:ring-emerald-400"
-                            />
-                          </td>
-                        </>
-                      ) : (
-                        <td className="text-center px-3 py-3 font-semibold text-gray-900">{item.quantity}</td>
-                      )}
+                      <td className="text-center px-3 py-3 font-semibold text-gray-900">{item.quantity}</td>
                       <td className="text-center px-3 py-3 text-xs text-green-700">
                         {item.sentAt ? new Date(item.sentAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }) : '—'}
                       </td>
@@ -1578,6 +1603,67 @@ export default function ShipmentDetailPage() {
           </div>
         </div>
       )}
+
+      {/* === STOCKPULSE EXPORT MODALI === */}
+      {showSPExport && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <h3 className="text-lg font-bold text-gray-900">StockPulse Aktarımı</h3>
+              <button onClick={() => setShowSPExport(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-6 py-4 space-y-5">
+              <p className="text-xs text-gray-500">
+                Sevkiyat: <span className="font-semibold text-gray-800">{shipment.name}</span> — Koli verilerinden FBA ve Depo olarak ayrıştırıldı.
+                StockPulse → In Transit → Yeni Sevkiyat → Yapıştır
+              </p>
+
+              {/* FBA Section */}
+              {spExportData.fba.items.size > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 bg-cyan-100 text-cyan-800 text-xs font-semibold rounded">FBA-US</span>
+                      <span className="text-xs text-gray-500">{spExportData.fba.items.size} SKU · {spExportData.fba.total.toLocaleString('tr-TR')} adet</span>
+                    </div>
+                    <button onClick={() => handleSPCopy('fba')}
+                      className="flex items-center gap-1 px-3 py-1 text-xs border rounded-lg hover:bg-gray-50 transition-colors">
+                      {spCopied === 'fba' ? <><Check className="w-3 h-3 text-green-600" /> Kopyalandı</> : <><Copy className="w-3 h-3" /> Kopyala</>}
+                    </button>
+                  </div>
+                  <textarea readOnly value={spExportData.fba.tsv} rows={Math.min(6, spExportData.fba.items.size)}
+                    className="w-full px-3 py-2 border rounded-lg text-xs font-mono bg-gray-50 resize-none focus:outline-none" />
+                </div>
+              )}
+
+              {/* DEPO Section */}
+              {spExportData.depo.items.size > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-xs font-semibold rounded">NJ</span>
+                      <span className="text-xs text-gray-500">{spExportData.depo.items.size} SKU · {spExportData.depo.total.toLocaleString('tr-TR')} adet</span>
+                    </div>
+                    <button onClick={() => handleSPCopy('depo')}
+                      className="flex items-center gap-1 px-3 py-1 text-xs border rounded-lg hover:bg-gray-50 transition-colors">
+                      {spCopied === 'depo' ? <><Check className="w-3 h-3 text-green-600" /> Kopyalandı</> : <><Copy className="w-3 h-3" /> Kopyala</>}
+                    </button>
+                  </div>
+                  <textarea readOnly value={spExportData.depo.tsv} rows={Math.min(6, spExportData.depo.items.size)}
+                    className="w-full px-3 py-2 border rounded-lg text-xs font-mono bg-gray-50 resize-none focus:outline-none" />
+                </div>
+              )}
+
+              {spExportData.fba.items.size === 0 && spExportData.depo.items.size === 0 && (
+                <p className="text-sm text-gray-500 text-center py-4">Koli verisi bulunamadı</p>
+              )}
+            </div>
+            <div className="flex items-center justify-end px-6 py-4 border-t bg-gray-50 rounded-b-2xl">
+              <button onClick={() => setShowSPExport(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Kapat</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1752,7 +1838,7 @@ function InlineFnskuInput({ item, onSaved }: { item: ShipmentItem; onSaved: (ite
 function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded, isSelected, togglingId,
   canBoxes, canPack, canSend, canDelete,
   onTogglePacked, onToggleSelect, onToggleExpand, onCreateBox, onDeleteBox, onDeleteItem, onFnskuSaved,
-  onPrintLabel }: {
+  onPrintLabel, sendQty, onSendQtyChange }: {
   item: ShipmentItem; itemDesi: number; itemBoxes: ShipmentBox[];
   isSea: boolean; isActive: boolean; isExpanded: boolean; isSelected: boolean; togglingId: string | null;
   canBoxes: boolean; canPack: boolean; canSend: boolean; canDelete: boolean;
@@ -1761,6 +1847,7 @@ function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded
   onDeleteItem: () => void;
   onFnskuSaved: (itemId: string, fnsku: string) => void;
   onPrintLabel: (item: ShipmentItem, count: number) => void;
+  sendQty?: number; onSendQtyChange?: (qty: number) => void;
 }) {
   // Deniz renk kodlama: kolilerdeki toplam adet vs item miktar
   const boxQtyTotal = itemBoxes.reduce((s, b) => s + b.quantity, 0);
@@ -1802,7 +1889,26 @@ function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded
         <td className="px-3 py-3"><div className={`text-xs leading-tight line-clamp-2 ${item.packed ? 'text-green-700' : 'text-gray-700'}`}>{item.productName || '—'}</div></td>
         <td className={`px-3 py-3 text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.productCategory || '—'}</td>
         <td className={`px-3 py-3 text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.marketplace?.name ?? '—'}</td>
-        <td className={`text-center px-3 py-3 font-semibold ${item.packed ? 'text-green-800' : 'text-gray-900'}`}>{item.quantity}</td>
+        {!isSea && onSendQtyChange ? (
+          <>
+            <td className={`text-center px-3 py-3 text-sm ${item.packed ? 'text-green-600' : 'text-gray-500'}`}>{item.quantity}</td>
+            <td className="text-center px-3 py-3">
+              <input
+                type="number"
+                min={1}
+                max={item.quantity}
+                value={sendQty ?? item.quantity}
+                onChange={e => {
+                  const val = Math.min(item.quantity, Math.max(1, parseInt(e.target.value) || 1));
+                  onSendQtyChange(val);
+                }}
+                className="w-16 px-2 py-1 text-sm text-center border rounded focus:outline-none focus:ring-1 focus:ring-emerald-400"
+              />
+            </td>
+          </>
+        ) : (
+          <td className={`text-center px-3 py-3 font-semibold ${item.packed ? 'text-green-800' : 'text-gray-900'}`}>{item.quantity}</td>
+        )}
         <td className={`text-center px-3 py-3 font-medium ${item.packed ? 'text-green-800' : 'text-gray-900'}`}>{itemDesi > 0 ? Math.round(itemDesi).toLocaleString('tr-TR') : '—'}</td>
         {isActive && (
           <td className="px-2 py-3 text-center">
