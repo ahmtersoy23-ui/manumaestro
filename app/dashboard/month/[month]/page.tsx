@@ -572,8 +572,14 @@ export default function MonthDetailPage() {
                       const cs = categoryStockMap.get(c.productCategory);
                       return s + (cs ? (viewMode === 'quantity' ? cs.netQty : cs.netDesi) : (viewMode === 'quantity' ? c.totalQuantity : c.totalDesi));
                     }, 0);
-                    const gUretilen = groupCats.reduce((s, c) => s + (viewMode === 'quantity' ? c.totalProduced : c.producedDesi), 0);
-                    const gKalan = Math.max(0, Math.round(gNet - gUretilen));
+                    const gUretilen = groupCats.reduce((s, c) => {
+                      const cs = categoryStockMap.get(c.productCategory);
+                      return s + (cs ? (viewMode === 'quantity' ? cs.producedQty : cs.producedDesi) : (viewMode === 'quantity' ? c.totalProduced : c.producedDesi));
+                    }, 0);
+                    const gKalan = groupCats.reduce((s, c) => {
+                      const cs = categoryStockMap.get(c.productCategory);
+                      return s + (cs ? (viewMode === 'quantity' ? cs.kalanQty : cs.kalanDesi) : 0);
+                    }, 0);
                     const suffix = viewMode === 'quantity' ? '' : ' desi';
                     return hasStock ? (
                       <div className="grid grid-cols-5 gap-2 mb-3 text-center text-xs">
