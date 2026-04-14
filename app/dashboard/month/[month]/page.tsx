@@ -126,6 +126,7 @@ export default function MonthDetailPage() {
     totalRequested: number;
     warehouseStock: number;
     netProduction: number;
+    produced: number;
     desi: number | null;
   }
   const [snapshotData, setSnapshotData] = useState<{
