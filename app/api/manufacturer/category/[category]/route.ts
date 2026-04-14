@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
+import { enrichProductSize } from '@/lib/db/enrichProductSize';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { formatMonthValue } from '@/lib/monthUtils';
 import { verifyAuth } from '@/lib/auth/verify';
@@ -96,7 +97,10 @@ export async function GET(
         })
       : [];
 
-    // 4. Snapshot stock (fixed)
+    // 4. Enrich productSize from pricelab_db (tek kaynak)
+    await enrichProductSize(requests);
+
+    // 5. Snapshot stock (fixed) — sayfa IWASKU'ları için
     const snapshots = pageIwaskus.length > 0
       ? await prisma.monthSnapshot.findMany({
           where: { month: productionMonth, iwasku: { in: pageIwaskus } },
@@ -109,7 +113,70 @@ export async function GET(
       producedMap.set(s.iwasku, s.produced);
     }
 
-    // 5. Format
+    // 6. Tüm kategori summary (sayfalamadan bağımsız)
+    const allRequests = await prisma.productionRequest.findMany({
+      where: {
+        ...baseWhere,
+        ...(statusFilter && { status: { in: statusFilter as never[] } }),
+        ...(marketplaceParam && { marketplaceId: marketplaceParam }),
+      },
+      select: { iwasku: true, quantity: true, productSize: true },
+    });
+    await enrichProductSize(allRequests);
+
+    const allSnapshots = await prisma.monthSnapshot.findMany({
+      where: { month: productionMonth, iwasku: { in: [...new Set(allRequests.map(r => r.iwasku))] } },
+    });
+    const allStockMap = new Map<string, number>();
+    const allProducedMap = new Map<string, number>();
+    for (const s of allSnapshots) {
+      allStockMap.set(s.iwasku, s.warehouseStock);
+      allProducedMap.set(s.iwasku, s.produced);
+    }
+
+    // IWASKU bazlı gruplama + aggregate
+    const summaryMap = new Map<string, { totalQty: number; desi: number; stock: number; produced: number }>();
+    for (const r of allRequests) {
+      const existing = summaryMap.get(r.iwasku);
+      if (existing) {
+        existing.totalQty += r.quantity;
+      } else {
+        summaryMap.set(r.iwasku, {
+          totalQty: r.quantity,
+          desi: r.productSize ?? 0,
+          stock: allStockMap.get(r.iwasku) ?? 0,
+          produced: allProducedMap.get(r.iwasku) ?? 0,
+        });
+      }
+    }
+
+    let talep = 0, talepDesi = 0, stok = 0, stokDesi = 0;
+    let netIhtiyac = 0, netDesi = 0, uretilen = 0, uretilenDesi = 0;
+    let kalan = 0, kalanDesi = 0;
+    for (const [, v] of summaryMap) {
+      const net = Math.max(0, v.totalQty - v.stock);
+      const rem = Math.max(0, net - v.produced);
+      talep += v.totalQty;
+      talepDesi += v.totalQty * v.desi;
+      stok += v.stock;
+      stokDesi += v.stock * v.desi;
+      netIhtiyac += net;
+      netDesi += net * v.desi;
+      uretilen += v.produced;
+      uretilenDesi += v.produced * v.desi;
+      kalan += rem;
+      kalanDesi += rem * v.desi;
+    }
+    const summary = {
+      talep, talepDesi: Math.round(talepDesi),
+      stok, stokDesi: Math.round(stokDesi),
+      netIhtiyac, netDesi: Math.round(netDesi),
+      uretilen, uretilenDesi: Math.round(uretilenDesi),
+      kalan, kalanDesi: Math.round(kalanDesi),
+      pct: netIhtiyac > 0 ? Math.round((uretilen / netIhtiyac) * 100) : 0,
+    };
+
+    // 7. Format
     const formattedRequests = requests.map((r) => ({
       id: r.id,
       iwasku: r.iwasku,
@@ -147,6 +214,7 @@ export async function GET(
         total: totalProducts,
         totalPages,
       },
+      summary,
       availableMarketplaces,
     });
   } catch (error) {

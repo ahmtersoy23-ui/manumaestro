@@ -101,6 +101,8 @@ export default function ManufacturerCategoryPage() {
   const [saving, setSaving] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<GroupedRequest | null>(null);
   const [exporting, setExporting] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [apiSummary, setApiSummary] = useState<Record<string, number> | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -144,6 +146,9 @@ export default function ManufacturerCategoryPage() {
           }
           if (data.availableMarketplaces) {
             setAvailableMarketplaces(data.availableMarketplaces);
+          }
+          if (data.summary) {
+            setApiSummary(data.summary);
           }
 
           // Group by IWASKU
@@ -436,60 +441,42 @@ export default function ManufacturerCategoryPage() {
         )}
       </div>
 
-      {/* Summary Card */}
-      {groupedRequests.length > 0 && (() => {
-        const totals = groupedRequests.reduce((acc, g) => {
-          const produced = editValues[g.iwasku]?.producedQuantity || 0;
-          const desi = g.productSize ?? 0;
-          acc.talep += g.totalQuantity;
-          acc.talepDesi += g.totalQuantity * desi;
-          acc.stok += g.warehouseStock ?? 0;
-          acc.stokDesi += (g.warehouseStock ?? 0) * desi;
-          acc.netIhtiyac += g.netNeed;
-          acc.netDesi += g.netNeed * desi;
-          acc.uretilen += produced;
-          acc.uretilenDesi += produced * desi;
-          acc.kalan += Math.max(0, g.netNeed - produced);
-          acc.kalanDesi += Math.max(0, g.netNeed - produced) * desi;
-          return acc;
-        }, { talep: 0, talepDesi: 0, stok: 0, stokDesi: 0, netIhtiyac: 0, netDesi: 0, uretilen: 0, uretilenDesi: 0, kalan: 0, kalanDesi: 0 });
-        const pct = totals.netIhtiyac > 0 ? Math.round((totals.uretilen / totals.netIhtiyac) * 100) : 0;
-        return (
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 text-center">
-              <div>
-                <p className="text-xs text-gray-500">Talep</p>
-                <p className="text-lg font-bold text-gray-900">{totals.talep.toLocaleString('tr-TR')}</p>
-                <p className="text-[10px] text-gray-400">{Math.round(totals.talepDesi).toLocaleString('tr-TR')} desi</p>
-              </div>
-              <div>
-                <p className="text-xs text-emerald-600">Stok</p>
-                <p className="text-lg font-bold text-emerald-700">{totals.stok.toLocaleString('tr-TR')}</p>
-                <p className="text-[10px] text-emerald-400">{Math.round(totals.stokDesi).toLocaleString('tr-TR')} desi</p>
-              </div>
-              <div>
-                <p className="text-xs text-blue-600">Net Ihtiyac</p>
-                <p className="text-lg font-bold text-blue-700">{totals.netIhtiyac.toLocaleString('tr-TR')}</p>
-                <p className="text-[10px] text-blue-400">{Math.round(totals.netDesi).toLocaleString('tr-TR')} desi</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Uretilen</p>
-                <p className="text-lg font-bold text-gray-900">{totals.uretilen.toLocaleString('tr-TR')}</p>
-                <p className="text-[10px] text-gray-400">{Math.round(totals.uretilenDesi).toLocaleString('tr-TR')} desi</p>
-              </div>
-              <div>
-                <p className="text-xs text-red-500">Kalan</p>
-                <p className={`text-lg font-bold ${totals.kalan === 0 ? 'text-green-600' : 'text-red-600'}`}>{totals.kalan.toLocaleString('tr-TR')}</p>
-                <p className={`text-[10px] ${totals.kalan === 0 ? 'text-green-400' : 'text-red-400'}`}>{Math.round(totals.kalanDesi).toLocaleString('tr-TR')} desi</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Ilerleme</p>
-                <p className={`text-lg font-bold ${pct >= 100 ? 'text-green-600' : 'text-gray-900'}`}>{pct}%</p>
-              </div>
+      {/* Summary Card — API'dan gelen tüm kategori toplamı */}
+      {apiSummary && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 text-center">
+            <div>
+              <p className="text-xs text-gray-500">Talep</p>
+              <p className="text-lg font-bold text-gray-900">{apiSummary.talep.toLocaleString('tr-TR')}</p>
+              <p className="text-[10px] text-gray-400">{apiSummary.talepDesi.toLocaleString('tr-TR')} desi</p>
+            </div>
+            <div>
+              <p className="text-xs text-emerald-600">Stok</p>
+              <p className="text-lg font-bold text-emerald-700">{apiSummary.stok.toLocaleString('tr-TR')}</p>
+              <p className="text-[10px] text-emerald-400">{apiSummary.stokDesi.toLocaleString('tr-TR')} desi</p>
+            </div>
+            <div>
+              <p className="text-xs text-blue-600">Net Ihtiyac</p>
+              <p className="text-lg font-bold text-blue-700">{apiSummary.netIhtiyac.toLocaleString('tr-TR')}</p>
+              <p className="text-[10px] text-blue-400">{apiSummary.netDesi.toLocaleString('tr-TR')} desi</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Uretilen</p>
+              <p className="text-lg font-bold text-gray-900">{apiSummary.uretilen.toLocaleString('tr-TR')}</p>
+              <p className="text-[10px] text-gray-400">{apiSummary.uretilenDesi.toLocaleString('tr-TR')} desi</p>
+            </div>
+            <div>
+              <p className="text-xs text-red-500">Kalan</p>
+              <p className={`text-lg font-bold ${apiSummary.kalan === 0 ? 'text-green-600' : 'text-red-600'}`}>{apiSummary.kalan.toLocaleString('tr-TR')}</p>
+              <p className={`text-[10px] ${apiSummary.kalan === 0 ? 'text-green-400' : 'text-red-400'}`}>{apiSummary.kalanDesi.toLocaleString('tr-TR')} desi</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Ilerleme</p>
+              <p className={`text-lg font-bold ${apiSummary.pct >= 100 ? 'text-green-600' : 'text-gray-900'}`}>{apiSummary.pct}%</p>
             </div>
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       {/* Requests Table */}
       {groupedRequests.length === 0 ? (
