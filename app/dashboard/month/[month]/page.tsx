@@ -141,31 +141,41 @@ export default function MonthDetailPage() {
     coveredDesi: number;
     netQty: number;       // max(0, demand - stock) per product, summed
     netDesi: number;
+    kalanQty: number;     // per-SKU remaining: sum(max(0, net - produced))
+    kalanDesi: number;
+    producedQty: number;  // per-SKU capped: sum(min(produced, net))
+    producedDesi: number;
   }
   const categoryStockMap = new Map<string, CategoryStock>();
   if (snapshotData && iwaskuSummary.length > 0) {
-    // Build fixed stock map from snapshot
+    // Build fixed stock + produced + desi maps from snapshot
     const stockMap = new Map<string, number>();
-    for (const s of snapshotData.snapshots) {
-      stockMap.set(s.iwasku, s.warehouseStock);
-    }
-    // Build desi map from snapshot (more complete than API)
+    const producedMap = new Map<string, number>();
     const desiMap = new Map<string, number>();
     for (const s of snapshotData.snapshots) {
+      stockMap.set(s.iwasku, s.warehouseStock);
+      if (s.produced != null) producedMap.set(s.iwasku, s.produced);
       if (s.desi) desiMap.set(s.iwasku, s.desi);
     }
-    // Compute using LIVE demand + FIXED stock
+    // Compute using LIVE demand + FIXED stock + produced (per-SKU)
     for (const item of iwaskuSummary) {
-      const existing = categoryStockMap.get(item.category) || { coveredQty: 0, coveredDesi: 0, netQty: 0, netDesi: 0 };
+      const existing = categoryStockMap.get(item.category) || { coveredQty: 0, coveredDesi: 0, netQty: 0, netDesi: 0, kalanQty: 0, kalanDesi: 0, producedQty: 0, producedDesi: 0 };
       const stock = stockMap.get(item.iwasku) || 0;
+      const produced = producedMap.get(item.iwasku) || 0;
       const demand = item.totalQty;
       const covered = Math.min(stock, demand);
       const net = Math.max(0, demand - stock);
+      const rem = Math.max(0, net - produced);
+      const fulfilled = Math.min(produced, net);
       const desiPerUnit = desiMap.get(item.iwasku) || item.desi || 0;
       existing.coveredQty += covered;
       existing.coveredDesi += covered * desiPerUnit;
       existing.netQty += net;
       existing.netDesi += net * desiPerUnit;
+      existing.kalanQty += rem;
+      existing.kalanDesi += rem * desiPerUnit;
+      existing.producedQty += fulfilled;
+      existing.producedDesi += fulfilled * desiPerUnit;
       categoryStockMap.set(item.category, existing);
     }
   }
@@ -645,26 +655,22 @@ export default function MonthDetailPage() {
                           </div>
 
                           {catStock && (() => {
-                            const kalanQty = Math.max(0, catStock.netQty - category.totalProduced);
-                            const kalanDesi = Math.max(0, catStock.netDesi - category.producedDesi);
                             return (
                               <div className="flex justify-between items-center">
                                 <p className="text-xs text-gray-600">Kalan</p>
-                                <p className={`text-sm font-bold ${(viewMode === 'quantity' ? kalanQty : kalanDesi) === 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                <p className={`text-sm font-bold ${(viewMode === 'quantity' ? catStock.kalanQty : catStock.kalanDesi) === 0 ? 'text-green-600' : 'text-red-600'}`}>
                                   {viewMode === 'quantity'
-                                    ? (kalanQty === 0 ? '✓' : `${kalanQty} adet`)
-                                    : (kalanDesi === 0 ? '✓' : `${Math.round(kalanDesi)} desi`)}
+                                    ? (catStock.kalanQty === 0 ? '✓' : `${catStock.kalanQty} adet`)
+                                    : (catStock.kalanDesi === 0 ? '✓' : `${Math.round(catStock.kalanDesi)} desi`)}
                                 </p>
                               </div>
                             );
                           })()}
 
                           {(() => {
-                            // Progress = üretilen / net ihtiyaç (snapshot varsa), yoksa üretilen / talep
-                            const baseQty = catStock ? catStock.netQty : category.totalQuantity;
-                            const baseDesi = catStock ? catStock.netDesi : category.totalDesi;
-                            const pctQty = baseQty > 0 ? Math.round((category.totalProduced / baseQty) * 100) : 0;
-                            const pctDesi = baseDesi > 0 ? Math.round((category.producedDesi / baseDesi) * 100) : 0;
+                            // Progress = per-SKU fulfilled / net ihtiyaç (fazla üretim telafi etmez)
+                            const pctQty = catStock && catStock.netQty > 0 ? Math.round((catStock.producedQty / catStock.netQty) * 100) : (category.totalProduced > 0 ? 100 : 0);
+                            const pctDesi = catStock && catStock.netDesi > 0 ? Math.round((catStock.producedDesi / catStock.netDesi) * 100) : (category.producedDesi > 0 ? 100 : 0);
                             const pct = viewMode === 'quantity' ? pctQty : pctDesi;
                             const barPct = Math.min(pct, 100);
                             return (
