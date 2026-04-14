@@ -103,6 +103,8 @@ export default function ShipmentDetailPage() {
   const [exitWeek, setExitWeek] = useState('');
   const [exitSaving, setExitSaving] = useState(false);
   const [exitPage, setExitPage] = useState(0);
+  // Karayolu/hava: gönderilen miktarı override (Gönderilenler tabında düzenlenebilir)
+  const [sentQtyOverrides, setSentQtyOverrides] = useState<Record<string, number>>({});
 
   // Permissions from API
   const [perms, setPerms] = useState<Record<string, boolean>>({});
@@ -400,11 +402,15 @@ export default function ShipmentDetailPage() {
     } catch { alert('Geri alma hatası'); } finally { setUnsending(false); }
   };
 
-  // Gönderilenleri depo çıkışı modalına gönder
+  // Gönderilenleri depo çıkışı modalına gönder (override miktarlarıyla)
   const handleExitForSent = () => {
     const items = [...selectedSentIds].map(sid => sentItems.find(i => i.id === sid)!).filter(Boolean);
     if (items.length === 0) return;
-    openExitModal(items);
+    const overriddenItems = items.map(i => ({
+      ...i,
+      quantity: sentQtyOverrides[i.id] ?? i.quantity,
+    }));
+    openExitModal(overriddenItems);
     setSelectedSentIds(new Set());
   };
 
@@ -1229,7 +1235,14 @@ export default function ShipmentDetailPage() {
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Ürün Adı</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Kategori</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Pazar Yeri</th>
-                    <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Miktar</th>
+                    {!isSea ? (
+                      <>
+                        <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Talep</th>
+                        <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Gönderilen</th>
+                      </>
+                    ) : (
+                      <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Miktar</th>
+                    )}
                     <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Gönderim</th>
                   </tr>
                 </thead>
@@ -1252,7 +1265,26 @@ export default function ShipmentDetailPage() {
                       <td className="px-3 py-3 text-xs text-gray-700 line-clamp-1">{item.productName || '—'}</td>
                       <td className="px-3 py-3 text-sm text-gray-600">{item.productCategory || '—'}</td>
                       <td className="px-3 py-3 text-sm text-gray-600">{item.marketplace?.name ?? '—'}</td>
-                      <td className="text-center px-3 py-3 font-semibold text-gray-900">{item.quantity}</td>
+                      {!isSea ? (
+                        <>
+                          <td className="text-center px-3 py-3 text-sm text-gray-500">{item.quantity}</td>
+                          <td className="text-center px-3 py-3">
+                            <input
+                              type="number"
+                              min={1}
+                              max={item.quantity}
+                              value={sentQtyOverrides[item.id] ?? item.quantity}
+                              onChange={e => {
+                                const val = Math.min(item.quantity, Math.max(1, parseInt(e.target.value) || 1));
+                                setSentQtyOverrides(prev => ({ ...prev, [item.id]: val }));
+                              }}
+                              className="w-16 px-2 py-1 text-sm text-center border rounded focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                            />
+                          </td>
+                        </>
+                      ) : (
+                        <td className="text-center px-3 py-3 font-semibold text-gray-900">{item.quantity}</td>
+                      )}
                       <td className="text-center px-3 py-3 text-xs text-green-700">
                         {item.sentAt ? new Date(item.sentAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }) : '—'}
                       </td>
