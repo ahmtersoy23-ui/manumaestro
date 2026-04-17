@@ -236,16 +236,15 @@ export async function POST(request: NextRequest, { params }: Params) {
     );
   }
 
-  // Birim desi: products.manual_size (öncelikli) → products.size → sku_master.size
+  // Birim desi: products.manual_size (öncelikli) → products.size
   const iwaskus = [...new Set(validation.data.items.map(i => i.iwasku))];
   const sizeMap = new Map<string, number>();
   if (iwaskus.length > 0) {
     const placeholders = iwaskus.map((_, i) => `$${i + 1}`).join(',');
     const rows = await queryProductDb(
-      `SELECT p.product_sku AS iwasku, COALESCE(p.manual_size, p.size, s.size) AS unit_size
+      `SELECT p.product_sku AS iwasku, COALESCE(p.manual_size, p.size) AS unit_size
        FROM products p
-       LEFT JOIN sku_master s ON s.iwasku = p.product_sku
-       WHERE p.product_sku IN (${placeholders}) AND COALESCE(p.manual_size, p.size, s.size) IS NOT NULL`,
+       WHERE p.product_sku IN (${placeholders}) AND COALESCE(p.manual_size, p.size) IS NOT NULL`,
       iwaskus
     );
     for (const row of rows) {

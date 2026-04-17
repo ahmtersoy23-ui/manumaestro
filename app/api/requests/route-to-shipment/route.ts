@@ -110,7 +110,9 @@ export async function POST(request: NextRequest) {
       const uniqueIwaskus = [...new Set(missingDesiIwaskus)];
       const placeholders = uniqueIwaskus.map((_, i) => `$${i + 1}`).join(',');
       const rows = await queryProductDb(
-        `SELECT DISTINCT iwasku, size::float AS desi FROM sku_master WHERE iwasku IN (${placeholders}) AND size IS NOT NULL`,
+        `SELECT p.product_sku AS iwasku, COALESCE(p.manual_size, p.size)::float AS desi
+         FROM products p
+         WHERE p.product_sku IN (${placeholders}) AND COALESCE(p.manual_size, p.size) IS NOT NULL`,
         uniqueIwaskus
       );
       for (const row of rows) {
