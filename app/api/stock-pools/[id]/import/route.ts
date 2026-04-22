@@ -97,8 +97,12 @@ export async function POST(request: NextRequest, { params }: Params) {
     }
   }
 
-  // Enrich items with product data from pricelab_db if desi/category missing
-  const iwaskusNeedingEnrichment = items.filter(i => !i.desi || !i.category).map(i => i.iwasku);
+  // Enrich items with product data from pricelab_db.
+  // Desi VEYA category eksikse enrich edilir; size=NULL olsa bile category gelsin diye
+  // size filtresi YOK (downstream 0 desi kontrolü ayrı yapılıyor).
+  const iwaskusNeedingEnrichment = items
+    .filter(i => !i.desi || !i.category)
+    .map(i => i.iwasku);
   const productDataMap = new Map<string, { desi: number; category: string }>();
 
   if (iwaskusNeedingEnrichment.length > 0) {
@@ -106,7 +110,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       const placeholders = iwaskusNeedingEnrichment.map((_, i) => `$${i + 1}`).join(',');
       const rows = await queryProductDb(
         `SELECT product_sku AS iwasku, COALESCE(manual_size, size) AS desi, category
-         FROM products WHERE product_sku IN (${placeholders}) AND COALESCE(manual_size, size) > 0`,
+         FROM products WHERE product_sku IN (${placeholders})`,
         iwaskusNeedingEnrichment
       );
       for (const row of rows) {
@@ -116,7 +120,7 @@ export async function POST(request: NextRequest, { params }: Params) {
         });
       }
     } catch {
-      // Continue without enrichment — desi will be 0
+      // Continue without enrichment — desi/category will fall back to existing or empty
     }
   }
 
@@ -143,8 +147,9 @@ export async function POST(request: NextRequest, { params }: Params) {
       }
       mergedMap.set(item.iwasku, {
         quantity: item.quantity,
-        desi: item.desi ?? enriched?.desi ?? 0,
-        category: item.category ?? enriched?.category ?? '',
+        // `||` kullanılır çünkü parse 0/"" değerleri gönderebiliyor; `??` onları "dolu" sayar.
+        desi: item.desi || enriched?.desi || 0,
+        category: item.category || enriched?.category || '',
         marketplaceSplit: split,
       });
     }
@@ -153,16 +158,18 @@ export async function POST(request: NextRequest, { params }: Params) {
   // Marketplace.code → region lookup (allocator region keyli split bekler)
   const codeToRegion = await loadCodeToRegionMap();
 
-  // Mevcut reserve'ler ve split'leri: (iwasku, marketplace) çakışma tespiti için
+  // Mevcut reserve'ler: çakışma tespiti + desi/category fallback
   const existingReserves = await prisma.stockReserve.findMany({
     where: { poolId: id, iwasku: { in: [...mergedMap.keys()] } },
-    select: { iwasku: true, marketplaceSplit: true, desiPerUnit: true },
+    select: { iwasku: true, marketplaceSplit: true, desiPerUnit: true, category: true },
   });
   const existingSplitByIwasku = new Map<string, Record<string, number>>();
   const existingDesiByIwasku = new Map<string, number>();
+  const existingCategoryByIwasku = new Map<string, string>();
   for (const r of existingReserves) {
     existingSplitByIwasku.set(r.iwasku, (r.marketplaceSplit as Record<string, number>) ?? {});
     if (r.desiPerUnit) existingDesiByIwasku.set(r.iwasku, r.desiPerUnit);
+    if (r.category) existingCategoryByIwasku.set(r.iwasku, r.category);
   }
 
   // Çakışma tespiti: aynı (iwasku, marketplace) zaten mevcutsa reddet.
@@ -197,8 +204,9 @@ export async function POST(request: NextRequest, { params }: Params) {
       const existingSplit = existingSplitByIwasku.get(iwasku) ?? {};
       const mergedSplit = { ...existingSplit, ...data.marketplaceSplit };
       const mergedQty = Object.values(mergedSplit).reduce((s, v) => s + v, 0);
-      // desi öncelik sırası: yeni import'ta varsa > DB'deki mevcut > katalog enrich > 0
+      // desi/category öncelik sırası: yeni import > DB'deki mevcut > katalog > boş
       const effectiveDesi = data.desi || existingDesiByIwasku.get(iwasku) || 0;
+      const effectiveCategory = data.category || existingCategoryByIwasku.get(iwasku) || null;
 
       const reserve = await tx.stockReserve.upsert({
         where: { poolId_iwasku: { poolId: id, iwasku } },
@@ -208,14 +216,14 @@ export async function POST(request: NextRequest, { params }: Params) {
           targetQuantity: mergedQty,
           targetDesi: mergedQty * effectiveDesi,
           desiPerUnit: effectiveDesi || null,
-          category: data.category || null,
+          category: effectiveCategory,
           marketplaceSplit: Object.keys(mergedSplit).length > 0 ? mergedSplit : undefined,
         },
         update: {
           targetQuantity: mergedQty,
           targetDesi: mergedQty * effectiveDesi,
           desiPerUnit: effectiveDesi || null,
-          category: data.category || null,
+          category: effectiveCategory,
           marketplaceSplit: Object.keys(mergedSplit).length > 0 ? mergedSplit : undefined,
         },
       });
