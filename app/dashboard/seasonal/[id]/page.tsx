@@ -189,22 +189,36 @@ export default function PoolDetailPage() {
     );
   }
 
-  // Ünite bazlı
-  const totalInitial = pool.reserves.reduce((s, r) => s + r.initialStock, 0);
-  const totalTarget = pool.reserves.reduce((s, r) => s + r.targetQuantity, 0);
-  const totalProduced = pool.reserves.reduce((s, r) => s + r.producedQuantity, 0);
-  const totalShipped = pool.reserves.reduce((s, r) => s + r.shippedQuantity, 0);
-  const totalDemand = totalInitial + totalTarget;
-  const totalFulfilled = totalInitial + totalProduced;
-
-  // Desi bazlı (sabit desiPerUnit field'ından)
+  // Desi/adet hesapları:
+  // Toplam Talep = Σ marketplaceSplit (pazar yerlerinden gelen orijinal talep).
+  // Başlangıç    = initialStock (mark-stock ile eklenen mevcut depo — talep dışı kaynak).
+  // Kalan Üretim = Toplam Talep − Başlangıç − Üretilen (henüz üretilecek miktar).
+  // Üretilen     = StockReserve.producedQuantity (API dinamik hesaplıyor; sezon COMPLETED+partial).
   const desiOf = (r: Reserve) => r.desiPerUnit ?? (r.targetDesi && r.targetQuantity > 0 ? r.targetDesi / r.targetQuantity : 0);
+
+  let totalDemand = 0;
+  let totalDemandDesi = 0;
+  for (const r of pool.reserves) {
+    const split = r.marketplaceSplit ?? {};
+    const d = desiOf(r);
+    for (const qty of Object.values(split)) {
+      if (!qty || qty <= 0) continue;
+      totalDemand += qty;
+      totalDemandDesi += qty * d;
+    }
+  }
+  totalDemandDesi = Math.round(totalDemandDesi);
+
+  const totalInitial = pool.reserves.reduce((s, r) => s + r.initialStock, 0);
   const totalInitialDesi = Math.round(pool.reserves.reduce((s, r) => s + r.initialStock * desiOf(r), 0));
-  const totalTargetDesi = Math.round(pool.reserves.reduce((s, r) => s + (r.targetDesi ?? 0), 0));
+  const totalProduced = pool.reserves.reduce((s, r) => s + r.producedQuantity, 0);
   const totalProducedDesi = Math.round(pool.reserves.reduce((s, r) => s + r.producedQuantity * desiOf(r), 0));
+  const totalShipped = pool.reserves.reduce((s, r) => s + r.shippedQuantity, 0);
   const totalShippedDesi = Math.round(pool.reserves.reduce((s, r) => s + r.shippedQuantity * desiOf(r), 0));
-  const totalDemandDesi = totalInitialDesi + totalTargetDesi;
+  const totalFulfilled = totalInitial + totalProduced;
   const totalFulfilledDesi = totalInitialDesi + totalProducedDesi;
+  const totalTarget = Math.max(0, totalDemand - totalFulfilled);
+  const totalTargetDesi = Math.max(0, totalDemandDesi - totalFulfilledDesi);
 
   // Toggle bazlı değerler
   const s = statUnit === 'desi'
