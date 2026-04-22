@@ -590,6 +590,59 @@ export default function PoolDetailPage() {
             <p className="text-xs text-gray-500">Sevkiyat</p>
           </div>
         </div>
+
+        {/* Pazar yeri kırılımı — collapsible */}
+        {(() => {
+          const byCode = new Map<string, { qty: number; desi: number }>();
+          for (const r of pool.reserves) {
+            const desiPerUnit = r.desiPerUnit ?? (r.targetDesi && r.targetQuantity > 0 ? r.targetDesi / r.targetQuantity : 0);
+            const split = r.marketplaceSplit ?? {};
+            for (const [code, qty] of Object.entries(split)) {
+              if (qty <= 0) continue;
+              const cur = byCode.get(code) ?? { qty: 0, desi: 0 };
+              cur.qty += qty;
+              cur.desi += qty * desiPerUnit;
+              byCode.set(code, cur);
+            }
+          }
+          const rows = [...byCode.entries()]
+            .map(([code, v]) => ({
+              code,
+              name: marketplaces.find(m => m.code === code)?.name ?? code,
+              region: marketplaces.find(m => m.code === code)?.region ?? '',
+              qty: v.qty,
+              desi: Math.round(v.desi),
+            }))
+            .sort((a, b) => b.qty - a.qty);
+          if (rows.length === 0) return null;
+          const totalQty = rows.reduce((s, r) => s + r.qty, 0);
+          const totalDesi = rows.reduce((s, r) => s + r.desi, 0);
+          return (
+            <details className="group mt-1">
+              <summary className="list-none cursor-pointer text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1.5 select-none px-1 py-1">
+                <span className="inline-block w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[5px] border-t-current transition-transform group-open:rotate-180" />
+                <span>Pazar yeri kırılımı ({rows.length})</span>
+                <span className="ml-2 text-gray-400">
+                  {totalQty.toLocaleString('tr-TR')} adet · {totalDesi.toLocaleString('tr-TR')} desi
+                </span>
+              </summary>
+              <div className="mt-2 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                {rows.map(mp => (
+                  <div key={mp.code} className="bg-white border rounded-lg px-3 py-2 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-gray-900 truncate" title={mp.code}>{mp.name}</p>
+                      <p className="text-[10px] text-gray-400">{mp.region}</p>
+                    </div>
+                    <div className="text-right whitespace-nowrap">
+                      <p className="text-sm font-semibold text-purple-600">{mp.qty.toLocaleString('tr-TR')}<span className="text-[10px] font-normal text-gray-400 ml-0.5">adet</span></p>
+                      <p className="text-xs text-gray-500">{mp.desi.toLocaleString('tr-TR')}<span className="text-[10px] text-gray-400 ml-0.5">desi</span></p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </details>
+          );
+        })()}
       </div>
 
       {/* Tabs */}

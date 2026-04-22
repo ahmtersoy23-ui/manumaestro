@@ -18,7 +18,7 @@ import { computeSezonProduced } from '@/lib/seasonal';
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(request: NextRequest, { params }: Params) {
-  const authResult = await requireRole(request, ['admin', 'editor']);
+  const authResult = await requireRole(request, ['admin', 'editor', 'viewer']);
   if (authResult instanceof NextResponse) return authResult;
   const { id } = await params;
 
