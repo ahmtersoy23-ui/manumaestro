@@ -130,6 +130,11 @@ export default function PoolDetailPage() {
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [selectedTemplateMps, setSelectedTemplateMps] = useState<Set<string>>(new Set());
 
+  // Reserve tablosu filtreleri
+  const [filterCategory, setFilterCategory] = useState<string>('');
+  const [filterRegion, setFilterRegion] = useState<string>('');
+  const [filterMarketplace, setFilterMarketplace] = useState<string>('');
+
   useEffect(() => {
     fetch('/api/marketplaces?limit=200')
       .then(r => r.json())
@@ -591,7 +596,7 @@ export default function PoolDetailPage() {
           </div>
         </div>
 
-        {/* Pazar yeri kırılımı — collapsible */}
+        {/* Pazar yeri kırılımı — bölge gruplu, collapsible */}
         {(() => {
           const byCode = new Map<string, { qty: number; desi: number }>();
           for (const r of pool.reserves) {
@@ -605,39 +610,165 @@ export default function PoolDetailPage() {
               byCode.set(code, cur);
             }
           }
-          const rows = [...byCode.entries()]
-            .map(([code, v]) => ({
-              code,
-              name: marketplaces.find(m => m.code === code)?.name ?? code,
-              region: marketplaces.find(m => m.code === code)?.region ?? '',
+          if (byCode.size === 0) return null;
+
+          type Mp = { code: string; name: string; qty: number; desi: number };
+          const byRegion = new Map<string, { qty: number; desi: number; mps: Mp[] }>();
+          for (const [code, v] of byCode) {
+            const mp = marketplaces.find(m => m.code === code);
+            const region = mp?.region ?? '—';
+            const name = mp?.name ?? code;
+            let bucket = byRegion.get(region);
+            if (!bucket) {
+              bucket = { qty: 0, desi: 0, mps: [] };
+              byRegion.set(region, bucket);
+            }
+            bucket.qty += v.qty;
+            bucket.desi += v.desi;
+            bucket.mps.push({ code, name, qty: v.qty, desi: Math.round(v.desi) });
+          }
+          const regions = [...byRegion.entries()]
+            .map(([region, v]) => ({
+              region,
               qty: v.qty,
               desi: Math.round(v.desi),
+              mps: v.mps.sort((a, b) => b.qty - a.qty),
             }))
             .sort((a, b) => b.qty - a.qty);
-          if (rows.length === 0) return null;
-          const totalQty = rows.reduce((s, r) => s + r.qty, 0);
-          const totalDesi = rows.reduce((s, r) => s + r.desi, 0);
+
+          const totalQty = regions.reduce((s, r) => s + r.qty, 0);
+          const totalDesi = regions.reduce((s, r) => s + r.desi, 0);
+
           return (
             <details className="group mt-1">
               <summary className="list-none cursor-pointer text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1.5 select-none px-1 py-1">
                 <span className="inline-block w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[5px] border-t-current transition-transform group-open:rotate-180" />
-                <span>Pazar yeri kırılımı ({rows.length})</span>
+                <span>Pazar yeri kırılımı ({regions.length} bölge, {byCode.size} pazar yeri)</span>
                 <span className="ml-2 text-gray-400">
                   {totalQty.toLocaleString('tr-TR')} adet · {totalDesi.toLocaleString('tr-TR')} desi
                 </span>
               </summary>
-              <div className="mt-2 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                {rows.map(mp => (
-                  <div key={mp.code} className="bg-white border rounded-lg px-3 py-2 flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-gray-900 truncate" title={mp.code}>{mp.name}</p>
-                      <p className="text-[10px] text-gray-400">{mp.region}</p>
+              <div className="mt-2 space-y-2">
+                {regions.map(reg => (
+                  <details key={reg.region} className="group/reg bg-white border rounded-lg">
+                    <summary className="list-none cursor-pointer flex items-center justify-between gap-2 px-3 py-2 hover:bg-gray-50 select-none">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="inline-block w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[5px] border-t-gray-400 transition-transform group-open/reg:rotate-180" />
+                        <span className="text-sm font-semibold text-gray-900">{reg.region} All</span>
+                        <span className="text-[10px] text-gray-400">({reg.mps.length})</span>
+                      </div>
+                      <div className="text-right whitespace-nowrap">
+                        <span className="text-sm font-semibold text-purple-600">{reg.qty.toLocaleString('tr-TR')}</span>
+                        <span className="text-[10px] text-gray-400 ml-1">adet</span>
+                        <span className="mx-2 text-gray-300">·</span>
+                        <span className="text-sm font-medium text-gray-700">{reg.desi.toLocaleString('tr-TR')}</span>
+                        <span className="text-[10px] text-gray-400 ml-1">desi</span>
+                      </div>
+                    </summary>
+                    <div className="border-t bg-gray-50/50 p-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {reg.mps.map(mp => (
+                        <div key={mp.code} className="bg-white border rounded-md px-3 py-1.5 flex items-center justify-between gap-2">
+                          <p className="text-xs font-medium text-gray-900 truncate" title={mp.code}>{mp.name}</p>
+                          <div className="text-right whitespace-nowrap">
+                            <span className="text-sm font-semibold text-purple-600">{mp.qty.toLocaleString('tr-TR')}</span>
+                            <span className="text-[10px] text-gray-400 ml-0.5">a</span>
+                            <span className="mx-1.5 text-gray-300">·</span>
+                            <span className="text-xs text-gray-700">{mp.desi.toLocaleString('tr-TR')}</span>
+                            <span className="text-[10px] text-gray-400 ml-0.5">d</span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <div className="text-right whitespace-nowrap">
-                      <p className="text-sm font-semibold text-purple-600">{mp.qty.toLocaleString('tr-TR')}<span className="text-[10px] font-normal text-gray-400 ml-0.5">adet</span></p>
-                      <p className="text-xs text-gray-500">{mp.desi.toLocaleString('tr-TR')}<span className="text-[10px] text-gray-400 ml-0.5">desi</span></p>
+                  </details>
+                ))}
+              </div>
+            </details>
+          );
+        })()}
+
+        {/* Kategori kırılımı — collapsible */}
+        {(() => {
+          type CatMp = { code: string; name: string; qty: number; desi: number };
+          const byCat = new Map<string, { qty: number; desi: number; mps: Map<string, { qty: number; desi: number }> }>();
+          for (const r of pool.reserves) {
+            const cat = r.category ?? '—';
+            const desiPerUnit = r.desiPerUnit ?? (r.targetDesi && r.targetQuantity > 0 ? r.targetDesi / r.targetQuantity : 0);
+            const split = r.marketplaceSplit ?? {};
+            let bucket = byCat.get(cat);
+            if (!bucket) {
+              bucket = { qty: 0, desi: 0, mps: new Map() };
+              byCat.set(cat, bucket);
+            }
+            for (const [code, qty] of Object.entries(split)) {
+              if (qty <= 0) continue;
+              bucket.qty += qty;
+              bucket.desi += qty * desiPerUnit;
+              const mp = bucket.mps.get(code) ?? { qty: 0, desi: 0 };
+              mp.qty += qty;
+              mp.desi += qty * desiPerUnit;
+              bucket.mps.set(code, mp);
+            }
+          }
+          if (byCat.size === 0) return null;
+
+          const cats = [...byCat.entries()]
+            .map(([cat, v]) => {
+              const mps: CatMp[] = [...v.mps.entries()]
+                .map(([code, m]) => ({
+                  code,
+                  name: marketplaces.find(mm => mm.code === code)?.name ?? code,
+                  qty: m.qty,
+                  desi: Math.round(m.desi),
+                }))
+                .sort((a, b) => b.qty - a.qty);
+              return { cat, qty: v.qty, desi: Math.round(v.desi), mps };
+            })
+            .sort((a, b) => b.qty - a.qty);
+
+          const totalQty = cats.reduce((s, r) => s + r.qty, 0);
+          const totalDesi = cats.reduce((s, r) => s + r.desi, 0);
+
+          return (
+            <details className="group mt-1">
+              <summary className="list-none cursor-pointer text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1.5 select-none px-1 py-1">
+                <span className="inline-block w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[5px] border-t-current transition-transform group-open:rotate-180" />
+                <span>Kategori kırılımı ({cats.length})</span>
+                <span className="ml-2 text-gray-400">
+                  {totalQty.toLocaleString('tr-TR')} adet · {totalDesi.toLocaleString('tr-TR')} desi
+                </span>
+              </summary>
+              <div className="mt-2 space-y-2">
+                {cats.map(c => (
+                  <details key={c.cat} className="group/cat bg-white border rounded-lg">
+                    <summary className="list-none cursor-pointer flex items-center justify-between gap-2 px-3 py-2 hover:bg-gray-50 select-none">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="inline-block w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[5px] border-t-gray-400 transition-transform group-open/cat:rotate-180" />
+                        <span className="text-sm font-semibold text-gray-900 truncate" title={c.cat}>{c.cat}</span>
+                        <span className="text-[10px] text-gray-400">({c.mps.length})</span>
+                      </div>
+                      <div className="text-right whitespace-nowrap">
+                        <span className="text-sm font-semibold text-purple-600">{c.qty.toLocaleString('tr-TR')}</span>
+                        <span className="text-[10px] text-gray-400 ml-1">adet</span>
+                        <span className="mx-2 text-gray-300">·</span>
+                        <span className="text-sm font-medium text-gray-700">{c.desi.toLocaleString('tr-TR')}</span>
+                        <span className="text-[10px] text-gray-400 ml-1">desi</span>
+                      </div>
+                    </summary>
+                    <div className="border-t bg-gray-50/50 p-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {c.mps.map(mp => (
+                        <div key={mp.code} className="bg-white border rounded-md px-3 py-1.5 flex items-center justify-between gap-2">
+                          <p className="text-xs font-medium text-gray-900 truncate" title={mp.code}>{mp.name}</p>
+                          <div className="text-right whitespace-nowrap">
+                            <span className="text-sm font-semibold text-purple-600">{mp.qty.toLocaleString('tr-TR')}</span>
+                            <span className="text-[10px] text-gray-400 ml-0.5">a</span>
+                            <span className="mx-1.5 text-gray-300">·</span>
+                            <span className="text-xs text-gray-700">{mp.desi.toLocaleString('tr-TR')}</span>
+                            <span className="text-[10px] text-gray-400 ml-0.5">d</span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
+                  </details>
                 ))}
               </div>
             </details>
@@ -673,7 +804,42 @@ export default function PoolDetailPage() {
       </div>
 
       {/* Reserves Tab */}
-      {tab === 'reserves' && (
+      {tab === 'reserves' && (() => {
+        // Filtre seçenekleri reserve'lerden türetilir
+        const categorySet = new Set<string>();
+        const regionSet = new Set<string>();
+        const mpSet = new Set<string>();
+        for (const r of pool.reserves) {
+          if (r.category) categorySet.add(r.category);
+          const split = r.marketplaceSplit ?? {};
+          for (const code of Object.keys(split)) {
+            if ((split[code] ?? 0) <= 0) continue;
+            mpSet.add(code);
+            const reg = marketplaces.find(m => m.code === code)?.region;
+            if (reg) regionSet.add(reg);
+          }
+        }
+        const categoryOpts = [...categorySet].sort();
+        const regionOpts = [...regionSet].sort();
+        const mpOpts = [...mpSet]
+          .map(code => ({ code, name: marketplaces.find(m => m.code === code)?.name ?? code }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        // Reserve'leri filtrele
+        const filteredReserves = pool.reserves.filter(r => {
+          if (filterCategory && r.category !== filterCategory) return false;
+          const split = r.marketplaceSplit ?? {};
+          const codes = Object.entries(split).filter(([, q]) => q > 0).map(([c]) => c);
+          if (filterMarketplace && !codes.includes(filterMarketplace)) return false;
+          if (filterRegion) {
+            const regions = new Set(codes.map(c => marketplaces.find(m => m.code === c)?.region).filter(Boolean));
+            if (!regions.has(filterRegion)) return false;
+          }
+          return true;
+        });
+        const anyFilter = !!(filterCategory || filterRegion || filterMarketplace);
+
+        return (
         <div className="bg-white border rounded-xl overflow-hidden">
           {/* Import section */}
           {pool.status === 'ACTIVE' && canEditAnyMp && (
@@ -722,8 +888,58 @@ export default function PoolDetailPage() {
             </div>
           )}
 
+          {/* Filtreler */}
+          {pool.reserves.length > 0 && (
+            <div className="border-b p-3 bg-gray-50/50 flex flex-wrap items-center gap-2">
+              <span className="text-xs text-gray-500 font-medium mr-1">Filtre:</span>
+              <select
+                value={filterCategory}
+                onChange={e => setFilterCategory(e.target.value)}
+                className="text-xs border rounded px-2 py-1 bg-white focus:ring-1 focus:ring-purple-500 focus:outline-none"
+              >
+                <option value="">Tüm kategoriler</option>
+                {categoryOpts.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select
+                value={filterRegion}
+                onChange={e => setFilterRegion(e.target.value)}
+                className="text-xs border rounded px-2 py-1 bg-white focus:ring-1 focus:ring-purple-500 focus:outline-none"
+              >
+                <option value="">Tüm bölgeler</option>
+                {regionOpts.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+              <select
+                value={filterMarketplace}
+                onChange={e => setFilterMarketplace(e.target.value)}
+                className="text-xs border rounded px-2 py-1 bg-white focus:ring-1 focus:ring-purple-500 focus:outline-none"
+              >
+                <option value="">Tüm pazar yerleri</option>
+                {mpOpts.map(mp => <option key={mp.code} value={mp.code}>{mp.name}</option>)}
+              </select>
+              {anyFilter && (
+                <>
+                  <button
+                    onClick={() => { setFilterCategory(''); setFilterRegion(''); setFilterMarketplace(''); }}
+                    className="text-xs text-purple-600 hover:text-purple-700 hover:underline ml-1"
+                  >
+                    Temizle
+                  </button>
+                  <span className="ml-auto text-xs text-gray-500">
+                    {filteredReserves.length} / {pool.reserves.length} satır
+                  </span>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Reserve table */}
           {pool.reserves.length > 0 ? (
+            filteredReserves.length === 0 ? (
+              <div className="text-center py-12">
+                <AlertCircle className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                <p className="text-sm text-gray-500">Seçili filtrelere uygun kayıt yok</p>
+              </div>
+            ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b">
@@ -741,7 +957,7 @@ export default function PoolDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {pool.reserves.map(r => {
+                  {filteredReserves.map(r => {
                     const split = r.marketplaceSplit ?? {};
                     const splitEntries = Object.entries(split).filter(([, q]) => q > 0).sort((a, b) => b[1] - a[1]);
                     // marketplace code → { name, region } lookup (fallback: code'un kendisi)
@@ -901,6 +1117,7 @@ export default function PoolDetailPage() {
                 </tbody>
               </table>
             </div>
+            )
           ) : (
             <div className="text-center py-12">
               <Package className="w-10 h-10 text-gray-300 mx-auto mb-3" />
@@ -909,7 +1126,8 @@ export default function PoolDetailPage() {
             </div>
           )}
         </div>
-      )}
+        );
+      })()}
 
       {/* Allocations Tab */}
       {tab === 'allocations' && (
