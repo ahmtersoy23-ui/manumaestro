@@ -10,6 +10,7 @@ import { prisma } from '@/lib/db/prisma';
 import { queryProductDb } from '@/lib/db/prisma';
 import { requireRole } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
+import { computeSezonProduced } from '@/lib/seasonal';
 import { z } from 'zod';
 
 const UpdatePoolSchema = z.object({
@@ -59,10 +60,19 @@ export async function GET(request: NextRequest, { params }: Params) {
     } catch { /* continue without names */ }
   }
 
-  const enrichedReserves = pool.reserves.map(r => ({
-    ...r,
-    productName: productMap[r.iwasku]?.name ?? null,
-  }));
+  // Sezon'a fiilen giden üretim her reserve için waterfall simülasyonu ile hesaplanır.
+  // StockReserve.producedQuantity kolonu deprecated/hep 0 olduğundan burada türetilip
+  // geri döndürülüyor — UI mevcut alan ismiyle okuyabilmek için override ediliyor.
+  const sezonProduced = await computeSezonProduced(id);
+
+  const enrichedReserves = pool.reserves.map(r => {
+    const actualProduced = sezonProduced.byIwaskuQty.get(r.iwasku) ?? 0;
+    return {
+      ...r,
+      productName: productMap[r.iwasku]?.name ?? null,
+      producedQuantity: actualProduced,
+    };
+  });
 
   return NextResponse.json({ success: true, data: { ...pool, reserves: enrichedReserves } });
 }

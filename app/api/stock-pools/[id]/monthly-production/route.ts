@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireRole } from '@/lib/auth/verify';
+import { computeSezonProduced } from '@/lib/seasonal';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -40,25 +41,9 @@ export async function GET(request: NextRequest, { params }: Params) {
     },
   });
 
-  // Üretim = Sezon marketplace'i altında status=COMPLETED olan talep quantity toplamı.
-  // producedQuantity kolonu deprecated (hiç güncellenmiyor); waterfallComplete sadece status
-  // değiştiriyor. Ay sayfasındaki "Tamamlandı" rakamıyla aynı mantık.
-  const sezonMp = await prisma.marketplace.findUnique({ where: { code: 'SEZON' } });
-  const sezonRequests = sezonMp
-    ? await prisma.productionRequest.findMany({
-        where: {
-          marketplaceId: sezonMp.id,
-          notes: { contains: `[pool:${id}]` },
-        },
-        select: {
-          iwasku: true,
-          productionMonth: true,
-          quantity: true,
-          status: true,
-          productSize: true,
-        },
-      })
-    : [];
+  // Üretim: waterfallComplete ile aynı mantıkla Sezon'a düşen üretimi simüle et.
+  // Tamamlanmış talepler + kısmi (PARTIALLY_PRODUCED) taleplerin Sezon payı dahil olur.
+  const sezonProduced = await computeSezonProduced(id);
 
   // Ay bazında agregasyon
   type MonthAgg = {
@@ -93,12 +78,13 @@ export async function GET(request: NextRequest, { params }: Params) {
     m.iwaskusPlanned.add(a.reserve.iwasku);
   }
 
-  for (const r of sezonRequests) {
-    if (r.status !== 'COMPLETED') continue;
-    const m = getMonth(r.productionMonth);
-    m.totalProduced += r.quantity;
-    m.totalProducedDesi += (r.productSize ?? 0) * r.quantity;
-    m.iwaskusProducing.add(r.iwasku);
+  for (const [pair, v] of sezonProduced.byIwaskuMonth) {
+    if (v.qty <= 0) continue;
+    const [iwasku, month] = pair.split('|');
+    const m = getMonth(month);
+    m.totalProduced += v.qty;
+    m.totalProducedDesi += v.desi;
+    m.iwaskusProducing.add(iwasku);
   }
 
   const sortedMonths = [...byMonth.keys()].sort();
@@ -127,12 +113,10 @@ export async function GET(request: NextRequest, { params }: Params) {
       planByIwasku.set(a.reserve.iwasku, cur);
     }
     const prodByIwasku = new Map<string, { qty: number; desi: number }>();
-    for (const r of sezonRequests) {
-      if (r.productionMonth !== month || r.status !== 'COMPLETED') continue;
-      const cur = prodByIwasku.get(r.iwasku) ?? { qty: 0, desi: 0 };
-      cur.qty += r.quantity;
-      cur.desi += (r.productSize ?? 0) * r.quantity;
-      prodByIwasku.set(r.iwasku, cur);
+    for (const [pair, v] of sezonProduced.byIwaskuMonth) {
+      const [iwasku, mth] = pair.split('|');
+      if (mth !== month || v.qty <= 0) continue;
+      prodByIwasku.set(iwasku, { qty: v.qty, desi: v.desi });
     }
     const productKeys = new Set([...planByIwasku.keys(), ...prodByIwasku.keys()]);
     const products = [...productKeys]
