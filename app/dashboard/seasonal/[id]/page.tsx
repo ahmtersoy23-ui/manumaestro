@@ -813,38 +813,33 @@ export default function PoolDetailPage() {
                                   </button>
                                 </div>
                               </div>
-                            ) : (
+                            ) : isAdmin ? (
                               <div className="flex items-center gap-1 justify-end">
-                                {/* Editor: satırda düzenleyebileceği en az bir marketplace varsa göster */}
-                                {(isAdmin || splitEntries.some(([code]) => canEditMp(code))) && (
-                                  <button
-                                    onClick={() => {
-                                      const split = r.marketplaceSplit && Object.keys(r.marketplaceSplit).length > 0
-                                        ? { ...r.marketplaceSplit }
-                                        : { TOTAL: r.targetQuantity };
-                                      setEditingReserveId(r.id);
-                                      setEditSplit(split as Record<string, number>);
-                                    }}
-                                    className="p-1 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded"
-                                    title="Hedefi düzenle"
-                                  >
-                                    <Edit2 className="w-3.5 h-3.5" />
-                                  </button>
-                                )}
-                                {isAdmin && (
-                                  <button
-                                    onClick={() => handleDeleteReserve(r.id, r.iwasku)}
-                                    disabled={deletingReserveId === r.id}
-                                    className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                                    title="Sil"
-                                  >
-                                    {deletingReserveId === r.id
-                                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                      : <Trash2 className="w-3.5 h-3.5" />}
-                                  </button>
-                                )}
+                                <button
+                                  onClick={() => {
+                                    const split = r.marketplaceSplit && Object.keys(r.marketplaceSplit).length > 0
+                                      ? { ...r.marketplaceSplit }
+                                      : { TOTAL: r.targetQuantity };
+                                    setEditingReserveId(r.id);
+                                    setEditSplit(split as Record<string, number>);
+                                  }}
+                                  className="p-1 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded"
+                                  title="Hedefi düzenle"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteReserve(r.id, r.iwasku)}
+                                  disabled={deletingReserveId === r.id}
+                                  className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                  title="Sil"
+                                >
+                                  {deletingReserveId === r.id
+                                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    : <Trash2 className="w-3.5 h-3.5" />}
+                                </button>
                               </div>
-                            )}
+                            ) : null}
                           </td>
                         )}
                       </tr>
