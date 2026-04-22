@@ -575,12 +575,30 @@ export default function PoolDetailPage() {
       {/* Stats Cards */}
       <div className="space-y-2">
         <div className="flex justify-end">
-          <button
-            onClick={() => setStatUnit(statUnit === 'unit' ? 'desi' : 'unit')}
-            className="text-xs px-2.5 py-1 rounded-md border bg-white text-gray-600 hover:bg-gray-50 transition-colors"
-          >
-            {statUnit === 'unit' ? 'Adet' : 'Desi'} gösteriliyor — <span className="font-medium text-purple-600">{statUnit === 'unit' ? 'Desi' : 'Adet'}</span>
-          </button>
+          <div className="inline-flex items-center p-0.5 rounded-lg bg-gray-100 border text-xs font-medium">
+            <button
+              onClick={() => setStatUnit('unit')}
+              className={`px-3 py-1 rounded-md transition-colors ${
+                statUnit === 'unit'
+                  ? 'bg-white text-purple-600 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+              aria-pressed={statUnit === 'unit'}
+            >
+              Adet
+            </button>
+            <button
+              onClick={() => setStatUnit('desi')}
+              className={`px-3 py-1 rounded-md transition-colors ${
+                statUnit === 'desi'
+                  ? 'bg-white text-purple-600 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+              aria-pressed={statUnit === 'desi'}
+            >
+              Desi
+            </button>
+          </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           <div className="bg-white border rounded-xl p-4 text-center">
