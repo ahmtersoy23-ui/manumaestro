@@ -19,12 +19,19 @@ export interface SSOUser {
   picture?: string;
 }
 
+export interface MarketplacePerm {
+  code: string;
+  canView: boolean;
+  canEdit: boolean;
+}
+
 interface AuthContextType {
   user: SSOUser | null;
   role: 'admin' | 'editor' | 'viewer' | null;
   loading: boolean;
   isAuthenticated: boolean;
   canViewStock: boolean;
+  marketplacePermissions: MarketplacePerm[];
   logout: () => void;
   hasRole: (roles: string[]) => boolean;
 }
@@ -35,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SSOUser | null>(null);
   const [role, setRole] = useState<'admin' | 'editor' | 'viewer' | null>(null);
   const [canViewStock, setCanViewStock] = useState(false);
+  const [marketplacePermissions, setMarketplacePermissions] = useState<MarketplacePerm[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -47,6 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(data.user);
           setRole(data.role);
           setCanViewStock(data.permissions?.canViewStock ?? false);
+          setMarketplacePermissions(data.permissions?.marketplaces ?? []);
         } else {
           // If API fails, redirect to SSO
           window.location.href = SSO_URL;
@@ -78,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading,
     isAuthenticated: !!user,
     canViewStock,
+    marketplacePermissions,
     logout: handleLogout,
     hasRole: hasRoleCheck,
   };

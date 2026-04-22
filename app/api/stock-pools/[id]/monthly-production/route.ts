@@ -13,7 +13,7 @@ import { requireRole } from '@/lib/auth/verify';
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(request: NextRequest, { params }: Params) {
-  const authResult = await requireRole(request, ['admin']);
+  const authResult = await requireRole(request, ['admin', 'editor']);
   if (authResult instanceof NextResponse) return authResult;
   const { id } = await params;
 

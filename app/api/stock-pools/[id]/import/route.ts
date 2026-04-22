@@ -47,7 +47,7 @@ const ImportSchema = z.object({
 type Params = { params: Promise<{ id: string }> };
 
 export async function POST(request: NextRequest, { params }: Params) {
-  const authResult = await requireRole(request, ['admin']);
+  const authResult = await requireRole(request, ['admin', 'editor']);
   if (authResult instanceof NextResponse) return authResult;
   const { user } = authResult;
   const { id } = await params;
@@ -71,6 +71,31 @@ export async function POST(request: NextRequest, { params }: Params) {
   }
 
   const { items, months, autoAllocate } = validation.data;
+
+  // Editor: sadece canEdit=true olan pazar yerlerine veri girebilir
+  if (user.role !== 'admin') {
+    const editableCodes = new Set(
+      (await prisma.userMarketplacePermission.findMany({
+        where: { userId: user.id, canEdit: true },
+        select: { marketplace: { select: { code: true } } },
+      })).map(r => r.marketplace.code)
+    );
+    const itemsMpCodes = new Set(items.map(i => i.marketplace).filter((c): c is string => !!c));
+    const forbidden = [...itemsMpCodes].filter(c => !editableCodes.has(c));
+    if (forbidden.length > 0) {
+      return NextResponse.json({
+        success: false,
+        error: `Şu pazar yerlerine düzenleme yetkiniz yok: ${forbidden.join(', ')}`,
+      }, { status: 403 });
+    }
+    // Marketplace belirtilmemiş satır (generic quantity) editor için kabul edilmez
+    if (items.some(i => !i.marketplace)) {
+      return NextResponse.json({
+        success: false,
+        error: 'Her satır için pazar yeri belirtilmelidir (editor rolü generic talep giremez)',
+      }, { status: 403 });
+    }
+  }
 
   // Enrich items with product data from pricelab_db if desi/category missing
   const iwaskusNeedingEnrichment = items.filter(i => !i.desi || !i.category).map(i => i.iwasku);
@@ -128,43 +153,60 @@ export async function POST(request: NextRequest, { params }: Params) {
   // Marketplace.code → region lookup (allocator region keyli split bekler)
   const codeToRegion = await loadCodeToRegionMap();
 
+  // Editor sadece kendi pazar yerlerini günceller; mevcut split'teki diğer
+  // pazar yerlerinin değerleri korunur. Admin için de merge uygulanır:
+  // ayrı Excel dosyalarıyla (örn. "Amazon.xlsx" → "Wayfair.xlsx") yapılan
+  // ardışık yüklemelerde ikinci yükleme ilkini ezmesin.
+  const existingReserves = await prisma.stockReserve.findMany({
+    where: { poolId: id, iwasku: { in: [...mergedMap.keys()] } },
+    select: { iwasku: true, marketplaceSplit: true, desiPerUnit: true },
+  });
+  const existingSplitByIwasku = new Map<string, Record<string, number>>();
+  const existingDesiByIwasku = new Map<string, number>();
+  for (const r of existingReserves) {
+    existingSplitByIwasku.set(r.iwasku, (r.marketplaceSplit as Record<string, number>) ?? {});
+    if (r.desiPerUnit) existingDesiByIwasku.set(r.iwasku, r.desiPerUnit);
+  }
+
   // Create reserves in transaction
   const reserveInputs: ReserveInput[] = [];
   const createdReserves = await prisma.$transaction(async (tx) => {
     const results = [];
 
     for (const [iwasku, data] of mergedMap) {
-      const splitJson = Object.keys(data.marketplaceSplit).length > 0
-        ? data.marketplaceSplit
-        : undefined;
+      const existingSplit = existingSplitByIwasku.get(iwasku) ?? {};
+      const mergedSplit = { ...existingSplit, ...data.marketplaceSplit };
+      const mergedQty = Object.values(mergedSplit).reduce((s, v) => s + v, 0);
+      // desi öncelik sırası: yeni import'ta varsa > DB'deki mevcut > katalog enrich > 0
+      const effectiveDesi = data.desi || existingDesiByIwasku.get(iwasku) || 0;
 
       const reserve = await tx.stockReserve.upsert({
         where: { poolId_iwasku: { poolId: id, iwasku } },
         create: {
           poolId: id,
           iwasku,
-          targetQuantity: data.quantity,
-          targetDesi: data.quantity * data.desi,
-          desiPerUnit: data.desi || null,
+          targetQuantity: mergedQty,
+          targetDesi: mergedQty * effectiveDesi,
+          desiPerUnit: effectiveDesi || null,
           category: data.category || null,
-          marketplaceSplit: splitJson ?? undefined,
+          marketplaceSplit: Object.keys(mergedSplit).length > 0 ? mergedSplit : undefined,
         },
         update: {
-          targetQuantity: data.quantity,
-          targetDesi: data.quantity * data.desi,
-          desiPerUnit: data.desi || null,
+          targetQuantity: mergedQty,
+          targetDesi: mergedQty * effectiveDesi,
+          desiPerUnit: effectiveDesi || null,
           category: data.category || null,
-          marketplaceSplit: splitJson ?? undefined,
+          marketplaceSplit: Object.keys(mergedSplit).length > 0 ? mergedSplit : undefined,
         },
       });
 
       results.push(reserve);
       reserveInputs.push({
         iwasku,
-        targetQuantity: data.quantity,
-        desiPerUnit: data.desi,
+        targetQuantity: mergedQty,
+        desiPerUnit: effectiveDesi,
         category: data.category,
-        marketplaceSplit: marketplaceSplitToRegionSplit(data.marketplaceSplit, codeToRegion),
+        marketplaceSplit: marketplaceSplitToRegionSplit(mergedSplit, codeToRegion),
       });
     }
 
@@ -212,9 +254,13 @@ export async function POST(request: NextRequest, { params }: Params) {
     });
   }
 
-  // Update pool totals
-  const totalUnits = [...mergedMap.values()].reduce((s, d) => s + d.quantity, 0);
-  const totalDesi = [...mergedMap.values()].reduce((s, d) => s + d.quantity * d.desi, 0);
+  // Update pool totals — merge sonrası tüm reserve'ler üzerinden
+  const allPoolReserves = await prisma.stockReserve.findMany({
+    where: { poolId: id },
+    select: { targetQuantity: true, targetDesi: true },
+  });
+  const totalUnits = allPoolReserves.reduce((s, r) => s + r.targetQuantity, 0);
+  const totalDesi = allPoolReserves.reduce((s, r) => s + (r.targetDesi ?? 0), 0);
 
   await prisma.stockPool.update({
     where: { id },

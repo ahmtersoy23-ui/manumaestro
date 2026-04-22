@@ -24,7 +24,7 @@ const UpdateReserveSchema = z.union([
 type Params = { params: Promise<{ id: string; reserveId: string }> };
 
 export async function PATCH(request: NextRequest, { params }: Params) {
-  const authResult = await requireRole(request, ['admin']);
+  const authResult = await requireRole(request, ['admin', 'editor']);
   if (authResult instanceof NextResponse) return authResult;
   const { user } = authResult;
   const { id, reserveId } = await params;
@@ -47,13 +47,52 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   }
 
   const parsed = validation.data;
+  const isAdmin = user.role === 'admin';
   let targetQuantity: number;
   let newSplit: Record<string, number> | undefined;
 
   if ('marketplaceSplit' in parsed) {
-    newSplit = parsed.marketplaceSplit;
+    if (isAdmin) {
+      newSplit = parsed.marketplaceSplit;
+    } else {
+      // Editor: yalnızca canEdit=true olduğu pazar yerlerini değiştirebilir.
+      // Mevcut split'teki diğer key'ler korunur.
+      const editableCodes = new Set(
+        (await prisma.userMarketplacePermission.findMany({
+          where: { userId: user.id, canEdit: true },
+          select: { marketplace: { select: { code: true } } },
+        })).map(r => r.marketplace.code)
+      );
+      const currentSplit = (reserve.marketplaceSplit as Record<string, number> | null) ?? {};
+      // Değişen key'leri tespit et (mevcut değer ile gönderilen değer farklıysa değişmiş sayılır)
+      const changedKeys = Object.keys(parsed.marketplaceSplit).filter(
+        k => parsed.marketplaceSplit[k] !== (currentSplit[k] ?? 0)
+      );
+      // Mevcut split'te olup yeni split'te olmayan key'ler: "silindi" demek — yine değişim
+      const removedKeys = Object.keys(currentSplit).filter(
+        k => !(k in parsed.marketplaceSplit) && currentSplit[k] > 0
+      );
+      const forbidden = [...changedKeys, ...removedKeys].filter(k => !editableCodes.has(k));
+      if (forbidden.length > 0) {
+        return NextResponse.json({
+          success: false,
+          error: `Şu pazar yerlerine düzenleme yetkiniz yok: ${forbidden.join(', ')}`,
+        }, { status: 403 });
+      }
+      // Güvenli merge: sadece izinli (değişen) key'ler yeni değerle, diğer key'ler korunur
+      newSplit = { ...currentSplit };
+      for (const k of changedKeys) newSplit[k] = parsed.marketplaceSplit[k]!;
+      for (const k of removedKeys) delete newSplit[k];
+    }
     targetQuantity = Object.values(newSplit).reduce((s, v) => s + v, 0);
   } else {
+    // Direct targetQuantity update (no split info) — admin only
+    if (!isAdmin) {
+      return NextResponse.json({
+        success: false,
+        error: 'Editor rolü pazar yeri kırılımı olmadan toplam miktar değiştiremez',
+      }, { status: 403 });
+    }
     targetQuantity = parsed.targetQuantity;
   }
 

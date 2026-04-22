@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const authResult = await requireRole(request, ['admin']);
+  const authResult = await requireRole(request, ['admin', 'editor']);
   if (authResult instanceof NextResponse) return authResult;
 
   const { searchParams } = new URL(request.url);
