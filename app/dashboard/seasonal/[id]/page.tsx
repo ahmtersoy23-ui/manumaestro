@@ -281,8 +281,10 @@ export default function PoolDetailPage() {
     const XLSX = await loadXLSX();
     const wb = XLSX.utils.book_new();
     for (const mp of selected) {
-      const ws = XLSX.utils.aoa_to_sheet([['iwasku', 'kategori', 'desi', 'q4 26', 'q1 27']]);
-      ws['!cols'] = [{ wch: 16 }, { wch: 20 }, { wch: 8 }, { wch: 10 }, { wch: 10 }];
+      // Kategori ve desi backend'de pricelab_db.products'tan iwasku ile eslestiriliyor;
+      // template sade: iwasku + miktar yeterli.
+      const ws = XLSX.utils.aoa_to_sheet([['iwasku', 'q4 26', 'q1 27']]);
+      ws['!cols'] = [{ wch: 16 }, { wch: 10 }, { wch: 10 }];
       // Sheet adı max 31 karakter (Excel sınırı), ASCII'ye çevir
       const sheetName = mp.name.slice(0, 31).replace(/[\\/\*\?\[\]:]/g, '-');
       XLSX.utils.book_append_sheet(wb, ws, sheetName);
@@ -616,7 +618,7 @@ export default function PoolDetailPage() {
                         <input type="file" accept=".xlsx,.xls" onChange={handleExcelImport} className="hidden" />
                       </label>
                     )}
-                    <span className="text-xs text-gray-500">Sheet adı = pazar yeri adı, kolonlar: iwasku, kategori, desi, q4 26, q1 27</span>
+                    <span className="text-xs text-gray-500">Sheet adı = pazar yeri adı, kolonlar: iwasku, q4 26, q1 27 (desi/kategori katalogdan gelir)</span>
                     {importing && <Loader2 className="w-4 h-4 animate-spin text-purple-500" />}
                   </div>
                   <details className="text-xs">
