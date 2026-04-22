@@ -49,12 +49,18 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   }
 
   const parsed = validation.data;
+  // Invariant: marketplaceSplit toplam = initialStock + targetQuantity.
+  // Split değişirse: önce initial'ı yeni toplama kadar sınırla, kalanı target.
+  // Direct targetQuantity update (legacy) için initial'a dokunulmaz.
   let targetQuantity: number;
+  let newInitialStock: number | undefined;
   let newSplit: Record<string, number> | undefined;
 
   if ('marketplaceSplit' in parsed) {
     newSplit = parsed.marketplaceSplit;
-    targetQuantity = Object.values(newSplit).reduce((s, v) => s + v, 0);
+    const splitTotal = Object.values(newSplit).reduce((s, v) => s + v, 0);
+    newInitialStock = Math.min(reserve.initialStock, splitTotal);
+    targetQuantity = splitTotal - newInitialStock;
   } else {
     targetQuantity = parsed.targetQuantity;
   }
@@ -67,15 +73,17 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   }
 
   // Keep desiPerUnit constant — recalculate targetDesi from new targetQuantity
-  const desiPerUnit = reserve.targetDesi && reserve.targetQuantity > 0
-    ? reserve.targetDesi / reserve.targetQuantity
-    : null;
+  const desiPerUnit = reserve.desiPerUnit
+    ?? (reserve.targetDesi && reserve.targetQuantity > 0
+      ? reserve.targetDesi / reserve.targetQuantity
+      : null);
   const newTargetDesi = desiPerUnit !== null ? targetQuantity * desiPerUnit : undefined;
 
   const updated = await prisma.stockReserve.update({
     where: { id: reserveId },
     data: {
       targetQuantity,
+      ...(newInitialStock !== undefined ? { initialStock: newInitialStock } : {}),
       ...(newSplit !== undefined ? { marketplaceSplit: newSplit } : {}),
       ...(newTargetDesi !== undefined ? { targetDesi: newTargetDesi } : {}),
     },
