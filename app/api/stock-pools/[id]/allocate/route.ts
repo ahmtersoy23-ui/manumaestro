@@ -18,6 +18,7 @@ import { requireRole } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
 import {
   allocateReserves,
+  computeSezonProduced,
   loadCodeToRegionMap,
   marketplaceSplitToRegionSplit,
   summarizeByMonth,
@@ -33,6 +34,10 @@ const AllocateSchema = z.object({
     desiPerDay: z.number().positive(),
   })).min(1),
   approve: z.boolean().default(false),
+  // true: Kilitli ayın plannedQty'si "karşılanmış" sayılır (eksikler yeni aylara girmez)
+  // false: Kilitli ayın FİİLİ sezon üretimi (COMPLETED + partial payı) karşılanmış sayılır;
+  //        plan - fiili = eksik, diğer açık aylara yeniden dağıtılır.
+  includeMissedFromLocked: z.boolean().default(false),
 });
 
 type Params = { params: Promise<{ id: string }> };
@@ -72,7 +77,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     );
   }
 
-  const { months, approve } = validation.data;
+  const { months, approve, includeMissedFromLocked } = validation.data;
 
   // ── Determine locked months (actualQty > 0 = production started) ──────────
   // A month is locked if ANY reserve has an allocation for it with actualQty > 0
@@ -101,10 +106,20 @@ export async function POST(request: NextRequest, { params }: Params) {
     }
   }
 
-  // Build reserve inputs, subtracting already-locked planned quantities
+  // Build reserve inputs. Kilitli ayda "karşılandı" sayılan miktar:
+  // - includeMissedFromLocked=false (varsayılan): plan kadar (mevcut davranış)
+  // - includeMissedFromLocked=true: fiili sezon üretimi kadar; eksik plan farkı
+  //   açık aylara geri dağıtılsın diye o kısmı burada düşmüyoruz.
+  const sezonProduced = includeMissedFromLocked
+    ? await computeSezonProduced(id)
+    : null;
+
   const lockedQtyByIwasku = new Map<string, number>();
   for (const la of lockedAllocations) {
-    lockedQtyByIwasku.set(la.iwasku, (lockedQtyByIwasku.get(la.iwasku) ?? 0) + la.plannedQty);
+    const consumedQty = sezonProduced
+      ? (sezonProduced.byIwaskuMonth.get(`${la.iwasku}|${la.month}`)?.qty ?? 0)
+      : la.plannedQty;
+    lockedQtyByIwasku.set(la.iwasku, (lockedQtyByIwasku.get(la.iwasku) ?? 0) + consumedQty);
   }
 
   // DB'deki marketplaceSplit artık marketplace.code bazlı — allocator için region'a topla

@@ -115,6 +115,8 @@ export default function PoolDetailPage() {
   const [previewing, setPreviewing] = useState(false);
   const [approving, setApproving] = useState(false);
   const [lockedMonths, setLockedMonths] = useState<string[]>([]);
+  // Kilitli aylardaki eksik üretimi açık aylara yayma modu
+  const [includeMissedFromLocked, setIncludeMissedFromLocked] = useState(false);
 
   // Release (Ay Planına Aktar) state
   const [releasing, setReleasing] = useState(false);
@@ -400,7 +402,7 @@ export default function PoolDetailPage() {
       const res = await fetch(`/api/stock-pools/${id}/allocate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ months: DEFAULT_MONTHS, approve: false }),
+        body: JSON.stringify({ months: DEFAULT_MONTHS, approve: false, includeMissedFromLocked }),
       });
       const data = await res.json();
       if (data.success) {
@@ -425,7 +427,7 @@ export default function PoolDetailPage() {
       const res = await fetch(`/api/stock-pools/${id}/allocate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ months: DEFAULT_MONTHS, approve: true }),
+        body: JSON.stringify({ months: DEFAULT_MONTHS, approve: true, includeMissedFromLocked }),
       });
       const data = await res.json();
       if (data.success) {
@@ -1256,32 +1258,43 @@ export default function PoolDetailPage() {
           {/* Preview / Calculate Section */}
           {pool.status === 'ACTIVE' && pool.reserves.length > 0 && isAdmin && (
             <div className="bg-white border border-purple-200 rounded-xl overflow-hidden">
-              <div className="px-4 py-3 border-b bg-purple-50 flex items-center justify-between">
+              <div className="px-4 py-3 border-b bg-purple-50 flex items-center justify-between gap-4 flex-wrap">
                 <div className="flex items-center gap-2">
                   <Eye className="w-4 h-4 text-purple-600" />
                   <span className="text-sm font-medium text-purple-700">
                     {preview ? 'Dağılım Önizleme' : 'Dağılımı Hesapla'}
                   </span>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handlePreview}
-                    disabled={previewing}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 text-white text-xs rounded-lg hover:bg-purple-700 disabled:opacity-50"
-                  >
-                    {previewing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
-                    {preview ? 'Yeniden Hesapla' : 'Önizle'}
-                  </button>
-                  {preview && (
+                <div className="flex items-center gap-3 flex-wrap">
+                  <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none" title="Açık: kilitli ayın gerçek üretim eksiği (plan − üretilen) gelecek açık aylara dağıtılır. Kapalı: kilitli ay planı karşılanmış sayılır, eksik yeniden dağıtılmaz.">
+                    <input
+                      type="checkbox"
+                      checked={includeMissedFromLocked}
+                      onChange={e => setIncludeMissedFromLocked(e.target.checked)}
+                      className="w-3.5 h-3.5 accent-purple-600"
+                    />
+                    Kilitli aylardaki eksikleri yay
+                  </label>
+                  <div className="flex gap-2">
                     <button
-                      onClick={handleApprove}
-                      disabled={approving}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 disabled:opacity-50"
+                      onClick={handlePreview}
+                      disabled={previewing}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 text-white text-xs rounded-lg hover:bg-purple-700 disabled:opacity-50"
                     >
-                      {approving ? <Loader2 className="w-3 h-3 animate-spin" /> : <ThumbsUp className="w-3 h-3" />}
-                      Onayla
+                      {previewing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
+                      {preview ? 'Yeniden Hesapla' : 'Önizle'}
                     </button>
-                  )}
+                    {preview && (
+                      <button
+                        onClick={handleApprove}
+                        disabled={approving}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 disabled:opacity-50"
+                      >
+                        {approving ? <Loader2 className="w-3 h-3 animate-spin" /> : <ThumbsUp className="w-3 h-3" />}
+                        Onayla
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
