@@ -40,7 +40,9 @@ export async function GET(request: NextRequest, { params }: Params) {
     },
   });
 
-  // Üretim (Sezon ProductionRequest'ler, bu havuza ait olanlar)
+  // Üretim = Sezon marketplace'i altında status=COMPLETED olan talep quantity toplamı.
+  // producedQuantity kolonu deprecated (hiç güncellenmiyor); waterfallComplete sadece status
+  // değiştiriyor. Ay sayfasındaki "Tamamlandı" rakamıyla aynı mantık.
   const sezonMp = await prisma.marketplace.findUnique({ where: { code: 'SEZON' } });
   const sezonRequests = sezonMp
     ? await prisma.productionRequest.findMany({
@@ -51,7 +53,8 @@ export async function GET(request: NextRequest, { params }: Params) {
         select: {
           iwasku: true,
           productionMonth: true,
-          producedQuantity: true,
+          quantity: true,
+          status: true,
           productSize: true,
         },
       })
@@ -91,10 +94,10 @@ export async function GET(request: NextRequest, { params }: Params) {
   }
 
   for (const r of sezonRequests) {
-    if ((r.producedQuantity ?? 0) <= 0) continue;
+    if (r.status !== 'COMPLETED') continue;
     const m = getMonth(r.productionMonth);
-    m.totalProduced += r.producedQuantity ?? 0;
-    m.totalProducedDesi += (r.productSize ?? 0) * (r.producedQuantity ?? 0);
+    m.totalProduced += r.quantity;
+    m.totalProducedDesi += (r.productSize ?? 0) * r.quantity;
     m.iwaskusProducing.add(r.iwasku);
   }
 
@@ -125,10 +128,10 @@ export async function GET(request: NextRequest, { params }: Params) {
     }
     const prodByIwasku = new Map<string, { qty: number; desi: number }>();
     for (const r of sezonRequests) {
-      if (r.productionMonth !== month) continue;
+      if (r.productionMonth !== month || r.status !== 'COMPLETED') continue;
       const cur = prodByIwasku.get(r.iwasku) ?? { qty: 0, desi: 0 };
-      cur.qty += r.producedQuantity ?? 0;
-      cur.desi += (r.productSize ?? 0) * (r.producedQuantity ?? 0);
+      cur.qty += r.quantity;
+      cur.desi += (r.productSize ?? 0) * r.quantity;
       prodByIwasku.set(r.iwasku, cur);
     }
     const productKeys = new Set([...planByIwasku.keys(), ...prodByIwasku.keys()]);
