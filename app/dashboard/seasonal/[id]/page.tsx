@@ -61,6 +61,16 @@ interface MonthQuota {
   locked?: boolean;
 }
 
+interface Marketplace {
+  id: string;
+  name: string;
+  code: string;
+  region: string;
+  marketplaceType: string;
+  isCustom: boolean;
+  isActive: boolean;
+}
+
 const statusColors: Record<string, string> = {
   PLANNED: 'bg-gray-100 text-gray-600',
   PRODUCING: 'bg-yellow-100 text-yellow-700',
@@ -115,6 +125,22 @@ export default function PoolDetailPage() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingReserveId, setDeletingReserveId] = useState<string | null>(null);
 
+  // Active marketplaces (for template sheet generation + import mapping)
+  const [marketplaces, setMarketplaces] = useState<Marketplace[]>([]);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [selectedTemplateMps, setSelectedTemplateMps] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    fetch('/api/marketplaces?limit=200')
+      .then(r => r.json())
+      .then(d => {
+        if (!d.success) return;
+        // Sezon custom marketplace'i talep girişi için kullanılmıyor — filtrele
+        const list = (d.data as Marketplace[]).filter(m => m.code !== 'SEZON');
+        setMarketplaces(list);
+      })
+      .catch(() => {});
+  }, []);
 
   const fetchPool = useCallback(async () => {
     try {
@@ -224,19 +250,45 @@ export default function PoolDetailPage() {
     }
   };
 
-  // Marketplace sheets to parse
-  const MARKETPLACE_SHEETS = ['US', 'EU', 'UK', 'CA', 'AU'];
+  // Excel sheet adı (örn. "Amazon US") → marketplace.code ("AMZN_US")
+  // Yaygın varyantları normalize ederek eşleştirir (case/space/underscore farklarına tolerans)
+  const normalizeSheetName = (s: string) =>
+    s.trim().toUpperCase().replace(/[\s_\-]+/g, '');
 
-  // Template indirme — bos Excel, her marketplace bir sheet
-  const handleDownloadTemplate = async () => {
+  const resolveMarketplaceFromSheet = (sheetName: string): string | null => {
+    const n = normalizeSheetName(sheetName);
+    for (const mp of marketplaces) {
+      if (normalizeSheetName(mp.code) === n) return mp.code;
+      if (normalizeSheetName(mp.name) === n) return mp.code;
+    }
+    return null;
+  };
+
+  // Template indirme — kullanıcı marketplace seçer, seçtikleri için sheet üretilir
+  // Sheet adı = marketplace.name (kullanıcı dostu); import sırasında name/code tolere edilir
+  const openTemplateDialog = () => {
+    // Varsayılan: Sezon hariç tüm aktif marketplace'ler işaretli
+    setSelectedTemplateMps(new Set(marketplaces.map(m => m.code)));
+    setTemplateDialogOpen(true);
+  };
+
+  const generateTemplate = async () => {
+    const selected = marketplaces.filter(m => selectedTemplateMps.has(m.code));
+    if (selected.length === 0) {
+      alert('En az bir pazar yeri seçmelisiniz.');
+      return;
+    }
     const XLSX = await loadXLSX();
     const wb = XLSX.utils.book_new();
-    for (const mp of MARKETPLACE_SHEETS) {
+    for (const mp of selected) {
       const ws = XLSX.utils.aoa_to_sheet([['iwasku', 'kategori', 'desi', 'q4 26', 'q1 27']]);
       ws['!cols'] = [{ wch: 16 }, { wch: 20 }, { wch: 8 }, { wch: 10 }, { wch: 10 }];
-      XLSX.utils.book_append_sheet(wb, ws, mp);
+      // Sheet adı max 31 karakter (Excel sınırı), ASCII'ye çevir
+      const sheetName = mp.name.slice(0, 31).replace(/[\\/\*\?\[\]:]/g, '-');
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
     }
     XLSX.writeFile(wb, `sezon-template.xlsx`);
+    setTemplateDialogOpen(false);
   };
 
   const handleExcelImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -248,12 +300,14 @@ export default function PoolDetailPage() {
         const XLSX = await loadXLSX();
         const wb = XLSX.read(evt.target?.result, { type: 'binary' });
         const items: { iwasku: string; quantity: number; desi: number; category: string; marketplace: string }[] = [];
+        const unmatchedSheets: string[] = [];
 
         for (const sheetName of wb.SheetNames) {
-          const marketplace = MARKETPLACE_SHEETS.find(
-            m => sheetName.toUpperCase().startsWith(m)
-          );
-          if (!marketplace) continue;
+          const mpCode = resolveMarketplaceFromSheet(sheetName);
+          if (!mpCode) {
+            unmatchedSheets.push(sheetName);
+            continue;
+          }
 
           const ws = wb.Sheets[sheetName]!;
           const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws!) as Record<string, unknown>[];
@@ -270,17 +324,23 @@ export default function PoolDetailPage() {
             const desi = Number(row['desi'] || row['Desi'] || row['Desi/Un'] || 0);
             const category = String(row['kategori'] || row['Kategori'] || row['category'] || '');
 
-            items.push({ iwasku, quantity, desi, category, marketplace });
+            items.push({ iwasku, quantity, desi, category, marketplace: mpCode });
           }
         }
 
         if (items.length === 0) {
-          alert('Excel\'de geçerli veri bulunamadı.\nBeklenen format: Sheet adı = US/EU/UK/CA/AU\nKolonlar: iwasku, kategori, desi, q4 26, q1 27');
+          const mpHint = marketplaces.slice(0, 5).map(m => m.name).join(', ');
+          alert(`Excel'de geçerli veri bulunamadı.\nSheet adı bir pazar yeri olmalı (örn. ${mpHint}...)\nKolonlar: iwasku, kategori, desi, q4 26, q1 27`);
           return;
         }
 
         const marketplaceCount = new Set(items.map(i => i.marketplace)).size;
-        alert(`${items.length} satır okundu (${marketplaceCount} marketplace). Aktarılıyor...`);
+        let msg = `${items.length} satır okundu (${marketplaceCount} pazar yeri).`;
+        if (unmatchedSheets.length > 0) {
+          msg += `\n\nEşleşmeyen sheet'ler atlandı: ${unmatchedSheets.join(', ')}`;
+        }
+        msg += '\n\nAktarılıyor...';
+        alert(msg);
         handleImport({ items, months: DEFAULT_MONTHS });
       } catch {
         alert('Excel dosyası okunamadı');
@@ -546,7 +606,7 @@ export default function PoolDetailPage() {
                 </summary>
                 <div className="mt-3 space-y-4">
                   <div className="flex items-center gap-3">
-                    <button onClick={handleDownloadTemplate} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 border">
+                    <button onClick={openTemplateDialog} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 border">
                       <FileSpreadsheet className="w-4 h-4" /> Template Indir
                     </button>
                     {isAdmin && (
@@ -556,7 +616,7 @@ export default function PoolDetailPage() {
                         <input type="file" accept=".xlsx,.xls" onChange={handleExcelImport} className="hidden" />
                       </label>
                     )}
-                    <span className="text-xs text-gray-500">Sheet = ulke (US/EU/UK/CA/AU), kolonlar: iwasku, kategori, desi, q4 26, q1 27</span>
+                    <span className="text-xs text-gray-500">Sheet adı = pazar yeri adı, kolonlar: iwasku, kategori, desi, q4 26, q1 27</span>
                     {importing && <Loader2 className="w-4 h-4 animate-spin text-purple-500" />}
                   </div>
                   <details className="text-xs">
@@ -605,6 +665,16 @@ export default function PoolDetailPage() {
                   {pool.reserves.map(r => {
                     const split = r.marketplaceSplit ?? {};
                     const splitEntries = Object.entries(split).filter(([, q]) => q > 0).sort((a, b) => b[1] - a[1]);
+                    // marketplace code → { name, region } lookup (fallback: code'un kendisi)
+                    const mpName = (code: string) => marketplaces.find(m => m.code === code)?.name ?? code;
+                    const mpRegion = (code: string) => marketplaces.find(m => m.code === code)?.region ?? code;
+                    // Region toplamı (ör. Amazon US + Wayfair US → US)
+                    const regionTotals: Record<string, number> = {};
+                    for (const [code, qty] of splitEntries) {
+                      const reg = mpRegion(code);
+                      regionTotals[reg] = (regionTotals[reg] ?? 0) + qty;
+                    }
+                    const regionEntries = Object.entries(regionTotals).sort((a, b) => b[1] - a[1]);
                     return (
                       <tr key={r.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 max-w-[320px]">
@@ -627,12 +697,27 @@ export default function PoolDetailPage() {
                         <td className="text-center px-3 py-3 text-gray-500">{r.targetDesi ? Math.round(r.targetDesi) : '—'}</td>
                         <td className="px-3 py-3">
                           {splitEntries.length > 0 ? (
-                            <div className="flex flex-wrap gap-0.5">
-                              {splitEntries.map(([code, qty]) => (
-                                <span key={code} className="text-[10px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">
-                                  {code}:{qty}
-                                </span>
-                              ))}
+                            <div className="space-y-1">
+                              {/* Bölge özet (US:651, EU:401 gibi) — planlama bölge bazlı */}
+                              <div className="flex flex-wrap gap-0.5">
+                                {regionEntries.map(([region, qty]) => (
+                                  <span key={region} className="text-[10px] font-semibold text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded">
+                                    {region}:{qty}
+                                  </span>
+                                ))}
+                              </div>
+                              {/* Pazar yeri kırılımı (Amazon US:500, Wayfair US:151 gibi) */}
+                              <div className="flex flex-wrap gap-0.5">
+                                {splitEntries.map(([code, qty]) => (
+                                  <span
+                                    key={code}
+                                    className="text-[10px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded"
+                                    title={code}
+                                  >
+                                    {mpName(code)}:{qty}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
                           ) : <span className="text-xs text-gray-400">—</span>}
                         </td>
@@ -644,10 +729,12 @@ export default function PoolDetailPage() {
                         {pool.status === 'ACTIVE' && (
                           <td className="px-3 py-3 text-right align-top">
                             {editingReserveId === r.id ? (
-                              <div className="min-w-[170px]">
+                              <div className="min-w-[240px]">
                                 {Object.entries(editSplit).map(([code, qty], i) => (
                                   <div key={code} className="flex items-center gap-1.5 mb-1">
-                                    <span className="text-xs font-semibold text-gray-700 w-8 text-left">{code}</span>
+                                    <span className="text-xs font-medium text-gray-700 flex-1 text-left truncate" title={code}>
+                                      {mpName(code)}
+                                    </span>
                                     <input
                                       type="number"
                                       value={qty}
@@ -949,6 +1036,79 @@ export default function PoolDetailPage() {
       {/* Monthly Production Tab */}
       {tab === 'production' && (
         <MonthlyProductionTab poolId={id} />
+      )}
+
+      {/* Template Download Dialog */}
+      {templateDialogOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setTemplateDialogOpen(false)}>
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-gray-900">Template İndir</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Talep gireceğin pazar yerlerini seç — her biri için ayrı sheet oluşur.</p>
+              </div>
+              <button onClick={() => setTemplateDialogOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-5 py-3 border-b flex items-center gap-3 text-xs">
+              <button
+                onClick={() => setSelectedTemplateMps(new Set(marketplaces.map(m => m.code)))}
+                className="text-purple-600 hover:underline"
+              >Tümünü seç</button>
+              <button
+                onClick={() => setSelectedTemplateMps(new Set())}
+                className="text-gray-500 hover:underline"
+              >Temizle</button>
+              <span className="ml-auto text-gray-500">{selectedTemplateMps.size} seçili</span>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-3">
+              {marketplaces.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-8">Pazar yerleri yükleniyor...</p>
+              ) : (
+                <div className="space-y-1">
+                  {marketplaces.map(mp => {
+                    const checked = selectedTemplateMps.has(mp.code);
+                    return (
+                      <label key={mp.code} className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            setSelectedTemplateMps(prev => {
+                              const next = new Set(prev);
+                              if (next.has(mp.code)) next.delete(mp.code);
+                              else next.add(mp.code);
+                              return next;
+                            });
+                          }}
+                          className="w-4 h-4 accent-purple-600"
+                        />
+                        <span className="text-sm text-gray-900 flex-1">{mp.name}</span>
+                        <span className="text-xs text-gray-400">{mp.region}</span>
+                        <span className="text-xs text-gray-300 font-mono">{mp.code}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="px-5 py-4 border-t flex justify-end gap-2">
+              <button
+                onClick={() => setTemplateDialogOpen(false)}
+                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+              >İptal</button>
+              <button
+                onClick={generateTemplate}
+                disabled={selectedTemplateMps.size === 0}
+                className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                İndir ({selectedTemplateMps.size} sheet)
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -33,6 +33,7 @@ export const DESTINATION_LEAD_TIMES: Record<string, { days: number; method: stri
   NL: { days: 15, method: 'road' },
   AE: { days: 7, method: 'air' },
   ZA: { days: 30, method: 'sea' },
+  TR: { days: 3, method: 'road' },
 };
 
 // Max lead time (AU=105 days) — used for normalization

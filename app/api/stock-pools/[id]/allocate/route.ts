@@ -18,6 +18,8 @@ import { requireRole } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
 import {
   allocateReserves,
+  loadCodeToRegionMap,
+  marketplaceSplitToRegionSplit,
   summarizeByMonth,
   type ReserveInput,
   type MonthCapacity,
@@ -105,16 +107,23 @@ export async function POST(request: NextRequest, { params }: Params) {
     lockedQtyByIwasku.set(la.iwasku, (lockedQtyByIwasku.get(la.iwasku) ?? 0) + la.plannedQty);
   }
 
+  // DB'deki marketplaceSplit artık marketplace.code bazlı — allocator için region'a topla
+  const codeToRegion = await loadCodeToRegionMap();
+
   const reserveInputs: ReserveInput[] = pool.reserves
     .map(r => {
       const lockedQty = lockedQtyByIwasku.get(r.iwasku) ?? 0;
       const remainingTarget = Math.max(0, r.targetQuantity - lockedQty);
+      const regionSplit = marketplaceSplitToRegionSplit(
+        r.marketplaceSplit as Record<string, number> | null,
+        codeToRegion,
+      );
       return {
         iwasku: r.iwasku,
         targetQuantity: remainingTarget,
         desiPerUnit: r.desiPerUnit ?? (r.targetDesi && r.targetQuantity > 0 ? r.targetDesi / r.targetQuantity : 0),
         category: r.category ?? '',
-        marketplaceSplit: (r.marketplaceSplit as Record<string, number>) ?? undefined,
+        marketplaceSplit: Object.keys(regionSplit).length > 0 ? regionSplit : undefined,
       };
     })
     .filter(r => r.targetQuantity > 0 && r.desiPerUnit > 0);

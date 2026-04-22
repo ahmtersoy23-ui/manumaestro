@@ -2,11 +2,14 @@
  * Stock Pool Import API
  * POST: Import reserves from Excel + auto-allocate to months
  *
- * Excel format (per-marketplace sheets: US, EU, UK, CA, AU):
+ * Excel format (per-marketplace sheets, sheet name = marketplace.code like AMZN_US, WAYFAIR_US):
  *   iwasku | kategori | desi | q4 26 | q1 27
  *
  * Frontend merges all sheets and sends:
- *   { iwasku, quantity, desi?, category?, marketplace? }[]
+ *   { iwasku, quantity, desi?, category?, marketplace? }[]   // marketplace = Marketplace.code
+ *
+ * DB: stock_reserves.marketplaceSplit key = marketplace code (AMZN_US, WAYFAIR_US...)
+ * Allocator input: region keyli split (AMZN_US + WAYFAIR_US → US) — Marketplace.code → region map ile türetilir
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -14,7 +17,13 @@ import { prisma } from '@/lib/db/prisma';
 import { queryProductDb } from '@/lib/db/prisma';
 import { requireRole } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
-import { allocateReserves, type ReserveInput, type MonthCapacity } from '@/lib/seasonal';
+import {
+  allocateReserves,
+  loadCodeToRegionMap,
+  marketplaceSplitToRegionSplit,
+  type ReserveInput,
+  type MonthCapacity,
+} from '@/lib/seasonal';
 import { z } from 'zod';
 
 const ImportItemSchema = z.object({
@@ -22,7 +31,7 @@ const ImportItemSchema = z.object({
   quantity: z.number().int().positive(),
   desi: z.number().min(0).optional(),
   category: z.string().optional(),
-  marketplace: z.string().optional(), // "US", "EU", "UK", "CA", "AU"
+  marketplace: z.string().optional(), // Marketplace.code: "AMZN_US", "WAYFAIR_US", "BOL_NL"...
 });
 
 const ImportSchema = z.object({
@@ -116,6 +125,9 @@ export async function POST(request: NextRequest, { params }: Params) {
     }
   }
 
+  // Marketplace.code → region lookup (allocator region keyli split bekler)
+  const codeToRegion = await loadCodeToRegionMap();
+
   // Create reserves in transaction
   const reserveInputs: ReserveInput[] = [];
   const createdReserves = await prisma.$transaction(async (tx) => {
@@ -152,7 +164,7 @@ export async function POST(request: NextRequest, { params }: Params) {
         targetQuantity: data.quantity,
         desiPerUnit: data.desi,
         category: data.category,
-        marketplaceSplit: data.marketplaceSplit,
+        marketplaceSplit: marketplaceSplitToRegionSplit(data.marketplaceSplit, codeToRegion),
       });
     }
 
