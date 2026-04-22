@@ -68,11 +68,18 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       const changedKeys = Object.keys(parsed.marketplaceSplit).filter(
         k => parsed.marketplaceSplit[k] !== (currentSplit[k] ?? 0)
       );
-      // Mevcut split'te olup yeni split'te olmayan key'ler: "silindi" demek — yine değişim
+      // Mevcut split'te olup yeni split'te olmayan key'ler: "silindi" demek
+      // Editor key silemez (admin ile iletişime geçsin) — sadece değer değiştirebilir
       const removedKeys = Object.keys(currentSplit).filter(
         k => !(k in parsed.marketplaceSplit) && currentSplit[k] > 0
       );
-      const forbidden = [...changedKeys, ...removedKeys].filter(k => !editableCodes.has(k));
+      if (removedKeys.length > 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'Pazar yeri kaydı silme yetkiniz yok. Silme için admin ile iletişime geçin.',
+        }, { status: 403 });
+      }
+      const forbidden = changedKeys.filter(k => !editableCodes.has(k));
       if (forbidden.length > 0) {
         return NextResponse.json({
           success: false,
@@ -82,7 +89,6 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       // Güvenli merge: sadece izinli (değişen) key'ler yeni değerle, diğer key'ler korunur
       newSplit = { ...currentSplit };
       for (const k of changedKeys) newSplit[k] = parsed.marketplaceSplit[k]!;
-      for (const k of removedKeys) delete newSplit[k];
     }
     targetQuantity = Object.values(newSplit).reduce((s, v) => s + v, 0);
   } else {

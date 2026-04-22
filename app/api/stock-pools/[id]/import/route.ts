@@ -153,10 +153,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   // Marketplace.code → region lookup (allocator region keyli split bekler)
   const codeToRegion = await loadCodeToRegionMap();
 
-  // Editor sadece kendi pazar yerlerini günceller; mevcut split'teki diğer
-  // pazar yerlerinin değerleri korunur. Admin için de merge uygulanır:
-  // ayrı Excel dosyalarıyla (örn. "Amazon.xlsx" → "Wayfair.xlsx") yapılan
-  // ardışık yüklemelerde ikinci yükleme ilkini ezmesin.
+  // Mevcut reserve'ler ve split'leri: (iwasku, marketplace) çakışma tespiti için
   const existingReserves = await prisma.stockReserve.findMany({
     where: { poolId: id, iwasku: { in: [...mergedMap.keys()] } },
     select: { iwasku: true, marketplaceSplit: true, desiPerUnit: true },
@@ -166,6 +163,29 @@ export async function POST(request: NextRequest, { params }: Params) {
   for (const r of existingReserves) {
     existingSplitByIwasku.set(r.iwasku, (r.marketplaceSplit as Record<string, number>) ?? {});
     if (r.desiPerUnit) existingDesiByIwasku.set(r.iwasku, r.desiPerUnit);
+  }
+
+  // Çakışma tespiti: aynı (iwasku, marketplace) zaten mevcutsa reddet.
+  // Toplama/üzerine yazma yok — hatalı girişleri admin silmeli, sonra tekrar yüklenmeli.
+  const conflicts: { iwasku: string; marketplace: string; existingQty: number }[] = [];
+  for (const [iwasku, data] of mergedMap) {
+    const existing = existingSplitByIwasku.get(iwasku) ?? {};
+    for (const mpCode of Object.keys(data.marketplaceSplit)) {
+      if ((existing[mpCode] ?? 0) > 0) {
+        conflicts.push({ iwasku, marketplace: mpCode, existingQty: existing[mpCode]! });
+      }
+    }
+  }
+  if (conflicts.length > 0) {
+    const sample = conflicts.slice(0, 10)
+      .map(c => `${c.iwasku} / ${c.marketplace} (mevcut: ${c.existingQty})`)
+      .join('\n');
+    const extraLine = conflicts.length > 10 ? `\n...ve ${conflicts.length - 10} satır daha` : '';
+    return NextResponse.json({
+      success: false,
+      error: `${conflicts.length} satır zaten girilmiş. Düzeltmek için admin ile iletişime geçin.\n\n${sample}${extraLine}`,
+      conflicts,
+    }, { status: 409 });
   }
 
   // Create reserves in transaction

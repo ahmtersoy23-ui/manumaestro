@@ -1,9 +1,13 @@
 /**
  * Monthly Production Tracking API
- * GET: Aggregate weekly warehouse entries by month for seasonal pool products
+ * GET: Havuzun ay bazlı planlama/gerçekleşme özeti
  *
- * Returns per-month production vs planned allocation comparison
- * Week boundary rule: weekStart month determines which month the production counts for
+ * Veri kaynağı:
+ *   Plan     → MonthlyAllocation (bu havuzun onaylı dağılımı)
+ *   Üretim   → ProductionRequest (marketplaceId=SEZON, notes contains [pool:<id>])
+ *              producedQuantity waterfallComplete tarafından MonthSnapshot'ten senkronize edilir.
+ *
+ * Ay sayfasındaki "Sezon" marketplace özetiyle tutarlıdır: aynı ProductionRequest kümesi.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -19,108 +23,124 @@ export async function GET(request: NextRequest, { params }: Params) {
 
   const pool = await prisma.stockPool.findUnique({
     where: { id },
-    include: {
-      reserves: {
-        where: { status: { not: 'CANCELLED' } },
-        select: { iwasku: true, targetQuantity: true, initialStock: true },
-        orderBy: { targetQuantity: 'desc' },
-      },
-    },
+    select: { id: true },
   });
-
   if (!pool) {
     return NextResponse.json({ success: false, error: 'Havuz bulunamadı' }, { status: 404 });
   }
 
-  const iwaskus = pool.reserves.map(r => r.iwasku);
-  if (iwaskus.length === 0) {
-    return NextResponse.json({ success: true, data: { months: [], byProduct: [] } });
-  }
-
-  // Get all PRODUCTION weekly entries for these iwaskus
-  const weeklyEntries = await prisma.warehouseWeekly.findMany({
-    where: {
-      iwasku: { in: iwaskus },
-      type: 'PRODUCTION',
-      quantity: { gt: 0 },
-    },
-    select: {
-      iwasku: true,
-      weekStart: true,
-      quantity: true,
-    },
-    orderBy: { weekStart: 'asc' },
-  });
-
-  // Get planned allocations per month per product
+  // Plan (MonthlyAllocation): havuzun onaylı dağılımı
   const allocations = await prisma.monthlyAllocation.findMany({
-    where: {
-      reserve: { poolId: id, status: { not: 'CANCELLED' } },
-    },
+    where: { reserve: { poolId: id, status: { not: 'CANCELLED' } } },
     select: {
       month: true,
       plannedQty: true,
-      reserve: { select: { iwasku: true } },
+      plannedDesi: true,
+      reserve: { select: { iwasku: true, desiPerUnit: true } },
     },
   });
 
-  // Aggregate weekly entries by month
-  // weekStart month = which month this production counts for
-  const productionByMonth = new Map<string, Map<string, number>>(); // month -> iwasku -> qty
+  // Üretim (Sezon ProductionRequest'ler, bu havuza ait olanlar)
+  const sezonMp = await prisma.marketplace.findUnique({ where: { code: 'SEZON' } });
+  const sezonRequests = sezonMp
+    ? await prisma.productionRequest.findMany({
+        where: {
+          marketplaceId: sezonMp.id,
+          notes: { contains: `[pool:${id}]` },
+        },
+        select: {
+          iwasku: true,
+          productionMonth: true,
+          producedQuantity: true,
+          productSize: true,
+        },
+      })
+    : [];
 
-  for (const entry of weeklyEntries) {
-    const d = new Date(entry.weekStart);
-    const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  // Ay bazında agregasyon
+  type MonthAgg = {
+    totalPlanned: number;
+    totalPlannedDesi: number;
+    totalProduced: number;
+    totalProducedDesi: number;
+    iwaskusProducing: Set<string>;
+    iwaskusPlanned: Set<string>;
+  };
+  const byMonth = new Map<string, MonthAgg>();
+  const getMonth = (month: string): MonthAgg => {
+    let m = byMonth.get(month);
+    if (!m) {
+      m = {
+        totalPlanned: 0,
+        totalPlannedDesi: 0,
+        totalProduced: 0,
+        totalProducedDesi: 0,
+        iwaskusProducing: new Set(),
+        iwaskusPlanned: new Set(),
+      };
+      byMonth.set(month, m);
+    }
+    return m;
+  };
 
-    if (!productionByMonth.has(month)) productionByMonth.set(month, new Map());
-    const monthMap = productionByMonth.get(month)!;
-    monthMap.set(entry.iwasku, (monthMap.get(entry.iwasku) ?? 0) + entry.quantity);
+  for (const a of allocations) {
+    const m = getMonth(a.month);
+    m.totalPlanned += a.plannedQty;
+    m.totalPlannedDesi += a.plannedDesi ?? (a.reserve.desiPerUnit ? a.plannedQty * a.reserve.desiPerUnit : 0);
+    m.iwaskusPlanned.add(a.reserve.iwasku);
   }
 
-  // Aggregate planned allocations by month
-  const plannedByMonth = new Map<string, Map<string, number>>(); // month -> iwasku -> qty
-
-  for (const alloc of allocations) {
-    const month = alloc.month;
-    if (!plannedByMonth.has(month)) plannedByMonth.set(month, new Map());
-    const monthMap = plannedByMonth.get(month)!;
-    monthMap.set(alloc.reserve.iwasku, (monthMap.get(alloc.reserve.iwasku) ?? 0) + alloc.plannedQty);
+  for (const r of sezonRequests) {
+    if ((r.producedQuantity ?? 0) <= 0) continue;
+    const m = getMonth(r.productionMonth);
+    m.totalProduced += r.producedQuantity ?? 0;
+    m.totalProducedDesi += (r.productSize ?? 0) * (r.producedQuantity ?? 0);
+    m.iwaskusProducing.add(r.iwasku);
   }
 
-  // Collect all months
-  const allMonths = new Set([...productionByMonth.keys(), ...plannedByMonth.keys()]);
-  const sortedMonths = Array.from(allMonths).sort();
-
-  // Build month summary
+  const sortedMonths = [...byMonth.keys()].sort();
   const months = sortedMonths.map(month => {
-    const produced = productionByMonth.get(month);
-    const planned = plannedByMonth.get(month);
-
-    const totalProduced = produced ? Array.from(produced.values()).reduce((s, v) => s + v, 0) : 0;
-    const totalPlanned = planned ? Array.from(planned.values()).reduce((s, v) => s + v, 0) : 0;
-    const productCount = produced ? produced.size : 0;
-
+    const m = byMonth.get(month)!;
     return {
       month,
-      totalPlanned,
-      totalProduced,
-      diff: totalProduced - totalPlanned,
-      productCount,
+      totalPlanned: m.totalPlanned,
+      totalPlannedDesi: Math.round(m.totalPlannedDesi),
+      totalProduced: m.totalProduced,
+      totalProducedDesi: Math.round(m.totalProducedDesi),
+      diff: m.totalProduced - m.totalPlanned,
+      diffDesi: Math.round(m.totalProducedDesi - m.totalPlannedDesi),
+      productCount: m.iwaskusProducing.size,
     };
   });
 
-  // Build per-product per-month detail
+  // Per-ürün detay: her iwasku için plan ve üretim
   const byProduct = sortedMonths.map(month => {
-    const produced = productionByMonth.get(month) ?? new Map<string, number>();
-    const planned = plannedByMonth.get(month) ?? new Map<string, number>();
-
-    const productKeys = new Set([...produced.keys(), ...planned.keys()]);
-    const products = Array.from(productKeys).map(iwasku => ({
-      iwasku,
-      planned: planned.get(iwasku) ?? 0,
-      produced: produced.get(iwasku) ?? 0,
-    })).sort((a, b) => b.planned - a.planned);
-
+    const planByIwasku = new Map<string, { qty: number; desi: number }>();
+    for (const a of allocations) {
+      if (a.month !== month) continue;
+      const cur = planByIwasku.get(a.reserve.iwasku) ?? { qty: 0, desi: 0 };
+      cur.qty += a.plannedQty;
+      cur.desi += a.plannedDesi ?? (a.reserve.desiPerUnit ? a.plannedQty * a.reserve.desiPerUnit : 0);
+      planByIwasku.set(a.reserve.iwasku, cur);
+    }
+    const prodByIwasku = new Map<string, { qty: number; desi: number }>();
+    for (const r of sezonRequests) {
+      if (r.productionMonth !== month) continue;
+      const cur = prodByIwasku.get(r.iwasku) ?? { qty: 0, desi: 0 };
+      cur.qty += r.producedQuantity ?? 0;
+      cur.desi += (r.productSize ?? 0) * (r.producedQuantity ?? 0);
+      prodByIwasku.set(r.iwasku, cur);
+    }
+    const productKeys = new Set([...planByIwasku.keys(), ...prodByIwasku.keys()]);
+    const products = [...productKeys]
+      .map(iwasku => ({
+        iwasku,
+        planned: planByIwasku.get(iwasku)?.qty ?? 0,
+        plannedDesi: Math.round(planByIwasku.get(iwasku)?.desi ?? 0),
+        produced: prodByIwasku.get(iwasku)?.qty ?? 0,
+        producedDesi: Math.round(prodByIwasku.get(iwasku)?.desi ?? 0),
+      }))
+      .sort((a, b) => b.planned - a.planned);
     return { month, products };
   });
 

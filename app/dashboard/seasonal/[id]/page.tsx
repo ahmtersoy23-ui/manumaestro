@@ -755,7 +755,7 @@ export default function PoolDetailPage() {
                         {pool.status === 'ACTIVE' && (
                           <td className="px-3 py-3 text-right align-top">
                             {editingReserveId === r.id ? (
-                              <div className="min-w-[240px]">
+                              <div className="min-w-[260px]">
                                 {Object.entries(editSplit).map(([code, qty], i) => {
                                   const editable = canEditMp(code);
                                   return (
@@ -773,6 +773,22 @@ export default function PoolDetailPage() {
                                       onKeyDown={e => { if (e.key === 'Escape') setEditingReserveId(null); }}
                                       className="w-16 px-1.5 py-0.5 border rounded text-xs text-center focus:ring-1 focus:ring-purple-500 disabled:bg-gray-50 disabled:text-gray-400"
                                     />
+                                    {isAdmin && code !== 'TOTAL' && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditSplit(prev => {
+                                            const next = { ...prev };
+                                            delete next[code];
+                                            return next;
+                                          });
+                                        }}
+                                        className="p-0.5 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded"
+                                        title={`${mpName(code)} kaydını sil`}
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    )}
                                   </div>
                                   );
                                 })}
@@ -1076,7 +1092,7 @@ export default function PoolDetailPage() {
 
       {/* Monthly Production Tab */}
       {tab === 'production' && (
-        <MonthlyProductionTab poolId={id} />
+        <MonthlyProductionTab poolId={id} statUnit={statUnit} />
       )}
 
       {/* Template Download Dialog */}
@@ -1163,10 +1179,21 @@ export default function PoolDetailPage() {
 // Monthly Production Tab Component
 // ============================================
 
-function MonthlyProductionTab({ poolId }: { poolId: string }) {
+function MonthlyProductionTab({ poolId, statUnit }: { poolId: string; statUnit: 'unit' | 'desi' }) {
+  type MonthRow = {
+    month: string;
+    totalPlanned: number;
+    totalPlannedDesi: number;
+    totalProduced: number;
+    totalProducedDesi: number;
+    diff: number;
+    diffDesi: number;
+    productCount: number;
+  };
+  type ProductRow = { iwasku: string; planned: number; plannedDesi: number; produced: number; producedDesi: number };
   const [data, setData] = useState<{
-    months: { month: string; totalPlanned: number; totalProduced: number; diff: number; productCount: number }[];
-    byProduct: { month: string; products: { iwasku: string; planned: number; produced: number }[] }[];
+    months: MonthRow[];
+    byProduct: { month: string; products: ProductRow[] }[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
@@ -1185,7 +1212,7 @@ function MonthlyProductionTab({ poolId }: { poolId: string }) {
       <div className="bg-white border rounded-xl text-center py-12">
         <BarChart3 className="w-10 h-10 text-gray-300 mx-auto mb-3" />
         <p className="text-gray-500">Henüz üretim verisi yok</p>
-        <p className="text-gray-400 text-sm mt-1">Haftalık depo girişleri yapıldıkça burada görünecek</p>
+        <p className="text-gray-400 text-sm mt-1">Ay planına aktarıp üretim başladıkça burada görünecek</p>
       </div>
     );
   }
@@ -1197,19 +1224,27 @@ function MonthlyProductionTab({ poolId }: { poolId: string }) {
   };
   const formatMonth = (m: string) => `${monthLabels[m.slice(5, 7)] ?? m.slice(5, 7)} ${m.slice(0, 4)}`;
 
-  const totalPlanned = data.months.reduce((s, m) => s + m.totalPlanned, 0);
-  const totalProduced = data.months.reduce((s, m) => s + m.totalProduced, 0);
+  const isDesi = statUnit === 'desi';
+  const suffix = isDesi ? ' desi' : '';
+  const pickPlanned = (m: MonthRow) => isDesi ? m.totalPlannedDesi : m.totalPlanned;
+  const pickProduced = (m: MonthRow) => isDesi ? m.totalProducedDesi : m.totalProduced;
+  const pickDiff = (m: MonthRow) => isDesi ? m.diffDesi : m.diff;
+  const pickProdPlan = (p: ProductRow) => isDesi ? p.plannedDesi : p.planned;
+  const pickProdDone = (p: ProductRow) => isDesi ? p.producedDesi : p.produced;
+
+  const totalPlanned = data.months.reduce((s, m) => s + pickPlanned(m), 0);
+  const totalProduced = data.months.reduce((s, m) => s + pickProduced(m), 0);
 
   return (
     <div className="space-y-4">
       {/* Summary */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white border rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-gray-900">{totalPlanned.toLocaleString('tr-TR')}</p>
+          <p className="text-2xl font-bold text-gray-900">{totalPlanned.toLocaleString('tr-TR')}{suffix}</p>
           <p className="text-xs text-gray-500">Toplam Planlanan</p>
         </div>
         <div className="bg-white border rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-green-600">{totalProduced.toLocaleString('tr-TR')}</p>
+          <p className="text-2xl font-bold text-green-600">{totalProduced.toLocaleString('tr-TR')}{suffix}</p>
           <p className="text-xs text-gray-500">Toplam Üretilen</p>
         </div>
         <div className="bg-white border rounded-xl p-4 text-center">
@@ -1235,7 +1270,10 @@ function MonthlyProductionTab({ poolId }: { poolId: string }) {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {data.months.map(m => {
-              const pct = m.totalPlanned > 0 ? Math.round(m.totalProduced / m.totalPlanned * 100) : 0;
+              const planned = pickPlanned(m);
+              const produced = pickProduced(m);
+              const diff = pickDiff(m);
+              const pct = planned > 0 ? Math.round(produced / planned * 100) : 0;
               const pctColor = pct >= 100 ? 'text-green-600' : pct >= 70 ? 'text-yellow-600' : 'text-red-600';
               const barColor = pct >= 100 ? 'bg-green-500' : pct >= 70 ? 'bg-yellow-500' : 'bg-red-500';
               const detail = data.byProduct.find(b => b.month === m.month);
@@ -1247,10 +1285,10 @@ function MonthlyProductionTab({ poolId }: { poolId: string }) {
                     onClick={() => setExpandedMonth(expandedMonth === m.month ? null : m.month)}
                   >
                     <td className="px-4 py-3 font-medium text-gray-900">{formatMonth(m.month)}</td>
-                    <td className="text-center px-3 py-3 text-gray-900">{m.totalPlanned.toLocaleString('tr-TR')}</td>
-                    <td className="text-center px-3 py-3 font-medium text-gray-900">{m.totalProduced.toLocaleString('tr-TR')}</td>
-                    <td className={`text-center px-3 py-3 font-medium ${m.diff >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {m.diff >= 0 ? '+' : ''}{m.diff.toLocaleString('tr-TR')}
+                    <td className="text-center px-3 py-3 text-gray-900">{planned.toLocaleString('tr-TR')}</td>
+                    <td className="text-center px-3 py-3 font-medium text-gray-900">{produced.toLocaleString('tr-TR')}</td>
+                    <td className={`text-center px-3 py-3 font-medium ${diff >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {diff >= 0 ? '+' : ''}{diff.toLocaleString('tr-TR')}
                     </td>
                     <td className="text-center px-3 py-3">
                       <div className="flex items-center gap-2 justify-center">
@@ -1278,16 +1316,21 @@ function MonthlyProductionTab({ poolId }: { poolId: string }) {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                              {detail.products.map(p => (
+                              {detail.products.map(p => {
+                                const pl = pickProdPlan(p);
+                                const pr = pickProdDone(p);
+                                const df = pr - pl;
+                                return (
                                 <tr key={p.iwasku} className="hover:bg-white">
                                   <td className="py-1 px-2 font-mono text-gray-700">{p.iwasku}</td>
-                                  <td className="text-center py-1 px-2 text-gray-600">{p.planned}</td>
-                                  <td className="text-center py-1 px-2 font-medium text-gray-900">{p.produced}</td>
-                                  <td className={`text-center py-1 px-2 font-medium ${p.produced - p.planned >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {p.produced - p.planned >= 0 ? '+' : ''}{p.produced - p.planned}
+                                  <td className="text-center py-1 px-2 text-gray-600">{pl.toLocaleString('tr-TR')}</td>
+                                  <td className="text-center py-1 px-2 font-medium text-gray-900">{pr.toLocaleString('tr-TR')}</td>
+                                  <td className={`text-center py-1 px-2 font-medium ${df >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {df >= 0 ? '+' : ''}{df.toLocaleString('tr-TR')}
                                   </td>
                                 </tr>
-                              ))}
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
