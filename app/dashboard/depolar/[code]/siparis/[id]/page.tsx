@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { ChevronLeft, AlertCircle, Truck, X, PackageOpen, Box as BoxIcon } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { SingleOrderItemAdder } from '@/components/wms/SingleOrderItemAdder';
+import { FbaPickupBoxSelector } from '@/components/wms/FbaPickupBoxSelector';
 
 const logger = createLogger('SiparisDetay');
 
@@ -216,16 +217,23 @@ export default function SiparisDetayPage({
         </div>
       </div>
 
-      {/* Kalem ekleme — yalnız DRAFT + SINGLE + yetkili */}
+      {/* Kalem ekleme — yalnız DRAFT + yetkili */}
       {data.order.status === 'DRAFT' &&
-        data.order.orderType === 'SINGLE' &&
-        ['PACKER', 'OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role) && (
+        ['PACKER', 'OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role) &&
+        (data.order.orderType === 'SINGLE' ? (
           <SingleOrderItemAdder
             warehouseCode={code}
             orderId={data.order.id}
             onSuccess={() => setRefreshKey((k) => k + 1)}
           />
-        )}
+        ) : (
+          <FbaPickupBoxSelector
+            warehouseCode={code}
+            orderId={data.order.id}
+            onSuccess={() => setRefreshKey((k) => k + 1)}
+            alreadyAddedIds={new Set(data.items.map((i) => i.shelfBoxId).filter(Boolean) as string[])}
+          />
+        ))}
 
       {/* Kalemler */}
       <div className="bg-white border border-gray-200 rounded-lg">
