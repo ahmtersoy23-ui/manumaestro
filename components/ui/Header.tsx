@@ -60,12 +60,12 @@ export function Header() {
 
             {canViewStock && (
               <Link
-                href="/dashboard/warehouse-stock"
+                href="/dashboard/depolar"
                 className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                title="Depo Stoğu"
+                title="Depolar"
               >
                 <Warehouse className="w-4 h-4" />
-                <span className="hidden lg:inline">Depo</span>
+                <span className="hidden lg:inline">Depolar</span>
               </Link>
             )}
 
@@ -172,12 +172,12 @@ export function Header() {
 
             {canViewStock && (
               <Link
-                href="/dashboard/warehouse-stock"
+                href="/dashboard/depolar"
                 onClick={() => setMenuOpen(false)}
                 className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
               >
                 <Warehouse className="w-4 h-4" />
-                Depo Stoğu
+                Depolar
               </Link>
             )}
 

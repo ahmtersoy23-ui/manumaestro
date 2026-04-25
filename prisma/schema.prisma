@@ -14,23 +14,23 @@ datasource db {
 // ============================================
 
 model User {
-  id                String                    @id @default(uuid())
-  email             String                    @unique
-  name              String
-  passwordHash      String
-  role              UserRole                  @default(OPERATOR)
-  isActive          Boolean                   @default(true)
-  createdAt         DateTime                  @default(now())
-  updatedAt         DateTime                  @updatedAt
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         UserRole @default(OPERATOR)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   // Relations
-  permissions           UserMarketplacePermission[]
-  categoryPermissions   UserCategoryPermission[]
-  stockPermission       UserStockPermission?
-  shipmentPermissions   UserShipmentPermission[]
-  requests              ProductionRequest[]
-  createdMarketplaces   Marketplace[]             @relation("CreatedBy")
-  auditLogs             AuditLog[]
+  permissions         UserMarketplacePermission[]
+  categoryPermissions UserCategoryPermission[]
+  stockPermission     UserStockPermission?
+  shipmentPermissions UserShipmentPermission[]
+  requests            ProductionRequest[]
+  createdMarketplaces Marketplace[]               @relation("CreatedBy")
+  auditLogs           AuditLog[]
 
   @@index([role])
   @@index([isActive])
@@ -48,24 +48,24 @@ enum UserRole {
 // ============================================
 
 model Marketplace {
-  id                String              @id @default(uuid())
-  name              String              // "Amazon US", "Wayfair UK", "Custom Market"
-  code              String              @unique // "AMZN_US", "WAYFAIR_UK", "CUSTOM_01"
-  marketplaceType   MarketplaceType
-  region            String              // "US", "EU", "UK", "CA", "AU", "ZA", "NL", "TR", "Custom"
-  isCustom          Boolean             @default(false)
-  isActive          Boolean             @default(true)
-  colorTag          String?             // Hex color for UI
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  createdById       String?
+  id              String          @id @default(uuid())
+  name            String // "Amazon US", "Wayfair UK", "Custom Market"
+  code            String          @unique // "AMZN_US", "WAYFAIR_UK", "CUSTOM_01"
+  marketplaceType MarketplaceType
+  region          String // "US", "EU", "UK", "CA", "AU", "ZA", "NL", "TR", "Custom"
+  isCustom        Boolean         @default(false)
+  isActive        Boolean         @default(true)
+  colorTag        String? // Hex color for UI
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  createdById     String?
 
   // Relations
-  createdBy         User?               @relation("CreatedBy", fields: [createdById], references: [id])
-  permissions       UserMarketplacePermission[]
-  requests          ProductionRequest[]
-  priorities        MarketplacePriority[]
-  shippingRoute     ShippingRoute?
+  createdBy     User?                       @relation("CreatedBy", fields: [createdById], references: [id])
+  permissions   UserMarketplacePermission[]
+  requests      ProductionRequest[]
+  priorities    MarketplacePriority[]
+  shippingRoute ShippingRoute?
 
   @@index([isActive, name])
   @@index([createdById])
@@ -88,16 +88,16 @@ enum MarketplaceType {
 // ============================================
 
 model UserMarketplacePermission {
-  id              String       @id @default(uuid())
-  userId          String
-  marketplaceId   String
-  canView         Boolean      @default(true)
-  canEdit         Boolean      @default(true)
-  createdAt       DateTime     @default(now())
+  id            String   @id @default(uuid())
+  userId        String
+  marketplaceId String
+  canView       Boolean  @default(true)
+  canEdit       Boolean  @default(true)
+  createdAt     DateTime @default(now())
 
   // Relations
-  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  marketplace     Marketplace  @relation(fields: [marketplaceId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  marketplace Marketplace @relation(fields: [marketplaceId], references: [id], onDelete: Cascade)
 
   @@unique([userId, marketplaceId])
   @@index([userId])
@@ -106,12 +106,12 @@ model UserMarketplacePermission {
 }
 
 model UserCategoryPermission {
-  userId    String
-  category  String   // ProductionRequest.productCategory değeriyle eşleşir
-  canView   Boolean  @default(true)
-  canEdit   Boolean  @default(true)
+  userId   String
+  category String // ProductionRequest.productCategory değeriyle eşleşir
+  canView  Boolean @default(true)
+  canEdit  Boolean @default(true)
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, category])
   @@index([userId])
@@ -129,29 +129,29 @@ model UserCategoryPermission {
 // ============================================
 
 model ProductionRequest {
-  id                String       @id @default(uuid())
-  iwasku            String       // Reference to products.iwasku
-  productName       String       // Cached from products
-  productCategory   String       // Cached from products
-  productSize       Float?       // Cached from products - desi (volumetric size)
+  id                String          @id @default(uuid())
+  iwasku            String // Reference to products.iwasku
+  productName       String // Cached from products
+  productCategory   String // Cached from products
+  productSize       Float? // Cached from products - desi (volumetric size)
   marketplaceId     String
   quantity          Int
-  producedQuantity  Int?         // @deprecated — MonthSnapshot.produced tek kaynak. İleride kaldırılacak.
-  requestDate       DateTime     @default(now()) // Entry date (today)
-  productionMonth   String       // Production month in YYYY-MM format (e.g., "2026-03")
+  producedQuantity  Int? // @deprecated — MonthSnapshot.produced tek kaynak. İleride kaldırılacak.
+  requestDate       DateTime        @default(now()) // Entry date (today)
+  productionMonth   String // Production month in YYYY-MM format (e.g., "2026-03")
   priority          RequestPriority @default(MEDIUM)
-  status            RequestStatus @default(REQUESTED)
+  status            RequestStatus   @default(REQUESTED)
   workflowStage     WorkflowStage? // For furniture category workflow tracking
   entryType         EntryType
-  notes             String?      // Operator notes
-  manufacturerNotes String?      // Manufacturer production notes
+  notes             String? // Operator notes
+  manufacturerNotes String? // Manufacturer production notes
   enteredById       String
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 
   // Relations
-  marketplace       Marketplace  @relation(fields: [marketplaceId], references: [id])
-  enteredBy         User         @relation(fields: [enteredById], references: [id])
+  marketplace Marketplace @relation(fields: [marketplaceId], references: [id])
+  enteredBy   User        @relation(fields: [enteredById], references: [id])
 
   @@index([iwasku])
   @@index([marketplaceId])
@@ -191,12 +191,12 @@ enum EntryType {
 }
 
 enum WorkflowStage {
-  REQUESTED       // Initial request received
-  CUTTING         // Material cutting stage
-  ASSEMBLY        // Assembly/construction stage
-  QUALITY_CHECK   // Quality control
-  PACKAGING       // Packaging stage
-  READY_TO_SHIP   // Ready for shipment
+  REQUESTED // Initial request received
+  CUTTING // Material cutting stage
+  ASSEMBLY // Assembly/construction stage
+  QUALITY_CHECK // Quality control
+  PACKAGING // Packaging stage
+  READY_TO_SHIP // Ready for shipment
 }
 
 // ============================================
@@ -204,20 +204,20 @@ enum WorkflowStage {
 // ============================================
 
 model AuditLog {
-  id            String       @id @default(uuid())
-  userId        String
-  userName      String       // Cached for performance
-  userEmail     String       // Cached for performance
-  action        AuditAction
-  entityType    String?      // e.g., "ProductionRequest", "Marketplace"
-  entityId      String?      // ID of the affected entity
-  description   String       // Human-readable description
-  metadata      Json?        // Additional data (old/new values, etc.)
-  ipAddress     String?
-  createdAt     DateTime     @default(now())
+  id          String      @id @default(uuid())
+  userId      String
+  userName    String // Cached for performance
+  userEmail   String // Cached for performance
+  action      AuditAction
+  entityType  String? // e.g., "ProductionRequest", "Marketplace"
+  entityId    String? // ID of the affected entity
+  description String // Human-readable description
+  metadata    Json? // Additional data (old/new values, etc.)
+  ipAddress   String?
+  createdAt   DateTime    @default(now())
 
   // Relations
-  user          User         @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([action])
@@ -249,12 +249,12 @@ enum AuditAction {
 // ============================================
 
 model UserShipmentPermission {
-  id              String          @id @default(uuid())
-  userId          String
-  destinationTab  String          // "US", "UK", "EU", "NL", "AU", "ZA" veya "*" (hepsi)
-  role            ShipmentRole    @default(VIEWER)
+  id             String       @id @default(uuid())
+  userId         String
+  destinationTab String // "US", "UK", "EU", "NL", "AU", "ZA" veya "*" (hepsi)
+  role           ShipmentRole @default(VIEWER)
 
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, destinationTab])
   @@index([userId])
@@ -262,10 +262,10 @@ model UserShipmentPermission {
 }
 
 enum ShipmentRole {
-  VIEWER    // Sadece goruntuleme
-  ROUTER    // Talep yonlendirme + silme + FBA isaretleme (pazar yeri sorumlusu)
-  PACKER    // Koli olusturma + check + gonder (depo elemani)
-  MANAGER   // Hepsi (sevkiyat olusturma dahil)
+  VIEWER // Sadece goruntuleme
+  ROUTER // Talep yonlendirme + silme + FBA isaretleme (pazar yeri sorumlusu)
+  PACKER // Koli olusturma + check + gonder (depo elemani)
+  MANAGER // Hepsi (sevkiyat olusturma dahil)
 }
 
 // ============================================
@@ -273,23 +273,23 @@ enum ShipmentRole {
 // ============================================
 
 model UserStockPermission {
-  userId    String   @unique
-  canView   Boolean  @default(true)
-  canEdit   Boolean  @default(false)
+  userId  String  @unique
+  canView Boolean @default(true)
+  canEdit Boolean @default(false)
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_stock_permissions")
 }
 
 model WarehouseProduct {
-  id          String   @id @default(uuid())
-  iwasku      String   @unique
-  eskiStok    Int      @default(0)   // Başlangıç stoğu
-  ilaveStok   Int      @default(0)   // Düzeltme / ilave
-  cikis       Int      @default(0)   // Gönderilen (pozitif saklanır, mevcut'tan çıkarılır)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(uuid())
+  iwasku    String   @unique
+  eskiStok  Int      @default(0) // Başlangıç stoğu
+  ilaveStok Int      @default(0) // Düzeltme / ilave
+  cikis     Int      @default(0) // Gönderilen (pozitif saklanır, mevcut'tan çıkarılır)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   weeklyEntries WarehouseWeekly[]
 
@@ -299,14 +299,14 @@ model WarehouseProduct {
 model WarehouseWeekly {
   id          String   @id @default(uuid())
   iwasku      String
-  weekStart   DateTime @db.Date       // Haftanın Pazartesi günü
-  quantity    Int      @default(0)     // O hafta miktar
+  weekStart   DateTime @db.Date // Haftanın Pazartesi günü
+  quantity    Int      @default(0) // O hafta miktar
   type        String   @default("PRODUCTION") // PRODUCTION veya SHIPMENT
   enteredById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  product     WarehouseProduct @relation(fields: [iwasku], references: [iwasku], onDelete: Cascade)
+  product WarehouseProduct @relation(fields: [iwasku], references: [iwasku], onDelete: Cascade)
 
   @@unique([iwasku, weekStart, type])
   @@index([iwasku])
@@ -314,14 +314,14 @@ model WarehouseWeekly {
 }
 
 model MonthSnapshot {
-  id              String   @id @default(uuid())
-  month           String
-  iwasku          String
-  totalRequested  Int
-  warehouseStock  Int
-  netProduction   Int
-  produced        Int      @default(0)  // Üretici girişi (ürün bazlı, tek değer)
-  createdAt       DateTime @default(now())
+  id             String   @id @default(uuid())
+  month          String
+  iwasku         String
+  totalRequested Int
+  warehouseStock Int
+  netProduction  Int
+  produced       Int      @default(0) // Üretici girişi (ürün bazlı, tek değer)
+  createdAt      DateTime @default(now())
 
   @@unique([month, iwasku])
   @@index([month])
@@ -333,12 +333,12 @@ model MonthSnapshot {
 // ============================================
 
 model StockPool {
-  id              String     @id @default(uuid())
-  name            String     // "Sezon Q4 2026", "Sezon Q1 2027"
-  code            String     @unique // "SZN-Q4-2026", "SZN-Q1-2027"
-  poolType        PoolType
-  targetQuarter   String?    // "Q4-2026", "Q1-2027"
-  status          PoolStatus @default(ACTIVE)
+  id            String     @id @default(uuid())
+  name          String // "Sezon Q4 2026", "Sezon Q1 2027"
+  code          String     @unique // "SZN-Q4-2026", "SZN-Q1-2027"
+  poolType      PoolType
+  targetQuarter String? // "Q4-2026", "Q1-2027"
+  status        PoolStatus @default(ACTIVE)
 
   productionStart DateTime?
   targetShipDate  DateTime?
@@ -346,11 +346,11 @@ model StockPool {
   totalTargetDesi  Float?
   totalTargetUnits Int?
 
-  notes           String?
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  reserves        StockReserve[]
+  reserves StockReserve[]
 
   @@index([status])
   @@map("stock_pools")
@@ -362,20 +362,20 @@ model StockReserve {
   iwasku           String
   targetQuantity   Int
   targetDesi       Float?
-  desiPerUnit      Float?        // Sabit: ürünün birim desisi (import'tan, değişmez)
-  initialStock     Int           @default(0)  // Depo başlangıç stoğu (mark-stock ile tek seferlik)
-  producedQuantity Int           @default(0)  // Sezon boyunca yeni üretim (haftalık girişlerden)
+  desiPerUnit      Float? // Sabit: ürünün birim desisi (import'tan, değişmez)
+  initialStock     Int           @default(0) // Depo başlangıç stoğu (mark-stock ile tek seferlik)
+  producedQuantity Int           @default(0) // Sezon boyunca yeni üretim (haftalık girişlerden)
   shippedQuantity  Int           @default(0)
   status           ReserveStatus @default(PLANNED)
-  destination      String?       // "US", "EU", "UK", "NL", "AU", "ZA"
-  category         String?       // Kategori cache (allocator için)
-  marketplaceSplit  Json?         // {"US": 120, "EU": 80, "UK": 45}
+  destination      String? // "US", "EU", "UK", "NL", "AU", "ZA"
+  category         String? // Kategori cache (allocator için)
+  marketplaceSplit Json? // {"US": 120, "EU": 80, "UK": 45}
 
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  pool             StockPool     @relation(fields: [poolId], references: [id], onDelete: Cascade)
-  allocations      MonthlyAllocation[]
+  pool        StockPool           @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  allocations MonthlyAllocation[]
 
   @@unique([poolId, iwasku])
   @@index([iwasku])
@@ -384,18 +384,18 @@ model StockReserve {
 }
 
 model MonthlyAllocation {
-  id          String   @id @default(uuid())
+  id          String  @id @default(uuid())
   reserveId   String
-  month       String   // "2026-04", "2026-05"
+  month       String // "2026-04", "2026-05"
   plannedQty  Int
   plannedDesi Float?
-  actualQty   Int      @default(0)
-  locked      Boolean  @default(false) // true = production started, allocation frozen
+  actualQty   Int     @default(0)
+  locked      Boolean @default(false) // true = production started, allocation frozen
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  reserve     StockReserve @relation(fields: [reserveId], references: [id], onDelete: Cascade)
+  reserve StockReserve @relation(fields: [reserveId], references: [id], onDelete: Cascade)
 
   @@unique([reserveId, month])
   @@index([month])
@@ -428,14 +428,14 @@ enum ReserveStatus {
 // ============================================
 
 model MarketplacePriority {
-  id            String      @id @default(uuid())
-  month         String      // "2026-04"
+  id            String @id @default(uuid())
+  month         String // "2026-04"
   marketplaceId String
-  priority      Int         // 1 = en yüksek
+  priority      Int // 1 = en yüksek
 
-  createdAt     DateTime    @default(now())
+  createdAt DateTime @default(now())
 
-  marketplace   Marketplace @relation(fields: [marketplaceId], references: [id], onDelete: Cascade)
+  marketplace Marketplace @relation(fields: [marketplaceId], references: [id], onDelete: Cascade)
 
   @@unique([month, marketplaceId])
   @@index([month])
@@ -447,37 +447,37 @@ model MarketplacePriority {
 // ============================================
 
 model ShippingRoute {
-  id              String      @id @default(uuid())
-  marketplaceId   String      @unique
-  destinationTab  String      // "US", "UK", "EU", "NL", "AU", "ZA"
-  shippingMethod  String      // "sea", "road", "air"
-  leadTimeDays    Int?
-  notes           String?
+  id             String  @id @default(uuid())
+  marketplaceId  String  @unique
+  destinationTab String // "US", "UK", "EU", "NL", "AU", "ZA"
+  shippingMethod String // "sea", "road", "air"
+  leadTimeDays   Int?
+  notes          String?
 
-  marketplace     Marketplace @relation(fields: [marketplaceId], references: [id], onDelete: Cascade)
+  marketplace Marketplace @relation(fields: [marketplaceId], references: [id], onDelete: Cascade)
 
   @@map("shipping_routes")
 }
 
 model Shipment {
-  id              String         @id @default(uuid())
-  name            String         // "US-2026-08-01", "EU-TIR-2026-10-05"
-  destinationTab  String         // "US", "UK", "EU", "NL", "AU", "ZA"
-  shippingMethod  String         // "sea", "road", "air"
+  id             String @id @default(uuid())
+  name           String // "US-2026-08-01", "EU-TIR-2026-10-05"
+  destinationTab String // "US", "UK", "EU", "NL", "AU", "ZA"
+  shippingMethod String // "sea", "road", "air"
 
-  plannedDate     DateTime?
-  actualDate      DateTime?
-  etaDate         DateTime?
+  plannedDate DateTime?
+  actualDate  DateTime?
+  etaDate     DateTime?
 
-  status          ShipmentStatus @default(PLANNING)
+  status ShipmentStatus @default(PLANNING)
 
-  notes           String?
-  createdById     String?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  notes       String?
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  items           ShipmentItem[]
-  boxes           ShipmentBox[]
+  items ShipmentItem[]
+  boxes ShipmentBox[]
 
   @@index([destinationTab])
   @@index([status])
@@ -485,21 +485,21 @@ model Shipment {
 }
 
 model ShipmentItem {
-  id                   String    @id @default(uuid())
-  shipmentId           String
-  iwasku               String
-  quantity             Int
-  desi                 Float?
-  marketplaceId        String?
-  reserveId            String?
-  productionRequestId  String?   // Yönlendirilen ProductionRequest bağlantısı
-  packed               Boolean   @default(false) // Depo: hazırlandı/paketlendi
-  sentAt               DateTime? // Gönderildi tarihi (null = bekleyen)
-  fnsku                String?   // Manuel FNSKU girişi (sku_master'da yoksa)
+  id                  String    @id @default(uuid())
+  shipmentId          String
+  iwasku              String
+  quantity            Int
+  desi                Float?
+  marketplaceId       String?
+  reserveId           String?
+  productionRequestId String? // Yönlendirilen ProductionRequest bağlantısı
+  packed              Boolean   @default(false) // Depo: hazırlandı/paketlendi
+  sentAt              DateTime? // Gönderildi tarihi (null = bekleyen)
+  fnsku               String? // Manuel FNSKU girişi (sku_master'da yoksa)
 
-  createdAt            DateTime  @default(now())
+  createdAt DateTime @default(now())
 
-  shipment             Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
 
   @@index([shipmentId])
   @@index([iwasku])
@@ -508,25 +508,25 @@ model ShipmentItem {
 }
 
 model ShipmentBox {
-  id               String    @id @default(uuid())
-  shipmentId       String
-  shipmentItemId   String?   // null: üretim dışı ek ürün
-  boxNumber        String    // "69-0001", "69-1001"
-  iwasku           String?
-  fnsku            String?
-  productName      String?
-  productCategory  String?
-  marketplaceCode  String?
-  destination      String    @default("DEPO") // "FBA" veya "DEPO"
-  quantity         Int       @default(1)
-  width            Float?    // cm
-  height           Float?    // cm
-  depth            Float?    // cm
-  weight           Float?    // kg
-  labelPrinted     Boolean   @default(false)
-  createdAt        DateTime  @default(now())
+  id              String   @id @default(uuid())
+  shipmentId      String
+  shipmentItemId  String? // null: üretim dışı ek ürün
+  boxNumber       String // "69-0001", "69-1001"
+  iwasku          String?
+  fnsku           String?
+  productName     String?
+  productCategory String?
+  marketplaceCode String?
+  destination     String   @default("DEPO") // "FBA" veya "DEPO"
+  quantity        Int      @default(1)
+  width           Float? // cm
+  height          Float? // cm
+  depth           Float? // cm
+  weight          Float? // kg
+  labelPrinted    Boolean  @default(false)
+  createdAt       DateTime @default(now())
 
-  shipment         Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
 
   @@index([shipmentId])
   @@index([boxNumber])
@@ -534,25 +534,25 @@ model ShipmentBox {
 }
 
 model ShipmentBoxArchive {
-  id               String   @id @default(uuid())
-  shipmentId       String
-  shipmentName     String   // "Gemi 69"
-  destinationTab   String   // "US", "EU"
-  shippingMethod   String   // "sea", "road", "air"
-  boxNumber        String
-  iwasku           String?
-  fnsku            String?
-  productName      String?
-  productCategory  String?
-  marketplaceCode  String?
-  destination      String   // "FBA" / "DEPO"
-  quantity         Int
-  width            Float?
-  height           Float?
-  depth            Float?
-  weight           Float?
-  closedAt         DateTime
-  createdAt        DateTime @default(now())
+  id              String   @id @default(uuid())
+  shipmentId      String
+  shipmentName    String // "Gemi 69"
+  destinationTab  String // "US", "EU"
+  shippingMethod  String // "sea", "road", "air"
+  boxNumber       String
+  iwasku          String?
+  fnsku           String?
+  productName     String?
+  productCategory String?
+  marketplaceCode String?
+  destination     String // "FBA" / "DEPO"
+  quantity        Int
+  width           Float?
+  height          Float?
+  depth           Float?
+  weight          Float?
+  closedAt        DateTime
+  createdAt       DateTime @default(now())
 
   @@index([shipmentId])
   @@index([shipmentName])
@@ -566,4 +566,248 @@ enum ShipmentStatus {
   LOADING
   IN_TRANSIT
   DELIVERED
+}
+
+// ============================================
+// WAREHOUSE — SHELF / RACK MANAGEMENT (Lite WMS)
+// ============================================
+// Üç depo (ANKARA, NJ, SHOWROOM) için raf-bazlı izleme.
+// - ANKARA: TOTALS_PRIMARY (WarehouseProduct ana doğru, raf bir kırılım)
+// - NJ / SHOWROOM: SHELF_PRIMARY (toplamlar raftan türetilir, run-time aggregation)
+
+model Warehouse {
+  code      String    @id // "ANKARA" | "NJ" | "SHOWROOM"
+  name      String
+  region    String // "TR" | "US"
+  isActive  Boolean   @default(true)
+  stockMode StockMode
+
+  shelves Shelf[]
+
+  @@map("warehouses")
+}
+
+enum StockMode {
+  TOTALS_PRIMARY // Ankara
+  SHELF_PRIMARY // NJ / Showroom
+}
+
+model Shelf {
+  id            String    @id @default(uuid())
+  warehouseCode String
+  code          String // "H1-B", "M5-A1" — serbest format
+  shelfType     ShelfType @default(NORMAL)
+  isActive      Boolean   @default(true)
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  warehouse Warehouse    @relation(fields: [warehouseCode], references: [code], onDelete: Restrict)
+  stocks    ShelfStock[]
+  boxes     ShelfBox[]
+
+  @@unique([warehouseCode, code])
+  @@index([warehouseCode, shelfType])
+  @@map("shelves")
+}
+
+enum ShelfType {
+  POOL // Havuz raf — sevkiyat varışı buraya düşer, manuel girişler buraya
+  TEMP // Geçici raf
+  NORMAL // Normal raf
+}
+
+// Rafta tekil/loose ürün
+model ShelfStock {
+  id            String   @id @default(uuid())
+  warehouseCode String
+  shelfId       String
+  iwasku        String
+  quantity      Int      @default(0)
+  reservedQty   Int      @default(0) // DRAFT outbound'larda rezerve edilmiş
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+
+  shelf Shelf @relation(fields: [shelfId], references: [id], onDelete: Cascade)
+
+  @@unique([shelfId, iwasku])
+  @@index([warehouseCode, iwasku])
+  @@map("shelf_stock")
+}
+
+// Rafta mühürlü/yarı-açık koli (NJ + Showroom; sevkiyattan veya manuel girişten)
+model ShelfBox {
+  id              String    @id @default(uuid())
+  warehouseCode   String
+  shelfId         String
+  shipmentBoxId   String?   @unique // ShipmentBox referansı (manuel girişlerde de bağlı)
+  boxNumber       String // ShipmentBox.boxNumber kopyası — display + arama
+  iwasku          String
+  fnsku           String?
+  marketplaceCode String?
+  destination     String    @default("DEPO") // "FBA" / "DEPO"
+  quantity        Int // anlık (kısmi çıkış sonrası azalır)
+  reservedQty     Int       @default(0)
+  status          BoxStatus @default(SEALED)
+  arrivedAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shelf Shelf @relation(fields: [shelfId], references: [id], onDelete: Cascade)
+
+  @@index([warehouseCode, iwasku])
+  @@index([warehouseCode, status])
+  @@index([boxNumber])
+  @@map("shelf_boxes")
+}
+
+enum BoxStatus {
+  SEALED // Mühürlü, hiç dokunulmadı
+  PARTIAL // Kısmen alındı (BOX_BREAK)
+  EMPTY // Tüm içerik çıkarıldı
+}
+
+// Tüm raf hareketleri — audit + undo
+model ShelfMovement {
+  id            String       @id @default(uuid())
+  warehouseCode String
+  type          MovementType
+  fromShelfId   String?
+  toShelfId     String?
+  iwasku        String?
+  quantity      Int?
+  shelfBoxId    String? // koli işlemi ise
+  refType       String? // "OUTBOUND_ORDER" / "SHIPMENT" / "MANUAL_BOX" / "FBA_PICKUP"
+  refId         String?
+  userId        String
+  notes         String?
+  createdAt     DateTime     @default(now())
+
+  // Self-relation: undo desteği
+  reverseOfId String?
+  reverseOf   ShelfMovement?  @relation("ShelfMovementReversal", fields: [reverseOfId], references: [id])
+  reversedBy  ShelfMovement[] @relation("ShelfMovementReversal")
+
+  @@index([warehouseCode, createdAt])
+  @@index([type])
+  @@index([reverseOfId])
+  @@map("shelf_movements")
+}
+
+enum MovementType {
+  INBOUND_FROM_SHIPMENT // Sevkiyat DELIVERED → POOL
+  INBOUND_MANUAL // Manuel koli ekleme
+  TRANSFER // Aynı depo içi raf-rafa
+  CROSS_WAREHOUSE_TRANSFER // NJ ↔ Showroom (POOL/TEMP'e)
+  BOX_OPEN // Koli tamamen açıldı
+  BOX_BREAK // Koliden kısmen alındı
+  OUTBOUND // Sipariş çıkışı
+  REVERSAL // Başka hareketin geri alınması
+}
+
+// Sipariş çıkışı (NJ + Showroom): SINGLE veya FBA_PICKUP
+model OutboundOrder {
+  id              String         @id @default(uuid())
+  warehouseCode   String // "NJ" | "SHOWROOM"
+  orderType       OrderType
+  marketplaceCode String // SINGLE'da seçilen; FBA_PICKUP'da "AMZN_US" sabit
+  orderNumber     String // SINGLE: order#; FBA_PICKUP: appointment/pickup ID
+  description     String?
+  status          OutboundStatus @default(DRAFT)
+  createdById     String
+  createdAt       DateTime       @default(now())
+  shippedById     String?
+  shippedAt       DateTime?
+  updatedAt       DateTime       @updatedAt
+
+  items OutboundOrderItem[]
+
+  @@unique([warehouseCode, marketplaceCode, orderNumber])
+  @@index([warehouseCode, status])
+  @@map("outbound_orders")
+}
+
+model OutboundOrderItem {
+  id              String  @id @default(uuid())
+  outboundOrderId String
+  iwasku          String
+  quantity        Int
+  shelfId         String? // tekil rafından çıkıyorsa
+  shelfBoxId      String? // koliden çıkıyorsa
+
+  order OutboundOrder @relation(fields: [outboundOrderId], references: [id], onDelete: Cascade)
+
+  @@index([outboundOrderId])
+  @@index([iwasku])
+  @@map("outbound_order_items")
+}
+
+enum OrderType {
+  SINGLE // Tekil sipariş — raf+koli karışık seçim, kısmi koli kırma destekli
+  FBA_PICKUP // Amazon FBA pick-up — koli bazlı, tam koli (kısmi yok)
+}
+
+enum OutboundStatus {
+  DRAFT // Hazırlanıyor, rezerve var, stok düşmedi
+  SHIPPED // Onaylandı ve gönderildi, stok düştü
+  CANCELLED // İptal edildi, rezerveler serbest
+}
+
+// Depo bazlı yetki — UserShipmentPermission paterniyle aynı (FK yok, "*" wildcard saklanabilir)
+model UserShelfPermission {
+  id            String    @id @default(uuid())
+  userId        String
+  warehouseCode String // "ANKARA" | "NJ" | "SHOWROOM" veya "*" tüm depolar
+  role          ShelfRole @default(VIEWER)
+  createdAt     DateTime  @default(now())
+
+  @@unique([userId, warehouseCode])
+  @@index([userId])
+  @@map("user_shelf_permissions")
+}
+
+enum ShelfRole {
+  VIEWER // Sadece görüntüleme
+  PACKER // Sipariş yaratır/düzenler (DRAFT). Sevk edemez.
+  OPERATOR // Raflar arası transfer, koli aç/parçala, yeni raf, manuel inbound
+  MANAGER // OPERATOR + sipariş onaylama (DRAFT→SHIPPED), undo, raf silme
+  ADMIN // Hepsi + depo ayarı, izin yönetimi
+}
+
+// CSV seed/import sırasında iwasku eşlemesi bulunamayan satırlar
+// Admin'in mapping ekranından elle çözeceği bekleme kuyruğu
+model UnmatchedSeedRow {
+  id             String          @id @default(uuid())
+  warehouseCode  String // "NJ" / "ANKARA" / "SHOWROOM"
+  source         String // "CSV_SEED" / "MANUAL" / "IMPORT"
+  rawLookup      String // CSV'deki orijinal "fnsku" kolon değeri
+  description    String?
+  shelfCode      String // "H1-B" — RESOLVED sırasında shelfId resolve
+  boxNumber      String? // null = loose / dolu = mühürlü koli
+  quantity       Int
+  status         UnmatchedStatus @default(PENDING)
+  resolvedAt     DateTime?
+  resolvedById   String?
+  resolvedIwasku String?
+  resolutionType ResolutionType?
+  notes          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([warehouseCode, status])
+  @@index([rawLookup])
+  @@map("unmatched_seed_rows")
+}
+
+enum UnmatchedStatus {
+  PENDING // Bekliyor, admin atamamış
+  RESOLVED // Admin atadı, ana stok'a yazıldı
+  SKIPPED // Admin "atla" dedi (#N/A vb.)
+}
+
+enum ResolutionType {
+  SKU_MASTER // sku_master.iwasku ile bulundu
+  PRODUCTS // products.product_sku doğrudan iwasku
+  LOCAL_ALIAS // Lokal alias (manumaestro_db) — ileride
+  PSEUDO // Yeni pseudo-iwasku (streç vb. yardımcı malzeme) — planlanacak
+  SKIP // Atlandı
 }
