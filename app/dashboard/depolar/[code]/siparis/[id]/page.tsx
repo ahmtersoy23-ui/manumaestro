@@ -8,6 +8,7 @@ import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, AlertCircle, Truck, X, PackageOpen, Box as BoxIcon } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { SingleOrderItemAdder } from '@/components/wms/SingleOrderItemAdder';
 
 const logger = createLogger('SiparisDetay');
 
@@ -214,6 +215,17 @@ export default function SiparisDetayPage({
           </div>
         </div>
       </div>
+
+      {/* Kalem ekleme — yalnız DRAFT + SINGLE + yetkili */}
+      {data.order.status === 'DRAFT' &&
+        data.order.orderType === 'SINGLE' &&
+        ['PACKER', 'OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role) && (
+          <SingleOrderItemAdder
+            warehouseCode={code}
+            orderId={data.order.id}
+            onSuccess={() => setRefreshKey((k) => k + 1)}
+          />
+        )}
 
       {/* Kalemler */}
       <div className="bg-white border border-gray-200 rounded-lg">
