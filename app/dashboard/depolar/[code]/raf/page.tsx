@@ -6,11 +6,12 @@
 
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
-import { Search, Layers, Package, Box, AlertCircle, Plus, PackagePlus, Layers3 } from 'lucide-react';
+import { Search, Layers, Package, Box, AlertCircle, Plus, PackagePlus, Layers3, AlertTriangle } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { NewShelfDialog } from '@/components/wms/NewShelfDialog';
 import { BulkShelfDialog } from '@/components/wms/BulkShelfDialog';
 import { ManualBoxDialog } from '@/components/wms/ManualBoxDialog';
+import { UnmatchedSeedTable } from '@/components/wms/UnmatchedSeedTable';
 
 const logger = createLogger('RafSekmesi');
 
@@ -61,6 +62,8 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
   const [searching, setSearching] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [dialog, setDialog] = useState<'NEW_SHELF' | 'BULK_SHELF' | 'MANUAL_BOX' | null>(null);
+  const [view, setView] = useState<'shelves' | 'unmatched'>('shelves');
+  const [pendingUnmatched, setPendingUnmatched] = useState<number>(0);
 
   // Rafları yükle — setLoading(true) initial state ile geliyor; refetch sırasında
   // mevcut veri gözükmeye devam eder, fetch tamamlanınca güncellenir.
@@ -75,6 +78,7 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
         if (d.success) {
           setShelves(d.data.shelves);
           setRole(d.data.role ?? 'VIEWER');
+          setPendingUnmatched(d.data.pendingUnmatched ?? 0);
         } else setError(d.error || 'Raflar yüklenemedi');
       })
       .catch((e) => {
@@ -119,6 +123,7 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
   const canCreateShelf = ['OPERATOR', 'MANAGER', 'ADMIN'].includes(role);
   const canBulkShelf = ['OPERATOR', 'MANAGER', 'ADMIN'].includes(role);
   const canManualBox = ['OPERATOR', 'MANAGER', 'ADMIN'].includes(role);
+  const canResolveUnmatched = ['MANAGER', 'ADMIN'].includes(role);
   // Manuel koli sadece SHELF_PRIMARY depolarda mantıklı (NJ + SHOWROOM)
   const isShelfPrimaryWh = code === 'NJ' || code === 'SHOWROOM';
 
@@ -126,6 +131,46 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
 
   return (
     <div className="space-y-5">
+      {/* Sub-tab: Raflar | Eşleşmeyen */}
+      {pendingUnmatched > 0 && (
+        <div className="flex items-center gap-1 border-b border-gray-200">
+          <button
+            onClick={() => setView('shelves')}
+            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${
+              view === 'shelves'
+                ? 'border-blue-600 text-blue-700'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Raflar
+          </button>
+          <button
+            onClick={() => setView('unmatched')}
+            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px flex items-center gap-1.5 ${
+              view === 'unmatched'
+                ? 'border-amber-600 text-amber-700'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
+            Eşleşmeyen ({pendingUnmatched})
+          </button>
+        </div>
+      )}
+
+      {/* Eşleşmeyen view */}
+      {view === 'unmatched' && pendingUnmatched > 0 && (
+        <UnmatchedSeedTable
+          warehouseCode={code}
+          canResolve={canResolveUnmatched}
+          refreshTick={refreshKey}
+          onChange={handleSuccess}
+        />
+      )}
+
+      {/* Raflar view (default) */}
+      {view === 'shelves' && <>
+
       {/* Action butonları */}
       {(canCreateShelf || canBulkShelf || canManualBox) && (
         <div className="flex flex-wrap gap-2">
@@ -381,6 +426,8 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
           )}
         </>
       )}
+
+      </>}
 
       {/* Modal'lar */}
       <NewShelfDialog

@@ -41,10 +41,15 @@ export async function GET(
     where.shelfType = shelfTypeFilter as 'POOL' | 'TEMP' | 'NORMAL';
   }
 
-  const shelves = await prisma.shelf.findMany({
-    where,
-    orderBy: [{ shelfType: 'asc' }, { code: 'asc' }],
-  });
+  const [shelves, pendingUnmatched] = await Promise.all([
+    prisma.shelf.findMany({
+      where,
+      orderBy: [{ shelfType: 'asc' }, { code: 'asc' }],
+    }),
+    prisma.unmatchedSeedRow.count({
+      where: { warehouseCode: upperCode, status: 'PENDING' },
+    }),
+  ]);
 
   // Her raf için stock+box özetini batch al
   const shelfIds = shelves.map((s) => s.id);
@@ -109,7 +114,7 @@ export async function GET(
 
   return NextResponse.json({
     success: true,
-    data: { shelves: result, role: auth.shelfRole },
+    data: { shelves: result, role: auth.shelfRole, pendingUnmatched },
   });
 }
 
