@@ -25,7 +25,13 @@ interface Movement {
   userId: string;
   createdAt: string;
   notes: string | null;
+  reverseOfId: string | null;
+  reversedBy: { id: string }[];
 }
+
+const UNDOABLE_TYPES = new Set([
+  'TRANSFER', 'CROSS_WAREHOUSE_TRANSFER', 'INBOUND_MANUAL', 'INBOUND_FROM_SHIPMENT',
+]);
 
 type Summary =
   | {
@@ -59,24 +65,54 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [undoingId, setUndoingId] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     fetch(`/api/depolar/${code}`, { credentials: 'include' })
       .then((r) => r.json())
       .then((d) => {
+        if (cancelled) return;
         if (d.success) setData(d.data);
         else setError(d.error || 'Veri yüklenemedi');
       })
       .catch((e) => {
+        if (cancelled) return;
         logger.error('Depo fetch error', e);
         setError('Sunucuya bağlanılamadı');
       })
-      .finally(() => setLoading(false));
-  }, [code]);
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [code, refreshKey]);
+
+  async function undoMovement(movementId: string, type: string) {
+    if (!confirm(`${type} hareketi geri alınacak. Onaylıyor musun?`)) return;
+    setUndoingId(movementId);
+    try {
+      const res = await fetch(`/api/depolar/${code}/hareketler/${movementId}/undo`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const d = await res.json();
+      if (!res.ok || !d.success) {
+        alert(d.error || 'Geri alınamadı');
+        return;
+      }
+      setRefreshKey((k) => k + 1);
+    } catch (e) {
+      logger.error('Undo hatası', e);
+      alert('Sunucu hatası');
+    } finally {
+      setUndoingId(null);
+    }
+  }
 
   if (loading) return <div className="text-center py-12 text-gray-500">Yükleniyor…</div>;
   if (error) return <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">{error}</div>;
   if (!data) return null;
+
+  const canUndo = ['OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role);
 
   // Ankara (TOTALS_PRIMARY): mevcut warehouse-stock UI'sı bu sekmenin tamamı.
   // eskiStok/ilaveStok/cikis girişleri, weekly entries, snapshot'lar — hepsi aynen burada.
@@ -184,11 +220,16 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
                 <th className="text-right px-4 py-2">Adet</th>
                 <th className="text-left px-4 py-2">Kaynak</th>
                 <th className="text-left px-4 py-2">Not</th>
+                {canUndo && <th className="text-right px-4 py-2 w-28">Durum</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {data.recentMovements.map((m) => (
-                <tr key={m.id} className="text-gray-700">
+              {data.recentMovements.map((m) => {
+                const isReversed = (m.reversedBy?.length ?? 0) > 0;
+                const isReversal = m.type === 'REVERSAL';
+                const showUndo = canUndo && !isReversed && !isReversal && UNDOABLE_TYPES.has(m.type);
+                return (
+                <tr key={m.id} className={`text-gray-700 ${isReversed ? 'opacity-50' : ''}`}>
                   <td className="px-4 py-2 text-xs text-gray-500">
                     {new Date(m.createdAt).toLocaleString('tr-TR')}
                   </td>
@@ -197,8 +238,32 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
                   <td className="px-4 py-2 text-right">{m.quantity ?? '—'}</td>
                   <td className="px-4 py-2 text-xs text-gray-500">{m.refType ?? '—'}</td>
                   <td className="px-4 py-2 text-xs text-gray-500 truncate max-w-[200px]">{m.notes ?? ''}</td>
+                  {canUndo && (
+                    <td className="px-4 py-2 text-right">
+                      {isReversed ? (
+                        <span className="text-[10px] uppercase px-1.5 py-0.5 rounded bg-gray-200 text-gray-600">
+                          Geri alındı
+                        </span>
+                      ) : isReversal ? (
+                        <span className="text-[10px] uppercase px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">
+                          Reversal
+                        </span>
+                      ) : showUndo ? (
+                        <button
+                          onClick={() => undoMovement(m.id, m.type)}
+                          disabled={undoingId === m.id}
+                          className="text-[11px] text-red-700 bg-red-50 hover:bg-red-100 px-2 py-1 rounded disabled:opacity-50"
+                        >
+                          {undoingId === m.id ? '…' : 'Geri Al'}
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-gray-400">—</span>
+                      )}
+                    </td>
+                  )}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}

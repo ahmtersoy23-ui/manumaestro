@@ -48,6 +48,8 @@ interface Movement {
   refType: string | null;
   notes: string | null;
   createdAt: string;
+  reverseOfId: string | null;
+  reversedBy: { id: string }[];
 }
 interface RafData {
   shelf: { id: string; code: string; shelfType: string; notes: string | null; warehouseCode: string };
@@ -131,6 +133,33 @@ export default function RafDetayPage({
       setOpeningBoxId(null);
     }
   }
+
+  const [undoingId, setUndoingId] = useState<string | null>(null);
+  async function undoMovement(movementId: string, type: string) {
+    if (!confirm(`${type} hareketi geri alınacak. Onaylıyor musun?`)) return;
+    setUndoingId(movementId);
+    try {
+      const res = await fetch(`/api/depolar/${code}/hareketler/${movementId}/undo`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        alert(data.error || 'Geri alınamadı');
+        return;
+      }
+      handleSuccess();
+    } catch (e) {
+      logger.error('Undo hatası', e);
+      alert('Sunucu hatası');
+    } finally {
+      setUndoingId(null);
+    }
+  }
+
+  const UNDOABLE_TYPES = new Set([
+    'TRANSFER', 'CROSS_WAREHOUSE_TRANSFER', 'INBOUND_MANUAL', 'INBOUND_FROM_SHIPMENT',
+  ]);
 
   if (loading) return <div className="text-center py-12 text-gray-500">Yükleniyor…</div>;
   if (error)
@@ -370,6 +399,7 @@ export default function RafDetayPage({
                   <th className="text-right px-4 py-2">Adet</th>
                   <th className="text-left px-4 py-2">Yön</th>
                   <th className="text-left px-4 py-2">Not</th>
+                  {canTransfer && <th className="text-right px-4 py-2 w-28">Durum</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -380,8 +410,11 @@ export default function RafDetayPage({
                       : m.fromShelfId === data.shelf.id && m.toShelfId !== data.shelf.id
                       ? 'Gitti'
                       : '—';
+                  const isReversed = (m.reversedBy?.length ?? 0) > 0;
+                  const isReversal = m.type === 'REVERSAL';
+                  const canUndo = !isReversed && !isReversal && UNDOABLE_TYPES.has(m.type);
                   return (
-                    <tr key={m.id} className="text-gray-700">
+                    <tr key={m.id} className={`text-gray-700 ${isReversed ? 'opacity-50' : ''}`}>
                       <td className="px-4 py-2 text-xs text-gray-500">
                         {new Date(m.createdAt).toLocaleString('tr-TR')}
                       </td>
@@ -392,6 +425,30 @@ export default function RafDetayPage({
                       <td className="px-4 py-2 text-xs text-gray-500 truncate max-w-[200px]">
                         {m.notes ?? ''}
                       </td>
+                      {canTransfer && (
+                        <td className="px-4 py-2 text-right">
+                          {isReversed ? (
+                            <span className="text-[10px] uppercase px-1.5 py-0.5 rounded bg-gray-200 text-gray-600">
+                              Geri alındı
+                            </span>
+                          ) : isReversal ? (
+                            <span className="text-[10px] uppercase px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">
+                              Reversal
+                            </span>
+                          ) : canUndo ? (
+                            <button
+                              onClick={() => undoMovement(m.id, m.type)}
+                              disabled={undoingId === m.id}
+                              className="text-[11px] text-red-700 bg-red-50 hover:bg-red-100 px-2 py-1 rounded disabled:opacity-50"
+                              title="Bu hareketi geri al"
+                            >
+                              {undoingId === m.id ? '…' : 'Geri Al'}
+                            </button>
+                          ) : (
+                            <span className="text-[11px] text-gray-400">—</span>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}

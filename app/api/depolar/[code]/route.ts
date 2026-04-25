@@ -43,6 +43,8 @@ export async function GET(
         id: true, type: true, iwasku: true, quantity: true,
         fromShelfId: true, toShelfId: true, refType: true,
         userId: true, createdAt: true, notes: true,
+        reverseOfId: true,
+        reversedBy: { select: { id: true } },
       },
     }),
   ]);

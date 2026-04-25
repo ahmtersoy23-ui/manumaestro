@@ -53,6 +53,7 @@ export async function GET(
         warehouseCode: upperCode,
         OR: [{ fromShelfId: shelf.id }, { toShelfId: shelf.id }],
       },
+      include: { reversedBy: { select: { id: true } } },
       orderBy: { createdAt: 'desc' },
       take: 30,
     }),
