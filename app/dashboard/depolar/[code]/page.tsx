@@ -1,12 +1,15 @@
 /**
  * Depo Dashboard Sekmesi (default tab).
- * Üstte prominent arama kutusu (henüz stub), altında özet kartlar ve son hareketler.
+ * Üstte prominent arama kutusu (henüz stub).
+ * Ankara (TOTALS_PRIMARY): toplam mevcut + ürün sayısı + detaylı sayfa link.
+ * NJ/Showroom (SHELF_PRIMARY): tekil/koli/raf kırılımı + koli durum dağılımı.
  */
 
 'use client';
 
 import { useEffect, useState, use } from 'react';
-import { Search, Layers, Package, Box, AlertTriangle, History } from 'lucide-react';
+import Link from 'next/link';
+import { Search, Layers, Package, Box, AlertTriangle, History, ExternalLink } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('DepoDashboard');
@@ -23,13 +26,24 @@ interface Movement {
   createdAt: string;
   notes: string | null;
 }
-interface Summary {
-  shelfCount: number;
-  looseSkuLines: number;
-  looseTotalQty: number;
-  boxesByStatus: { status: string; count: number; quantity: number }[];
-  pendingUnmatched: number;
-}
+
+type Summary =
+  | {
+      mode: 'TOTALS_PRIMARY';
+      shelfCount: number;
+      totalQty: number;
+      productCount: number;
+      pendingUnmatched: number;
+    }
+  | {
+      mode: 'SHELF_PRIMARY';
+      shelfCount: number;
+      looseSkuLines: number;
+      looseTotalQty: number;
+      boxesByStatus: { status: string; count: number; quantity: number }[];
+      pendingUnmatched: number;
+    };
+
 interface DepoData {
   warehouse: { code: string; name: string; region: string; stockMode: string };
   role: string;
@@ -64,77 +78,137 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
   if (error) return <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">{error}</div>;
   if (!data) return null;
 
-  const totalBoxQty = data.summary.boxesByStatus.reduce((s, x) => s + (x.status !== 'EMPTY' ? x.quantity : 0), 0);
-  const totalBoxCount = data.summary.boxesByStatus.reduce((s, x) => s + (x.status !== 'EMPTY' ? x.count : 0), 0);
+  const isAnkara = data.summary.mode === 'TOTALS_PRIMARY';
 
   return (
     <div className="space-y-6">
-      {/* Prominent arama kutusu — sonraki commit'te canlanacak */}
+      {/* Prominent arama kutusu — sonraki adımda canlanacak */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
         <input
           type="text"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="SKU / FNSKU yazın → bu deponun raf+koli dağılımı açılacak (yakında)"
+          placeholder={
+            isAnkara
+              ? 'SKU / FNSKU yazın → Ankara stoğunda arama (yakında)'
+              : 'SKU / FNSKU yazın → bu deponun raf+koli dağılımı açılacak (yakında)'
+          }
           className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400"
           disabled
         />
       </div>
 
-      {/* Özet kartlar */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <div className="flex items-center gap-2 text-gray-500 text-xs">
-            <Layers className="w-4 h-4" /> Raf
+      {/* Ankara — TOTALS_PRIMARY view */}
+      {data.summary.mode === 'TOTALS_PRIMARY' && (
+        <>
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
+            <p className="text-xs text-blue-700 mb-1">
+              Ankara depo <span className="font-medium">toplam-bazlı</span> izlenir.
+              Mevcut detaylı stok takip sayfası hâlâ aktif.
+            </p>
+            <Link
+              href="/dashboard/warehouse-stock"
+              className="inline-flex items-center gap-1 text-sm font-medium text-blue-700 hover:text-blue-900"
+            >
+              Detaylı Stok Sayfasına Git <ExternalLink className="w-3 h-3" />
+            </Link>
           </div>
-          <p className="mt-2 text-2xl font-semibold text-gray-900">{data.summary.shelfCount}</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <div className="flex items-center gap-2 text-gray-500 text-xs">
-            <Package className="w-4 h-4" /> Tekil ürün
-          </div>
-          <p className="mt-2 text-2xl font-semibold text-gray-900">{data.summary.looseTotalQty}</p>
-          <p className="text-[11px] text-gray-400">{data.summary.looseSkuLines} satır</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <div className="flex items-center gap-2 text-gray-500 text-xs">
-            <Box className="w-4 h-4" /> Koli
-          </div>
-          <p className="mt-2 text-2xl font-semibold text-gray-900">{totalBoxQty}</p>
-          <p className="text-[11px] text-gray-400">{totalBoxCount} koli</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <div className="flex items-center gap-2 text-gray-500 text-xs">
-            <AlertTriangle className="w-4 h-4" /> Eşleşmeyen
-          </div>
-          <p className="mt-2 text-2xl font-semibold text-gray-900">{data.summary.pendingUnmatched}</p>
-          <p className="text-[11px] text-gray-400">mapping bekliyor</p>
-        </div>
-      </div>
 
-      {/* Koli durum dağılımı */}
-      {data.summary.boxesByStatus.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <p className="text-sm font-medium text-gray-700 mb-3">Koli Durumu</p>
-          <div className="grid grid-cols-3 gap-3 text-sm">
-            {(['SEALED', 'PARTIAL', 'EMPTY'] as const).map((status) => {
-              const row = data.summary.boxesByStatus.find((r) => r.status === status);
-              const label =
-                status === 'SEALED' ? 'Mühürlü' : status === 'PARTIAL' ? 'Kısmi açık' : 'Boş';
-              return (
-                <div key={status} className="border border-gray-100 rounded-md p-3">
-                  <p className="text-[11px] text-gray-500">{label}</p>
-                  <p className="text-lg font-semibold text-gray-900">{row?.count ?? 0}</p>
-                  <p className="text-[11px] text-gray-400">{row?.quantity ?? 0} adet</p>
-                </div>
-              );
-            })}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-gray-500 text-xs">
+                <Package className="w-4 h-4" /> Toplam Mevcut
+              </div>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{data.summary.totalQty}</p>
+              <p className="text-[11px] text-gray-400">{data.summary.productCount} ürün</p>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-gray-500 text-xs">
+                <Layers className="w-4 h-4" /> Raf Kırılımı
+              </div>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{data.summary.shelfCount}</p>
+              <p className="text-[11px] text-gray-400">raf tanımlı</p>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-gray-500 text-xs">
+                <AlertTriangle className="w-4 h-4" /> Eşleşmeyen
+              </div>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{data.summary.pendingUnmatched}</p>
+              <p className="text-[11px] text-gray-400">mapping bekliyor</p>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
-      {/* Son hareketler */}
+      {/* NJ/Showroom — SHELF_PRIMARY view */}
+      {data.summary.mode === 'SHELF_PRIMARY' && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-gray-500 text-xs">
+                <Layers className="w-4 h-4" /> Raf
+              </div>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{data.summary.shelfCount}</p>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-gray-500 text-xs">
+                <Package className="w-4 h-4" /> Tekil ürün
+              </div>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{data.summary.looseTotalQty}</p>
+              <p className="text-[11px] text-gray-400">{data.summary.looseSkuLines} satır</p>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-gray-500 text-xs">
+                <Box className="w-4 h-4" /> Koli (mühürlü+kısmi)
+              </div>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">
+                {data.summary.boxesByStatus
+                  .filter((b) => b.status !== 'EMPTY')
+                  .reduce((s, x) => s + x.quantity, 0)}
+              </p>
+              <p className="text-[11px] text-gray-400">
+                {data.summary.boxesByStatus
+                  .filter((b) => b.status !== 'EMPTY')
+                  .reduce((s, x) => s + x.count, 0)}{' '}
+                koli
+              </p>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-gray-500 text-xs">
+                <AlertTriangle className="w-4 h-4" /> Eşleşmeyen
+              </div>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{data.summary.pendingUnmatched}</p>
+              <p className="text-[11px] text-gray-400">mapping bekliyor</p>
+            </div>
+          </div>
+
+          {/* Koli durum dağılımı */}
+          {data.summary.boxesByStatus.length > 0 && (
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <p className="text-sm font-medium text-gray-700 mb-3">Koli Durumu</p>
+              <div className="grid grid-cols-3 gap-3 text-sm">
+                {(['SEALED', 'PARTIAL', 'EMPTY'] as const).map((status) => {
+                  const row = data.summary.mode === 'SHELF_PRIMARY'
+                    ? data.summary.boxesByStatus.find((r) => r.status === status)
+                    : null;
+                  const label =
+                    status === 'SEALED' ? 'Mühürlü' : status === 'PARTIAL' ? 'Kısmi açık' : 'Boş';
+                  return (
+                    <div key={status} className="border border-gray-100 rounded-md p-3">
+                      <p className="text-[11px] text-gray-500">{label}</p>
+                      <p className="text-lg font-semibold text-gray-900">{row?.count ?? 0}</p>
+                      <p className="text-[11px] text-gray-400">{row?.quantity ?? 0} adet</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Son hareketler — her iki mod için */}
       <div className="bg-white border border-gray-200 rounded-lg">
         <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
           <History className="w-4 h-4 text-gray-500" />

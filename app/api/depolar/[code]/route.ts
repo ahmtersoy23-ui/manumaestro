@@ -1,12 +1,15 @@
 /**
  * GET /api/depolar/[code]
  * Tek bir deponun ayrıntılı özeti — Dashboard sekmesi için.
+ * Ankara (TOTALS_PRIMARY): WarehouseProduct toplamı.
+ * NJ + Showroom (SHELF_PRIMARY): ShelfStock + ShelfBox.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
+import { getAnkaraTotals } from '@/lib/warehouse/ankaraTotals';
 
 export async function GET(
   request: NextRequest,
@@ -27,19 +30,8 @@ export async function GET(
     return NextResponse.json({ success: false, error: 'Depo bulunamadı' }, { status: 404 });
   }
 
-  const [shelfCount, stockAgg, boxStatusGroup, pendingUnmatched, recentMovements] = await Promise.all([
+  const [shelfCount, pendingUnmatched, recentMovements] = await Promise.all([
     prisma.shelf.count({ where: { warehouseCode: upperCode, isActive: true } }),
-    prisma.shelfStock.aggregate({
-      where: { warehouseCode: upperCode },
-      _sum: { quantity: true },
-      _count: true,
-    }),
-    prisma.shelfBox.groupBy({
-      by: ['status'],
-      where: { warehouseCode: upperCode },
-      _count: true,
-      _sum: { quantity: true },
-    }),
     prisma.unmatchedSeedRow.count({
       where: { warehouseCode: upperCode, status: 'PENDING' },
     }),
@@ -55,6 +47,44 @@ export async function GET(
     }),
   ]);
 
+  let summary;
+  if (warehouse.stockMode === 'TOTALS_PRIMARY') {
+    const totals = await getAnkaraTotals();
+    summary = {
+      mode: 'TOTALS_PRIMARY' as const,
+      shelfCount,
+      totalQty: totals.totalQty,
+      productCount: totals.productCount,
+      pendingUnmatched,
+    };
+  } else {
+    const [stockAgg, boxStatusGroup] = await Promise.all([
+      prisma.shelfStock.aggregate({
+        where: { warehouseCode: upperCode },
+        _sum: { quantity: true },
+        _count: true,
+      }),
+      prisma.shelfBox.groupBy({
+        by: ['status'],
+        where: { warehouseCode: upperCode },
+        _count: true,
+        _sum: { quantity: true },
+      }),
+    ]);
+    summary = {
+      mode: 'SHELF_PRIMARY' as const,
+      shelfCount,
+      looseSkuLines: stockAgg._count,
+      looseTotalQty: stockAgg._sum.quantity ?? 0,
+      boxesByStatus: boxStatusGroup.map((g) => ({
+        status: g.status,
+        count: g._count,
+        quantity: g._sum.quantity ?? 0,
+      })),
+      pendingUnmatched,
+    };
+  }
+
   return NextResponse.json({
     success: true,
     data: {
@@ -65,17 +95,7 @@ export async function GET(
         stockMode: warehouse.stockMode,
       },
       role: auth.shelfRole,
-      summary: {
-        shelfCount,
-        looseSkuLines: stockAgg._count,
-        looseTotalQty: stockAgg._sum.quantity ?? 0,
-        boxesByStatus: boxStatusGroup.map((g) => ({
-          status: g.status,
-          count: g._count,
-          quantity: g._sum.quantity ?? 0,
-        })),
-        pendingUnmatched,
-      },
+      summary,
       recentMovements,
     },
   });

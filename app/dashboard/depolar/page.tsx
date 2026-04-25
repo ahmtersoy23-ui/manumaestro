@@ -1,32 +1,42 @@
 /**
  * Depo Lobby — kullanıcının erişebileceği depoları kart olarak listeler.
- * Her karta tıklayınca depo detay sayfasına gider (3 sekme: Dashboard | Raf | Sipariş Çıkış).
+ * Ankara (TOTALS_PRIMARY) için: tek toplam stok rakamı + ürün sayısı + raf sayısı.
+ * NJ/Showroom (SHELF_PRIMARY) için: tekil + koli + raf kırılımı.
  */
 
 'use client';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Warehouse as WarehouseIcon, AlertTriangle, Package, Box } from 'lucide-react';
+import { Warehouse as WarehouseIcon, AlertTriangle, Package, Box, Layers } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('DepolarLobby');
 
-interface WarehouseCard {
+type WarehouseCard = {
   code: string;
   name: string;
   region: string;
   stockMode: 'TOTALS_PRIMARY' | 'SHELF_PRIMARY';
   role: string | null;
-  summary: {
-    shelfCount: number;
-    looseSkuLines: number;
-    looseTotalQty: number;
-    boxCount: number;
-    boxTotalQty: number;
-    pendingUnmatched: number;
-  };
-}
+  summary:
+    | {
+        mode: 'TOTALS_PRIMARY';
+        shelfCount: number;
+        totalQty: number;
+        productCount: number;
+        pendingUnmatched: number;
+      }
+    | {
+        mode: 'SHELF_PRIMARY';
+        shelfCount: number;
+        looseSkuLines: number;
+        looseTotalQty: number;
+        boxCount: number;
+        boxTotalQty: number;
+        pendingUnmatched: number;
+      };
+};
 
 export default function DepolarLobbyPage() {
   const [warehouses, setWarehouses] = useState<WarehouseCard[]>([]);
@@ -47,14 +57,10 @@ export default function DepolarLobbyPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) {
-    return <div className="text-center py-12 text-gray-500">Depolar yükleniyor…</div>;
-  }
+  if (loading) return <div className="text-center py-12 text-gray-500">Depolar yükleniyor…</div>;
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
-        {error}
-      </div>
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">{error}</div>
     );
   }
   if (warehouses.length === 0) {
@@ -98,26 +104,45 @@ export default function DepolarLobbyPage() {
               </span>
             </div>
 
-            <div className="mt-5 grid grid-cols-3 gap-2 text-sm">
-              <div className="border-r border-gray-100 pr-2">
-                <p className="text-[11px] text-gray-500 flex items-center gap-1">
-                  <Package className="w-3 h-3" /> Tekil
-                </p>
-                <p className="font-semibold text-gray-900">{w.summary.looseTotalQty}</p>
-                <p className="text-[10px] text-gray-400">{w.summary.looseSkuLines} satır</p>
+            {w.summary.mode === 'TOTALS_PRIMARY' ? (
+              <div className="mt-5 grid grid-cols-2 gap-2 text-sm">
+                <div className="border-r border-gray-100 pr-2">
+                  <p className="text-[11px] text-gray-500 flex items-center gap-1">
+                    <Package className="w-3 h-3" /> Toplam Mevcut
+                  </p>
+                  <p className="font-semibold text-gray-900 text-lg">{w.summary.totalQty}</p>
+                  <p className="text-[10px] text-gray-400">{w.summary.productCount} ürün</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-gray-500 flex items-center gap-1">
+                    <Layers className="w-3 h-3" /> Raf Kırılımı
+                  </p>
+                  <p className="font-semibold text-gray-900 text-lg">{w.summary.shelfCount}</p>
+                  <p className="text-[10px] text-gray-400">raf tanımlı</p>
+                </div>
               </div>
-              <div className="border-r border-gray-100 pr-2">
-                <p className="text-[11px] text-gray-500 flex items-center gap-1">
-                  <Box className="w-3 h-3" /> Koli
-                </p>
-                <p className="font-semibold text-gray-900">{w.summary.boxTotalQty}</p>
-                <p className="text-[10px] text-gray-400">{w.summary.boxCount} koli</p>
+            ) : (
+              <div className="mt-5 grid grid-cols-3 gap-2 text-sm">
+                <div className="border-r border-gray-100 pr-2">
+                  <p className="text-[11px] text-gray-500 flex items-center gap-1">
+                    <Package className="w-3 h-3" /> Tekil
+                  </p>
+                  <p className="font-semibold text-gray-900">{w.summary.looseTotalQty}</p>
+                  <p className="text-[10px] text-gray-400">{w.summary.looseSkuLines} satır</p>
+                </div>
+                <div className="border-r border-gray-100 pr-2">
+                  <p className="text-[11px] text-gray-500 flex items-center gap-1">
+                    <Box className="w-3 h-3" /> Koli
+                  </p>
+                  <p className="font-semibold text-gray-900">{w.summary.boxTotalQty}</p>
+                  <p className="text-[10px] text-gray-400">{w.summary.boxCount} koli</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-gray-500">Raf</p>
+                  <p className="font-semibold text-gray-900">{w.summary.shelfCount}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-[11px] text-gray-500">Raf</p>
-                <p className="font-semibold text-gray-900">{w.summary.shelfCount}</p>
-              </div>
-            </div>
+            )}
 
             {w.summary.pendingUnmatched > 0 && (
               <div className="mt-4 flex items-center gap-2 text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
