@@ -32,11 +32,11 @@ interface Shipment {
   stats: ShipmentStats;
 }
 
-const TABS = ['US', 'UK', 'EU', 'NL', 'AU', 'ZA'] as const;
+const TABS = ['US', 'US_SHOWROOM', 'UK', 'EU', 'NL', 'AU', 'ZA'] as const;
 type Tab = typeof TABS[number];
 
 const tabLabels: Record<Tab, string> = {
-  US: '🇺🇸 US', UK: '🇬🇧 UK', EU: '🇪🇺 EU', NL: '🇳🇱 NL', AU: '🇦🇺 AU', ZA: '🇿🇦 ZA',
+  US: '🇺🇸 US', US_SHOWROOM: '🇺🇸 Showroom', UK: '🇬🇧 UK', EU: '🇪🇺 EU', NL: '🇳🇱 NL', AU: '🇦🇺 AU', ZA: '🇿🇦 ZA',
 };
 
 const methodIcons: Record<string, typeof Anchor> = {

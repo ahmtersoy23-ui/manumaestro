@@ -183,6 +183,16 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     });
   }
 
+  // DELIVERED'a geçiş: WMS varış hook'u — boxes hedef deponun POOL rafına SEALED olarak yansır.
+  // Idempotent: aynı sevkiyat ikinci kez DELIVERED yapılırsa atlar.
+  let arrivalSummary: { warehouseCode: string | null; boxesCreated: number; boxesSkipped: number } | null = null;
+  if (data.status === 'DELIVERED' && shipment.status !== 'DELIVERED') {
+    arrivalSummary = await prisma.$transaction(async (tx) => {
+      const { processShipmentArrival } = await import('@/lib/wms/shipmentArrivalHook');
+      return processShipmentArrival(tx, id, user.id);
+    });
+  }
+
   const updated = await prisma.shipment.update({
     where: { id },
     data: {
@@ -198,9 +208,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     userId: user.id, userName: user.name, userEmail: user.email,
     action: 'UPDATE_REQUEST', entityType: 'Shipment', entityId: id,
     description: `Sevkiyat güncellendi: ${updated.name} → ${data.status ?? 'bilgi güncellemesi'}`,
+    metadata: arrivalSummary ? { arrival: arrivalSummary } : undefined,
   });
 
-  return NextResponse.json({ success: true, data: updated });
+  return NextResponse.json({ success: true, data: updated, arrival: arrivalSummary });
 }
 
 // --- POST: Add items to shipment ---

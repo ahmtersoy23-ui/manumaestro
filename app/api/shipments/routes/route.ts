@@ -11,7 +11,7 @@ import { z } from 'zod';
 
 const RouteSchema = z.object({
   marketplaceId: z.string().uuid(),
-  destinationTab: z.enum(['US', 'UK', 'EU', 'NL', 'AU', 'ZA']),
+  destinationTab: z.enum(['US', 'US_SHOWROOM', 'UK', 'EU', 'NL', 'AU', 'ZA']),
   shippingMethod: z.enum(['sea', 'road', 'air']),
   leadTimeDays: z.number().int().optional(),
   notes: z.string().optional(),
