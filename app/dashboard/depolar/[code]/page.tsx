@@ -8,9 +8,9 @@
 'use client';
 
 import { useEffect, useState, use } from 'react';
-import Link from 'next/link';
-import { Search, Layers, Package, Box, AlertTriangle, History, ExternalLink } from 'lucide-react';
+import { Search, Layers, Package, Box, AlertTriangle, History } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import WarehouseStockView from '@/components/warehouse/WarehouseStockView';
 
 const logger = createLogger('DepoDashboard');
 
@@ -78,7 +78,11 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
   if (error) return <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">{error}</div>;
   if (!data) return null;
 
-  const isAnkara = data.summary.mode === 'TOTALS_PRIMARY';
+  // Ankara (TOTALS_PRIMARY): mevcut warehouse-stock UI'sı bu sekmenin tamamı.
+  // eskiStok/ilaveStok/cikis girişleri, weekly entries, snapshot'lar — hepsi aynen burada.
+  if (data.summary.mode === 'TOTALS_PRIMARY') {
+    return <WarehouseStockView />;
+  }
 
   return (
     <div className="space-y-6">
@@ -89,57 +93,11 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
           type="text"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder={
-            isAnkara
-              ? 'SKU / FNSKU yazın → Ankara stoğunda arama (yakında)'
-              : 'SKU / FNSKU yazın → bu deponun raf+koli dağılımı açılacak (yakında)'
-          }
+          placeholder="SKU / FNSKU yazın → bu deponun raf+koli dağılımı açılacak (yakında)"
           className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400"
           disabled
         />
       </div>
-
-      {/* Ankara — TOTALS_PRIMARY view */}
-      {data.summary.mode === 'TOTALS_PRIMARY' && (
-        <>
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-xs text-blue-700 mb-1">
-              Ankara depo <span className="font-medium">toplam-bazlı</span> izlenir.
-              Mevcut detaylı stok takip sayfası hâlâ aktif.
-            </p>
-            <Link
-              href="/dashboard/warehouse-stock"
-              className="inline-flex items-center gap-1 text-sm font-medium text-blue-700 hover:text-blue-900"
-            >
-              Detaylı Stok Sayfasına Git <ExternalLink className="w-3 h-3" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-gray-500 text-xs">
-                <Package className="w-4 h-4" /> Toplam Mevcut
-              </div>
-              <p className="mt-2 text-2xl font-semibold text-gray-900">{data.summary.totalQty}</p>
-              <p className="text-[11px] text-gray-400">{data.summary.productCount} ürün</p>
-            </div>
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-gray-500 text-xs">
-                <Layers className="w-4 h-4" /> Raf Kırılımı
-              </div>
-              <p className="mt-2 text-2xl font-semibold text-gray-900">{data.summary.shelfCount}</p>
-              <p className="text-[11px] text-gray-400">raf tanımlı</p>
-            </div>
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-gray-500 text-xs">
-                <AlertTriangle className="w-4 h-4" /> Eşleşmeyen
-              </div>
-              <p className="mt-2 text-2xl font-semibold text-gray-900">{data.summary.pendingUnmatched}</p>
-              <p className="text-[11px] text-gray-400">mapping bekliyor</p>
-            </div>
-          </div>
-        </>
-      )}
 
       {/* NJ/Showroom — SHELF_PRIMARY view */}
       {data.summary.mode === 'SHELF_PRIMARY' && (
