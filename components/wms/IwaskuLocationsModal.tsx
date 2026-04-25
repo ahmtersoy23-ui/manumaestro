@@ -70,18 +70,14 @@ export function IwaskuLocationsModal({ isOpen, warehouseCode, iwasku, productNam
     return () => { cancelled = true; };
   }, [isOpen, warehouseCode, iwasku]);
 
-  // Modal kapanınca state reset
-  useEffect(() => {
-    if (!isOpen) {
-      setData(null);
-      setError(null);
-    }
-  }, [isOpen]);
-
   if (!isOpen || !iwasku) return null;
 
-  const totalLoose = data?.stocks.reduce((s, x) => s + x.quantity, 0) ?? 0;
-  const totalBox = data?.boxes.reduce((s, x) => s + x.quantity, 0) ?? 0;
+  // Data eski bir iwasku'ya aitse loading göster (yeni fetch henüz dönmedi)
+  const dataMatches = data?.iwasku === iwasku;
+  const visibleData = dataMatches ? data : null;
+
+  const totalLoose = visibleData?.stocks.reduce((s, x) => s + x.quantity, 0) ?? 0;
+  const totalBox = visibleData?.boxes.reduce((s, x) => s + x.quantity, 0) ?? 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
@@ -110,25 +106,25 @@ export function IwaskuLocationsModal({ isOpen, warehouseCode, iwasku, productNam
             </div>
           )}
 
-          {!data && !error && (
+          {!visibleData && !error && (
             <div className="text-center text-gray-500 text-sm py-6">Yükleniyor…</div>
           )}
 
-          {data && (
+          {visibleData && (
             <>
-              {data.stocks.length === 0 && data.boxes.length === 0 && (
+              {visibleData.stocks.length === 0 && visibleData.boxes.length === 0 && (
                 <div className="text-center text-gray-500 text-sm py-6">
                   Bu ürünün depoda kullanılabilir konumu yok.
                 </div>
               )}
 
               {/* Tekil ürün */}
-              {data.stocks.length > 0 && (
+              {visibleData.stocks.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-sm font-medium text-gray-700 flex items-center gap-2">
                       <Package className="w-4 h-4 text-gray-500" />
-                      Tekil Ürün ({data.stocks.length} raf)
+                      Tekil Ürün ({visibleData.stocks.length} raf)
                     </h3>
                     <span className="text-xs text-gray-500">Toplam {totalLoose}</span>
                   </div>
@@ -142,7 +138,7 @@ export function IwaskuLocationsModal({ isOpen, warehouseCode, iwasku, productNam
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {data.stocks.map((s) => (
+                      {visibleData.stocks.map((s) => (
                         <tr key={s.id} className="text-gray-700">
                           <td className="px-3 py-1.5 font-mono text-xs">
                             {s.shelfCode}
@@ -161,12 +157,12 @@ export function IwaskuLocationsModal({ isOpen, warehouseCode, iwasku, productNam
               )}
 
               {/* Koli */}
-              {data.boxes.length > 0 && (
+              {visibleData.boxes.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-sm font-medium text-gray-700 flex items-center gap-2">
                       <BoxIcon className="w-4 h-4 text-gray-500" />
-                      Koli ({data.boxes.length})
+                      Koli ({visibleData.boxes.length})
                     </h3>
                     <span className="text-xs text-gray-500">Toplam {totalBox}</span>
                   </div>
@@ -182,7 +178,7 @@ export function IwaskuLocationsModal({ isOpen, warehouseCode, iwasku, productNam
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {data.boxes.map((b) => (
+                      {visibleData.boxes.map((b) => (
                         <tr key={b.id} className="text-gray-700">
                           <td className="px-3 py-1.5 font-mono text-xs">{b.boxNumber}</td>
                           <td className="px-3 py-1.5 font-mono text-xs">{b.shelfCode}</td>
