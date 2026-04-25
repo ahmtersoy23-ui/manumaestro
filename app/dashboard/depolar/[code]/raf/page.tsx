@@ -1,15 +1,16 @@
 /**
- * Raf Düzeni Sekmesi — raf grid + canlı arama.
- * Read-only v1: rafları liste ve arama. Yazma operasyonları (yeni raf, transfer,
- * koli aç/parçala, manuel koli) sonraki commit'lerde gelecek.
+ * Raf Düzeni Sekmesi — raf grid + canlı arama + yeni raf/koli operasyonları.
  */
 
 'use client';
 
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
-import { Search, Layers, Package, Box, AlertCircle } from 'lucide-react';
+import { Search, Layers, Package, Box, AlertCircle, Plus, PackagePlus, Layers3 } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { NewShelfDialog } from '@/components/wms/NewShelfDialog';
+import { BulkShelfDialog } from '@/components/wms/BulkShelfDialog';
+import { ManualBoxDialog } from '@/components/wms/ManualBoxDialog';
 
 const logger = createLogger('RafSekmesi');
 
@@ -51,12 +52,15 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
   const code = rawCode.toUpperCase();
 
   const [shelves, setShelves] = useState<ShelfRow[]>([]);
+  const [role, setRole] = useState<string>('VIEWER');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'POOL' | 'TEMP' | 'NORMAL'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult | null>(null);
   const [searching, setSearching] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [dialog, setDialog] = useState<'NEW_SHELF' | 'BULK_SHELF' | 'MANUAL_BOX' | null>(null);
 
   // Rafları yükle — setLoading(true) initial state ile geliyor; refetch sırasında
   // mevcut veri gözükmeye devam eder, fetch tamamlanınca güncellenir.
@@ -68,8 +72,10 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return;
-        if (d.success) setShelves(d.data.shelves);
-        else setError(d.error || 'Raflar yüklenemedi');
+        if (d.success) {
+          setShelves(d.data.shelves);
+          setRole(d.data.role ?? 'VIEWER');
+        } else setError(d.error || 'Raflar yüklenemedi');
       })
       .catch((e) => {
         if (cancelled) return;
@@ -78,7 +84,7 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [code, typeFilter]);
+  }, [code, typeFilter, refreshKey]);
 
   // Debounced arama — q < 2 ise fetch yapma; UI tarafı searchTerm'e göre derived
   useEffect(() => {
@@ -109,8 +115,47 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
   const totalSealedBoxes = shelves.reduce((s, r) => s + r.summary.sealedBoxes, 0);
   const totalPartialBoxes = shelves.reduce((s, r) => s + r.summary.partialBoxes, 0);
 
+  // Yetki rozetleri — admin/manager/operator yazma yetkisi var
+  const canCreateShelf = ['OPERATOR', 'MANAGER', 'ADMIN'].includes(role);
+  const canBulkShelf = ['OPERATOR', 'MANAGER', 'ADMIN'].includes(role);
+  const canManualBox = ['OPERATOR', 'MANAGER', 'ADMIN'].includes(role);
+  // Manuel koli sadece SHELF_PRIMARY depolarda mantıklı (NJ + SHOWROOM)
+  const isShelfPrimaryWh = code === 'NJ' || code === 'SHOWROOM';
+
+  const handleSuccess = () => setRefreshKey((k) => k + 1);
+
   return (
     <div className="space-y-5">
+      {/* Action butonları */}
+      {(canCreateShelf || canBulkShelf || canManualBox) && (
+        <div className="flex flex-wrap gap-2">
+          {canCreateShelf && (
+            <button
+              onClick={() => setDialog('NEW_SHELF')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              <Plus className="w-4 h-4" /> Yeni Raf
+            </button>
+          )}
+          {canBulkShelf && (
+            <button
+              onClick={() => setDialog('BULK_SHELF')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white border border-gray-200 text-gray-700 rounded-md hover:bg-gray-50"
+            >
+              <Layers3 className="w-4 h-4" /> Toplu Raf
+            </button>
+          )}
+          {canManualBox && isShelfPrimaryWh && (
+            <button
+              onClick={() => setDialog('MANUAL_BOX')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white border border-gray-200 text-gray-700 rounded-md hover:bg-gray-50"
+            >
+              <PackagePlus className="w-4 h-4" /> Yeni Koli (Manuel)
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Arama */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -336,6 +381,26 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
           )}
         </>
       )}
+
+      {/* Modal'lar */}
+      <NewShelfDialog
+        isOpen={dialog === 'NEW_SHELF'}
+        warehouseCode={code}
+        onClose={() => setDialog(null)}
+        onSuccess={handleSuccess}
+      />
+      <BulkShelfDialog
+        isOpen={dialog === 'BULK_SHELF'}
+        warehouseCode={code}
+        onClose={() => setDialog(null)}
+        onSuccess={handleSuccess}
+      />
+      <ManualBoxDialog
+        isOpen={dialog === 'MANUAL_BOX'}
+        warehouseCode={code}
+        onClose={() => setDialog(null)}
+        onSuccess={handleSuccess}
+      />
     </div>
   );
 }
