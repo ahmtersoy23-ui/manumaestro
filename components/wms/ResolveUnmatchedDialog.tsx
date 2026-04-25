@@ -51,10 +51,10 @@ export function ResolveUnmatchedDialog({ isOpen, warehouseCode, source, onClose,
     if (isOpen) {
       setIwasku('');
       setProductDisplay('');
-      setProductSearchQuery('');
       setProductHits([]);
       setShowDropdown(false);
-      setApplyToAll(false);
+      // Group'tan açıldıysa (groupCount > 1) toplu mod default açık
+      setApplyToAll((source?.groupCount ?? 1) > 1);
       setError(null);
       // Default: rawLookup'ı arama kutusuna doldur (kullanıcı kolayca arayabilsin)
       setProductSearchQuery(source?.rawLookup ?? '');

@@ -7,10 +7,11 @@
 
 'use client';
 
-import { useEffect, useState, use } from 'react';
-import { Search, Layers, Package, Box, AlertTriangle, History } from 'lucide-react';
+import { useEffect, useState, useMemo, use } from 'react';
+import { Search, Layers, Package, Box, AlertTriangle, History, ExternalLink } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import WarehouseStockView from '@/components/warehouse/WarehouseStockView';
+import { IwaskuLocationsModal } from '@/components/wms/IwaskuLocationsModal';
 
 const logger = createLogger('DepoDashboard');
 
@@ -32,6 +33,18 @@ interface Movement {
 const UNDOABLE_TYPES = new Set([
   'TRANSFER', 'CROSS_WAREHOUSE_TRANSFER', 'INBOUND_MANUAL', 'INBOUND_FROM_SHIPMENT',
 ]);
+
+interface AggregateRow {
+  iwasku: string;
+  productName: string | null;
+  category: string | null;
+  looseQty: number;
+  looseShelves: number;
+  boxQty: number;
+  boxCount: number;
+  totalQty: number;
+  totalReservedQty: number;
+}
 
 type Summary =
   | {
@@ -67,6 +80,8 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
   const [searchTerm, setSearchTerm] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [undoingId, setUndoingId] = useState<string | null>(null);
+  const [iwaskuModal, setIwaskuModal] = useState<{ iwasku: string; productName: string | null } | null>(null);
+  const [aggregate, setAggregate] = useState<AggregateRow[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +98,20 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
         setError('Sunucuya bağlanılamadı');
       })
       .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [code, refreshKey]);
+
+  // Aggregate fetch — sadece SHELF_PRIMARY depoları için
+  useEffect(() => {
+    if (code === 'ANKARA') return;
+    let cancelled = false;
+    fetch(`/api/depolar/${code}/iwasku-aggregate`, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        if (d.success) setAggregate(d.data.rows);
+      })
+      .catch((e) => logger.error('Aggregate fetch', e));
     return () => { cancelled = true; };
   }, [code, refreshKey]);
 
@@ -129,9 +158,8 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
           type="text"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="SKU / FNSKU yazın → bu deponun raf+koli dağılımı açılacak (yakında)"
+          placeholder="SKU / ürün adı / kategori — alt tabloyu filtreler"
           className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400"
-          disabled
         />
       </div>
 
@@ -199,6 +227,13 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
               </div>
             </div>
           )}
+
+          {/* Ürünler aggregate tablosu — sadece SHELF_PRIMARY */}
+          <IwaskuAggregateTable
+            rows={aggregate}
+            searchTerm={searchTerm}
+            onSelect={(iwasku, productName) => setIwaskuModal({ iwasku, productName })}
+          />
         </>
       )}
 
@@ -268,6 +303,104 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
           </table>
         )}
       </div>
+
+      {/* iwasku konum modal'ı */}
+      <IwaskuLocationsModal
+        isOpen={!!iwaskuModal}
+        warehouseCode={code}
+        iwasku={iwaskuModal?.iwasku ?? null}
+        productName={iwaskuModal?.productName}
+        onClose={() => setIwaskuModal(null)}
+      />
+    </div>
+  );
+}
+
+interface IwaskuAggregateTableProps {
+  rows: AggregateRow[] | null;
+  searchTerm: string;
+  onSelect: (iwasku: string, productName: string | null) => void;
+}
+
+function IwaskuAggregateTable({ rows, searchTerm, onSelect }: IwaskuAggregateTableProps) {
+  const filtered = useMemo(() => {
+    if (!rows) return [];
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(
+      (r) =>
+        r.iwasku.toLowerCase().includes(q) ||
+        (r.productName ?? '').toLowerCase().includes(q) ||
+        (r.category ?? '').toLowerCase().includes(q)
+    );
+  }, [rows, searchTerm]);
+
+  if (rows === null) {
+    return (
+      <div className="bg-white border border-gray-200 rounded-lg px-4 py-6 text-sm text-gray-400 text-center">
+        Ürünler yükleniyor…
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg">
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <h3 className="text-sm font-medium text-gray-700">
+          Ürünler ({filtered.length}
+          {filtered.length !== rows.length && `/${rows.length}`})
+        </h3>
+        <span className="text-xs text-gray-500">Bir satıra tıkla → konum dağılımı modal</span>
+      </div>
+      {filtered.length === 0 ? (
+        <div className="px-4 py-6 text-sm text-gray-400 text-center">Eşleşen ürün yok.</div>
+      ) : (
+        <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-xs text-gray-500 sticky top-0">
+              <tr>
+                <th className="text-left px-4 py-2">SKU</th>
+                <th className="text-left px-4 py-2">Ürün</th>
+                <th className="text-right px-4 py-2">Tekil</th>
+                <th className="text-right px-4 py-2">Koli</th>
+                <th className="text-right px-4 py-2">Toplam</th>
+                <th className="text-right px-4 py-2">Rezerve</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {filtered.map((r) => (
+                <tr
+                  key={r.iwasku}
+                  onClick={() => onSelect(r.iwasku, r.productName)}
+                  className="text-gray-700 cursor-pointer hover:bg-blue-50"
+                >
+                  <td className="px-4 py-2 font-mono text-xs">{r.iwasku}</td>
+                  <td className="px-4 py-2 text-xs truncate max-w-[320px]">
+                    {r.productName ?? <span className="text-gray-400">—</span>}
+                    {r.category && <span className="ml-2 text-[10px] text-gray-400">{r.category}</span>}
+                  </td>
+                  <td className="px-4 py-2 text-right text-sm">
+                    {r.looseQty}
+                    {r.looseShelves > 0 && (
+                      <span className="ml-1 text-[10px] text-gray-400">/{r.looseShelves} raf</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2 text-right text-sm">
+                    {r.boxQty}
+                    {r.boxCount > 0 && (
+                      <span className="ml-1 text-[10px] text-gray-400">/{r.boxCount} koli</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2 text-right font-semibold text-gray-900">{r.totalQty}</td>
+                  <td className="px-4 py-2 text-right text-amber-600">
+                    {r.totalReservedQty > 0 ? r.totalReservedQty : ''}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
