@@ -1,15 +1,15 @@
 /**
- * Raf Detay Sayfası — read-only v1.
- * Rafın içindeki tekil ürünler + koliler + son hareketler.
- * Yazma operasyonları (Transfer, Aç, Parçala, Manuel Koli) sonraki commit'lerde gelecek.
+ * Raf Detay Sayfası — rafın içindeki tekil ürünler + koliler + son hareketler.
+ * Tekil ve koli satırlarında Transfer butonu (yetkili kullanıcılar için).
  */
 
 'use client';
 
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Package, Box, History, AlertCircle } from 'lucide-react';
+import { ChevronLeft, Package, Box, History, AlertCircle, ArrowRightLeft } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { TransferDialog, type TransferSource } from '@/components/wms/TransferDialog';
 
 const logger = createLogger('RafDetay');
 
@@ -80,22 +80,31 @@ export default function RafDetayPage({
   const [data, setData] = useState<RafData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [transferSource, setTransferSource] = useState<TransferSource | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     fetch(`/api/depolar/${code}/raflar/${encodeURIComponent(shelfCode)}`, {
       credentials: 'include',
     })
       .then((r) => r.json())
       .then((d) => {
+        if (cancelled) return;
         if (d.success) setData(d.data);
         else setError(d.error || 'Raf yüklenemedi');
       })
       .catch((e) => {
+        if (cancelled) return;
         logger.error('Raf detay fetch error', e);
         setError('Sunucuya bağlanılamadı');
       })
-      .finally(() => setLoading(false));
-  }, [code, shelfCode]);
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [code, shelfCode, refreshKey]);
+
+  const canTransfer = data && ['OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role);
+  const handleTransferSuccess = () => setRefreshKey((k) => k + 1);
 
   if (loading) return <div className="text-center py-12 text-gray-500">Yükleniyor…</div>;
   if (error)
@@ -160,6 +169,7 @@ export default function RafDetayPage({
                   <th className="text-right px-4 py-2">Adet</th>
                   <th className="text-right px-4 py-2">Rezerve</th>
                   <th className="text-right px-4 py-2">Kullanılabilir</th>
+                  {canTransfer && <th className="text-right px-4 py-2 w-24">İşlem</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -175,6 +185,31 @@ export default function RafDetayPage({
                     <td className="px-4 py-2 text-right font-semibold text-gray-900">
                       {s.availableQty}
                     </td>
+                    {canTransfer && (
+                      <td className="px-4 py-2 text-right">
+                        {s.availableQty > 0 ? (
+                          <button
+                            onClick={() =>
+                              setTransferSource({
+                                type: 'stock',
+                                id: s.id,
+                                iwasku: s.iwasku,
+                                productName: s.productName,
+                                available: s.availableQty,
+                                fromShelfId: data.shelf.id,
+                                fromShelfCode: data.shelf.code,
+                              })
+                            }
+                            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-blue-700 bg-blue-50 hover:bg-blue-100 rounded"
+                            title="Transfer"
+                          >
+                            <ArrowRightLeft className="w-3 h-3" /> Transfer
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-gray-400">—</span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -207,6 +242,7 @@ export default function RafDetayPage({
                   <th className="text-left px-4 py-2">Hedef</th>
                   <th className="text-right px-4 py-2">Adet</th>
                   <th className="text-left px-4 py-2">Durum</th>
+                  {canTransfer && <th className="text-right px-4 py-2 w-24">İşlem</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -224,6 +260,32 @@ export default function RafDetayPage({
                         {b.status}
                       </span>
                     </td>
+                    {canTransfer && (
+                      <td className="px-4 py-2 text-right">
+                        {b.status !== 'EMPTY' && b.reservedQty === 0 ? (
+                          <button
+                            onClick={() =>
+                              setTransferSource({
+                                type: 'box',
+                                id: b.id,
+                                iwasku: b.iwasku,
+                                productName: b.productName,
+                                available: b.quantity,
+                                boxNumber: b.boxNumber,
+                                fromShelfId: data.shelf.id,
+                                fromShelfCode: data.shelf.code,
+                              })
+                            }
+                            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-blue-700 bg-blue-50 hover:bg-blue-100 rounded"
+                            title="Transfer"
+                          >
+                            <ArrowRightLeft className="w-3 h-3" /> Transfer
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-gray-400">—</span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -281,6 +343,15 @@ export default function RafDetayPage({
           </div>
         )}
       </div>
+
+      {/* Transfer modal */}
+      <TransferDialog
+        isOpen={!!transferSource}
+        warehouseCode={code}
+        source={transferSource}
+        onClose={() => setTransferSource(null)}
+        onSuccess={handleTransferSuccess}
+      />
     </div>
   );
 }
