@@ -27,7 +27,7 @@ interface Route {
   marketplace: Marketplace;
 }
 
-const TABS = ['US', 'US_SHOWROOM', 'UK', 'EU', 'NL', 'AU', 'ZA'];
+const TABS = ['US', 'UK', 'EU', 'NL', 'AU', 'ZA'];
 const METHODS = ['sea', 'road', 'air'];
 const methodLabels: Record<string, string> = { sea: '🚢 Deniz', road: '🚛 Karayolu', air: '✈️ Hava' };
 

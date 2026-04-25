@@ -54,7 +54,7 @@ export async function requireShipmentView(
     return {
       user: auth.user,
       shipmentRole: 'MANAGER',
-      accessibleTabs: ['US', 'US_SHOWROOM', 'UK', 'EU', 'NL', 'AU', 'ZA'],
+      accessibleTabs: ['US', 'UK', 'EU', 'NL', 'AU', 'ZA'],
     };
   }
 

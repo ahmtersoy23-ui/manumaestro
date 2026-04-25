@@ -518,7 +518,7 @@ export default function ShipmentDetailPage() {
     if ((await res.json()).success) await Promise.all([fetchBoxes(), fetchShipment()]);
   };
 
-  const handleSetDestination = async (destination: 'FBA' | 'DEPO') => {
+  const handleSetDestination = async (destination: 'FBA' | 'DEPO' | 'SHOWROOM') => {
     const ids = [...selectedBoxIds];
     if (ids.length === 0) return;
     setSettingDest(true);
@@ -535,7 +535,7 @@ export default function ShipmentDetailPage() {
     } catch { /* */ } finally { setSettingDest(false); }
   };
 
-  const handleBulkFbaSubmit = async (dest: 'FBA' | 'DEPO') => {
+  const handleBulkFbaSubmit = async (dest: 'FBA' | 'DEPO' | 'SHOWROOM') => {
     const numbers = bulkFbaText.split(/[\n,;\t]+/).map(s => s.trim()).filter(Boolean);
     if (numbers.length === 0) return;
     setSettingDest(true); setBulkFbaResult(null);
@@ -1400,6 +1400,10 @@ export default function ShipmentDetailPage() {
                   className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 disabled:opacity-50">
                   {selectedBoxIds.size} koli → Depo
                 </button>
+                <button onClick={() => handleSetDestination('SHOWROOM')} disabled={settingDest}
+                  className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 disabled:opacity-50">
+                  {selectedBoxIds.size} koli → Showroom
+                </button>
               </>
             )}
           </div>
@@ -1428,6 +1432,10 @@ export default function ShipmentDetailPage() {
                 <button onClick={() => handleBulkFbaSubmit('DEPO')} disabled={settingDest || !bulkFbaText.trim()}
                   className="px-4 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 disabled:opacity-50 flex items-center gap-2">
                   Depo Olarak İşaretle
+                </button>
+                <button onClick={() => handleBulkFbaSubmit('SHOWROOM')} disabled={settingDest || !bulkFbaText.trim()}
+                  className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2">
+                  Showroom Olarak İşaretle
                 </button>
               </div>
               {bulkFbaResult && (

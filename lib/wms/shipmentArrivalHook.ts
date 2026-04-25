@@ -1,27 +1,35 @@
 /**
  * Sevkiyat varış hook'u — Shipment.status DELIVERED'a geçince
- * sevkiyatın boxes'ı hedef deponun POOL rafına ShelfBox(SEALED) olarak yazar.
+ * sevkiyatın boxes'ı KOLİ BAZINDA hedef deponun POOL rafına yansır.
  *
- * destinationTab → warehouseCode mapping:
- *   US → NJ
- *   US_SHOWROOM → SHOWROOM
- *   diğer (UK/EU/NL/AU/ZA) → raf yansıması atlanır (eski akış aynı)
+ * Hedef seçimi: destinationTab + ShipmentBox.destination kombinasyonu
+ *   destinationTab='US' AND box.destination='SHOWROOM' → SHOWROOM POOL
+ *   destinationTab='US' AND box.destination ∈ {FBA, DEPO} → NJ POOL
+ *   diğer destinationTab (UK/EU/...) → raf yansıması atlanır (eski akış)
  *
  * Idempotent: aynı shipmentBoxId'li ShelfBox zaten varsa atlar.
- * Tüm operasyon çağrıyı yapan transaction'ın içinde olmalı.
+ * Çağrıyı yapan transaction'ın içinde olmalı.
  */
 
 import type { Prisma } from '@prisma/client';
 
-const DESTINATION_TO_WAREHOUSE: Record<string, string> = {
-  US: 'NJ',
-  US_SHOWROOM: 'SHOWROOM',
-};
-
 export interface ArrivalResult {
-  warehouseCode: string | null;
+  warehouseDistribution: Record<string, number>; // warehouseCode → boxes
   boxesCreated: number;
   boxesSkipped: number;
+}
+
+/**
+ * Bir koli'nin gideceği depoyu belirler.
+ * Mapping yoksa null döner (raf yansıması atlanır).
+ */
+function resolveTargetWarehouse(destinationTab: string, boxDestination: string): string | null {
+  if (destinationTab === 'US') {
+    if (boxDestination === 'SHOWROOM') return 'SHOWROOM';
+    return 'NJ'; // FBA + DEPO → NJ
+  }
+  // Diğer destinasyonlar şimdilik raf takibinde değil
+  return null;
 }
 
 export async function processShipmentArrival(
@@ -35,35 +43,40 @@ export async function processShipmentArrival(
   });
   if (!shipment) throw new Error('Sevkiyat bulunamadı');
 
-  const warehouseCode = DESTINATION_TO_WAREHOUSE[shipment.destinationTab];
-  if (!warehouseCode) {
-    // Mapping yok → eski akış (raf yansıması atlanır)
-    return { warehouseCode: null, boxesCreated: 0, boxesSkipped: shipment.boxes.length };
-  }
+  // POOL raf cache (depo başına bir kere fetch)
+  const poolCache = new Map<string, string>(); // warehouseCode → poolId
+  const getPool = async (warehouseCode: string): Promise<string> => {
+    const cached = poolCache.get(warehouseCode);
+    if (cached) return cached;
+    const wh = await tx.warehouse.findUnique({ where: { code: warehouseCode } });
+    if (!wh || !wh.isActive) {
+      throw new Error(`Hedef depo (${warehouseCode}) yok veya pasif — DELIVERED bloklandı`);
+    }
+    const pool = await tx.shelf.findFirst({
+      where: { warehouseCode, shelfType: 'POOL', isActive: true },
+    });
+    if (!pool) throw new Error(`${warehouseCode} deposunda POOL raf yok — önce yaratın`);
+    poolCache.set(warehouseCode, pool.id);
+    return pool.id;
+  };
 
-  // Depo + POOL rafı zorunlu
-  const warehouse = await tx.warehouse.findUnique({ where: { code: warehouseCode } });
-  if (!warehouse || !warehouse.isActive) {
-    throw new Error(`Hedef depo (${warehouseCode}) yok veya pasif — DELIVERED bloklandı`);
-  }
-  const pool = await tx.shelf.findFirst({
-    where: { warehouseCode, shelfType: 'POOL', isActive: true },
-  });
-  if (!pool) {
-    throw new Error(`${warehouseCode} deposunda POOL raf yok — önce yaratın`);
-  }
-
+  const distribution: Record<string, number> = {};
   let boxesCreated = 0;
   let boxesSkipped = 0;
 
   for (const box of shipment.boxes) {
+    const targetWh = resolveTargetWarehouse(shipment.destinationTab, box.destination);
+    if (!targetWh) {
+      boxesSkipped++;
+      continue;
+    }
     if (!box.iwasku) {
-      // iwasku yoksa raf yansıması anlamsız (denormalize edilmiş veri)
+      // iwasku yoksa raf yansıması anlamsız (denormalize edilmiş veri eksik)
       boxesSkipped++;
       continue;
     }
 
-    // Idempotency: aynı ShipmentBox referansı varsa atla
+    // Idempotency
     const existing = await tx.shelfBox.findUnique({
       where: { shipmentBoxId: box.id },
     });
@@ -72,10 +85,12 @@ export async function processShipmentArrival(
       continue;
     }
 
+    const poolId = await getPool(targetWh);
+
     const shelfBox = await tx.shelfBox.create({
       data: {
-        warehouseCode,
-        shelfId: pool.id,
+        warehouseCode: targetWh,
+        shelfId: poolId,
         shipmentBoxId: box.id,
         boxNumber: box.boxNumber,
         iwasku: box.iwasku,
@@ -89,21 +104,22 @@ export async function processShipmentArrival(
 
     await tx.shelfMovement.create({
       data: {
-        warehouseCode,
+        warehouseCode: targetWh,
         type: 'INBOUND_FROM_SHIPMENT',
-        toShelfId: pool.id,
+        toShelfId: poolId,
         iwasku: box.iwasku,
         quantity: box.quantity,
         shelfBoxId: shelfBox.id,
         refType: 'SHIPMENT',
         refId: shipmentId,
         userId,
-        notes: `Sevkiyat ${shipment.name} varışı — koli ${box.boxNumber}`,
+        notes: `Sevkiyat ${shipment.name} varışı — koli ${box.boxNumber} (${box.destination})`,
       },
     });
 
+    distribution[targetWh] = (distribution[targetWh] ?? 0) + 1;
     boxesCreated++;
   }
 
-  return { warehouseCode, boxesCreated, boxesSkipped };
+  return { warehouseDistribution: distribution, boxesCreated, boxesSkipped };
 }

@@ -183,9 +183,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     });
   }
 
-  // DELIVERED'a geçiş: WMS varış hook'u — boxes hedef deponun POOL rafına SEALED olarak yansır.
+  // DELIVERED'a geçiş: WMS varış hook'u — koli'ler ShipmentBox.destination'a göre
+  // hedef deponun POOL rafına SEALED olarak yansır (US+SHOWROOM→SHOWROOM, US+FBA/DEPO→NJ).
   // Idempotent: aynı sevkiyat ikinci kez DELIVERED yapılırsa atlar.
-  let arrivalSummary: { warehouseCode: string | null; boxesCreated: number; boxesSkipped: number } | null = null;
+  let arrivalSummary: import('@/lib/wms/shipmentArrivalHook').ArrivalResult | null = null;
   if (data.status === 'DELIVERED' && shipment.status !== 'DELIVERED') {
     arrivalSummary = await prisma.$transaction(async (tx) => {
       const { processShipmentArrival } = await import('@/lib/wms/shipmentArrivalHook');

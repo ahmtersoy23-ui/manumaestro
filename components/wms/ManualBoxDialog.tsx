@@ -44,7 +44,7 @@ export function ManualBoxDialog({ isOpen, warehouseCode, onClose, onSuccess }: P
 
   const [quantity, setQuantity] = useState<number | ''>('');
   const [marketplaceCode, setMarketplaceCode] = useState('');
-  const [destination, setDestination] = useState<'DEPO' | 'FBA'>('DEPO');
+  const [destination, setDestination] = useState<'DEPO' | 'FBA' | 'SHOWROOM'>('DEPO');
   const [boxNumber, setBoxNumber] = useState('');
   const [targetShelfId, setTargetShelfId] = useState('');
 
@@ -219,7 +219,7 @@ export function ManualBoxDialog({ isOpen, warehouseCode, onClose, onSuccess }: P
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Hedef</label>
               <div className="flex gap-1">
-                {(['DEPO', 'FBA'] as const).map((d) => (
+                {(['DEPO', 'FBA', 'SHOWROOM'] as const).map((d) => (
                   <button
                     key={d}
                     type="button"

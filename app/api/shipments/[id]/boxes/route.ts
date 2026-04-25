@@ -76,7 +76,7 @@ const CreateBoxSchema = z.object({
   productName: z.string().optional().nullable(),
   productCategory: z.string().optional().nullable(),
   marketplaceCode: z.string().optional().nullable(),
-  destination: z.enum(['FBA', 'DEPO']).optional().default('DEPO'),
+  destination: z.enum(['FBA', 'DEPO', 'SHOWROOM']).optional().default('DEPO'),
   quantity: z.number().int().positive().default(1),
   width: z.number().positive().optional().nullable(),
   height: z.number().positive().optional().nullable(),
@@ -207,7 +207,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
 const SetDestinationSchema = z.object({
   boxIds: z.array(z.string().uuid()).optional(),
   boxNumbers: z.array(z.string()).optional(), // Koli no listesi ile toplu islem
-  destination: z.enum(['FBA', 'DEPO']),
+  destination: z.enum(['FBA', 'DEPO', 'SHOWROOM']),
 });
 
 export async function PATCH(request: NextRequest, { params }: Params) {

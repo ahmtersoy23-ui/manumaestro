@@ -12,7 +12,7 @@ import { z } from 'zod';
 
 const CreateShipmentSchema = z.object({
   name: z.string().min(1).max(100),
-  destinationTab: z.enum(['US', 'US_SHOWROOM', 'UK', 'EU', 'NL', 'AU', 'ZA']),
+  destinationTab: z.enum(['US', 'UK', 'EU', 'NL', 'AU', 'ZA']),
   shippingMethod: z.enum(['sea', 'road', 'air']),
   plannedDate: z.string().datetime().optional(),
   etaDate: z.string().datetime().optional(),

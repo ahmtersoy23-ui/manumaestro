@@ -96,7 +96,7 @@ export async function getAccessibleDestinations(
   userId: string,
   userRole: string
 ): Promise<string[]> {
-  if (userRole === 'admin') return ['US', 'US_SHOWROOM', 'UK', 'EU', 'NL', 'AU', 'ZA'];
+  if (userRole === 'admin') return ['US', 'UK', 'EU', 'NL', 'AU', 'ZA'];
 
   const permissions = await prisma.userShipmentPermission.findMany({
     where: { userId },
@@ -104,6 +104,6 @@ export async function getAccessibleDestinations(
   });
 
   const tabs = permissions.map(p => p.destinationTab);
-  if (tabs.includes('*')) return ['US', 'US_SHOWROOM', 'UK', 'EU', 'NL', 'AU', 'ZA'];
+  if (tabs.includes('*')) return ['US', 'UK', 'EU', 'NL', 'AU', 'ZA'];
   return [...new Set(tabs)];
 }
