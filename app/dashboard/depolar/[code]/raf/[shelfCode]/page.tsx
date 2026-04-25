@@ -7,9 +7,10 @@
 
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Package, Box, History, AlertCircle, ArrowRightLeft } from 'lucide-react';
+import { ChevronLeft, Package, Box, History, AlertCircle, ArrowRightLeft, PackageOpen, Scissors } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { TransferDialog, type TransferSource } from '@/components/wms/TransferDialog';
+import { BreakBoxDialog, type BreakBoxSource } from '@/components/wms/BreakBoxDialog';
 
 const logger = createLogger('RafDetay');
 
@@ -82,6 +83,8 @@ export default function RafDetayPage({
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [transferSource, setTransferSource] = useState<TransferSource | null>(null);
+  const [breakSource, setBreakSource] = useState<BreakBoxSource | null>(null);
+  const [openingBoxId, setOpeningBoxId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,7 +107,30 @@ export default function RafDetayPage({
   }, [code, shelfCode, refreshKey]);
 
   const canTransfer = data && ['OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role);
-  const handleTransferSuccess = () => setRefreshKey((k) => k + 1);
+  const canBoxOps = data && ['OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role);
+  const handleSuccess = () => setRefreshKey((k) => k + 1);
+
+  async function openBox(boxId: string, boxNumber: string) {
+    if (!confirm(`Koli ${boxNumber} tamamen açılacak. Onaylıyor musun?`)) return;
+    setOpeningBoxId(boxId);
+    try {
+      const res = await fetch(`/api/depolar/${code}/koli/${boxId}/open`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        alert(data.error || 'Koli açılamadı');
+        return;
+      }
+      handleSuccess();
+    } catch (e) {
+      logger.error('Open box hatası', e);
+      alert('Sunucu hatası');
+    } finally {
+      setOpeningBoxId(null);
+    }
+  }
 
   if (loading) return <div className="text-center py-12 text-gray-500">Yükleniyor…</div>;
   if (error)
@@ -263,24 +289,55 @@ export default function RafDetayPage({
                     {canTransfer && (
                       <td className="px-4 py-2 text-right">
                         {b.status !== 'EMPTY' && b.reservedQty === 0 ? (
-                          <button
-                            onClick={() =>
-                              setTransferSource({
-                                type: 'box',
-                                id: b.id,
-                                iwasku: b.iwasku,
-                                productName: b.productName,
-                                available: b.quantity,
-                                boxNumber: b.boxNumber,
-                                fromShelfId: data.shelf.id,
-                                fromShelfCode: data.shelf.code,
-                              })
-                            }
-                            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-blue-700 bg-blue-50 hover:bg-blue-100 rounded"
-                            title="Transfer"
-                          >
-                            <ArrowRightLeft className="w-3 h-3" /> Transfer
-                          </button>
+                          <div className="inline-flex flex-wrap gap-1 justify-end">
+                            <button
+                              onClick={() =>
+                                setTransferSource({
+                                  type: 'box',
+                                  id: b.id,
+                                  iwasku: b.iwasku,
+                                  productName: b.productName,
+                                  available: b.quantity,
+                                  boxNumber: b.boxNumber,
+                                  fromShelfId: data.shelf.id,
+                                  fromShelfCode: data.shelf.code,
+                                })
+                              }
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-blue-700 bg-blue-50 hover:bg-blue-100 rounded"
+                              title="Transfer"
+                            >
+                              <ArrowRightLeft className="w-3 h-3" /> Transfer
+                            </button>
+                            {canBoxOps && (
+                              <>
+                                <button
+                                  onClick={() =>
+                                    setBreakSource({
+                                      id: b.id,
+                                      boxNumber: b.boxNumber,
+                                      iwasku: b.iwasku,
+                                      productName: b.productName,
+                                      available: b.availableQty,
+                                      reservedQty: b.reservedQty,
+                                      shelfCode: data.shelf.code,
+                                    })
+                                  }
+                                  className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-amber-700 bg-amber-50 hover:bg-amber-100 rounded"
+                                  title="Kısmi al / parçala"
+                                >
+                                  <Scissors className="w-3 h-3" /> Parçala
+                                </button>
+                                <button
+                                  onClick={() => openBox(b.id, b.boxNumber)}
+                                  disabled={openingBoxId === b.id}
+                                  className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-green-700 bg-green-50 hover:bg-green-100 rounded disabled:opacity-50"
+                                  title="Tüm koliyi aç (içeriği rafa boşalt)"
+                                >
+                                  <PackageOpen className="w-3 h-3" /> {openingBoxId === b.id ? '...' : 'Aç'}
+                                </button>
+                              </>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-[11px] text-gray-400">—</span>
                         )}
@@ -350,7 +407,16 @@ export default function RafDetayPage({
         warehouseCode={code}
         source={transferSource}
         onClose={() => setTransferSource(null)}
-        onSuccess={handleTransferSuccess}
+        onSuccess={handleSuccess}
+      />
+
+      {/* Parçala modal */}
+      <BreakBoxDialog
+        isOpen={!!breakSource}
+        warehouseCode={code}
+        source={breakSource}
+        onClose={() => setBreakSource(null)}
+        onSuccess={handleSuccess}
       />
     </div>
   );
