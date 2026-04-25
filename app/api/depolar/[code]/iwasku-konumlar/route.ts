@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
+import { getProductsByIwasku } from '@/lib/products/lookup';
 
 export async function GET(
   request: NextRequest,
@@ -41,10 +42,15 @@ export async function GET(
     }),
   ]);
 
+  const productMap = await getProductsByIwasku([iwasku]);
+  const info = productMap.get(iwasku);
+
   return NextResponse.json({
     success: true,
     data: {
       iwasku,
+      asin: info?.asin ?? null,
+      productName: info?.name ?? null,
       stocks: stocks
         .filter((s) => s.quantity - s.reservedQty > 0)
         .map((s) => ({

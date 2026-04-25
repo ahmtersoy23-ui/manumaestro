@@ -33,6 +33,8 @@ interface BoxLoc {
 }
 interface Locations {
   iwasku: string;
+  asin: string | null;
+  productName: string | null;
   stocks: StockLoc[];
   boxes: BoxLoc[];
 }
@@ -89,9 +91,16 @@ export function IwaskuLocationsModal({ isOpen, warehouseCode, iwasku, productNam
           <div>
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <span className="font-mono text-sm">{iwasku}</span>
+              {visibleData?.asin && (
+                <span className="text-[10px] font-mono text-gray-500 px-1.5 py-0.5 bg-gray-100 rounded">
+                  ASIN: {visibleData.asin}
+                </span>
+              )}
               <span className="text-xs text-gray-500 font-normal">@ {warehouseCode}</span>
             </h2>
-            {productName && <p className="text-xs text-gray-600 mt-0.5">{productName}</p>}
+            {(productName || visibleData?.productName) && (
+              <p className="text-xs text-gray-600 mt-0.5">{productName ?? visibleData?.productName}</p>
+            )}
           </div>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
             <X className="w-4 h-4" />

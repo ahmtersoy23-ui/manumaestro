@@ -1,7 +1,8 @@
 /**
  * GET /api/depolar/[code]/iwasku-aggregate
- * Bir deponun tüm iwasku'larını aggregate olarak döner — Dashboard tablosu için.
- * Her iwasku için: tekil toplam, raf sayısı, koli toplam, koli sayısı, toplam adet.
+ * Bir deponun (iwasku, fnsku) BAZLI aggregate'ı — Dashboard tablosu için.
+ * Aynı iwasku farklı FNSKU'larla listelenmişse AYRI satır olarak görünür.
+ * ShelfStock'un FNSKU'su yok → fnsku=null satırlarda gösterilir.
  *
  * Sadece SHELF_PRIMARY depolar (NJ, SHOWROOM) için anlamlı.
  */
@@ -34,16 +35,16 @@ export async function GET(
       _count: true,
     }),
     prisma.shelfBox.groupBy({
-      by: ['iwasku'],
+      by: ['iwasku', 'fnsku'],
       where: { warehouseCode: upperCode, status: { not: 'EMPTY' } },
       _sum: { quantity: true, reservedQty: true },
       _count: true,
     }),
   ]);
 
-  // İki kaynaktan iwasku merge
   type Row = {
     iwasku: string;
+    fnsku: string | null;
     looseQty: number;
     looseReservedQty: number;
     looseShelves: number;
@@ -52,40 +53,57 @@ export async function GET(
     boxCount: number;
   };
   const map = new Map<string, Row>();
+  const keyOf = (iwasku: string, fnsku: string | null) => `${iwasku}|${fnsku ?? ''}`;
 
+  // ShelfStock → fnsku=null satırlar (loose ürünlerin FNSKU bilgisi yok)
   for (const s of stockAgg) {
-    const cur = map.get(s.iwasku) ?? {
-      iwasku: s.iwasku, looseQty: 0, looseReservedQty: 0, looseShelves: 0,
+    const k = keyOf(s.iwasku, null);
+    const cur = map.get(k) ?? {
+      iwasku: s.iwasku, fnsku: null,
+      looseQty: 0, looseReservedQty: 0, looseShelves: 0,
       boxQty: 0, boxReservedQty: 0, boxCount: 0,
     };
     cur.looseQty = s._sum.quantity ?? 0;
     cur.looseReservedQty = s._sum.reservedQty ?? 0;
     cur.looseShelves = s._count;
-    map.set(s.iwasku, cur);
+    map.set(k, cur);
   }
 
+  // ShelfBox (iwasku, fnsku) → kendi satırı
   for (const b of boxAgg) {
-    const cur = map.get(b.iwasku) ?? {
-      iwasku: b.iwasku, looseQty: 0, looseReservedQty: 0, looseShelves: 0,
+    const k = keyOf(b.iwasku, b.fnsku);
+    const cur = map.get(k) ?? {
+      iwasku: b.iwasku, fnsku: b.fnsku,
+      looseQty: 0, looseReservedQty: 0, looseShelves: 0,
       boxQty: 0, boxReservedQty: 0, boxCount: 0,
     };
     cur.boxQty = b._sum.quantity ?? 0;
     cur.boxReservedQty = b._sum.reservedQty ?? 0;
     cur.boxCount = b._count;
-    map.set(b.iwasku, cur);
+    map.set(k, cur);
   }
 
-  const iwaskus = Array.from(map.keys());
+  const iwaskus = Array.from(new Set(Array.from(map.values()).map((r) => r.iwasku)));
   const productMap = await getProductsByIwasku(iwaskus);
 
-  const rows = Array.from(map.values()).map((r) => ({
-    ...r,
-    totalQty: r.looseQty + r.boxQty,
-    totalReservedQty: r.looseReservedQty + r.boxReservedQty,
-    productName: productMap.get(r.iwasku)?.name ?? null,
-    category: productMap.get(r.iwasku)?.category ?? null,
-  }));
-  rows.sort((a, b) => b.totalQty - a.totalQty);
+  const rows = Array.from(map.values()).map((r) => {
+    const info = productMap.get(r.iwasku);
+    return {
+      ...r,
+      totalQty: r.looseQty + r.boxQty,
+      totalReservedQty: r.looseReservedQty + r.boxReservedQty,
+      productName: info?.name ?? null,
+      category: info?.category ?? null,
+      asin: info?.asin ?? null,
+    };
+  });
+  // Sıralama: iwasku → fnsku (null önce), totalQty desc'e değil iwasku gruplarını korur
+  rows.sort((a, b) => {
+    if (a.iwasku !== b.iwasku) return a.iwasku.localeCompare(b.iwasku);
+    if (a.fnsku === null && b.fnsku !== null) return -1;
+    if (a.fnsku !== null && b.fnsku === null) return 1;
+    return (a.fnsku ?? '').localeCompare(b.fnsku ?? '');
+  });
 
   return NextResponse.json({
     success: true,

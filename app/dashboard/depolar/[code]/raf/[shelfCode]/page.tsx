@@ -19,6 +19,7 @@ interface ShelfStockRow {
   iwasku: string;
   productName: string | null;
   category: string | null;
+  asin: string | null;
   quantity: number;
   reservedQty: number;
   availableQty: number;
@@ -29,6 +30,7 @@ interface ShelfBoxRow {
   iwasku: string;
   productName: string | null;
   category: string | null;
+  asin: string | null;
   fnsku: string | null;
   marketplaceCode: string | null;
   destination: string;
@@ -219,6 +221,8 @@ export default function RafDetayPage({
               <thead className="bg-gray-50 text-xs text-gray-500">
                 <tr>
                   <th className="text-left px-4 py-2">SKU</th>
+                  <th className="text-left px-4 py-2">FNSKU</th>
+                  <th className="text-left px-4 py-2">ASIN</th>
                   <th className="text-left px-4 py-2">Ürün</th>
                   <th className="text-left px-4 py-2">Kategori</th>
                   <th className="text-right px-4 py-2">Adet</th>
@@ -231,7 +235,9 @@ export default function RafDetayPage({
                 {data.stocks.map((s) => (
                   <tr key={s.id} className="text-gray-700">
                     <td className="px-4 py-2 font-mono text-xs">{s.iwasku}</td>
-                    <td className="px-4 py-2 text-xs truncate max-w-[280px]">{s.productName ?? '—'}</td>
+                    <td className="px-4 py-2 font-mono text-[11px] text-gray-400">—</td>
+                    <td className="px-4 py-2 font-mono text-[11px] text-gray-500">{s.asin ?? '—'}</td>
+                    <td className="px-4 py-2 text-xs truncate max-w-[260px]">{s.productName ?? '—'}</td>
                     <td className="px-4 py-2 text-xs text-gray-500">{s.category ?? '—'}</td>
                     <td className="px-4 py-2 text-right font-medium">{s.quantity}</td>
                     <td className="px-4 py-2 text-right text-amber-600">
@@ -291,8 +297,9 @@ export default function RafDetayPage({
                 <tr>
                   <th className="text-left px-4 py-2">Koli No</th>
                   <th className="text-left px-4 py-2">SKU</th>
-                  <th className="text-left px-4 py-2">Ürün</th>
                   <th className="text-left px-4 py-2">FNSKU</th>
+                  <th className="text-left px-4 py-2">ASIN</th>
+                  <th className="text-left px-4 py-2">Ürün</th>
                   <th className="text-left px-4 py-2">MP</th>
                   <th className="text-left px-4 py-2">Hedef</th>
                   <th className="text-right px-4 py-2">Adet</th>
@@ -305,8 +312,9 @@ export default function RafDetayPage({
                   <tr key={b.id} className="text-gray-700">
                     <td className="px-4 py-2 font-mono text-xs">{b.boxNumber}</td>
                     <td className="px-4 py-2 font-mono text-xs">{b.iwasku}</td>
-                    <td className="px-4 py-2 text-xs truncate max-w-[240px]">{b.productName ?? '—'}</td>
                     <td className="px-4 py-2 font-mono text-[10px] text-gray-500">{b.fnsku ?? '—'}</td>
+                    <td className="px-4 py-2 font-mono text-[10px] text-gray-500">{b.asin ?? '—'}</td>
+                    <td className="px-4 py-2 text-xs truncate max-w-[220px]">{b.productName ?? '—'}</td>
                     <td className="px-4 py-2 text-[11px] text-gray-500">{b.marketplaceCode ?? '—'}</td>
                     <td className="px-4 py-2 text-[11px] text-gray-500">{b.destination}</td>
                     <td className="px-4 py-2 text-right font-medium">{b.quantity}</td>

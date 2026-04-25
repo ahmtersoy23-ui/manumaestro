@@ -36,6 +36,8 @@ const UNDOABLE_TYPES = new Set([
 
 interface AggregateRow {
   iwasku: string;
+  fnsku: string | null;
+  asin: string | null;
   productName: string | null;
   category: string | null;
   looseQty: number;
@@ -330,6 +332,8 @@ function IwaskuAggregateTable({ rows, searchTerm, onSelect }: IwaskuAggregateTab
     return rows.filter(
       (r) =>
         r.iwasku.toLowerCase().includes(q) ||
+        (r.fnsku ?? '').toLowerCase().includes(q) ||
+        (r.asin ?? '').toLowerCase().includes(q) ||
         (r.productName ?? '').toLowerCase().includes(q) ||
         (r.category ?? '').toLowerCase().includes(q)
     );
@@ -359,7 +363,9 @@ function IwaskuAggregateTable({ rows, searchTerm, onSelect }: IwaskuAggregateTab
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500 sticky top-0">
               <tr>
-                <th className="text-left px-4 py-2">SKU</th>
+                <th className="text-left px-4 py-2">SKU (iwasku)</th>
+                <th className="text-left px-4 py-2">FNSKU</th>
+                <th className="text-left px-4 py-2">ASIN</th>
                 <th className="text-left px-4 py-2">Ürün</th>
                 <th className="text-right px-4 py-2">Tekil</th>
                 <th className="text-right px-4 py-2">Koli</th>
@@ -368,14 +374,20 @@ function IwaskuAggregateTable({ rows, searchTerm, onSelect }: IwaskuAggregateTab
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filtered.map((r) => (
+              {filtered.map((r, idx) => (
                 <tr
-                  key={r.iwasku}
+                  key={`${r.iwasku}|${r.fnsku ?? ''}|${idx}`}
                   onClick={() => onSelect(r.iwasku, r.productName)}
                   className="text-gray-700 cursor-pointer hover:bg-blue-50"
                 >
                   <td className="px-4 py-2 font-mono text-xs">{r.iwasku}</td>
-                  <td className="px-4 py-2 text-xs truncate max-w-[320px]">
+                  <td className="px-4 py-2 font-mono text-[11px] text-gray-600">
+                    {r.fnsku ?? <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-4 py-2 font-mono text-[11px] text-gray-600">
+                    {r.asin ?? <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-4 py-2 text-xs truncate max-w-[280px]">
                     {r.productName ?? <span className="text-gray-400">—</span>}
                     {r.category && <span className="ml-2 text-[10px] text-gray-400">{r.category}</span>}
                   </td>
