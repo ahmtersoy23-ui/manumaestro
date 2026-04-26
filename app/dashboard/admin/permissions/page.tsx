@@ -33,7 +33,7 @@ type CatPermMap = Map<string, { canView: boolean; canEdit: boolean }>;
 
 export default function AdminPermissionsPage() {
   const { role } = useAuth();
-  const [activeTab, setActiveTab] = useState<'marketplace' | 'category' | 'stock' | 'shipment'>('marketplace');
+  const [activeTab, setActiveTab] = useState<'marketplace' | 'category' | 'stock' | 'shelf' | 'shipment'>('marketplace');
 
   // Marketplace tab state
   const [users, setUsers] = useState<OperatorUser[]>([]);
@@ -408,6 +408,16 @@ export default function AdminPermissionsPage() {
             Stok İzinleri
           </button>
           <button
+            onClick={() => setActiveTab('shelf')}
+            className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'shelf'
+                ? 'border-purple-600 text-purple-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Depo Rolleri
+          </button>
+          <button
             onClick={() => setActiveTab('shipment')}
             className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
               activeTab === 'shipment'
@@ -697,10 +707,163 @@ export default function AdminPermissionsPage() {
         </>
       )}
 
+      {/* Shelf Tab */}
+      {activeTab === 'shelf' && <ShelfPermissionsSection />}
+
       {/* Shipment Tab */}
       {activeTab === 'shipment' && (
         <ShipmentPermissionsSection availableUsers={users.map(u => ({ id: u.id, name: u.name, email: u.email }))} />
       )}
+    </div>
+  );
+}
+
+// --- Depo Rolleri (UserShelfPermission) ---
+const SHELF_ROLES = ['VIEWER', 'PACKER', 'OPERATOR', 'MANAGER', 'ADMIN'] as const;
+const SHELF_ROLE_LABELS: Record<string, { label: string; color: string }> = {
+  VIEWER:   { label: 'Viewer',   color: 'bg-gray-100 text-gray-600' },
+  PACKER:   { label: 'Packer',   color: 'bg-orange-100 text-orange-700' },
+  OPERATOR: { label: 'Operator', color: 'bg-blue-100 text-blue-700' },
+  MANAGER:  { label: 'Manager',  color: 'bg-purple-100 text-purple-700' },
+  ADMIN:    { label: 'Admin',    color: 'bg-red-100 text-red-700' },
+};
+
+interface ShelfUser {
+  id: string;
+  name: string;
+  email: string;
+  permissions: Record<string, string>; // warehouseCode → role
+}
+
+function ShelfPermissionsSection() {
+  const [users, setUsers] = useState<ShelfUser[]>([]);
+  const [warehouses, setWarehouses] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null); // userId|warehouseCode
+
+  const fetchData = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/shelf-permissions');
+      const data = await res.json();
+      if (data.success) {
+        setUsers(data.data.users);
+        setWarehouses(data.data.warehouses);
+      }
+    } catch (err) {
+      logger.error('Shelf perms fetch', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const updatePerm = async (userId: string, warehouseCode: string, role: string | null) => {
+    const key = `${userId}|${warehouseCode}`;
+    setSaving(key);
+    try {
+      if (role === null) {
+        // Sil
+        await fetch('/api/admin/shelf-permissions', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, warehouseCode }),
+        });
+      } else {
+        await fetch('/api/admin/shelf-permissions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, warehouseCode, role }),
+        });
+      }
+      // Optimistic update
+      setUsers((prev) =>
+        prev.map((u) => {
+          if (u.id !== userId) return u;
+          const next = { ...u.permissions };
+          if (role === null) delete next[warehouseCode];
+          else next[warehouseCode] = role;
+          return { ...u, permissions: next };
+        })
+      );
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  if (loading) return <div className="text-center py-12 text-gray-500">Yükleniyor…</div>;
+
+  const cols = [...warehouses, '*'];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <Shield className="w-6 h-6 text-purple-600" />
+        <h2 className="text-xl font-bold text-gray-900">Depo Rolleri</h2>
+      </div>
+      <p className="text-sm text-gray-500">
+        Her depo için ayrı rol atayın. <strong>VIEWER</strong>: görüntüleme · <strong>PACKER</strong>: sipariş yaratır (sevk edemez) ·
+        <strong> OPERATOR</strong>: raf transfer / koli aç-parçala / manuel koli ·
+        <strong> MANAGER</strong>: + sipariş onaylama / undo · <strong>ADMIN</strong>: depo yönetimi.
+        <br />
+        <span className="font-medium">Tümü</span> kolonu wildcard — her depoda aynı rol verir (depo bazlı kayıtlardan önce uygulanır).
+      </p>
+
+      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-xs text-gray-500">
+            <tr>
+              <th className="text-left px-4 py-3">Kullanıcı</th>
+              {cols.map((wh) => (
+                <th key={wh} className="text-center px-4 py-3 min-w-[140px]">
+                  {wh === '*' ? 'Tümü' : wh}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {users.length === 0 ? (
+              <tr>
+                <td colSpan={cols.length + 1} className="px-4 py-6 text-center text-gray-400 text-sm">
+                  OPERATOR rolünde aktif kullanıcı yok.
+                </td>
+              </tr>
+            ) : (
+              users.map((u) => (
+                <tr key={u.id} className="text-gray-700">
+                  <td className="px-4 py-2">
+                    <div className="font-medium text-gray-900">{u.name}</div>
+                    <div className="text-xs text-gray-500">{u.email}</div>
+                  </td>
+                  {cols.map((wh) => {
+                    const current = u.permissions[wh] ?? '';
+                    const key = `${u.id}|${wh}`;
+                    return (
+                      <td key={wh} className="px-4 py-2 text-center">
+                        <select
+                          value={current}
+                          disabled={saving === key}
+                          onChange={(e) => updatePerm(u.id, wh, e.target.value || null)}
+                          className={`px-2 py-1 border border-gray-200 rounded-md text-xs ${
+                            current ? SHELF_ROLE_LABELS[current]?.color ?? 'bg-white' : 'bg-white text-gray-400'
+                          }`}
+                        >
+                          <option value="">— Yetkisiz</option>
+                          {SHELF_ROLES.map((r) => (
+                            <option key={r} value={r}>
+                              {SHELF_ROLE_LABELS[r].label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
