@@ -116,7 +116,6 @@ export async function PATCH(
     }
 
     // Write producedQuantity to MonthSnapshot.produced (product-level single value)
-    // Skip if value hasn't changed (prevents redundant waterfall when frontend sends multiple requests)
     if (producedQuantity !== undefined) {
       const existing = await prisma.monthSnapshot.findUnique({
         where: { month_iwasku: { month: existingRequest.productionMonth, iwasku: existingRequest.iwasku } },
@@ -135,10 +134,11 @@ export async function PATCH(
             produced: producedQuantity,
           },
         });
-
-        // Waterfall: recalculate statuses (only when produced actually changed)
-        await waterfallComplete(existingRequest.iwasku, existingRequest.productionMonth);
       }
+
+      // Waterfall'ı her save'de çağır — producedQuantity değişmese bile DB'de eski PARTIALLY/REQUESTED
+      // kayıtlar varsa (warehouseStock veya totalRequested değişmiş olabilir) tutarlı hale getirir.
+      await waterfallComplete(existingRequest.iwasku, existingRequest.productionMonth);
     }
 
     return NextResponse.json({ success: true });
