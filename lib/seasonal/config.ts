@@ -1,5 +1,14 @@
 // Seasonal production planning configuration
 
+// Sezon planlamasına dahil edilmeyecek kategoriler (case-insensitive eşleşme)
+// IWA fabrikası dışında alıp-satılan veya tedarikçi üretimi olan ürünler hariç tutulur
+export const SEASONAL_EXCLUDED_CATEGORIES = new Set(['alsat', 'mobilya', 'tekstil']);
+
+export function isSeasonalEligibleCategory(category: string | null | undefined): boolean {
+  if (!category) return true; // Boş/bilinmeyen → varsayılan olarak dahil
+  return !SEASONAL_EXCLUDED_CATEGORIES.has(category.trim().toLowerCase());
+}
+
 // Minimum batch size per product per month
 // If a product's monthly allocation falls below this, it won't be produced that month
 // Prevents micro-batches that are inefficient for production lines

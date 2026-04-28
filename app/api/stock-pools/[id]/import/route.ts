@@ -21,6 +21,7 @@ import {
   allocateReserves,
   loadCodeToRegionMap,
   marketplaceSplitToRegionSplit,
+  isSeasonalEligibleCategory,
   type ReserveInput,
   type MonthCapacity,
 } from '@/lib/seasonal';
@@ -129,11 +130,21 @@ export async function POST(request: NextRequest, { params }: Params) {
     quantity: number; desi: number; category: string;
     marketplaceSplit: Record<string, number>;
   }>();
+  const skippedNonEligible: { iwasku: string; category: string }[] = [];
 
   for (const item of items) {
-    const existing = mergedMap.get(item.iwasku);
     const enriched = productDataMap.get(item.iwasku);
+    const effectiveCategory = item.category || enriched?.category || '';
 
+    // Sezon planına uygun olmayan kategorileri (Alsat/Mobilya/Tekstil) atla
+    if (!isSeasonalEligibleCategory(effectiveCategory)) {
+      if (!skippedNonEligible.some(s => s.iwasku === item.iwasku)) {
+        skippedNonEligible.push({ iwasku: item.iwasku, category: effectiveCategory });
+      }
+      continue;
+    }
+
+    const existing = mergedMap.get(item.iwasku);
     if (existing) {
       existing.quantity += item.quantity;
       if (item.marketplace) {
@@ -149,7 +160,7 @@ export async function POST(request: NextRequest, { params }: Params) {
         quantity: item.quantity,
         // `||` kullanılır çünkü parse 0/"" değerleri gönderebiliyor; `??` onları "dolu" sayar.
         desi: item.desi || enriched?.desi || 0,
-        category: item.category || enriched?.category || '',
+        category: effectiveCategory,
         marketplaceSplit: split,
       });
     }
@@ -313,6 +324,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       totalDesi: Math.round(totalDesi),
       allocationsCreated: allocations.length,
       monthSummary: autoAllocate ? (await import('@/lib/seasonal')).summarizeByMonth(allocations) : [],
+      skippedNonEligible,
     },
   }, { status: 201 });
 }

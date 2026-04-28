@@ -19,7 +19,7 @@
  * Global quota — kategoriler arası boşluk geri devredilir.
  */
 
-import { getMinBatchSize, getPhase, getWeightedLeadTime, type AllocPhase } from './config';
+import { getMinBatchSize, getPhase, getWeightedLeadTime, isSeasonalEligibleCategory, type AllocPhase } from './config';
 
 // ============================================
 // TYPES
@@ -70,13 +70,17 @@ export function allocateReserves(
 ): AllocationResult[] {
   if (reserves.length === 0 || months.length === 0) return [];
 
-  const totalDemandDesi = reserves.reduce(
+  // Sezon planına uygun olmayan kategorileri (Alsat/Mobilya/Tekstil) hesaba katma
+  const eligible = reserves.filter(r => isSeasonalEligibleCategory(r.category));
+  if (eligible.length === 0) return [];
+
+  const totalDemandDesi = eligible.reduce(
     (s, r) => s + r.targetQuantity * r.desiPerUnit, 0
   );
   if (totalDemandDesi <= 0) return [];
 
   // Sort globally: weighted lead time DESC (AU/CA first), then total desi DESC
-  const sorted = [...reserves].sort((a, b) => {
+  const sorted = [...eligible].sort((a, b) => {
     const ltA = getWeightedLeadTime(a.marketplaceSplit ?? {});
     const ltB = getWeightedLeadTime(b.marketplaceSplit ?? {});
     if (ltB !== ltA) return ltB - ltA;

@@ -255,7 +255,14 @@ export default function PoolDetailPage() {
       });
       const data = await res.json();
       if (data.success) {
-        alert(`${data.data.reservesCreated} ürün aktarıldı. Aylık Dağılım sekmesinden dağılımı önizleyip onaylayabilirsiniz.`);
+        const skipped: { iwasku: string; category: string }[] = data.data.skippedNonEligible ?? [];
+        let msg = `${data.data.reservesCreated} ürün aktarıldı. Aylık Dağılım sekmesinden dağılımı önizleyip onaylayabilirsiniz.`;
+        if (skipped.length > 0) {
+          const sample = skipped.slice(0, 5).map(s => `${s.iwasku} (${s.category || 'kategorisiz'})`).join(', ');
+          const extra = skipped.length > 5 ? ` …ve ${skipped.length - 5} daha` : '';
+          msg += `\n\n${skipped.length} ürün sezon planına dahil edilmedi (Alsat/Mobilya/Tekstil): ${sample}${extra}`;
+        }
+        alert(msg);
         setImportJson('');
         setPreview(null); // Clear any old preview
         fetchPool();
