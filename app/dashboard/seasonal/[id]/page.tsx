@@ -10,6 +10,7 @@ import { useState, useEffect, useCallback, Fragment } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { isSeasonalEligibleCategory } from '@/lib/seasonal/config';
 import {
   Upload, Package, TrendingUp, Truck, AlertCircle,
   Loader2, CheckCircle2, XCircle, BarChart3, Calendar, FileSpreadsheet,
@@ -198,9 +199,14 @@ export default function PoolDetailPage() {
   // Üretilen     = StockReserve.producedQuantity (API dinamik hesaplıyor; sezon COMPLETED+partial).
   const desiOf = (r: Reserve) => r.desiPerUnit ?? (r.targetDesi && r.targetQuantity > 0 ? r.targetDesi / r.targetQuantity : 0);
 
+  // Sezon planına dahil olmayan kategoriler (Alsat/Mobilya/Tekstil) ana hesaplardan hariç tutulur.
+  // Listede görünmeye devam ederler — sadece summary + kırılımlar filtrelenir.
+  const eligibleReserves = pool.reserves.filter(r => isSeasonalEligibleCategory(r.category));
+  const excludedReserves = pool.reserves.filter(r => !isSeasonalEligibleCategory(r.category));
+
   let totalDemand = 0;
   let totalDemandDesi = 0;
-  for (const r of pool.reserves) {
+  for (const r of eligibleReserves) {
     const split = r.marketplaceSplit ?? {};
     const d = desiOf(r);
     for (const qty of Object.values(split)) {
@@ -211,12 +217,12 @@ export default function PoolDetailPage() {
   }
   totalDemandDesi = Math.round(totalDemandDesi);
 
-  const totalInitial = pool.reserves.reduce((s, r) => s + r.initialStock, 0);
-  const totalInitialDesi = Math.round(pool.reserves.reduce((s, r) => s + r.initialStock * desiOf(r), 0));
-  const totalProduced = pool.reserves.reduce((s, r) => s + r.producedQuantity, 0);
-  const totalProducedDesi = Math.round(pool.reserves.reduce((s, r) => s + r.producedQuantity * desiOf(r), 0));
-  const totalShipped = pool.reserves.reduce((s, r) => s + r.shippedQuantity, 0);
-  const totalShippedDesi = Math.round(pool.reserves.reduce((s, r) => s + r.shippedQuantity * desiOf(r), 0));
+  const totalInitial = eligibleReserves.reduce((s, r) => s + r.initialStock, 0);
+  const totalInitialDesi = Math.round(eligibleReserves.reduce((s, r) => s + r.initialStock * desiOf(r), 0));
+  const totalProduced = eligibleReserves.reduce((s, r) => s + r.producedQuantity, 0);
+  const totalProducedDesi = Math.round(eligibleReserves.reduce((s, r) => s + r.producedQuantity * desiOf(r), 0));
+  const totalShipped = eligibleReserves.reduce((s, r) => s + r.shippedQuantity, 0);
+  const totalShippedDesi = Math.round(eligibleReserves.reduce((s, r) => s + r.shippedQuantity * desiOf(r), 0));
   const totalFulfilled = totalInitial + totalProduced;
   const totalFulfilledDesi = totalInitialDesi + totalProducedDesi;
   const totalTarget = Math.max(0, totalDemand - totalFulfilled);
@@ -640,7 +646,7 @@ export default function PoolDetailPage() {
         {/* Pazar yeri kırılımı — bölge gruplu, collapsible */}
         {(() => {
           const byCode = new Map<string, { qty: number; desi: number }>();
-          for (const r of pool.reserves) {
+          for (const r of eligibleReserves) {
             const desiPerUnit = r.desiPerUnit ?? (r.targetDesi && r.targetQuantity > 0 ? r.targetDesi / r.targetQuantity : 0);
             const split = r.marketplaceSplit ?? {};
             for (const [code, qty] of Object.entries(split)) {
@@ -727,11 +733,11 @@ export default function PoolDetailPage() {
           );
         })()}
 
-        {/* Kategori kırılımı — collapsible */}
+        {/* Kategori kırılımı — collapsible (sadece sezon planına dahil olanlar) */}
         {(() => {
           type CatMp = { code: string; name: string; qty: number; desi: number };
           const byCat = new Map<string, { qty: number; desi: number; mps: Map<string, { qty: number; desi: number }> }>();
-          for (const r of pool.reserves) {
+          for (const r of eligibleReserves) {
             const cat = r.category ?? '—';
             const desiPerUnit = r.desiPerUnit ?? (r.targetDesi && r.targetQuantity > 0 ? r.targetDesi / r.targetQuantity : 0);
             const split = r.marketplaceSplit ?? {};
@@ -810,6 +816,58 @@ export default function PoolDetailPage() {
                       ))}
                     </div>
                   </details>
+                ))}
+              </div>
+            </details>
+          );
+        })()}
+
+        {/* Sezon planına dahil olmayan kategoriler — ana hesaba katılmaz, bilgi amaçlı */}
+        {(() => {
+          if (excludedReserves.length === 0) return null;
+          const byCat = new Map<string, { qty: number; desi: number; count: number }>();
+          for (const r of excludedReserves) {
+            const cat = r.category ?? '—';
+            const d = desiOf(r);
+            const split = r.marketplaceSplit ?? {};
+            let qty = 0;
+            for (const v of Object.values(split)) if (v > 0) qty += v;
+            const cur = byCat.get(cat) ?? { qty: 0, desi: 0, count: 0 };
+            cur.qty += qty;
+            cur.desi += qty * d;
+            cur.count += 1;
+            byCat.set(cat, cur);
+          }
+          const cats = [...byCat.entries()]
+            .map(([cat, v]) => ({ cat, qty: v.qty, desi: Math.round(v.desi), count: v.count }))
+            .sort((a, b) => b.qty - a.qty);
+          const totalQty = cats.reduce((s, c) => s + c.qty, 0);
+          const totalDesi = cats.reduce((s, c) => s + c.desi, 0);
+          return (
+            <details className="group mt-1">
+              <summary className="list-none cursor-pointer text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1.5 select-none px-1 py-1">
+                <span className="inline-block w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[5px] border-t-current transition-transform group-open:rotate-180" />
+                <span>Sezon planına dahil olmayan kategoriler ({cats.length})</span>
+                <span className="ml-2 text-gray-400">
+                  {totalQty.toLocaleString('tr-TR')} adet · {totalDesi.toLocaleString('tr-TR')} desi
+                </span>
+                <span className="ml-2 text-[10px] text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">ana hesaba katılmıyor</span>
+              </summary>
+              <div className="mt-2 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                {cats.map(c => (
+                  <div key={c.cat} className="bg-amber-50/50 border border-amber-100 rounded-md px-3 py-2 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-800 truncate" title={c.cat}>{c.cat}</p>
+                      <p className="text-[10px] text-gray-500">{c.count} ürün</p>
+                    </div>
+                    <div className="text-right whitespace-nowrap">
+                      <span className="text-sm font-semibold text-gray-700">{c.qty.toLocaleString('tr-TR')}</span>
+                      <span className="text-[10px] text-gray-400 ml-1">adet</span>
+                      <span className="mx-1.5 text-gray-300">·</span>
+                      <span className="text-xs text-gray-600">{c.desi.toLocaleString('tr-TR')}</span>
+                      <span className="text-[10px] text-gray-400 ml-0.5">desi</span>
+                    </div>
+                  </div>
                 ))}
               </div>
             </details>
