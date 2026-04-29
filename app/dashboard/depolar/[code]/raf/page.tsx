@@ -133,7 +133,7 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
     return m ? { wall: m[1], rack: parseInt(m[2], 10), level: parseInt(m[3], 10) } : null;
   };
 
-  // Natural sort + Ankara için duvar bazlı gruplama (A=Sağ Koridor, B=Sol Koridor)
+  // Natural sort + Ankara için: Havuzlar (POOL) en üstte, sonra duvar bazlı koridorlar
   const groupedShelves = useMemo(() => {
     const sorted = [...shelves].sort((a, b) => {
       const pa = parseShelfCode(a.code);
@@ -148,19 +148,25 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
     if (code !== 'ANKARA') {
       return [{ key: 'all', label: null as string | null, items: sorted }];
     }
-    const groups = new Map<string, typeof sorted>();
-    for (const s of sorted) {
+    // POOL rafları "Havuzlar" başlığı altında en üste, geri kalanlar duvar bazlı
+    const poolItems = sorted.filter(s => s.shelfType === 'POOL');
+    const others = sorted.filter(s => s.shelfType !== 'POOL');
+    const groups: Array<{ key: string; label: string | null; items: typeof sorted }> = [];
+    if (poolItems.length > 0) {
+      groups.push({ key: 'POOL', label: 'Havuzlar', items: poolItems });
+    }
+    const wallGroups = new Map<string, typeof sorted>();
+    for (const s of others) {
       const parsed = parseShelfCode(s.code);
       const key = parsed?.wall ?? 'Diğer';
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(s);
+      if (!wallGroups.has(key)) wallGroups.set(key, []);
+      wallGroups.get(key)!.push(s);
     }
     const labels: Record<string, string> = { A: 'Sağ Koridor', B: 'Sol Koridor' };
-    return [...groups.entries()].map(([key, items]) => ({
-      key,
-      label: labels[key] ?? key,
-      items,
-    }));
+    for (const [key, items] of wallGroups) {
+      groups.push({ key, label: labels[key] ?? key, items });
+    }
+    return groups;
   }, [shelves, code]);
 
   const handleSuccess = () => setRefreshKey((k) => k + 1);
