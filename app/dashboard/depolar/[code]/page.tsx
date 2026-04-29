@@ -184,16 +184,16 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
             </div>
             <div className="bg-white border border-gray-200 rounded-lg p-4">
               <div className="flex items-center gap-2 text-gray-500 text-xs">
-                <Box className="w-4 h-4" /> Koli (mühürlü+kısmi)
+                <Box className="w-4 h-4" /> Koli
               </div>
               <p className="mt-2 text-2xl font-semibold text-gray-900">
                 {data.summary.boxesByStatus
-                  .filter((b) => b.status !== 'EMPTY')
+                  .filter((b) => b.status === 'SEALED')
                   .reduce((s, x) => s + x.quantity, 0)}
               </p>
               <p className="text-[11px] text-gray-400">
                 {data.summary.boxesByStatus
-                  .filter((b) => b.status !== 'EMPTY')
+                  .filter((b) => b.status === 'SEALED')
                   .reduce((s, x) => s + x.count, 0)}{' '}
                 koli
               </p>
@@ -206,29 +206,6 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
               <p className="text-[11px] text-gray-400">mapping bekliyor</p>
             </div>
           </div>
-
-          {/* Koli durum dağılımı */}
-          {data.summary.boxesByStatus.length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
-              <p className="text-sm font-medium text-gray-700 mb-3">Koli Durumu</p>
-              <div className="grid grid-cols-3 gap-3 text-sm">
-                {(['SEALED', 'PARTIAL', 'EMPTY'] as const).map((status) => {
-                  const row = data.summary.mode === 'SHELF_PRIMARY'
-                    ? data.summary.boxesByStatus.find((r) => r.status === status)
-                    : null;
-                  const label =
-                    status === 'SEALED' ? 'Mühürlü' : status === 'PARTIAL' ? 'Kısmi açık' : 'Boş';
-                  return (
-                    <div key={status} className="border border-gray-100 rounded-md p-3">
-                      <p className="text-[11px] text-gray-500">{label}</p>
-                      <p className="text-lg font-semibold text-gray-900">{row?.count ?? 0}</p>
-                      <p className="text-[11px] text-gray-400">{row?.quantity ?? 0} adet</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
           {/* Ürünler aggregate tablosu — sadece SHELF_PRIMARY */}
           <IwaskuAggregateTable
