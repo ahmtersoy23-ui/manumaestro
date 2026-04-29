@@ -1,11 +1,11 @@
 /**
  * GET /api/depolar/[code]/arama?q=...
- * Depo içi arama: SKU/iwasku, FNSKU, raf kodu, koli numarası.
+ * Depo içi arama: SKU/iwasku, FNSKU, raf kodu, koli numarası, ürün adı.
  * Case-insensitive. Tüm eşleşen ShelfStock ve ShelfBox kayıtlarını döner.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db/prisma';
+import { prisma, queryProductDb } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
 import { getProductsByIwasku } from '@/lib/products/lookup';
@@ -33,6 +33,18 @@ export async function GET(
     });
   }
 
+  // Pricelab'da ürün adı eşleşen iwasku'ları bul (name araması)
+  let nameMatchIwaskus: string[] = [];
+  try {
+    const rows = await queryProductDb(
+      `SELECT product_sku FROM products WHERE name ILIKE $1 LIMIT 200`,
+      [`%${q}%`]
+    );
+    nameMatchIwaskus = rows.map((r: { product_sku: string }) => r.product_sku);
+  } catch {
+    // Pricelab erişimi yoksa name araması atlanır
+  }
+
   // Önce raf kodu eşleşmeleri (sadece bu depo)
   const shelves = await prisma.shelf.findMany({
     where: {
@@ -44,18 +56,21 @@ export async function GET(
     take: 30,
   });
 
-  // ShelfStock — iwasku eşleşmesi
+  // ShelfStock — iwasku VEYA isim eşleşmesi
   const stocks = await prisma.shelfStock.findMany({
     where: {
       warehouseCode: upperCode,
-      iwasku: { contains: q, mode: 'insensitive' },
+      OR: [
+        { iwasku: { contains: q, mode: 'insensitive' } },
+        ...(nameMatchIwaskus.length > 0 ? [{ iwasku: { in: nameMatchIwaskus } }] : []),
+      ],
     },
     include: { shelf: { select: { code: true, shelfType: true } } },
     orderBy: { iwasku: 'asc' },
     take: 100,
   });
 
-  // ShelfBox — iwasku, fnsku veya boxNumber eşleşmesi
+  // ShelfBox — iwasku, fnsku, boxNumber VEYA isim eşleşmesi
   const boxes = await prisma.shelfBox.findMany({
     where: {
       warehouseCode: upperCode,
@@ -63,6 +78,7 @@ export async function GET(
         { iwasku: { contains: q, mode: 'insensitive' } },
         { fnsku: { contains: q, mode: 'insensitive' } },
         { boxNumber: { contains: q, mode: 'insensitive' } },
+        ...(nameMatchIwaskus.length > 0 ? [{ iwasku: { in: nameMatchIwaskus } }] : []),
       ],
     },
     include: { shelf: { select: { code: true, shelfType: true } } },
