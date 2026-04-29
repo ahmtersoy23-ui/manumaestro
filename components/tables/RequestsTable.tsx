@@ -472,16 +472,16 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                     </button>
                   </th>
                 )}
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Uretim Ayi</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Tarih</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">IWASKU</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Urun Adi</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kategori</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Miktar</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Oncelik</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Durum</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Sevkiyat</th>
-                {isEditor && <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase">Sil</th>}
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">ÜRETİM AYI</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">TARİH</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">IWASKU</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">ÜRÜN ADI</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">KATEGORİ</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">MİKTAR</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">ÖNCELİK</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">DURUM</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">SEVKİYAT</th>
+                {isEditor && <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700">SİL</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -508,7 +508,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm font-mono text-gray-900">{request.iwasku}</td>
                   <td className="px-4 py-3">
-                    <div className="text-xs text-gray-900 leading-tight line-clamp-2 whitespace-normal" title={request.productName}>
+                    <div className="text-xs text-gray-900 leading-tight whitespace-normal break-words" title={request.productName}>
                       {request.productName}
                     </div>
                   </td>
