@@ -131,3 +131,39 @@ export async function computeSezonProduced(poolId: string): Promise<SezonProduce
 
   return { byIwaskuQty, byIwaskuDesi, byMonthQty, byMonthDesi, byIwaskuMonth };
 }
+
+/**
+ * Belirli IWASKU'lar için aktif tüm SEASONAL havuzlardaki sezon üretimini hesaplar.
+ * ATP ve snapshot için kullanılır — `StockReserve.producedQuantity` DB'de yazılmıyor,
+ * dinamik hesap tek doğru kaynak.
+ *
+ * Dönen değer: Map<iwasku, sezonProduced (qty)> — sıfır olanlar dahil edilmez.
+ */
+export async function getSezonProducedByIwasku(
+  iwaskus: string[],
+): Promise<Map<string, number>> {
+  if (iwaskus.length === 0) return new Map();
+
+  // Bu IWASKU'ları içeren aktif SEASONAL havuzları bul
+  const reserves = await prisma.stockReserve.findMany({
+    where: {
+      iwasku: { in: iwaskus },
+      pool: { poolType: 'SEASONAL', status: 'ACTIVE' },
+      status: { not: 'CANCELLED' },
+    },
+    select: { poolId: true },
+  });
+  const poolIds = [...new Set(reserves.map(r => r.poolId))];
+  if (poolIds.length === 0) return new Map();
+
+  // Her havuz için sezon üretimini hesapla, iwasku başına birleştir
+  const merged = new Map<string, number>();
+  const results = await Promise.all(poolIds.map(id => computeSezonProduced(id)));
+  for (const result of results) {
+    for (const [iwasku, qty] of result.byIwaskuQty) {
+      if (qty <= 0) continue;
+      merged.set(iwasku, (merged.get(iwasku) ?? 0) + qty);
+    }
+  }
+  return merged;
+}

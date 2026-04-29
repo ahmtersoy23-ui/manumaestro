@@ -4,14 +4,15 @@
  * ATP = Total warehouse stock - Seasonal reserved - Shipment reserved
  *
  * Total stock (mevcut)       = eskiStok + ilaveStok + weeklyProduction - cikis - weeklyShipment
- * Seasonal reserved          = SUM(initialStock + producedQuantity - shippedQuantity) per SEASONAL pool
- *                              Snapshot'taki formülle aynı — sezon için ayrılmış toplam miktar
- *                              (başlangıç + üretilen − sevk edilen)
+ * Seasonal reserved          = (initialStock − shippedQuantity) + sezonProduced
+ *                              sezonProduced waterfall ile dinamik hesaplanır (computeSezonProduced),
+ *                              çünkü StockReserve.producedQuantity alanı DB'de güncellenmiyor.
  * Shipment reserved (Ankara) = SUM(shipment_items.quantity) WHERE packed AND sent_at IS NULL
  *                              (kolilenmiş ama henüz sevk edilmemiş — Ankara'dan çıkacak miktar)
  */
 
 import { prisma } from './prisma';
+import { getSezonProducedByIwasku } from '@/lib/seasonal/sezonProduced';
 
 export interface ATPResult {
   iwasku: string;
@@ -45,29 +46,35 @@ export async function getATPBulk(iwaskus: string[]): Promise<ATPResult[]> {
     },
   });
 
-  // Sezon rezervi — snapshot ile aynı formül:
-  // reserved = initialStock + producedQuantity - shippedQuantity
-  // (sezon için ayrılmış toplam miktar — başlangıç + üretilen − sevk edilen)
-  const reserves = await prisma.stockReserve.findMany({
-    where: {
-      iwasku: { in: iwaskus },
-      pool: { poolType: 'SEASONAL' },
-      status: { not: 'CANCELLED' },
-    },
-    select: {
-      iwasku: true,
-      initialStock: true,
-      producedQuantity: true,
-      shippedQuantity: true,
-    },
-  });
+  // Sezon rezervi: (initialStock − shippedQuantity) DB'den + sezonProduced dinamik hesap
+  // StockReserve.producedQuantity alanı DB'de güncellenmiyor → waterfall simülasyonu kullan
+  const [reserves, sezonProducedMap] = await Promise.all([
+    prisma.stockReserve.findMany({
+      where: {
+        iwasku: { in: iwaskus },
+        pool: { poolType: 'SEASONAL' },
+        status: { not: 'CANCELLED' },
+      },
+      select: {
+        iwasku: true,
+        initialStock: true,
+        shippedQuantity: true,
+      },
+    }),
+    getSezonProducedByIwasku(iwaskus),
+  ]);
 
   const reserveMap = new Map<string, number>();
   for (const r of reserves) {
-    const reserved = r.initialStock + r.producedQuantity - r.shippedQuantity;
+    const reserved = r.initialStock - r.shippedQuantity;
     if (reserved <= 0) continue;
     const current = reserveMap.get(r.iwasku) ?? 0;
     reserveMap.set(r.iwasku, current + reserved);
+  }
+  // Dinamik sezon üretimini ekle
+  for (const [iwasku, produced] of sezonProducedMap) {
+    if (produced <= 0) continue;
+    reserveMap.set(iwasku, (reserveMap.get(iwasku) ?? 0) + produced);
   }
 
   // Sevkiyat rezerve: kolilenmiş (packed=true) ama henüz sevk edilmemiş (sentAt=null)

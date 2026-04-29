@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockWarehouseProductFindMany = vi.fn();
 const mockStockReserveFindMany = vi.fn();
 const mockShipmentItemGroupBy = vi.fn();
+const mockGetSezonProducedByIwasku = vi.fn();
 
 vi.mock('@/lib/db/prisma', () => ({
   prisma: {
@@ -24,13 +25,18 @@ vi.mock('@/lib/db/prisma', () => ({
   },
 }));
 
+vi.mock('@/lib/seasonal/sezonProduced', () => ({
+  getSezonProducedByIwasku: (...args: unknown[]) => mockGetSezonProducedByIwasku(...args),
+}));
+
 import { getATPBulk, getATP, getATPAll, getATPMap } from '@/lib/db/atp';
 
 describe('ATP Calculations', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Default: no shipment reservations — testler ihtiyaca göre override eder
+    // Default: no shipment reservations, no dynamic seasonal production
     mockShipmentItemGroupBy.mockResolvedValue([]);
+    mockGetSezonProducedByIwasku.mockResolvedValue(new Map<string, number>());
   });
 
   describe('getATPBulk', () => {
@@ -102,9 +108,10 @@ describe('ATP Calculations', () => {
       ]);
     });
 
-    it('should include producedQuantity in reserve calculation (snapshot ile aynı formül)', async () => {
-      // Sezon rezervi formülü = initialStock + producedQuantity - shippedQuantity
-      // (snapshot route'undaki hesapla aynı)
+    it('should add dynamic sezonProduced from helper to reserved', async () => {
+      // Sezon için fiilen üretilen miktar `getSezonProducedByIwasku` helper'ı ile
+      // dinamik hesaplanır (StockReserve.producedQuantity DB'de güncellenmiyor).
+      // Reserve formülü: (initialStock − shippedQuantity) + sezonProduced
       mockWarehouseProductFindMany.mockResolvedValue([
         {
           iwasku: 'SKU-300',
@@ -116,19 +123,19 @@ describe('ATP Calculations', () => {
       ]);
 
       mockStockReserveFindMany.mockResolvedValue([
-        { iwasku: 'SKU-300', initialStock: 40, producedQuantity: 20, shippedQuantity: 5 },
+        { iwasku: 'SKU-300', initialStock: 40, shippedQuantity: 5 },  // = 35
       ]);
+      mockGetSezonProducedByIwasku.mockResolvedValue(new Map([['SKU-300', 20]]));
 
       const result = await getATPBulk(['SKU-300']);
 
-      // reserved = 40 + 20 - 5 = 55, atp = 100 - 55 = 45
+      // reserved = (40 − 5) + 20 = 55, atp = 100 − 55 = 45
       expect(result).toEqual([
         { iwasku: 'SKU-300', mevcut: 100, reserved: 55, shipmentReserved: 0, atp: 45 },
       ]);
 
-      // producedQuantity select clause'da olmalı
-      const selectArg = mockStockReserveFindMany.mock.calls[0][0].select;
-      expect(selectArg).toHaveProperty('producedQuantity', true);
+      // Helper iwasku listesi ile çağrılmalı
+      expect(mockGetSezonProducedByIwasku).toHaveBeenCalledWith(['SKU-300']);
     });
 
     it('should sum multiple reserves for the same product', async () => {
