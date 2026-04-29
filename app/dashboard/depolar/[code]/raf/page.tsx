@@ -4,7 +4,7 @@
 
 'use client';
 
-import { useEffect, useState, use } from 'react';
+import { useEffect, useState, use, useMemo } from 'react';
 import Link from 'next/link';
 import { Search, Layers, Package, Box, AlertCircle, Plus, PackagePlus, Layers3, AlertTriangle } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
@@ -126,6 +126,42 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
   const canResolveUnmatched = ['MANAGER', 'ADMIN'].includes(role);
   // Manuel koli sadece SHELF_PRIMARY depolarda mantıklı (NJ + SHOWROOM)
   const isShelfPrimaryWh = code === 'NJ' || code === 'SHOWROOM';
+
+  // Raf code formatını parse et (örn. "A10-3" → wall:A, rack:10, level:3)
+  const parseShelfCode = (rafCode: string) => {
+    const m = rafCode.match(/^([A-Z]+)(\d+)-(\d+)$/);
+    return m ? { wall: m[1], rack: parseInt(m[2], 10), level: parseInt(m[3], 10) } : null;
+  };
+
+  // Natural sort + Ankara için duvar bazlı gruplama (A=Sağ Koridor, B=Sol Koridor)
+  const groupedShelves = useMemo(() => {
+    const sorted = [...shelves].sort((a, b) => {
+      const pa = parseShelfCode(a.code);
+      const pb = parseShelfCode(b.code);
+      if (pa && pb) {
+        if (pa.wall !== pb.wall) return pa.wall.localeCompare(pb.wall);
+        if (pa.rack !== pb.rack) return pa.rack - pb.rack;
+        return pa.level - pb.level;
+      }
+      return a.code.localeCompare(b.code);
+    });
+    if (code !== 'ANKARA') {
+      return [{ key: 'all', label: null as string | null, items: sorted }];
+    }
+    const groups = new Map<string, typeof sorted>();
+    for (const s of sorted) {
+      const parsed = parseShelfCode(s.code);
+      const key = parsed?.wall ?? 'Diğer';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(s);
+    }
+    const labels: Record<string, string> = { A: 'Sağ Koridor', B: 'Sol Koridor' };
+    return [...groups.entries()].map(([key, items]) => ({
+      key,
+      label: labels[key] ?? key,
+      items,
+    }));
+  }, [shelves, code]);
 
   const handleSuccess = () => setRefreshKey((k) => k + 1);
 
@@ -387,41 +423,50 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
               Bu filtreyle eşleşen raf yok.
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-              {shelves.map((s) => {
-                const badge = TYPE_BADGE[s.shelfType] ?? TYPE_BADGE.NORMAL;
-                const totalQty = s.summary.looseQty + s.summary.sealedQty + s.summary.partialQty;
-                return (
-                  <Link
-                    key={s.id}
-                    href={`/dashboard/depolar/${code}/raf/${encodeURIComponent(s.code)}`}
-                    className="block bg-white border border-gray-200 rounded-lg p-3 hover:border-blue-400 hover:shadow-sm transition"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-sm font-semibold text-gray-900">{s.code}</span>
-                      <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded ${badge.cls}`}>
-                        {badge.label}
-                      </span>
-                    </div>
-                    <div className="mt-2 text-[11px] text-gray-500 space-y-0.5">
-                      <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-1"><Package className="w-3 h-3" /> Tekil</span>
-                        <span className="text-gray-700 font-medium">{s.summary.looseQty}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-1"><Box className="w-3 h-3" /> Koli</span>
-                        <span className="text-gray-700 font-medium">
-                          {s.summary.sealedBoxes + s.summary.partialBoxes}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between border-t border-gray-100 pt-1 mt-1">
-                        <span className="text-gray-400">Toplam</span>
-                        <span className="font-semibold text-gray-900">{totalQty}</span>
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })}
+            <div className="space-y-5">
+              {groupedShelves.map((g) => (
+                <div key={g.key}>
+                  {g.label && (
+                    <h3 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">{g.label}</h3>
+                  )}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                    {g.items.map((s) => {
+                      const badge = TYPE_BADGE[s.shelfType] ?? TYPE_BADGE.NORMAL;
+                      const totalQty = s.summary.looseQty + s.summary.sealedQty + s.summary.partialQty;
+                      return (
+                        <Link
+                          key={s.id}
+                          href={`/dashboard/depolar/${code}/raf/${encodeURIComponent(s.code)}`}
+                          className="block bg-white border border-gray-200 rounded-lg p-3 hover:border-blue-400 hover:shadow-sm transition"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono text-sm font-semibold text-gray-900">{s.code}</span>
+                            <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded ${badge.cls}`}>
+                              {badge.label}
+                            </span>
+                          </div>
+                          <div className="mt-2 text-[11px] text-gray-500 space-y-0.5">
+                            <div className="flex items-center justify-between">
+                              <span className="flex items-center gap-1"><Package className="w-3 h-3" /> Tekil</span>
+                              <span className="text-gray-700 font-medium">{s.summary.looseQty}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="flex items-center gap-1"><Box className="w-3 h-3" /> Koli</span>
+                              <span className="text-gray-700 font-medium">
+                                {s.summary.sealedBoxes + s.summary.partialBoxes}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between border-t border-gray-100 pt-1 mt-1">
+                              <span className="text-gray-400">Toplam</span>
+                              <span className="font-semibold text-gray-900">{totalQty}</span>
+                            </div>
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </>
