@@ -15,8 +15,8 @@ type WarehouseCode = (typeof VALID_CODES)[number];
 
 const WAREHOUSE_LABELS: Record<WarehouseCode, string> = {
   ANKARA: 'Ankara Depo',
-  NJ: 'New Jersey Depo',
-  SHOWROOM: 'Showroom',
+  NJ: 'Summerset Depo',
+  SHOWROOM: 'Fairfield Depo',
 };
 
 export default function DepoDetayLayout({

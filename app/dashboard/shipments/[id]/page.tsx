@@ -1402,7 +1402,7 @@ export default function ShipmentDetailPage() {
                 </button>
                 <button onClick={() => handleSetDestination('SHOWROOM')} disabled={settingDest}
                   className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 disabled:opacity-50">
-                  {selectedBoxIds.size} koli → Showroom
+                  {selectedBoxIds.size} koli → Fairfield
                 </button>
               </>
             )}
@@ -1435,7 +1435,7 @@ export default function ShipmentDetailPage() {
                 </button>
                 <button onClick={() => handleBulkFbaSubmit('SHOWROOM')} disabled={settingDest || !bulkFbaText.trim()}
                   className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2">
-                  Showroom Olarak İşaretle
+                  Fairfield Olarak İşaretle
                 </button>
               </div>
               {bulkFbaResult && (
