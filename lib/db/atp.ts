@@ -1,20 +1,22 @@
 /**
  * ATP (Available to Promise) calculation
  *
- * ATP = Total warehouse stock - Seasonal reserved stock
+ * ATP = Total warehouse stock - Seasonal reserved - Shipment reserved
  *
- * Total stock (mevcut) = eskiStok + ilaveStok + weeklyProduction - cikis - weeklyShipment
- * Reserved = SUM(stock_reserves.initialStock + stock_reserves.producedQuantity - stock_reserves.shippedQuantity)
- *            WHERE pool is SEASONAL AND (initialStock > 0 OR producedQuantity > 0)
+ * Total stock (mevcut)       = eskiStok + ilaveStok + weeklyProduction - cikis - weeklyShipment
+ * Seasonal reserved          = SUM(initialStock - shippedQuantity) per SEASONAL pool
+ * Shipment reserved (Ankara) = SUM(shipment_items.quantity) WHERE packed AND sent_at IS NULL
+ *                              (kolilenmiş ama henüz sevk edilmemiş — Ankara'dan çıkacak miktar)
  */
 
 import { prisma } from './prisma';
 
 export interface ATPResult {
   iwasku: string;
-  mevcut: number;    // Total physical stock
-  reserved: number;  // Seasonal reserved stock
-  atp: number;       // Available to promise
+  mevcut: number;            // Total physical stock
+  reserved: number;          // Seasonal reserved stock
+  shipmentReserved: number;  // Packed but not yet shipped
+  atp: number;               // Available to promise
 }
 
 /**
@@ -64,11 +66,29 @@ export async function getATPBulk(iwaskus: string[]): Promise<ATPResult[]> {
     reserveMap.set(r.iwasku, current + (r.initialStock - r.shippedQuantity));
   }
 
+  // Sevkiyat rezerve: kolilenmiş (packed=true) ama henüz sevk edilmemiş (sentAt=null)
+  // shipment_items aggregation — tek source of truth, kalıcı kolon yok.
+  // Şu an tüm sevkiyatlar Ankara çıkışlı kabul ediliyor; ileride Shipment.warehouseFrom
+  // eklendiğinde buraya filter eklenir.
+  const shipItems = await prisma.shipmentItem.groupBy({
+    by: ['iwasku'],
+    where: {
+      iwasku: { in: iwaskus },
+      packed: true,
+      sentAt: null,
+    },
+    _sum: { quantity: true },
+  });
+  const shipmentReservedMap = new Map<string, number>();
+  for (const s of shipItems) {
+    shipmentReservedMap.set(s.iwasku, s._sum.quantity ?? 0);
+  }
+
   // Calculate ATP for each product
   return iwaskus.map(iwasku => {
     const wp = warehouseProducts.find(w => w.iwasku === iwasku);
     if (!wp) {
-      return { iwasku, mevcut: 0, reserved: 0, atp: 0 };
+      return { iwasku, mevcut: 0, reserved: 0, shipmentReserved: 0, atp: 0 };
     }
 
     const weeklyProduction = wp.weeklyEntries
@@ -81,9 +101,10 @@ export async function getATPBulk(iwaskus: string[]): Promise<ATPResult[]> {
 
     const mevcut = wp.eskiStok + wp.ilaveStok + weeklyProduction - wp.cikis - weeklyShipment;
     const reserved = Math.max(0, reserveMap.get(iwasku) ?? 0);
-    const atp = Math.max(0, mevcut - reserved);
+    const shipmentReserved = Math.max(0, shipmentReservedMap.get(iwasku) ?? 0);
+    const atp = Math.max(0, mevcut - reserved - shipmentReserved);
 
-    return { iwasku, mevcut, reserved, atp };
+    return { iwasku, mevcut, reserved, shipmentReserved, atp };
   });
 }
 

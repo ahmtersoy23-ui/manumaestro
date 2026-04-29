@@ -22,7 +22,7 @@ interface StockProduct {
   id: string; iwasku: string; productName: string; productCategory: string;
   desi: number | null; eskiStok: number; ilaveStok: number; cikis: number;
   uretilen: number; haftalikCikis: number; toplamCikis: number; mevcut: number;
-  reserved: number; atp: number;
+  reserved: number; shipmentReserved: number; atp: number;
   toplamDesi: number | null;
   weeklyEntries: WeeklyEntry[];
   shipmentEntries: WeeklyEntry[];
@@ -77,7 +77,7 @@ function formatWeekLabel(dateStr: string): { range: string; month: string } {
   };
 }
 
-type SortKey = 'iwasku' | 'productName' | 'productCategory' | 'desi' | 'eskiStok' | 'uretilen' | 'ilaveStok' | 'toplamCikis' | 'mevcut' | 'reserved' | 'atp' | 'toplamDesi';
+type SortKey = 'iwasku' | 'productName' | 'productCategory' | 'desi' | 'eskiStok' | 'uretilen' | 'ilaveStok' | 'toplamCikis' | 'mevcut' | 'reserved' | 'shipmentReserved' | 'atp' | 'toplamDesi';
 
 export default function WarehouseStockPage() {
   const { role } = useAuth();
@@ -243,7 +243,7 @@ export default function WarehouseStockPage() {
       p.weeklyEntries.forEach(w => { row[`Üretim ${w.weekStart.split('T')[0]}`] = w.quantity; });
       row['Üretilen'] = p.uretilen; row['İlave'] = p.ilaveStok;
       p.shipmentEntries.forEach(w => { row[`Çıkış ${w.weekStart.split('T')[0]}`] = w.quantity; });
-      row['Çıkış'] = p.toplamCikis; row['Mevcut'] = p.mevcut; row['Sezon Rez.'] = p.reserved; row['ATP'] = p.atp; row['Toplam Desi'] = p.toplamDesi;
+      row['Çıkış'] = p.toplamCikis; row['Mevcut'] = p.mevcut; row['Sezon Rez.'] = p.reserved; row['Sev. Rez.'] = p.shipmentReserved; row['ATP'] = p.atp; row['Toplam Desi'] = p.toplamDesi;
       return row;
     });
     const XLSX = await loadXLSX();
@@ -552,6 +552,7 @@ export default function WarehouseStockPage() {
                         SZN Talep
                       </th>
                       <SortHeader label="Sezon Rez." sortField="reserved" className="text-right font-semibold text-orange-600 bg-orange-50 min-w-[55px]" />
+                      <SortHeader label="Sev. Rez." sortField="shipmentReserved" className="text-right font-semibold text-blue-600 bg-blue-50 min-w-[55px]" />
                       <SortHeader label="ATP" sortField="atp" className="text-right font-bold text-emerald-700 bg-emerald-50 min-w-[55px]" />
                       <SortHeader label="T.Desi" sortField="toplamDesi" className="text-right font-semibold text-gray-500 min-w-[55px]" />
                     </tr>
@@ -648,6 +649,7 @@ export default function WarehouseStockPage() {
                             ) : <span className="text-[9px] text-gray-300">—</span>}
                           </td>
                           <td className="px-2 py-1 text-right text-orange-600 bg-orange-50/30">{p.reserved > 0 ? p.reserved : '-'}</td>
+                          <td className="px-2 py-1 text-right text-blue-600 bg-blue-50/30" title="Kolilenmiş, henüz sevk edilmemiş">{p.shipmentReserved > 0 ? p.shipmentReserved : '-'}</td>
                           <td className="px-2 py-1 text-right font-bold text-emerald-700 bg-emerald-50/30">{p.atp}</td>
                           <td className="px-2 py-1 text-right text-gray-400">{p.toplamDesi ?? '-'}</td>
                         </tr>
