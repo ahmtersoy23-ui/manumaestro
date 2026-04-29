@@ -5,4 +5,4 @@
 
 CREATE INDEX IF NOT EXISTS "shipment_items_open_iwasku_idx"
   ON "shipment_items" ("iwasku")
-  WHERE "packed" = true AND "sent_at" IS NULL;
+  WHERE "packed" = true AND "sentAt" IS NULL;

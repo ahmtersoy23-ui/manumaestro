@@ -6,7 +6,7 @@
 UPDATE production_requests pr
 SET status = 'COMPLETED'
 FROM month_snapshots ms
-WHERE ms.month = pr.production_month
+WHERE ms."month" = pr."productionMonth"
   AND ms.iwasku = pr.iwasku
   AND pr.status IN ('PARTIALLY_PRODUCED', 'REQUESTED', 'IN_PRODUCTION')
-  AND (ms.warehouse_stock + ms.produced) >= ms.total_requested;
+  AND (ms."warehouseStock" + ms.produced) >= ms."totalRequested";
