@@ -47,6 +47,17 @@ async function generateSnapshot(month: string): Promise<void> {
     if (reserved > 0) seasonMap.set(r.iwasku, (seasonMap.get(r.iwasku) ?? 0) + reserved);
   }
 
+  // 3b. Sevkiyat rezerve: kolilenmiş ama henüz sevk edilmemiş (Ankara çıkışlı)
+  const shipItems = await prisma.shipmentItem.groupBy({
+    by: ['iwasku'],
+    where: { packed: true, sentAt: null },
+    _sum: { quantity: true },
+  });
+  const shipmentReservedMap = new Map<string, number>();
+  for (const s of shipItems) {
+    shipmentReservedMap.set(s.iwasku, s._sum.quantity ?? 0);
+  }
+
   // 4. Collect ALL iwaskus: those with requests + those with stock in warehouse
   const requestMap = new Map(requests.map(r => [r.iwasku, r._sum.quantity || 0]));
   const allIwaskus = new Set([...requestMap.keys(), ...stockMap.keys()]);
@@ -58,7 +69,9 @@ async function generateSnapshot(month: string): Promise<void> {
     const totalRequested = requestMap.get(iwasku) || 0;
     const rawStock = stockMap.get(iwasku) || 0;
     const reserved = seasonMap.get(iwasku) || 0;
-    const warehouseStock = Math.max(0, rawStock - reserved); // Sezon reserved düşülmüş
+    const shipmentReserved = shipmentReservedMap.get(iwasku) || 0;
+    // Sezon + sevkiyat rezerveleri düş — kolide olan ama sevk edilmemiş miktar da kullanılamaz
+    const warehouseStock = Math.max(0, rawStock - reserved - shipmentReserved);
     const netProduction = Math.max(0, totalRequested - warehouseStock);
 
     return prisma.monthSnapshot.upsert({
