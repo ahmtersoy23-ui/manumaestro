@@ -91,7 +91,7 @@ describe('ATP Calculations', () => {
 
       // Reserve with initialStock=30, shipped=10 -> reserved = 20
       mockStockReserveFindMany.mockResolvedValue([
-        { iwasku: 'SKU-200', initialStock: 30, shippedQuantity: 10 },
+        { iwasku: 'SKU-200', initialStock: 30, producedQuantity: 0, shippedQuantity: 10 },
       ]);
 
       const result = await getATPBulk(['SKU-200']);
@@ -102,10 +102,9 @@ describe('ATP Calculations', () => {
       ]);
     });
 
-    it('should NOT include producedQuantity in reserve calculation (critical)', async () => {
-      // This test verifies the critical business rule:
-      // producedQuantity is excluded from reserves because new production
-      // goes to monthly demands first. Season accounting is handled separately.
+    it('should include producedQuantity in reserve calculation (snapshot ile aynı formül)', async () => {
+      // Sezon rezervi formülü = initialStock + producedQuantity - shippedQuantity
+      // (snapshot route'undaki hesapla aynı)
       mockWarehouseProductFindMany.mockResolvedValue([
         {
           iwasku: 'SKU-300',
@@ -116,35 +115,20 @@ describe('ATP Calculations', () => {
         },
       ]);
 
-      // The query filter only selects initialStock > 0.
-      // producedQuantity is NOT in the select clause -- it is excluded by design.
-      // The reserve map formula: initialStock - shippedQuantity (no producedQuantity).
       mockStockReserveFindMany.mockResolvedValue([
-        { iwasku: 'SKU-300', initialStock: 40, shippedQuantity: 5 },
+        { iwasku: 'SKU-300', initialStock: 40, producedQuantity: 20, shippedQuantity: 5 },
       ]);
 
       const result = await getATPBulk(['SKU-300']);
 
-      // reserved = initialStock(40) - shipped(5) = 35
-      // If producedQuantity were included (say 20), reserved would be 55 -- WRONG
-      // atp = 100 - 35 = 65
+      // reserved = 40 + 20 - 5 = 55, atp = 100 - 55 = 45
       expect(result).toEqual([
-        { iwasku: 'SKU-300', mevcut: 100, reserved: 35, shipmentReserved: 0, atp: 65 },
+        { iwasku: 'SKU-300', mevcut: 100, reserved: 55, shipmentReserved: 0, atp: 45 },
       ]);
 
-      // Verify the Prisma query only selects initialStock and shippedQuantity
-      expect(mockStockReserveFindMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          select: expect.objectContaining({
-            initialStock: true,
-            shippedQuantity: true,
-          }),
-        })
-      );
-
-      // Verify producedQuantity is NOT in the select clause
+      // producedQuantity select clause'da olmalı
       const selectArg = mockStockReserveFindMany.mock.calls[0][0].select;
-      expect(selectArg).not.toHaveProperty('producedQuantity');
+      expect(selectArg).toHaveProperty('producedQuantity', true);
     });
 
     it('should sum multiple reserves for the same product', async () => {
@@ -160,8 +144,8 @@ describe('ATP Calculations', () => {
 
       // Two separate reserves for the same SKU
       mockStockReserveFindMany.mockResolvedValue([
-        { iwasku: 'SKU-400', initialStock: 50, shippedQuantity: 10 },  // 40
-        { iwasku: 'SKU-400', initialStock: 30, shippedQuantity: 5 },   // 25
+        { iwasku: 'SKU-400', initialStock: 50, producedQuantity: 0, shippedQuantity: 10 },  // 40
+        { iwasku: 'SKU-400', initialStock: 30, producedQuantity: 0, shippedQuantity: 5 },   // 25
       ]);
 
       const result = await getATPBulk(['SKU-400']);
@@ -186,7 +170,7 @@ describe('ATP Calculations', () => {
 
       // Reserve is larger than mevcut
       mockStockReserveFindMany.mockResolvedValue([
-        { iwasku: 'SKU-500', initialStock: 50, shippedQuantity: 0 },
+        { iwasku: 'SKU-500', initialStock: 50, producedQuantity: 0, shippedQuantity: 0 },
       ]);
 
       const result = await getATPBulk(['SKU-500']);
@@ -216,7 +200,7 @@ describe('ATP Calculations', () => {
       ]);
 
       mockStockReserveFindMany.mockResolvedValue([
-        { iwasku: 'SKU-A', initialStock: 20, shippedQuantity: 5 },
+        { iwasku: 'SKU-A', initialStock: 20, producedQuantity: 0, shippedQuantity: 5 },
       ]);
 
       const result = await getATPBulk(['SKU-A', 'SKU-B']);
@@ -238,7 +222,7 @@ describe('ATP Calculations', () => {
         },
       ]);
       mockStockReserveFindMany.mockResolvedValue([
-        { iwasku: 'SKU-SHIP', initialStock: 20, shippedQuantity: 5 },
+        { iwasku: 'SKU-SHIP', initialStock: 20, producedQuantity: 0, shippedQuantity: 5 },
       ]);
       // 3 koli toplamda 30 adet, henüz sevk edilmemiş
       mockShipmentItemGroupBy.mockResolvedValue([

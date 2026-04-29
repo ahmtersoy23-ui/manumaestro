@@ -4,7 +4,9 @@
  * ATP = Total warehouse stock - Seasonal reserved - Shipment reserved
  *
  * Total stock (mevcut)       = eskiStok + ilaveStok + weeklyProduction - cikis - weeklyShipment
- * Seasonal reserved          = SUM(initialStock - shippedQuantity) per SEASONAL pool
+ * Seasonal reserved          = SUM(initialStock + producedQuantity - shippedQuantity) per SEASONAL pool
+ *                              Snapshot'taki formülle aynı — sezon için ayrılmış toplam miktar
+ *                              (başlangıç + üretilen − sevk edilen)
  * Shipment reserved (Ankara) = SUM(shipment_items.quantity) WHERE packed AND sent_at IS NULL
  *                              (kolilenmiş ama henüz sevk edilmemiş — Ankara'dan çıkacak miktar)
  */
@@ -43,27 +45,29 @@ export async function getATPBulk(iwaskus: string[]): Promise<ATPResult[]> {
     },
   });
 
-  // Get seasonal reserves (only initialStock — pre-assigned depot stock)
-  // producedQuantity is NOT included: new production goes to monthly demands first,
-  // season accounting is handled via batch reconciliation separately.
+  // Sezon rezervi — snapshot ile aynı formül:
+  // reserved = initialStock + producedQuantity - shippedQuantity
+  // (sezon için ayrılmış toplam miktar — başlangıç + üretilen − sevk edilen)
   const reserves = await prisma.stockReserve.findMany({
     where: {
       iwasku: { in: iwaskus },
       pool: { poolType: 'SEASONAL' },
-      initialStock: { gt: 0 },
+      status: { not: 'CANCELLED' },
     },
     select: {
       iwasku: true,
       initialStock: true,
+      producedQuantity: true,
       shippedQuantity: true,
     },
   });
 
-  // Build reserve map: reserved = initialStock - shippedQuantity
   const reserveMap = new Map<string, number>();
   for (const r of reserves) {
+    const reserved = r.initialStock + r.producedQuantity - r.shippedQuantity;
+    if (reserved <= 0) continue;
     const current = reserveMap.get(r.iwasku) ?? 0;
-    reserveMap.set(r.iwasku, current + (r.initialStock - r.shippedQuantity));
+    reserveMap.set(r.iwasku, current + reserved);
   }
 
   // Sevkiyat rezerve: kolilenmiş (packed=true) ama henüz sevk edilmemiş (sentAt=null)
