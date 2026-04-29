@@ -824,7 +824,7 @@ export default function MonthDetailPage() {
         <div>
           <button onClick={() => toggleSection('priority')} className="flex items-center gap-3 mb-4 w-full text-left hover:opacity-80 transition-opacity">
             <Factory className="w-6 h-6 text-purple-700" />
-            <h2 className="text-2xl font-semibold text-gray-900">Oncelik Siralamasi</h2>
+            <h2 className="text-2xl font-semibold text-gray-900">Öncelik Sıralaması</h2>
             <ChevronDown className={`w-5 h-5 text-gray-400 ml-auto transition-transform ${isSectionOpen('priority') ? 'rotate-180' : ''}`} />
           </button>
           {isSectionOpen('priority') && (

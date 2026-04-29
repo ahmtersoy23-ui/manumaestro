@@ -43,19 +43,31 @@ export function MarketplacePriority({ month }: Props) {
       const prioData = await prioRes.json();
       const mpData = await mpRes.json();
 
-      const activeMarketplaces = (mpData.data || []).filter((m: Marketplace & { isActive: boolean }) => m.isActive);
+      const activeMarketplaces: Marketplace[] = (mpData.data || []).filter((m: Marketplace & { isActive: boolean }) => m.isActive);
       setMarketplaces(activeMarketplaces);
 
-      if (prioData.success && prioData.data.length > 0) {
-        setPriorities(prioData.data);
-      } else {
-        // Initialize with default order (by region)
-        const defaultPriorities = activeMarketplaces.map((mp: Marketplace, idx: number) => ({
+      const dbPriorities: PriorityItem[] = (prioData.success && prioData.data) ? prioData.data : [];
+
+      if (dbPriorities.length === 0) {
+        // Hiç priority kaydı yoksa: tüm aktif marketplace'leri default sıralı göster
+        const defaultPriorities = activeMarketplaces.map((mp, idx) => ({
           marketplaceId: mp.id,
           marketplace: mp,
           priority: idx + 1,
         }));
         setPriorities(defaultPriorities);
+      } else {
+        // Kısmi kayıt varsa: DB'dekiler + DB'de olmayan aktif marketplace'leri sona ekle
+        const dbIds = new Set(dbPriorities.map(p => p.marketplaceId));
+        const missing = activeMarketplaces.filter(mp => !dbIds.has(mp.id));
+        const maxPriority = dbPriorities.reduce((m, p) => Math.max(m, p.priority), 0);
+        const appended = missing.map((mp, idx) => ({
+          marketplaceId: mp.id,
+          marketplace: mp,
+          priority: maxPriority + idx + 1,
+        }));
+        setPriorities([...dbPriorities, ...appended]);
+        if (appended.length > 0) setDirty(true);
       }
     } catch {
       // ignore
