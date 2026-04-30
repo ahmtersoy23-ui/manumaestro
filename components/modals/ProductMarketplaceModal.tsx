@@ -5,6 +5,7 @@
 
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { X, ShoppingBag, CheckCircle2 } from 'lucide-react';
 
 const PRIORITY_STYLE: Record<string, string> = {
@@ -43,6 +44,24 @@ export function ProductMarketplaceModal({
   productName,
   requests,
 }: ProductMarketplaceModalProps) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Escape ile kapat
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
+  // İlk focusable element'e focus (read-only modal — kapat butonu)
+  useEffect(() => {
+    if (!isOpen) return;
+    closeButtonRef.current?.focus();
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const total = requests.reduce((sum, r) => sum + r.quantity, 0);
@@ -66,6 +85,7 @@ export function ProductMarketplaceModal({
             </div>
           </div>
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={onClose}
             aria-label="Kapat"

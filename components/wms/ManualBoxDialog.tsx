@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, Search } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 
@@ -52,6 +52,23 @@ export function ManualBoxDialog({ isOpen, warehouseCode, onClose, onSuccess }: P
   const [shelves, setShelves] = useState<ShelfOption[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const productInputRef = useRef<HTMLInputElement>(null);
+
+  // Escape ile kapat
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
+  // İlk focusable element'e focus (ürün search input)
+  useEffect(() => {
+    if (!isOpen) return;
+    productInputRef.current?.focus();
+  }, [isOpen]);
 
   // Marketplace + raf listesini bir kerelik yükle
   useEffect(() => {
@@ -178,6 +195,7 @@ export function ManualBoxDialog({ isOpen, warehouseCode, onClose, onSuccess }: P
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
                   <input
+                    ref={productInputRef}
                     id="manual-box-product"
                     type="text"
                     value={productSearchQuery}

@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 
@@ -29,6 +29,7 @@ export function AddMarketplaceModal({ isOpen, onClose, onSuccess, editData }: Ad
   const [region, setRegion] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   const isEditMode = !!editData;
 
@@ -42,6 +43,22 @@ export function AddMarketplaceModal({ isOpen, onClose, onSuccess, editData }: Ad
     }
     setError(null);
   }, [editData, isOpen]);
+
+  // Escape ile kapat
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
+  // İlk focusable element'e focus
+  useEffect(() => {
+    if (!isOpen) return;
+    nameInputRef.current?.focus();
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -117,6 +134,7 @@ export function AddMarketplaceModal({ isOpen, onClose, onSuccess, editData }: Ad
               Pazar Yeri Adı <span className="text-red-500">*</span>
             </label>
             <input
+              ref={nameInputRef}
               type="text"
               id="name"
               value={name}
