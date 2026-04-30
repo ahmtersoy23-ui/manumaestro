@@ -83,17 +83,24 @@ export function AddMarketplaceModal({ isOpen, onClose, onSuccess, editData }: Ad
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-marketplace-title"
+        className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4"
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900">
+          <h2 id="add-marketplace-title" className="text-xl font-bold text-gray-900">
             {isEditMode ? 'Pazar Yeri Düzenle' : 'Özel Pazar Yeri Ekle'}
           </h2>
           <button
+            type="button"
             onClick={onClose}
+            aria-label="Kapat"
             className="text-gray-400 hover:text-gray-600 transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 

@@ -143,18 +143,24 @@ export function ManualBoxDialog({ isOpen, warehouseCode, onClose, onSuccess }: P
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-5" onClick={(e) => e.stopPropagation()}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="manual-box-dialog-title"
+        className="bg-white rounded-xl shadow-xl w-full max-w-lg p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Yeni Koli (Manuel) — {warehouseCode}</h2>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
-            <X className="w-4 h-4" />
+          <h2 id="manual-box-dialog-title" className="text-lg font-semibold">Yeni Koli (Manuel) — {warehouseCode}</h2>
+          <button type="button" onClick={onClose} aria-label="Kapat" className="p-1 hover:bg-gray-100 rounded">
+            <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
 
         <div className="space-y-3">
           {/* Ürün autocomplete */}
           <div className="relative">
-            <label className="block text-xs font-medium text-gray-700 mb-1">Ürün (SKU/iwasku) *</label>
+            <label htmlFor="manual-box-product" className="block text-xs font-medium text-gray-700 mb-1">Ürün (SKU/iwasku) *</label>
             {productDisplay ? (
               <div className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-md bg-blue-50 text-sm">
                 <span className="font-mono text-xs">{iwasku}</span>
@@ -170,8 +176,9 @@ export function ManualBoxDialog({ isOpen, warehouseCode, onClose, onSuccess }: P
             ) : (
               <>
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
                   <input
+                    id="manual-box-product"
                     type="text"
                     value={productSearchQuery}
                     onChange={(e) => {
@@ -207,8 +214,9 @@ export function ManualBoxDialog({ isOpen, warehouseCode, onClose, onSuccess }: P
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Adet *</label>
+              <label htmlFor="manual-box-quantity" className="block text-xs font-medium text-gray-700 mb-1">Adet *</label>
               <input
+                id="manual-box-quantity"
                 type="number"
                 min="1"
                 value={quantity}
@@ -216,14 +224,15 @@ export function ManualBoxDialog({ isOpen, warehouseCode, onClose, onSuccess }: P
                 className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
               />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Hedef</label>
+            <div role="group" aria-label="Hedef">
+              <span className="block text-xs font-medium text-gray-700 mb-1">Hedef</span>
               <div className="flex gap-1">
                 {(['DEPO', 'FBA', 'SHOWROOM'] as const).map((d) => (
                   <button
                     key={d}
                     type="button"
                     onClick={() => setDestination(d)}
+                    aria-pressed={destination === d}
                     className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium ${
                       destination === d ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
@@ -236,8 +245,9 @@ export function ManualBoxDialog({ isOpen, warehouseCode, onClose, onSuccess }: P
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Pazaryeri *</label>
+            <label htmlFor="manual-box-marketplace" className="block text-xs font-medium text-gray-700 mb-1">Pazaryeri *</label>
             <select
+              id="manual-box-marketplace"
               value={marketplaceCode}
               onChange={(e) => setMarketplaceCode(e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
@@ -253,10 +263,11 @@ export function ManualBoxDialog({ isOpen, warehouseCode, onClose, onSuccess }: P
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
+              <label htmlFor="manual-box-number" className="block text-xs font-medium text-gray-700 mb-1">
                 Koli no (opsiyonel)
               </label>
               <input
+                id="manual-box-number"
                 type="text"
                 value={boxNumber}
                 onChange={(e) => setBoxNumber(e.target.value)}
@@ -265,8 +276,9 @@ export function ManualBoxDialog({ isOpen, warehouseCode, onClose, onSuccess }: P
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Hedef raf (opsiyonel)</label>
+              <label htmlFor="manual-box-target-shelf" className="block text-xs font-medium text-gray-700 mb-1">Hedef raf (opsiyonel)</label>
               <select
+                id="manual-box-target-shelf"
                 value={targetShelfId}
                 onChange={(e) => setTargetShelfId(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"

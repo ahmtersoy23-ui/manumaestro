@@ -50,21 +50,28 @@ export function ProductMarketplaceModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="product-marketplace-title"
+        className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4"
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center gap-3">
-            <ShoppingBag className="w-5 h-5 text-purple-600" />
+            <ShoppingBag className="w-5 h-5 text-purple-600" aria-hidden="true" />
             <div>
-              <h2 className="text-lg font-bold text-gray-900">Pazar Yeri Dağılımı</h2>
+              <h2 id="product-marketplace-title" className="text-lg font-bold text-gray-900">Pazar Yeri Dağılımı</h2>
               <p className="text-xs text-gray-500 font-mono mt-0.5">{iwasku}</p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
+            aria-label="Kapat"
             className="text-gray-400 hover:text-gray-600 transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
