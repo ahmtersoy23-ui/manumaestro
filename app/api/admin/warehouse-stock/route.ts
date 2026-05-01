@@ -203,6 +203,7 @@ export async function GET(request: NextRequest) {
         mevcut,
         reserved: atpMap.get(p.iwasku)?.reserved ?? 0,
         shipmentReserved: atpMap.get(p.iwasku)?.shipmentReserved ?? 0,
+        liveDemand: atpMap.get(p.iwasku)?.liveDemand ?? 0,
         atp: atpMap.get(p.iwasku)?.atp ?? mevcut,
         _seasonPool: seasonPoolMap.get(p.iwasku) ?? null,
         _monthDemands: demandMap.get(p.iwasku) ?? [],

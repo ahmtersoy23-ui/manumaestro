@@ -1,24 +1,31 @@
 /**
  * ATP (Available to Promise) calculation
  *
- * ATP = Total warehouse stock - Seasonal reserved - Shipment reserved
+ * ATP = Total warehouse stock - Seasonal reserved - Shipment reserved - Live non-Sezon demand
  *
  * Total stock (mevcut)       = eskiStok + ilaveStok + weeklyProduction - cikis - weeklyShipment
- * Seasonal reserved          = (initialStock − shippedQuantity) + sezonProduced
+ * Seasonal reserved          = (initialStock − shippedQuantity) + sezonProduced,
  *                              sezonProduced waterfall ile dinamik hesaplanır (computeSezonProduced),
  *                              çünkü StockReserve.producedQuantity alanı DB'de güncellenmiyor.
+ *                              Sezon rezervi `mevcut − shipmentReserved − liveDemand` üst sınırına çekilir
+ *                              ki Sezon, koliye girmemiş non-Sezon taleplerin payını yemesin.
  * Shipment reserved (Ankara) = SUM(shipment_items.quantity) WHERE packed AND sent_at IS NULL
  *                              (kolilenmiş ama henüz sevk edilmemiş — Ankara'dan çıkacak miktar)
+ * Live demand (non-Sezon)    = Her (iwasku, marketplace) için en güncel açık PR'ın kalan miktarı.
+ *                              Daha güncel ay'da yeni PR girilirse eski PR "kapsanmış" sayılır.
+ *                              Detay: lib/seasonal/nonSezonOpen.ts
  */
 
 import { prisma } from './prisma';
 import { getSezonProducedByIwasku } from '@/lib/seasonal/sezonProduced';
+import { getNonSezonOpenByIwasku } from '@/lib/seasonal/nonSezonOpen';
 
 export interface ATPResult {
   iwasku: string;
   mevcut: number;            // Total physical stock
   reserved: number;          // Seasonal reserved stock
   shipmentReserved: number;  // Packed but not yet shipped
+  liveDemand: number;        // Açık non-Sezon PR'lardan kalan toplam
   atp: number;               // Available to promise
 }
 
@@ -27,7 +34,16 @@ export interface ATPResult {
  */
 export async function getATP(iwasku: string): Promise<ATPResult> {
   const results = await getATPBulk([iwasku]);
-  return results[0] ?? { iwasku, mevcut: 0, reserved: 0, atp: 0 };
+  return (
+    results[0] ?? {
+      iwasku,
+      mevcut: 0,
+      reserved: 0,
+      shipmentReserved: 0,
+      liveDemand: 0,
+      atp: 0,
+    }
+  );
 }
 
 /**
@@ -48,7 +64,8 @@ export async function getATPBulk(iwaskus: string[]): Promise<ATPResult[]> {
 
   // Sezon rezervi: (initialStock − shippedQuantity) DB'den + sezonProduced dinamik hesap
   // StockReserve.producedQuantity alanı DB'de güncellenmiyor → waterfall simülasyonu kullan
-  const [reserves, sezonProducedMap] = await Promise.all([
+  // liveDemand: yola çıkmamış non-Sezon talepler — her (iwasku, marketplace) için en güncel açık PR'ın kalanı
+  const [reserves, sezonProducedMap, nonSezonOpenMap] = await Promise.all([
     prisma.stockReserve.findMany({
       where: {
         iwasku: { in: iwaskus },
@@ -62,6 +79,7 @@ export async function getATPBulk(iwaskus: string[]): Promise<ATPResult[]> {
       },
     }),
     getSezonProducedByIwasku(iwaskus),
+    getNonSezonOpenByIwasku(iwaskus),
   ]);
 
   const reserveMap = new Map<string, number>();
@@ -99,7 +117,14 @@ export async function getATPBulk(iwaskus: string[]): Promise<ATPResult[]> {
   return iwaskus.map(iwasku => {
     const wp = warehouseProducts.find(w => w.iwasku === iwasku);
     if (!wp) {
-      return { iwasku, mevcut: 0, reserved: 0, shipmentReserved: 0, atp: 0 };
+      return {
+        iwasku,
+        mevcut: 0,
+        reserved: 0,
+        shipmentReserved: 0,
+        liveDemand: 0,
+        atp: 0,
+      };
     }
 
     const weeklyProduction = wp.weeklyEntries
@@ -111,11 +136,18 @@ export async function getATPBulk(iwaskus: string[]): Promise<ATPResult[]> {
       .reduce((sum, e) => sum + e.quantity, 0);
 
     const mevcut = wp.eskiStok + wp.ilaveStok + weeklyProduction - wp.cikis - weeklyShipment;
-    const reserved = Math.max(0, reserveMap.get(iwasku) ?? 0);
     const shipmentReserved = Math.max(0, shipmentReservedMap.get(iwasku) ?? 0);
-    const atp = Math.max(0, mevcut - reserved - shipmentReserved);
+    const liveDemand = Math.max(0, nonSezonOpenMap.get(iwasku) ?? 0);
 
-    return { iwasku, mevcut, reserved, shipmentReserved, atp };
+    // Sezon rezervini, yola çıkmamış non-Sezon talepler düşüldükten sonra kalan stok ile sınırla.
+    // Aksi halde Sezon, henüz koliye girmemiş AU/Bol gibi taleplerin payını yiyebilir.
+    const reservedRaw = Math.max(0, reserveMap.get(iwasku) ?? 0);
+    const reservedCap = Math.max(0, mevcut - shipmentReserved - liveDemand);
+    const reserved = Math.min(reservedRaw, reservedCap);
+
+    const atp = Math.max(0, mevcut - reserved - shipmentReserved - liveDemand);
+
+    return { iwasku, mevcut, reserved, shipmentReserved, liveDemand, atp };
   });
 }
 
