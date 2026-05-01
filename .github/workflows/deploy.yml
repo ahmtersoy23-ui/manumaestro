@@ -69,4 +69,4 @@ jobs:
             npm ci --omit=dev --ignore-scripts
             npx prisma generate
             npx prisma migrate deploy
-            pm2 restart manumaestro
+            sudo -u iwaapps -H PM2_HOME=/home/iwaapps/.pm2 pm2 restart manumaestro
