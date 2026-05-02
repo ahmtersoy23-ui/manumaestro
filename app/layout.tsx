@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ToastProvider } from "@/components/providers/ToastProvider";
+import { PWARegister } from "@/components/PWARegister";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -18,6 +19,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "ManuMaestro - Üretim Talep Yönetimi",
   description: "Üretim Mükemmelliğini Yönetin",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    title: "ManuMaestro",
+    statusBarStyle: "default",
+  },
   icons: {
     icon: { url: '/icon.svg', type: 'image/svg+xml' },
     apple: '/logo.svg',
@@ -27,6 +34,7 @@ export const metadata: Metadata = {
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
+  themeColor: '#2563eb',
 };
 
 export default function RootLayout({
@@ -50,6 +58,7 @@ export default function RootLayout({
             {children}
           </AuthProvider>
           <ToastProvider />
+          <PWARegister />
         </ErrorBoundary>
       </body>
     </html>

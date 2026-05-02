@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Search, Plus, Package, Box as BoxIcon, AlertCircle, Sparkles, Loader2 } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { suggestPick, type PickCandidate, type PickSuggestion } from '@/lib/wms/fifoSuggest';
+import { ScanInput } from '@/components/wms/ScanInput';
 
 const logger = createLogger('SingleItemAdder');
 
@@ -294,16 +295,13 @@ export function SingleOrderItemAdder({ warehouseCode, orderId, onSuccess }: Prop
                 />
                 <span className="text-gray-500">adet</span>
               </label>
-              <label className="flex items-center gap-2 text-xs text-gray-700">
-                Konum filtre:
-                <input
-                  type="text"
-                  value={shelfFilter}
-                  onChange={(e) => setShelfFilter(e.target.value)}
-                  placeholder="örn. A-01"
-                  className="w-32 px-2 py-1 border border-gray-300 rounded text-sm font-mono"
-                />
-              </label>
+              <ScanInput
+                label="Konum filtre:"
+                value={shelfFilter}
+                onChange={setShelfFilter}
+                placeholder="örn. A-01"
+                className="text-xs"
+              />
             </div>
           )}
 

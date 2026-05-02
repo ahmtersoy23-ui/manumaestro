@@ -26,6 +26,8 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@prisma/adapter-pg": "^7.2.0",
     "@prisma/client": "^7.2.0",
+    "@zxing/browser": "^0.2.0",
+    "@zxing/library": "^0.22.0",
     "clsx": "^2.1.1",
     "dotenv": "^17.3.1",
     "exceljs": "^4.4.0",
