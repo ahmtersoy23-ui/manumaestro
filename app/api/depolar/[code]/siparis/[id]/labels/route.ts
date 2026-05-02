@@ -47,6 +47,7 @@ export async function POST(
   const type = formData.get('type');
   const shipmentBoxId = formData.get('shipmentBoxId');
   const notes = formData.get('notes');
+  const trackingNumber = formData.get('trackingNumber');
 
   if (!(file instanceof File)) {
     return NextResponse.json({ success: false, error: 'Dosya gerekli' }, { status: 400 });
@@ -87,6 +88,7 @@ export async function POST(
       fileSize: saved.fileSize,
       uploadedById: auth.user.id,
       notes: typeof notes === 'string' && notes.length > 0 ? notes : null,
+      trackingNumber: typeof trackingNumber === 'string' && trackingNumber.length > 0 ? trackingNumber : null,
     },
   });
 
@@ -102,6 +104,8 @@ export async function POST(
       printedAt: label.printedAt,
       shipmentBoxId: label.shipmentBoxId,
       notes: label.notes,
+      trackingNumber: label.trackingNumber,
+      archivedAt: label.archivedAt,
     },
   });
 }
@@ -141,6 +145,8 @@ export async function GET(
       printedAt: true,
       shipmentBoxId: true,
       notes: true,
+      trackingNumber: true,
+      archivedAt: true,
     },
   });
 

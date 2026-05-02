@@ -829,11 +829,14 @@ model OrderLabel {
   printedAt       DateTime?
   printedById     String?
   notes           String?
+  trackingNumber  String? // Kargo tracking no — etiket arşivlense bile saklanır
+  archivedAt      DateTime? // Fiziksel dosya silindi (tracking ref. kaldı)
 
   outboundOrder OutboundOrder @relation(fields: [outboundOrderId], references: [id], onDelete: Cascade)
 
   @@index([outboundOrderId, type])
   @@index([shipmentBoxId])
+  @@index([archivedAt])
   @@map("order_labels")
 }
 

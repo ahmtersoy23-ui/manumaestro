@@ -103,3 +103,16 @@ export const LABEL_CONFIG = {
   ALLOWED_MIME_TYPES: Array.from(ALLOWED_MIME_TYPES),
   UPLOAD_ROOT,
 } as const;
+
+// Retention politikası — yeniden değerlendirilebilir, şu an kargo için 14 gün.
+export const LABEL_RETENTION_DAYS: Record<string, number> = {
+  SHIPPING: 14, // Aras/UPS/FedEx kargo PDF — taşıyıcı 14 günden sonra ulaşmaz
+  FNSKU: 0, // Hiç silinmez (Amazon FBA referansı)
+  OTHER: 30, // Ticari fatura vb. (uzun süre)
+};
+
+export function getRetentionThreshold(type: 'SHIPPING' | 'FNSKU' | 'OTHER', now: Date = new Date()): Date | null {
+  const days = LABEL_RETENTION_DAYS[type];
+  if (!days || days <= 0) return null;
+  return new Date(now.getTime() - days * 86_400_000);
+}

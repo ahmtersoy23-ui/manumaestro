@@ -53,19 +53,30 @@ export async function PATCH(
   const loaded = await loadOrderAndLabel(code, orderId, labelId);
   if ('error' in loaded) return loaded.error;
 
-  const auth = await requireShelfAction(request, loaded.upperCode, 'printLabel');
-  if (auth instanceof NextResponse) return auth;
-
   const body = await request.json().catch(() => ({}));
-  if (body.action !== 'print') {
-    return NextResponse.json({ success: false, error: 'Geçersiz aksiyon' }, { status: 400 });
+
+  if (body.action === 'print') {
+    const auth = await requireShelfAction(request, loaded.upperCode, 'printLabel');
+    if (auth instanceof NextResponse) return auth;
+    const updated = await prisma.orderLabel.update({
+      where: { id: labelId },
+      data: { printedAt: new Date(), printedById: auth.user.id },
+      select: { id: true, printedAt: true },
+    });
+    return NextResponse.json({ success: true, data: updated });
   }
 
-  const updated = await prisma.orderLabel.update({
-    where: { id: labelId },
-    data: { printedAt: new Date(), printedById: auth.user.id },
-    select: { id: true, printedAt: true },
-  });
+  if (body.action === 'updateTracking') {
+    const auth = await requireShelfAction(request, loaded.upperCode, 'uploadLabel');
+    if (auth instanceof NextResponse) return auth;
+    const tn = typeof body.trackingNumber === 'string' ? body.trackingNumber.trim() : '';
+    const updated = await prisma.orderLabel.update({
+      where: { id: labelId },
+      data: { trackingNumber: tn.length > 0 ? tn : null },
+      select: { id: true, trackingNumber: true },
+    });
+    return NextResponse.json({ success: true, data: updated });
+  }
 
-  return NextResponse.json({ success: true, data: updated });
+  return NextResponse.json({ success: false, error: 'Geçersiz aksiyon' }, { status: 400 });
 }

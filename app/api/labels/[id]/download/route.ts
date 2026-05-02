@@ -21,6 +21,12 @@ export async function GET(
   if (!label) {
     return NextResponse.json({ success: false, error: 'Etiket bulunamadı' }, { status: 404 });
   }
+  if (label.archivedAt) {
+    return NextResponse.json(
+      { success: false, error: 'Bu etiket arşivlendi (dosya silindi). Sadece tracking number saklı.' },
+      { status: 410 }
+    );
+  }
 
   const auth = await requireShelfAction(request, label.outboundOrder.warehouseCode, 'view');
   if (auth instanceof NextResponse) return auth;

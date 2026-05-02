@@ -35,6 +35,8 @@ interface LabelDto {
   printedAt: string | null;
   shipmentBoxId: string | null;
   notes: string | null;
+  trackingNumber: string | null;
+  archivedAt: string | null;
 }
 
 interface Props {
@@ -57,8 +59,11 @@ export function LabelUploader({ warehouseCode, orderId, role }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [uploadType, setUploadType] = useState<LabelType>('SHIPPING');
+  const [uploadTracking, setUploadTracking] = useState<string>('');
   const [uploading, setUploading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [editingTrackingId, setEditingTrackingId] = useState<string | null>(null);
+  const [editingTrackingValue, setEditingTrackingValue] = useState<string>('');
 
   const canUpload = ['PACKER', 'OPERATOR', 'MANAGER', 'ADMIN'].includes(role);
   const canPrint = canUpload;
@@ -102,6 +107,7 @@ export function LabelUploader({ warehouseCode, orderId, role }: Props) {
       const fd = new FormData();
       fd.append('file', file);
       fd.append('type', uploadType);
+      if (uploadTracking.trim().length > 0) fd.append('trackingNumber', uploadTracking.trim());
       const res = await fetch(`/api/depolar/${warehouseCode}/siparis/${orderId}/labels`, {
         method: 'POST',
         body: fd,
@@ -112,12 +118,38 @@ export function LabelUploader({ warehouseCode, orderId, role }: Props) {
         setError(d.error || 'Yükleme başarısız');
         return;
       }
+      setUploadTracking('');
       setRefreshKey((k) => k + 1);
     } catch (e) {
       logger.error('Label upload', e);
       setError('Sunucu hatası');
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function saveTracking(labelId: string, value: string) {
+    try {
+      const res = await fetch(
+        `/api/depolar/${warehouseCode}/siparis/${orderId}/labels/${labelId}`,
+        {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'updateTracking', trackingNumber: value }),
+        }
+      );
+      const d = await res.json();
+      if (!res.ok || !d.success) {
+        alert(d.error || 'Tracking güncellenemedi');
+        return;
+      }
+      setEditingTrackingId(null);
+      setEditingTrackingValue('');
+      setRefreshKey((k) => k + 1);
+    } catch (e) {
+      logger.error('Update tracking', e);
+      alert('Sunucu hatası');
     }
   }
 
@@ -185,6 +217,16 @@ export function LabelUploader({ warehouseCode, orderId, role }: Props) {
             <option value="FNSKU">FNSKU</option>
             <option value="OTHER">Diğer</option>
           </select>
+          {uploadType === 'SHIPPING' && (
+            <input
+              type="text"
+              value={uploadTracking}
+              onChange={(e) => setUploadTracking(e.target.value)}
+              disabled={uploading}
+              placeholder="Tracking no (ops.)"
+              className="w-44 text-sm border border-gray-300 rounded-md px-2 py-1.5 font-mono bg-white"
+            />
+          )}
           <label
             className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md cursor-pointer ${
               uploading
@@ -206,7 +248,7 @@ export function LabelUploader({ warehouseCode, orderId, role }: Props) {
               }}
             />
           </label>
-          <span className="text-xs text-gray-500">PDF / PNG / JPG · max 10MB</span>
+          <span className="text-xs text-gray-500">PDF / PNG / JPG · max 10MB · Kargo: 14 gün sonra arşivlenir</span>
         </div>
       )}
 
@@ -226,13 +268,18 @@ export function LabelUploader({ warehouseCode, orderId, role }: Props) {
       ) : labels ? (
         <ul className="divide-y divide-gray-100">
           {labels.map((label) => (
-            <li key={label.id} className="px-4 py-2.5 flex items-center gap-3 text-sm">
+            <li key={label.id} className={`px-4 py-2.5 flex items-center gap-3 text-sm ${label.archivedAt ? 'opacity-60' : ''}`}>
               <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded font-medium ${TYPE_BADGE[label.type]}`}>
                 {TYPE_LABEL[label.type]}
               </span>
               <div className="min-w-0 flex-1">
                 <div className="font-mono text-xs text-gray-800 truncate" title={label.fileName}>
                   {label.fileName}
+                  {label.archivedAt && (
+                    <span className="ml-2 text-[10px] uppercase px-1 py-0.5 rounded bg-gray-200 text-gray-600">
+                      arşivlendi
+                    </span>
+                  )}
                 </div>
                 <div className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-2 flex-wrap">
                   <span>{formatBytes(label.fileSize)}</span>
@@ -248,18 +295,70 @@ export function LabelUploader({ warehouseCode, orderId, role }: Props) {
                     </>
                   )}
                 </div>
+                {/* Tracking number — kargo etiketleri için her zaman görünür / düzenlenebilir */}
+                {label.type === 'SHIPPING' && (
+                  <div className="mt-1 flex items-center gap-2">
+                    {editingTrackingId === label.id ? (
+                      <>
+                        <input
+                          type="text"
+                          autoFocus
+                          value={editingTrackingValue}
+                          onChange={(e) => setEditingTrackingValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') saveTracking(label.id, editingTrackingValue);
+                            if (e.key === 'Escape') { setEditingTrackingId(null); setEditingTrackingValue(''); }
+                          }}
+                          placeholder="Tracking no"
+                          className="text-xs border border-gray-300 rounded px-1.5 py-0.5 font-mono w-44"
+                        />
+                        <button
+                          onClick={() => saveTracking(label.id, editingTrackingValue)}
+                          className="text-[10px] px-1.5 py-0.5 bg-green-600 text-white rounded hover:bg-green-700"
+                        >
+                          Kaydet
+                        </button>
+                        <button
+                          onClick={() => { setEditingTrackingId(null); setEditingTrackingValue(''); }}
+                          className="text-[10px] px-1.5 py-0.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                        >
+                          İptal
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!canUpload) return;
+                          setEditingTrackingId(label.id);
+                          setEditingTrackingValue(label.trackingNumber ?? '');
+                        }}
+                        className={`text-[11px] font-mono ${
+                          label.trackingNumber
+                            ? 'text-gray-700'
+                            : 'text-blue-600 italic'
+                        } ${canUpload ? 'hover:underline cursor-pointer' : 'cursor-default'}`}
+                        disabled={!canUpload}
+                      >
+                        {label.trackingNumber ? `📦 ${label.trackingNumber}` : (canUpload ? '+ Tracking ekle' : '')}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-1.5">
-                <a
-                  href={`/api/labels/${label.id}/download`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded"
-                  title="İndir / Görüntüle"
-                >
-                  <Download className="w-4 h-4" />
-                </a>
-                {canPrint && (
+                {!label.archivedAt && (
+                  <a
+                    href={`/api/labels/${label.id}/download`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded"
+                    title="İndir / Görüntüle"
+                  >
+                    <Download className="w-4 h-4" />
+                  </a>
+                )}
+                {canPrint && !label.archivedAt && (
                   <button
                     onClick={() => handlePrint(label.id)}
                     className="inline-flex items-center gap-1 px-2 py-1 text-xs text-blue-700 bg-blue-50 hover:bg-blue-100 rounded"
