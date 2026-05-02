@@ -16,8 +16,9 @@ import { getATPBulk } from '@/lib/db/atp';
 
 const logger = createLogger('MonthSnapshot');
 
-// snapshot.warehouseStock = ATP (mevcut − sezonRez − sevkRez − liveDemand).
-// Tek kaynak: getATPBulk. Inventory ekranındaki ATP ile snapshot hep tutarlı.
+// snapshot.warehouseStock = ATP (mevcut − sezonRez − sevkRez).
+// getATPBulk ile single source of truth. liveDemand kavramı kaldırıldı,
+// snapshot ↔ ATP arasında çevrim yok, regenerate her seferinde aynı sonucu verir.
 async function generateSnapshot(month: string): Promise<void> {
   const [requests, warehouseProducts] = await Promise.all([
     prisma.productionRequest.groupBy({
@@ -54,8 +55,6 @@ async function generateSnapshot(month: string): Promise<void> {
   if (upsertOps.length === 0) return;
 
   await prisma.$transaction(upsertOps);
-
-  // Snapshot is informational only — does NOT trigger waterfall or change statuses.
   logger.info(`Snapshot generated for ${month}: ${upsertOps.length} products`);
 }
 

@@ -10,7 +10,6 @@ const mockWarehouseProductFindMany = vi.fn();
 const mockStockReserveFindMany = vi.fn();
 const mockShipmentItemGroupBy = vi.fn();
 const mockGetSezonProducedByIwasku = vi.fn();
-const mockGetNonSezonOpenByIwasku = vi.fn();
 
 vi.mock('@/lib/db/prisma', () => ({
   prisma: {
@@ -30,19 +29,14 @@ vi.mock('@/lib/seasonal/sezonProduced', () => ({
   getSezonProducedByIwasku: (...args: unknown[]) => mockGetSezonProducedByIwasku(...args),
 }));
 
-vi.mock('@/lib/seasonal/nonSezonOpen', () => ({
-  getNonSezonOpenByIwasku: (...args: unknown[]) => mockGetNonSezonOpenByIwasku(...args),
-}));
-
 import { getATPBulk, getATP, getATPAll, getATPMap } from '@/lib/db/atp';
 
 describe('ATP Calculations', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Default: no shipment reservations, no dynamic seasonal production, no live non-Sezon demand
+    // Default: no shipment reservations, no dynamic seasonal production
     mockShipmentItemGroupBy.mockResolvedValue([]);
     mockGetSezonProducedByIwasku.mockResolvedValue(new Map<string, number>());
-    mockGetNonSezonOpenByIwasku.mockResolvedValue(new Map<string, number>());
   });
 
   describe('getATPBulk', () => {
@@ -62,7 +56,7 @@ describe('ATP Calculations', () => {
       const result = await getATPBulk(['SKU-MISSING']);
 
       expect(result).toEqual([
-        { iwasku: 'SKU-MISSING', mevcut: 0, reserved: 0, shipmentReserved: 0, liveDemand: 0, atp: 0 },
+        { iwasku: 'SKU-MISSING', mevcut: 0, reserved: 0, shipmentReserved: 0, atp: 0 },
       ]);
     });
 
@@ -86,7 +80,7 @@ describe('ATP Calculations', () => {
 
       // mevcut = eskiStok(50) + ilaveStok(10) + production(20) - cikis(5) - shipment(8) = 67
       expect(result).toEqual([
-        { iwasku: 'SKU-100', mevcut: 67, reserved: 0, shipmentReserved: 0, liveDemand: 0, atp: 67 },
+        { iwasku: 'SKU-100', mevcut: 67, reserved: 0, shipmentReserved: 0, atp: 67 },
       ]);
     });
 
@@ -110,7 +104,7 @@ describe('ATP Calculations', () => {
 
       // mevcut = 100, reserved = 30-10 = 20, atp = 100-20 = 80
       expect(result).toEqual([
-        { iwasku: 'SKU-200', mevcut: 100, reserved: 20, shipmentReserved: 0, liveDemand: 0, atp: 80 },
+        { iwasku: 'SKU-200', mevcut: 100, reserved: 20, shipmentReserved: 0, atp: 80 },
       ]);
     });
 
@@ -137,7 +131,7 @@ describe('ATP Calculations', () => {
 
       // reserved = (40 − 5) + 20 = 55, atp = 100 − 55 = 45
       expect(result).toEqual([
-        { iwasku: 'SKU-300', mevcut: 100, reserved: 55, shipmentReserved: 0, liveDemand: 0, atp: 45 },
+        { iwasku: 'SKU-300', mevcut: 100, reserved: 55, shipmentReserved: 0, atp: 45 },
       ]);
 
       // Helper iwasku listesi ile çağrılmalı
@@ -166,7 +160,7 @@ describe('ATP Calculations', () => {
       // reserved = (50-10) + (30-5) = 40 + 25 = 65
       // atp = 200 - 65 = 135
       expect(result).toEqual([
-        { iwasku: 'SKU-400', mevcut: 200, reserved: 65, shipmentReserved: 0, liveDemand: 0, atp: 135 },
+        { iwasku: 'SKU-400', mevcut: 200, reserved: 65, shipmentReserved: 0, atp: 135 },
       ]);
     });
 
@@ -188,9 +182,9 @@ describe('ATP Calculations', () => {
 
       const result = await getATPBulk(['SKU-500']);
 
-      // reservedRaw=50, reservedCap=10 (mevcut-shipment-liveDemand) → reserved=10, atp=0
+      // reservedRaw=50, reservedCap=10 (mevcut-shipment) → reserved=10, atp=0
       expect(result).toEqual([
-        { iwasku: 'SKU-500', mevcut: 10, reserved: 10, shipmentReserved: 0, liveDemand: 0, atp: 0 },
+        { iwasku: 'SKU-500', mevcut: 10, reserved: 10, shipmentReserved: 0, atp: 0 },
       ]);
     });
 
@@ -219,9 +213,9 @@ describe('ATP Calculations', () => {
       const result = await getATPBulk(['SKU-A', 'SKU-B']);
 
       // SKU-A: mevcut = 100+20+30-10-0 = 140, reserved = 15, atp = 125
-      expect(result[0]).toEqual({ iwasku: 'SKU-A', mevcut: 140, reserved: 15, shipmentReserved: 0, liveDemand: 0, atp: 125 });
+      expect(result[0]).toEqual({ iwasku: 'SKU-A', mevcut: 140, reserved: 15, shipmentReserved: 0, atp: 125 });
       // SKU-B: mevcut = 50+0+0-0-15 = 35, reserved = 0, atp = 35
-      expect(result[1]).toEqual({ iwasku: 'SKU-B', mevcut: 35, reserved: 0, shipmentReserved: 0, liveDemand: 0, atp: 35 });
+      expect(result[1]).toEqual({ iwasku: 'SKU-B', mevcut: 35, reserved: 0, shipmentReserved: 0, atp: 35 });
     });
 
     it('should subtract shipment reserve (packed but not sent) from atp', async () => {
@@ -246,75 +240,7 @@ describe('ATP Calculations', () => {
 
       // mevcut=100, reserved=15, shipmentReserved=30, atp=max(0, 100-15-30)=55
       expect(result).toEqual([
-        { iwasku: 'SKU-SHIP', mevcut: 100, reserved: 15, shipmentReserved: 30, liveDemand: 0, atp: 55 },
-      ]);
-    });
-
-    it('liveDemand stoktan düşülür ve Sezon rezervi onun altında sınırlanır', async () => {
-      // Senaryo 1: AHM örneği — depoda 265, AU 199 açık talep, Sezon talep 120
-      mockWarehouseProductFindMany.mockResolvedValue([
-        {
-          iwasku: 'AHM',
-          eskiStok: 0,
-          ilaveStok: 270,
-          cikis: 0,
-          weeklyEntries: [{ quantity: 5, type: 'SHIPMENT' }],
-        },
-      ]);
-      // Sezon waterfall'dan Sezon talebi 120 dolduruluyor (Mayıs ayı)
-      mockStockReserveFindMany.mockResolvedValue([]);
-      mockGetSezonProducedByIwasku.mockResolvedValue(new Map([['AHM', 120]]));
-      // AU 240 talep, 41 üretildi → kalan 199
-      mockGetNonSezonOpenByIwasku.mockResolvedValue(new Map([['AHM', 199]]));
-
-      const result = await getATPBulk(['AHM']);
-
-      // mevcut = 0+270+0-0-5 = 265
-      // reservedRaw = 120, reservedCap = 265-0-199 = 66 → reserved = min(120,66) = 66
-      // atp = max(0, 265-66-0-199) = 0
-      expect(result).toEqual([
-        { iwasku: 'AHM', mevcut: 265, reserved: 66, shipmentReserved: 0, liveDemand: 199, atp: 0 },
-      ]);
-    });
-
-    it('liveDemand 0 ise eski Sezon davranışı korunur (Senaryo 3)', async () => {
-      // AU'ya sevkiyat yapılmış, açık talep yok → liveDemand=0
-      mockWarehouseProductFindMany.mockResolvedValue([
-        {
-          iwasku: 'AHM-2',
-          eskiStok: 0,
-          ilaveStok: 270,
-          cikis: 0,
-          weeklyEntries: [{ quantity: 5, type: 'SHIPMENT' }],
-        },
-      ]);
-      mockStockReserveFindMany.mockResolvedValue([]);
-      mockGetSezonProducedByIwasku.mockResolvedValue(new Map([['AHM-2', 120]]));
-      mockGetNonSezonOpenByIwasku.mockResolvedValue(new Map());
-
-      const result = await getATPBulk(['AHM-2']);
-
-      // mevcut=265, reserved=120 (cap=265 yeterli), liveDemand=0, atp=145
-      expect(result).toEqual([
-        { iwasku: 'AHM-2', mevcut: 265, reserved: 120, shipmentReserved: 0, liveDemand: 0, atp: 145 },
-      ]);
-    });
-
-    it('liveDemand mevcut+sezon toplamından büyükse atp 0 ve reserved 0', async () => {
-      mockWarehouseProductFindMany.mockResolvedValue([
-        { iwasku: 'TIGHT', eskiStok: 100, ilaveStok: 0, cikis: 0, weeklyEntries: [] },
-      ]);
-      mockStockReserveFindMany.mockResolvedValue([]);
-      mockGetSezonProducedByIwasku.mockResolvedValue(new Map([['TIGHT', 50]]));
-      // liveDemand stoktan büyük → Sezon hiç rezerv edemez
-      mockGetNonSezonOpenByIwasku.mockResolvedValue(new Map([['TIGHT', 150]]));
-
-      const result = await getATPBulk(['TIGHT']);
-
-      // mevcut=100, reservedRaw=50, reservedCap=max(0,100-0-150)=0 → reserved=0
-      // atp = max(0, 100-0-0-150) = 0
-      expect(result).toEqual([
-        { iwasku: 'TIGHT', mevcut: 100, reserved: 0, shipmentReserved: 0, liveDemand: 150, atp: 0 },
+        { iwasku: 'SKU-SHIP', mevcut: 100, reserved: 15, shipmentReserved: 30, atp: 55 },
       ]);
     });
 
@@ -340,7 +266,7 @@ describe('ATP Calculations', () => {
 
       // mevcut = 80 + 5 + (10+25) - 3 - (12+8) = 80 + 5 + 35 - 3 - 20 = 97
       expect(result).toEqual([
-        { iwasku: 'SKU-MIX', mevcut: 97, reserved: 0, shipmentReserved: 0, liveDemand: 0, atp: 97 },
+        { iwasku: 'SKU-MIX', mevcut: 97, reserved: 0, shipmentReserved: 0, atp: 97 },
       ]);
     });
   });
@@ -360,7 +286,7 @@ describe('ATP Calculations', () => {
 
       const result = await getATP('SKU-SINGLE');
 
-      expect(result).toEqual({ iwasku: 'SKU-SINGLE', mevcut: 50, reserved: 0, shipmentReserved: 0, liveDemand: 0, atp: 50 });
+      expect(result).toEqual({ iwasku: 'SKU-SINGLE', mevcut: 50, reserved: 0, shipmentReserved: 0, atp: 50 });
     });
 
     it('should return zeros when product not found', async () => {
@@ -369,7 +295,7 @@ describe('ATP Calculations', () => {
 
       const result = await getATP('SKU-NOPE');
 
-      expect(result).toEqual({ iwasku: 'SKU-NOPE', mevcut: 0, reserved: 0, shipmentReserved: 0, liveDemand: 0, atp: 0 });
+      expect(result).toEqual({ iwasku: 'SKU-NOPE', mevcut: 0, reserved: 0, shipmentReserved: 0, atp: 0 });
     });
   });
 
@@ -389,8 +315,8 @@ describe('ATP Calculations', () => {
       const result = await getATPAll();
 
       expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({ iwasku: 'SKU-X', mevcut: 30, reserved: 0, shipmentReserved: 0, liveDemand: 0, atp: 30 });
-      expect(result[1]).toEqual({ iwasku: 'SKU-Y', mevcut: 60, reserved: 0, shipmentReserved: 0, liveDemand: 0, atp: 60 });
+      expect(result[0]).toEqual({ iwasku: 'SKU-X', mevcut: 30, reserved: 0, shipmentReserved: 0, atp: 30 });
+      expect(result[1]).toEqual({ iwasku: 'SKU-Y', mevcut: 60, reserved: 0, shipmentReserved: 0, atp: 60 });
     });
   });
 
@@ -404,7 +330,7 @@ describe('ATP Calculations', () => {
       const map = await getATPMap(['SKU-M1']);
 
       expect(map).toBeInstanceOf(Map);
-      expect(map.get('SKU-M1')).toEqual({ iwasku: 'SKU-M1', mevcut: 40, reserved: 0, shipmentReserved: 0, liveDemand: 0, atp: 40 });
+      expect(map.get('SKU-M1')).toEqual({ iwasku: 'SKU-M1', mevcut: 40, reserved: 0, shipmentReserved: 0, atp: 40 });
     });
   });
 });

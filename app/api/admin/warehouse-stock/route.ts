@@ -73,7 +73,12 @@ export async function GET(request: NextRequest) {
       },
     });
     const seasonPoolMap = new Map<string, { poolId: string; poolName: string; target: number; produced: number }>();
-    const seasonDemandsMap = new Map<string, { code: string; qty: number }[]>();
+    const seasonDemandsMap = new Map<string, { code: string; name: string; qty: number }[]>();
+
+    // Marketplace code → name lookup (modal'da kod yerine isim göster)
+    const marketplaces = await prisma.marketplace.findMany({ select: { code: true, name: true } });
+    const marketplaceNameByCode = new Map(marketplaces.map(m => [m.code, m.name]));
+
     for (const r of activeReserves) {
       seasonPoolMap.set(r.iwasku, {
         poolId: r.pool.id, poolName: r.pool.name,
@@ -84,7 +89,7 @@ export async function GET(request: NextRequest) {
         const split = r.marketplaceSplit as Record<string, number>;
         const demands = Object.entries(split)
           .filter(([, qty]) => qty > 0)
-          .map(([code, qty]) => ({ code, qty }))
+          .map(([code, qty]) => ({ code, name: marketplaceNameByCode.get(code) ?? code, qty }))
           .sort((a, b) => b.qty - a.qty);
         if (demands.length > 0) {
           seasonDemandsMap.set(r.iwasku, demands);
@@ -203,7 +208,6 @@ export async function GET(request: NextRequest) {
         mevcut,
         reserved: atpMap.get(p.iwasku)?.reserved ?? 0,
         shipmentReserved: atpMap.get(p.iwasku)?.shipmentReserved ?? 0,
-        liveDemand: atpMap.get(p.iwasku)?.liveDemand ?? 0,
         atp: atpMap.get(p.iwasku)?.atp ?? mevcut,
         _seasonPool: seasonPoolMap.get(p.iwasku) ?? null,
         _monthDemands: demandMap.get(p.iwasku) ?? [],
