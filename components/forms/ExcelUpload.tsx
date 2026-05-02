@@ -33,14 +33,14 @@ const PRIORITY_MAP: Record<string, 'HIGH' | 'MEDIUM' | 'LOW'> = {
 };
 
 export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps) {
-  const { role } = useAuth();
+  const { isSuperAdmin } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [productionMonth, setProductionMonth] = useState('');
   const [monthError, setMonthError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  const availableMonths = getAvailableMonthsForEntry(role === 'admin');
+  const availableMonths = getAvailableMonthsForEntry(isSuperAdmin);
 
   // Auto-select first available month on mount
   useEffect(() => {

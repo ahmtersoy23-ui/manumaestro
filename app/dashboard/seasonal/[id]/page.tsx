@@ -100,7 +100,7 @@ const MONTH_LABELS: Record<string, string> = {
 };
 
 export default function PoolDetailPage() {
-  const { role, marketplacePermissions } = useAuth();
+  const { role, isSuperAdmin, marketplacePermissions } = useAuth();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [pool, setPool] = useState<PoolDetail | null>(null);
@@ -1244,7 +1244,7 @@ export default function PoolDetailPage() {
                     </span>
                   )}
                 </div>
-                {isAdmin && (
+                {isSuperAdmin && (
                   <button
                     onClick={handleRelease}
                     disabled={releasing}
@@ -1274,7 +1274,7 @@ export default function PoolDetailPage() {
                         <tr key={month} className={`hover:bg-gray-50 ${data.locked ? 'bg-orange-50/40' : ''}`}>
                           <td className="px-4 py-3 font-medium">
                             <div className="flex items-center gap-1.5">
-                              {isAdmin ? (
+                              {isSuperAdmin ? (
                                 <button
                                   onClick={async () => {
                                     const newLocked = !data.locked;
@@ -1320,8 +1320,8 @@ export default function PoolDetailPage() {
             </div>
           )}
 
-          {/* Preview / Calculate Section */}
-          {pool.status === 'ACTIVE' && pool.reserves.length > 0 && isAdmin && (
+          {/* Preview / Calculate Section — sezon onayı süper-admin */}
+          {pool.status === 'ACTIVE' && pool.reserves.length > 0 && isSuperAdmin && (
             <div className="bg-white border border-purple-200 rounded-xl overflow-hidden">
               <div className="px-4 py-3 border-b bg-purple-50 flex items-center justify-between gap-4 flex-wrap">
                 <div className="flex items-center gap-2">

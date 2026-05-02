@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { queryProductDb } from '@/lib/db/prisma';
-import { requireRole } from '@/lib/auth/verify';
+import { requireSuperAdmin } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
 import { waterfallComplete } from '@/lib/waterfallComplete';
 
@@ -18,7 +18,8 @@ type Params = { params: Promise<{ id: string }> };
 const SEZON_MARKETPLACE_CODE = 'SEZON';
 
 export async function POST(request: NextRequest, { params }: Params) {
-  const authResult = await requireRole(request, ['admin']);
+  // Süper-admin gerekli (sezon havuzunu ay planına aktarma kritik aksiyon)
+  const authResult = await requireSuperAdmin(request);
   if (authResult instanceof NextResponse) return authResult;
   const { user } = authResult;
   const { id } = await params;

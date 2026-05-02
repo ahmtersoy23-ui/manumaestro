@@ -26,7 +26,7 @@ interface Product {
 }
 
 export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: ManualEntryFormProps) {
-  const { role } = useAuth();
+  const { isSuperAdmin } = useAuth();
   const [iwasku, setIwasku] = useState('');
   const [quantity, setQuantity] = useState('');
   const [productName, setProductName] = useState('');
@@ -41,7 +41,7 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
   const [showDropdown, setShowDropdown] = useState(false);
   const [monthError, setMonthError] = useState('');
 
-  const availableMonths = getAvailableMonthsForEntry(role === 'admin');
+  const availableMonths = getAvailableMonthsForEntry(isSuperAdmin);
   const today = new Date();
   const dayOfMonth = today.getDate();
   const currentMonth = getCurrentMonth();

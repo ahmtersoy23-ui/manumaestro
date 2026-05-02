@@ -287,6 +287,56 @@ export async function checkStockPermission(
 }
 
 /**
+ * Süper-admin email allowlist — env var ile override edilebilir
+ * (SUPER_ADMIN_EMAILS=a@x.com,b@y.com)
+ */
+const SUPER_ADMIN_EMAILS = (process.env.SUPER_ADMIN_EMAILS ?? 'ersoy@iwaconcept.com.tr')
+  .split(',')
+  .map(e => e.trim().toLowerCase())
+  .filter(Boolean);
+
+/** Email süper-admin listesinde mi? */
+export function isSuperAdmin(email?: string | null): boolean {
+  return !!email && SUPER_ADMIN_EMAILS.includes(email.toLowerCase());
+}
+
+/**
+ * Süper-admin yetkisi gerektir (kritik aksiyonlar: yeni talep, sezon onayı, vs)
+ * Returns user if authorized, error response if not
+ */
+export async function requireSuperAdmin(
+  request: NextRequest,
+): Promise<{ user: VerifiedUser } | NextResponse> {
+  const authResult = await verifyAuth(request);
+
+  if (!authResult.success || !authResult.user) {
+    return NextResponse.json(
+      { success: false, error: authResult.error || 'Yetkisiz erişim' },
+      { status: 401 },
+    );
+  }
+
+  if (!isSuperAdmin(authResult.user.email)) {
+    const endpoint = request.nextUrl.pathname;
+    logAction({
+      userId: authResult.user.id,
+      userName: authResult.user.name,
+      userEmail: authResult.user.email,
+      action: 'ACCESS_DENIED',
+      entityType: 'Auth',
+      description: `Süper-admin gerekli: ${endpoint} — kullanıcı: ${authResult.user.email}`,
+      metadata: { endpoint, method: request.method, userEmail: authResult.user.email },
+    }).catch(() => {});
+    return NextResponse.json(
+      { success: false, error: 'Bu işlem süper-admin yetkisi gerektirir' },
+      { status: 403 },
+    );
+  }
+
+  return { user: authResult.user };
+}
+
+/**
  * Verify user has required role
  * Returns user if authorized, error response if not
  */

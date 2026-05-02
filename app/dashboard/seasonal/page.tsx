@@ -12,7 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
 export default function SeasonalPage() {
-  const { role } = useAuth();
+  const { role, isSuperAdmin } = useAuth();
   const router = useRouter();
   const [error, setError] = useState('');
 
@@ -35,8 +35,8 @@ export default function SeasonalPage() {
           return;
         }
 
-        // No active pool — admin creates automatically, others see error
-        if (role !== 'admin') { setError('Aktif sezon havuzu yok'); return; }
+        // No active pool — only super-admin can create one
+        if (!isSuperAdmin) { setError('Aktif sezon havuzu yok'); return; }
         const createRes = await fetch('/api/stock-pools', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -56,7 +56,7 @@ export default function SeasonalPage() {
         setError('Bağlantı hatası');
       }
     })();
-  }, [role, router]);
+  }, [role, router, isSuperAdmin]);
 
 
   if (error) {

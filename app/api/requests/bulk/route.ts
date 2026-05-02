@@ -9,7 +9,7 @@ import { prisma, queryProductDb } from '@/lib/db/prisma';
 import { createLogger } from '@/lib/logger';
 import { BulkRequestSchema, formatValidationError } from '@/lib/validation/schemas';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-import { requireRole } from '@/lib/auth/verify';
+import { requireSuperAdmin } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
 import { errorResponse } from '@/lib/api/response';
 
@@ -23,8 +23,8 @@ export async function POST(request: NextRequest) {
       return rateLimitExceededResponse(rateLimitResult);
     }
 
-    // Authentication & Authorization: Require editor or admin role
-    const authResult = await requireRole(request, ['admin', 'editor']);
+    // Authorization: Süper-admin gerekli (toplu talep yükleme kritik aksiyon)
+    const authResult = await requireSuperAdmin(request);
     if (authResult instanceof NextResponse) {
       return authResult;
     }

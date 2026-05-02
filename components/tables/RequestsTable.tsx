@@ -92,7 +92,7 @@ const METHOD_LABEL: Record<string, string> = { sea: 'Deniz', road: 'Kara', air: 
 const PAGE_SIZE = 30;
 
 export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, archiveMode = false, onSummary }: RequestsTableProps) {
-  const { hasRole } = useAuth();
+  const { hasRole, isSuperAdmin } = useAuth();
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -428,6 +428,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                 </button>
               );
             })}
+            {isSuperAdmin && (
             <button
               onClick={handleBulkDelete}
               disabled={bulkDeleting}
@@ -440,6 +441,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
               )}
               Sil
             </button>
+            )}
           </div>
         </div>
       )}
@@ -459,7 +461,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
               <col className="w-20" />
               <col className="w-28" />
               {isAdmin && <col className="w-28" />}
-              {isEditor && <col className="w-16" />}
+              {isSuperAdmin && <col className="w-16" />}
             </colgroup>
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
@@ -481,7 +483,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">ÖNCELİK</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">DURUM</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">SEVKİYAT</th>
-                {isEditor && <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700">SİL</th>}
+                {isSuperAdmin && <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700">SİL</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -527,7 +529,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                     </span>
                   </td>
                   <td className="px-4 py-3">{renderShipmentCell(request)}</td>
-                  {isEditor && (
+                  {isSuperAdmin && (
                     <td className="px-4 py-3 whitespace-nowrap text-right">
                       <button
                         onClick={() => handleDelete(request.id)}

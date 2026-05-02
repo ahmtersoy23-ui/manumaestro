@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { requireRole } from '@/lib/auth/verify';
+import { requireSuperAdmin } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
 import { z } from 'zod';
 
@@ -19,7 +19,8 @@ const LockMonthSchema = z.object({
 type Params = { params: Promise<{ id: string }> };
 
 export async function POST(request: NextRequest, { params }: Params) {
-  const authResult = await requireRole(request, ['admin']);
+  // Süper-admin gerekli (sezon ay kilitleme kritik aksiyon)
+  const authResult = await requireSuperAdmin(request);
   if (authResult instanceof NextResponse) return authResult;
   const { user } = authResult;
   const { id } = await params;

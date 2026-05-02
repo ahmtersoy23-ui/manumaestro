@@ -15,6 +15,7 @@ import { RequestsTable, RequestSummary } from '@/components/tables/RequestsTable
 import { Download, Upload, PlusCircle, Clock, Archive, ArrowLeft, Package, Check, AlertCircle, ChevronDown } from 'lucide-react';
 import { parseMonthValue, getActiveMonths } from '@/lib/monthUtils';
 import { createLogger } from '@/lib/logger';
+import { useAuth } from '@/contexts/AuthContext';
 
 const logger = createLogger('MarketplacePage');
 
@@ -38,6 +39,7 @@ interface ProductionRequest {
 export default function MarketplacePage({ params }: { params: Promise<{ slug: string }> }) {
   const searchParams = useSearchParams();
   const month = searchParams.get('month');
+  const { isSuperAdmin } = useAuth();
 
   const [marketplace, setMarketplace] = useState<Marketplace | null>(null);
   const [activeTab, setActiveTab] = useState<'manual' | 'excel'>('manual');
@@ -197,7 +199,8 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
         </div>
       </div>
 
-      {/* Entry Methods - Collapsible */}
+      {/* Entry Methods - Süper-admin only (yeni talep kritik aksiyon) */}
+      {isSuperAdmin && (
       <div className="bg-white rounded-xl border border-gray-200">
         <button onClick={() => setFormOpen(!formOpen)}
           className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors">
@@ -236,6 +239,7 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
           </>
         )}
       </div>
+      )}
 
       {/* Requests - Month Tabs */}
       <div>

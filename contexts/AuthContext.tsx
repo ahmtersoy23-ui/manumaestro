@@ -30,10 +30,22 @@ interface AuthContextType {
   role: 'admin' | 'editor' | 'viewer' | null;
   loading: boolean;
   isAuthenticated: boolean;
+  isSuperAdmin: boolean;
   canViewStock: boolean;
   marketplacePermissions: MarketplacePerm[];
   logout: () => void;
   hasRole: (roles: string[]) => boolean;
+}
+
+// Süper-admin email allowlist (server'la eşit tutulmalı — env'den okumak için
+// NEXT_PUBLIC_ prefix gerek; default: ersoy@iwaconcept.com.tr)
+const SUPER_ADMIN_EMAILS = (process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAILS ?? 'ersoy@iwaconcept.com.tr')
+  .split(',')
+  .map(e => e.trim().toLowerCase())
+  .filter(Boolean);
+
+function checkSuperAdmin(email?: string | null): boolean {
+  return !!email && SUPER_ADMIN_EMAILS.includes(email.toLowerCase());
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -86,6 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     role,
     loading,
     isAuthenticated: !!user,
+    isSuperAdmin: checkSuperAdmin(user?.email),
     canViewStock,
     marketplacePermissions,
     logout: handleLogout,

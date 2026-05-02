@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { requireRole } from '@/lib/auth/verify';
+import { requireRole, requireSuperAdmin } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
 import { z } from 'zod';
 
@@ -23,7 +23,8 @@ const CreatePoolSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  const authResult = await requireRole(request, ['admin']);
+  // Süper-admin gerekli (yeni sezon havuzu oluşturma kritik aksiyon)
+  const authResult = await requireSuperAdmin(request);
   if (authResult instanceof NextResponse) return authResult;
   const { user } = authResult;
 
