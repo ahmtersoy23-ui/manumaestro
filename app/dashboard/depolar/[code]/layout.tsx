@@ -8,7 +8,7 @@
 import { ReactNode, use } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, LayoutGrid, PackageOpen, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, LayoutGrid, PackageOpen, ChevronRight, ClipboardCheck } from 'lucide-react';
 
 const VALID_CODES = ['ANKARA', 'NJ', 'SHOWROOM'] as const;
 type WarehouseCode = (typeof VALID_CODES)[number];
@@ -47,6 +47,7 @@ export default function DepoDetayLayout({
     ...(showOutbound
       ? [{ href: `${baseHref}/siparis`, label: 'Sipariş Çıkış', icon: PackageOpen, exact: false }]
       : []),
+    { href: `${baseHref}/sayim`, label: 'Sayım', icon: ClipboardCheck, exact: false },
   ];
 
   const isActive = (href: string, exact: boolean) =>

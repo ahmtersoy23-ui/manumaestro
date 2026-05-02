@@ -602,9 +602,10 @@ model Shelf {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  warehouse Warehouse    @relation(fields: [warehouseCode], references: [code], onDelete: Restrict)
-  stocks    ShelfStock[]
-  boxes     ShelfBox[]
+  warehouse        Warehouse        @relation(fields: [warehouseCode], references: [code], onDelete: Restrict)
+  stocks           ShelfStock[]
+  boxes            ShelfBox[]
+  cycleCountTasks  CycleCountTask[]
 
   @@unique([warehouseCode, code])
   @@index([warehouseCode, shelfType])
@@ -701,6 +702,7 @@ enum MovementType {
   BOX_OPEN // Koli tamamen açıldı
   BOX_BREAK // Koliden kısmen alındı
   OUTBOUND // Sipariş çıkışı
+  ADJUSTMENT // Cycle count sapması veya manuel düzeltme (gerekçe zorunlu)
   REVERSAL // Başka hareketin geri alınması
 }
 
@@ -844,4 +846,70 @@ enum OrderLabelType {
   SHIPPING // Kargo etiketi (Aras, UPS, FedEx, USPS, DHL vb.)
   FNSKU // Amazon FNSKU etiketi (FBA_PICKUP)
   OTHER // Ticari fatura, packing list, diğer
+}
+
+// Cycle count (devirli sayım) görevleri — ABC sınıfına göre periyodik
+// (A: ayda 1, B: 3 ayda 1, C: 6 ayda 1). Sayım blind: sistem qty
+// kullanıcıya gösterilmez, sayılan miktar ile karşılaştırılır.
+model CycleCountTask {
+  id            String           @id @default(uuid())
+  warehouseCode String
+  shelfId       String
+  abcClass      String? // A | B | C — generator sırasında set edilir
+  status        CycleCountStatus @default(PENDING)
+  scheduledFor  DateTime         @default(now())
+  toleranceQty  Int              @default(0) // A=0, B=1, C=2
+  assignedToId  String?
+  startedAt     DateTime?
+  startedById   String?
+  completedAt   DateTime?
+  completedById String?
+  notes         String?
+  createdAt     DateTime         @default(now())
+
+  shelf Shelf            @relation(fields: [shelfId], references: [id], onDelete: Cascade)
+  items CycleCountItem[]
+
+  @@index([warehouseCode, status])
+  @@index([shelfId])
+  @@map("cycle_count_tasks")
+}
+
+model CycleCountItem {
+  id           String                @id @default(uuid())
+  taskId       String
+  iwasku       String
+  source       CycleCountItemSource // STOCK | BOX
+  shelfStockId String?
+  shelfBoxId   String?
+  systemQty    Int // task başlatıldığında snapshot
+  countedQty   Int? // kullanıcının girdiği (blind)
+  diffQty      Int? // counted - system (item commit anında set)
+  resolution   CycleCountResolution?
+  resolvedById String?
+  resolvedAt   DateTime?
+
+  task CycleCountTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([iwasku])
+  @@map("cycle_count_items")
+}
+
+enum CycleCountStatus {
+  PENDING // Generate edildi, başlanmadı
+  IN_PROGRESS // Sayım yapılıyor (blind giriş)
+  COMPLETED // Sayıldı, tüm fark tolerans içinde
+  DISCREPANCY // Sayıldı, en az bir kalemde fark > tolerance — manager review
+}
+
+enum CycleCountItemSource {
+  STOCK // ShelfStock kaydı
+  BOX // ShelfBox kaydı
+}
+
+enum CycleCountResolution {
+  ACCEPT // Kullanıcı kabul etti, adjust yapıldı
+  INVESTIGATE // İncelemeye alındı, henüz adjust yok
+  IGNORE // Yok say (hata, çift sayım vb.)
 }

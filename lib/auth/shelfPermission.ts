@@ -40,6 +40,10 @@ const ROLE_CAN: Record<ShelfRoleLevel, {
   uploadLabel: boolean; // kargo PDF / FNSKU / diğer yükle
   printLabel: boolean; // basıldı işaretle
   deleteLabel: boolean; // yüklenen etiketi sil
+  // Cycle counting (Faz 1.3)
+  cycleCountPerform: boolean; // task başlat, sayım gir, tamamla
+  cycleCountResolve: boolean; // discrepancy adjust + manuel inventory düzeltme
+  cycleCountGenerate: boolean; // task generator manuel tetikleme
   // Yönetim
   managePermissions: boolean;
   manageWarehouseSettings: boolean;
@@ -53,6 +57,7 @@ const ROLE_CAN: Record<ShelfRoleLevel, {
     undoOwnRecent: false, undoAny: false,
     resolveUnmatched: false,
     uploadLabel: false, printLabel: false, deleteLabel: false,
+    cycleCountPerform: false, cycleCountResolve: false, cycleCountGenerate: false,
     managePermissions: false, manageWarehouseSettings: false,
   },
   PACKER: {
@@ -64,6 +69,7 @@ const ROLE_CAN: Record<ShelfRoleLevel, {
     undoOwnRecent: false, undoAny: false,
     resolveUnmatched: false,
     uploadLabel: true, printLabel: true, deleteLabel: false,
+    cycleCountPerform: true, cycleCountResolve: false, cycleCountGenerate: false,
     managePermissions: false, manageWarehouseSettings: false,
   },
   OPERATOR: {
@@ -75,6 +81,7 @@ const ROLE_CAN: Record<ShelfRoleLevel, {
     undoOwnRecent: true, undoAny: false,
     resolveUnmatched: false,
     uploadLabel: true, printLabel: true, deleteLabel: false,
+    cycleCountPerform: true, cycleCountResolve: false, cycleCountGenerate: false,
     managePermissions: false, manageWarehouseSettings: false,
   },
   MANAGER: {
@@ -86,6 +93,7 @@ const ROLE_CAN: Record<ShelfRoleLevel, {
     undoOwnRecent: true, undoAny: true,
     resolveUnmatched: true,
     uploadLabel: true, printLabel: true, deleteLabel: true,
+    cycleCountPerform: true, cycleCountResolve: true, cycleCountGenerate: true,
     managePermissions: false, manageWarehouseSettings: false,
   },
   ADMIN: {
@@ -97,6 +105,7 @@ const ROLE_CAN: Record<ShelfRoleLevel, {
     undoOwnRecent: true, undoAny: true,
     resolveUnmatched: true,
     uploadLabel: true, printLabel: true, deleteLabel: true,
+    cycleCountPerform: true, cycleCountResolve: true, cycleCountGenerate: true,
     managePermissions: true, manageWarehouseSettings: true,
   },
 };
