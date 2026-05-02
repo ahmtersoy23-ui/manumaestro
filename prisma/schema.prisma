@@ -913,3 +913,18 @@ enum CycleCountResolution {
   INVESTIGATE // İncelemeye alındı, henüz adjust yok
   IGNORE // Yok say (hata, çift sayım vb.)
 }
+
+// =============================================================================
+// PRODUCT SERIAL COUNTER — üretim etiketi için iwasku-bazlı seri numarası sayacı
+// =============================================================================
+// Üretim etiketinde basılan IWASKU-XXXXXX serisinin per-SKU counter'ı.
+// Atomic increment için ON CONFLICT UPSERT pattern'i kullanılır (lib/serial/generate.ts).
+// İleride SwiftStock ile senkronize edilebilir; şimdilik ManuMaestro tek otorite.
+model ProductSerialCounter {
+  iwasku     String   @id
+  lastSerial Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("product_serial_counters")
+}

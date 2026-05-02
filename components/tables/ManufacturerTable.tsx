@@ -6,7 +6,8 @@
 'use client';
 
 import { useState, useEffect, Fragment } from 'react';
-import { ChevronDown, ChevronRight, Package, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Package, Loader2, Printer } from 'lucide-react';
+import { LabelPrintModal } from '@/components/labels/LabelPrintModal';
 
 interface ManufacturerTableProps {
   selectedCategory: string | null;
@@ -75,6 +76,7 @@ export function ManufacturerTable({ selectedCategory }: ManufacturerTableProps) 
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [data, setData] = useState<ProductData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [labelTarget, setLabelTarget] = useState<{ iwasku: string; productName: string; defaultQuantity: number } | null>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -140,6 +142,7 @@ export function ManufacturerTable({ selectedCategory }: ManufacturerTableProps) 
   }
 
   return (
+    <>
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -159,6 +162,9 @@ export function ManufacturerTable({ selectedCategory }: ManufacturerTableProps) 
               </th>
               <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
                 Toplam Miktar
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider w-32">
+                {/* Aksiyon */}
               </th>
             </tr>
           </thead>
@@ -202,12 +208,30 @@ export function ManufacturerTable({ selectedCategory }: ManufacturerTableProps) 
                         {item.totalQuantity}
                       </span>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLabelTarget({
+                            iwasku: item.iwasku,
+                            productName: item.productName,
+                            defaultQuantity: item.totalQuantity,
+                          });
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-md transition-colors"
+                        title="Etiket Bas"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                        Etiket
+                      </button>
+                    </td>
                   </tr>
 
                   {/* Expanded Details Row */}
                   {isExpanded && (
                     <tr>
-                      <td colSpan={5} className="px-6 py-4 bg-gray-50">
+                      <td colSpan={6} className="px-6 py-4 bg-gray-50">
                         <div className="space-y-3">
                           <h4 className="text-sm font-semibold text-gray-700 mb-3">
                             Pazar Yeri Dağılımı
@@ -245,5 +269,14 @@ export function ManufacturerTable({ selectedCategory }: ManufacturerTableProps) 
         </table>
       </div>
     </div>
+    {labelTarget && (
+      <LabelPrintModal
+        iwasku={labelTarget.iwasku}
+        productName={labelTarget.productName}
+        defaultQuantity={labelTarget.defaultQuantity}
+        onClose={() => setLabelTarget(null)}
+      />
+    )}
+    </>
   );
 }
