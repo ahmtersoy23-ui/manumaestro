@@ -106,11 +106,28 @@ export default function WarehouseStockPage() {
   const [snapshotData, setSnapshotData] = useState<{ summary: { totalRequested: number; totalStock: number; totalNet: number }; snapshots: SnapshotItem[] } | null>(null);
   const [snapshotLoading, setSnapshotLoading] = useState(false);
 
+  // Demand modal — Aylık / SZN Talep detayı
+  type DemandModalState = {
+    iwasku: string;
+    productName: string;
+    type: 'monthly' | 'season';
+    items: { label: string; qty: number }[];
+  };
+  const [demandModal, setDemandModal] = useState<DemandModalState | null>(null);
+
   const weekStarts = getWeekStarts();
   const currentWeek = getCurrentWeekStart();
   const prevWeek = weekStarts[0] || '';
 
   useEffect(() => { setCanEdit(role === 'admin' || role === 'editor'); }, [role]);
+
+  // Modal ESC kapatma
+  useEffect(() => {
+    if (!demandModal) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDemandModal(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [demandModal]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -525,32 +542,8 @@ export default function WarehouseStockPage() {
                       })}
                       <SortHeader label="Çıkış" sortField="toplamCikis" className="text-right font-semibold text-red-700 bg-red-50 min-w-[45px]" />
                       <SortHeader label="Mevcut" sortField="mevcut" className="text-right font-bold text-purple-700 bg-purple-50 min-w-[55px]" />
-                      <th className="px-2 py-2 text-left font-semibold text-indigo-600 bg-indigo-50 min-w-[120px] relative group/tip">
-                        Aylık Talep
-                        <span className="ml-1 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-indigo-200 text-indigo-700 text-[8px] font-bold cursor-help">?</span>
-                        <div className="absolute left-0 top-full mt-1 bg-gray-900 text-white text-[10px] rounded-lg p-3 w-48 z-50 hidden group-hover/tip:block shadow-xl">
-                          <p className="font-semibold mb-1.5">Kısaltmalar</p>
-                          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
-                            <span>US — Amazon US</span>
-                            <span>EU — Amazon EU</span>
-                            <span>UK — Amazon UK</span>
-                            <span>AU — Amazon AU</span>
-                            <span>CA — Amazon CA</span>
-                            <span>Citi — Amazon Citi</span>
-                            <span>TK — Takealot</span>
-                            <span>KF — Kaufland</span>
-                            <span>BOL — Bol.com</span>
-                            <span>WM — Walmart</span>
-                            <span>WF-US — Wayfair US</span>
-                            <span>WF-UK — Wayfair UK</span>
-                            <span>ET — Etsy</span>
-                            <span>EB — Ebay</span>
-                          </div>
-                        </div>
-                      </th>
-                      <th className="px-2 py-2 text-left font-semibold text-purple-600 bg-purple-50 min-w-[100px]">
-                        SZN Talep
-                      </th>
+                      <th className="px-2 py-2 text-right font-semibold text-indigo-600 bg-indigo-50 min-w-[80px]">Aylık Talep</th>
+                      <th className="px-2 py-2 text-right font-semibold text-purple-600 bg-purple-50 min-w-[80px]">SZN Talep</th>
                       <SortHeader label="Pazar Rez." sortField="liveDemand" className="text-right font-semibold text-rose-600 bg-rose-50 min-w-[55px]" />
                       <SortHeader label="Sezon Rez." sortField="reserved" className="text-right font-semibold text-orange-600 bg-orange-50 min-w-[55px]" />
                       <SortHeader label="Sev. Rez." sortField="shipmentReserved" className="text-right font-semibold text-blue-600 bg-blue-50 min-w-[55px]" />
@@ -579,7 +572,7 @@ export default function WarehouseStockPage() {
                           <td className="px-2 py-1 text-gray-500 max-w-[120px]">
                             <span className="line-clamp-2 whitespace-normal leading-tight">{p.productCategory}</span>
                           </td>
-                          <td className="px-2 py-1 text-right text-gray-400">{p.desi || '-'}</td>
+                          <td className="px-2 py-1 text-right text-gray-400">{p.desi != null ? p.desi.toFixed(1) : '-'}</td>
                           {showExtraCols && (
                           <td className="px-2 py-1 text-right bg-amber-50/30">
                             <EditableCell value={p.eskiStok} onSave={v => updateField(p.iwasku, 'eskiStok', v)} className="text-amber-700" />
@@ -613,40 +606,42 @@ export default function WarehouseStockPage() {
                           ))}
                           <td className="px-2 py-1 text-right font-medium text-red-700 bg-red-50/30">{p.toplamCikis || '-'}</td>
                           <td className="px-2 py-1 text-right font-bold text-purple-700 bg-purple-50/30">{p.mevcut}</td>
-                          <td className="px-1 py-1 bg-indigo-50/20">
+                          <td className="px-1 py-1 text-right bg-indigo-50/20">
                             {(p._monthDemands && p._monthDemands.length > 0) ? (
-                              <div className="grid grid-cols-3 gap-0.5">
-                                {p._monthDemands.map((d, i) => {
-                                  // Name-based abbreviations
-                                  const abbr: Record<string, string> = {
-                                    'Amazon US': 'US', 'Amazon EU': 'EU', 'Amazon UK': 'UK',
-                                    'Amazon AU': 'AU', 'Amazon CA': 'CA', 'Amazon Citi': 'Citi',
-                                    'Takealot': 'TK', 'Kaufland': 'KF', 'Bol': 'BOL',
-                                    'Wayfair US': 'WF-US', 'Wayfair UK': 'WF-UK',
-                                    'Walmart': 'WM', 'Etsy': 'ET', 'Ebay': 'EB',
-                                  };
-                                  const short = abbr[d.name] ?? d.name.substring(0, 4);
-                                  return (
-                                    <span key={i} className="text-[9px] text-indigo-700 bg-indigo-100 px-1 rounded" title={`${d.name}: ${d.qty}`}>
-                                      {short}_{d.qty}
-                                    </span>
-                                  );
+                              <button
+                                type="button"
+                                onClick={() => setDemandModal({
+                                  iwasku: p.iwasku,
+                                  productName: p.productName,
+                                  type: 'monthly',
+                                  items: [...p._monthDemands!].sort((a, b) => b.qty - a.qty).map(d => ({ label: d.name, qty: d.qty })),
                                 })}
-                              </div>
+                                className="w-full text-right hover:bg-indigo-100 rounded px-1 py-0.5 transition-colors"
+                              >
+                                <span className="font-semibold text-indigo-700">
+                                  {p._monthDemands.reduce((s, d) => s + d.qty, 0).toLocaleString()}
+                                </span>
+                                <span className="ml-1 text-[10px] text-indigo-400">({p._monthDemands.length})</span>
+                              </button>
                             ) : <span className="text-[9px] text-gray-300">—</span>}
                           </td>
-                          <td className="px-1 py-1 bg-purple-50/20">
+                          <td className="px-1 py-1 text-right bg-purple-50/20">
                             {(p._seasonDemands && p._seasonDemands.length > 0) ? (
-                              <div className="grid grid-cols-3 gap-0.5">
-                                {p._seasonDemands.map((d, i) => (
-                                  <span key={i} className="text-[9px] text-purple-700 bg-purple-100 px-1 rounded" title={`${d.code}: ${d.qty}`}>
-                                    {d.code}_{d.qty}
-                                  </span>
-                                ))}
-                                <span className="text-[9px] text-purple-900 font-bold px-1 col-span-3">
-                                  Σ{p._seasonDemands.reduce((s, d) => s + d.qty, 0)}
+                              <button
+                                type="button"
+                                onClick={() => setDemandModal({
+                                  iwasku: p.iwasku,
+                                  productName: p.productName,
+                                  type: 'season',
+                                  items: [...p._seasonDemands!].sort((a, b) => b.qty - a.qty).map(d => ({ label: d.code, qty: d.qty })),
+                                })}
+                                className="w-full text-right hover:bg-purple-100 rounded px-1 py-0.5 transition-colors"
+                              >
+                                <span className="font-semibold text-purple-700">
+                                  {p._seasonDemands.reduce((s, d) => s + d.qty, 0).toLocaleString()}
                                 </span>
-                              </div>
+                                <span className="ml-1 text-[10px] text-purple-400">({p._seasonDemands.length})</span>
+                              </button>
                             ) : <span className="text-[9px] text-gray-300">—</span>}
                           </td>
                           <td className="px-2 py-1 text-right text-rose-600 bg-rose-50/30" title="Açık non-Sezon talepler — yola çıkmamış pazaryeri rezervi">{p.liveDemand > 0 ? p.liveDemand : '-'}</td>
@@ -719,6 +714,60 @@ export default function WarehouseStockPage() {
           {snapshotMonth && !snapshotLoading && !snapshotData && (
             <div className="p-8 text-center text-sm text-gray-400">Bu ay için snapshot verisi yok (ay henüz kilitlenmemiş veya üretim talebi yok)</div>
           )}
+        </div>
+      )}
+
+      {/* Demand Detail Modal — Aylık / SZN Talep */}
+      {demandModal && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          onClick={() => setDemandModal(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] overflow-hidden flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className={`px-4 py-3 border-b border-gray-200 flex items-start justify-between ${demandModal.type === 'monthly' ? 'bg-indigo-50' : 'bg-purple-50'}`}>
+              <div className="min-w-0 flex-1">
+                <h3 className={`text-sm font-semibold ${demandModal.type === 'monthly' ? 'text-indigo-700' : 'text-purple-700'}`}>
+                  {demandModal.type === 'monthly' ? 'Aylık Talep' : 'Sezon Talep'} Detayı
+                </h3>
+                <p className="text-xs text-gray-500 font-mono mt-0.5">{demandModal.iwasku}</p>
+                <p className="text-xs text-gray-700 line-clamp-1">{demandModal.productName}</p>
+              </div>
+              <button
+                onClick={() => setDemandModal(null)}
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none ml-2"
+                aria-label="Kapat"
+              >
+                ×
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
+                  <tr>
+                    <th className="px-4 py-2 text-left font-semibold text-gray-600">{demandModal.type === 'monthly' ? 'Kanal' : 'Sezon Kodu'}</th>
+                    <th className="px-4 py-2 text-right font-semibold text-gray-600">Adet</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {demandModal.items.map((d, i) => (
+                    <tr key={i} className="hover:bg-gray-50">
+                      <td className="px-4 py-2 text-gray-900">{d.label}</td>
+                      <td className="px-4 py-2 text-right text-gray-700">{d.qty.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className={`px-4 py-3 border-t border-gray-200 flex items-center justify-between ${demandModal.type === 'monthly' ? 'bg-indigo-50' : 'bg-purple-50'}`}>
+              <span className="text-xs font-semibold text-gray-700">Toplam ({demandModal.items.length})</span>
+              <span className={`text-sm font-bold ${demandModal.type === 'monthly' ? 'text-indigo-700' : 'text-purple-700'}`}>
+                {demandModal.items.reduce((s, d) => s + d.qty, 0).toLocaleString()}
+              </span>
+            </div>
+          </div>
         </div>
       )}
     </div>
