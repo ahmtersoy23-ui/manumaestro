@@ -55,6 +55,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Duplicate guard: same iwasku + marketplace + productionMonth zaten var mı?
+    const existingDup = await prisma.productionRequest.findFirst({
+      where: { iwasku, marketplaceId, productionMonth },
+      select: { id: true, quantity: true },
+    });
+    if (existingDup) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Bu ürün için ${productionMonth} ayında bu pazar yerine zaten ${existingDup.quantity} adetlik talep var. Mevcut talebi düzenleyin veya silip yeniden girin.`,
+          code: 'DUPLICATE_REQUEST',
+          existingRequestId: existingDup.id,
+        },
+        { status: 409 }
+      );
+    }
+
     // requestDate is always today (entry date)
     const requestDate = new Date();
 

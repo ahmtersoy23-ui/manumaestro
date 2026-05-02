@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
 
     const errors: string[] = [];
     const warnings: string[] = [];
+    const duplicates: string[] = [];
 
     // Batch product lookup: 1 query instead of N
     const uniqueIwaskus = [...new Set(requests.map(r => r.iwasku))];
@@ -65,6 +66,21 @@ export async function POST(request: NextRequest) {
       : [];
     const productMap = new Map(products.map((p: { iwasku: string; name: string; category: string; size: number | null }) => [p.iwasku, p]));
 
+    // Existing requests for same marketplace + productionMonth (duplicate guard)
+    const existing = uniqueIwaskus.length > 0
+      ? await prisma.productionRequest.findMany({
+          where: {
+            marketplaceId,
+            productionMonth,
+            iwasku: { in: uniqueIwaskus },
+          },
+          select: { iwasku: true },
+        })
+      : [];
+    const existingSet = new Set(existing.map(e => e.iwasku));
+    // Track within-batch duplicates (same iwasku appearing twice in the file)
+    const seenInBatch = new Set<string>();
+
     // Validate + prepare batch data
     const toCreate: Prisma.ProductionRequestCreateManyInput[] = [];
 
@@ -74,6 +90,11 @@ export async function POST(request: NextRequest) {
         errors.push(`Ürün bulunamadı: ${item.iwasku}`);
         continue;
       }
+      if (existingSet.has(item.iwasku) || seenInBatch.has(item.iwasku)) {
+        duplicates.push(item.iwasku);
+        continue;
+      }
+      seenInBatch.add(item.iwasku);
       if (!product.size) {
         warnings.push(`${item.iwasku}: Desi verisi eksik`);
       }
@@ -106,16 +127,18 @@ export async function POST(request: NextRequest) {
       userEmail: user.email,
       action: 'BULK_UPLOAD',
       entityType: 'ProductionRequest',
-      description: `Toplu yükleme: ${createdCount} talep oluşturuldu, ${errors.length} hata (${productionMonth}, pazaryeri: ${marketplaceId})`,
-      metadata: { created: createdCount, errors, warnings, marketplaceId, productionMonth },
+      description: `Toplu yükleme: ${createdCount} talep oluşturuldu, ${duplicates.length} duplicate atlandı, ${errors.length} hata (${productionMonth}, pazaryeri: ${marketplaceId})`,
+      metadata: { created: createdCount, errors, warnings, duplicates, marketplaceId, productionMonth },
     });
 
     return NextResponse.json({
       success: true,
       data: {
         created: createdCount,
+        skipped: duplicates.length,
         errors: errors.length > 0 ? errors : undefined,
         warnings: warnings.length > 0 ? warnings : undefined,
+        duplicates: duplicates.length > 0 ? duplicates : undefined,
       },
     });
   } catch (error) {
