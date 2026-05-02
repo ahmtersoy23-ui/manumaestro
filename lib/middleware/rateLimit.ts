@@ -158,9 +158,9 @@ export const rateLimiters = {
     windowMs: 60 * 1000,
   }),
 
-  // Write operations: 100 requests per minute
+  // Write operations: 200 requests per minute
   write: createRateLimiter({
-    maxRequests: 100,
+    maxRequests: 200,
     windowMs: 60 * 1000,
   }),
 
