@@ -61,6 +61,7 @@ export async function GET(
           quantity: s.quantity,
           reservedQty: s.reservedQty,
           availableQty: s.quantity - s.reservedQty,
+          createdAt: s.createdAt.toISOString(), // FIFO ref
         })),
       boxes: boxes
         .filter((b) => b.quantity - b.reservedQty > 0)
@@ -68,6 +69,7 @@ export async function GET(
           id: b.id,
           shelfId: b.shelfId,
           shelfCode: b.shelf.code,
+          shelfType: b.shelf.shelfType,
           boxNumber: b.boxNumber,
           fnsku: b.fnsku,
           marketplaceCode: b.marketplaceCode,
@@ -76,6 +78,7 @@ export async function GET(
           reservedQty: b.reservedQty,
           availableQty: b.quantity - b.reservedQty,
           status: b.status,
+          arrivedAt: b.arrivedAt.toISOString(), // FIFO ref
         })),
     },
   });

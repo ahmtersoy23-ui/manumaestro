@@ -5,9 +5,10 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Search, Plus, Package, Box as BoxIcon, AlertCircle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Search, Plus, Package, Box as BoxIcon, AlertCircle, Sparkles, Loader2 } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { suggestPick, type PickCandidate, type PickSuggestion } from '@/lib/wms/fifoSuggest';
 
 const logger = createLogger('SingleItemAdder');
 
@@ -25,12 +26,14 @@ interface StockLocation {
   quantity: number;
   reservedQty: number;
   availableQty: number;
+  createdAt: string;
 }
 
 interface BoxLocation {
   id: string;
   shelfId: string;
   shelfCode: string;
+  shelfType: string;
   boxNumber: string;
   fnsku: string | null;
   marketplaceCode: string | null;
@@ -39,6 +42,7 @@ interface BoxLocation {
   reservedQty: number;
   availableQty: number;
   status: string;
+  arrivedAt: string;
 }
 
 interface Locations {
@@ -60,6 +64,9 @@ export function SingleOrderItemAdder({ warehouseCode, orderId, onSuccess }: Prop
   const [selectedProduct, setSelectedProduct] = useState<ProductHit | null>(null);
   const [locations, setLocations] = useState<Locations | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [needQty, setNeedQty] = useState<number>(1);
+  const [bulkAdding, setBulkAdding] = useState(false);
+  const [shelfFilter, setShelfFilter] = useState<string>('');
 
   // Debounced product autocomplete — fetch sırasında state setter setTimeout içinde
   useEffect(() => {
@@ -111,6 +118,83 @@ export function SingleOrderItemAdder({ warehouseCode, orderId, onSuccess }: Prop
     setLocations(null);
     setSearchQuery('');
     setError(null);
+    setNeedQty(1);
+    setShelfFilter('');
+  }
+
+  // FIFO candidate listesi (filtered + suggest input)
+  const candidates: PickCandidate[] = useMemo(() => {
+    if (!locations) return [];
+    const list: PickCandidate[] = [];
+    for (const s of locations.stocks) {
+      if (shelfFilter && !s.shelfCode.toUpperCase().includes(shelfFilter.toUpperCase())) continue;
+      list.push({
+        source: 'STOCK',
+        locationId: s.id,
+        shelfId: s.shelfId,
+        shelfCode: s.shelfCode,
+        shelfType: s.shelfType,
+        availableQty: s.availableQty,
+        ageReference: new Date(s.createdAt),
+      });
+    }
+    for (const b of locations.boxes) {
+      if (shelfFilter && !b.shelfCode.toUpperCase().includes(shelfFilter.toUpperCase())) continue;
+      list.push({
+        source: 'BOX',
+        locationId: b.id,
+        shelfId: b.shelfId,
+        shelfCode: b.shelfCode,
+        shelfType: b.shelfType,
+        availableQty: b.availableQty,
+        ageReference: new Date(b.arrivedAt),
+        boxNumber: b.boxNumber,
+        fnsku: b.fnsku,
+        marketplaceCode: b.marketplaceCode,
+        status: b.status,
+      });
+    }
+    return list;
+  }, [locations, shelfFilter]);
+
+  const suggestion = useMemo(() => suggestPick(candidates, needQty), [candidates, needQty]);
+
+  async function postItem(payload: Record<string, unknown>) {
+    const res = await fetch(`/api/depolar/${warehouseCode}/siparis/${orderId}/items`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const d = await res.json();
+    if (!res.ok || !d.success) throw new Error(d.error || 'Eklenemedi');
+    return d;
+  }
+
+  async function applySuggestions(suggestions: PickSuggestion[]) {
+    if (suggestions.length === 0 || !selectedProduct) return;
+    setBulkAdding(true);
+    setError(null);
+    try {
+      for (const s of suggestions) {
+        if (s.source === 'STOCK') {
+          await postItem({
+            shelfId: candidates.find((c) => c.locationId === s.locationId)?.shelfId,
+            iwasku: selectedProduct.iwasku,
+            quantity: s.suggestedQty,
+          });
+        } else {
+          await postItem({ shelfBoxId: s.locationId, quantity: s.suggestedQty });
+        }
+      }
+      onSuccess();
+      reset();
+    } catch (e) {
+      logger.error('Bulk apply suggestions', e);
+      setError((e as Error).message || 'Toplu ekleme başarısız');
+    } finally {
+      setBulkAdding(false);
+    }
   }
 
   async function addStockItem(loc: StockLocation, qty: number) {
@@ -120,26 +204,16 @@ export function SingleOrderItemAdder({ warehouseCode, orderId, onSuccess }: Prop
       return;
     }
     try {
-      const res = await fetch(`/api/depolar/${warehouseCode}/siparis/${orderId}/items`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          shelfId: loc.shelfId,
-          iwasku: selectedProduct!.iwasku,
-          quantity: qty,
-        }),
+      await postItem({
+        shelfId: loc.shelfId,
+        iwasku: selectedProduct!.iwasku,
+        quantity: qty,
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setError(data.error || 'Eklenemedi');
-        return;
-      }
       onSuccess();
       reset();
     } catch (e) {
       logger.error('Add stock item', e);
-      setError('Sunucu hatası');
+      setError((e as Error).message || 'Sunucu hatası');
     }
   }
 
@@ -150,22 +224,12 @@ export function SingleOrderItemAdder({ warehouseCode, orderId, onSuccess }: Prop
       return;
     }
     try {
-      const res = await fetch(`/api/depolar/${warehouseCode}/siparis/${orderId}/items`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shelfBoxId: box.id, quantity: qty }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setError(data.error || 'Eklenemedi');
-        return;
-      }
+      await postItem({ shelfBoxId: box.id, quantity: qty });
       onSuccess();
       reset();
     } catch (e) {
       logger.error('Add box item', e);
-      setError('Sunucu hatası');
+      setError((e as Error).message || 'Sunucu hatası');
     }
   }
 
@@ -216,6 +280,79 @@ export function SingleOrderItemAdder({ warehouseCode, orderId, onSuccess }: Prop
             <div className="text-gray-800">{selectedProduct.name}</div>
           </div>
 
+          {/* Pick controls: hedef miktar + filtre */}
+          {locations && (locations.stocks.length > 0 || locations.boxes.length > 0) && (
+            <div className="bg-white border border-blue-200 rounded p-2.5 flex items-center gap-3 flex-wrap">
+              <label className="flex items-center gap-2 text-xs text-gray-700">
+                İhtiyaç:
+                <input
+                  type="number"
+                  min="1"
+                  value={needQty}
+                  onChange={(e) => setNeedQty(Math.max(1, Number(e.target.value) || 1))}
+                  className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-right"
+                />
+                <span className="text-gray-500">adet</span>
+              </label>
+              <label className="flex items-center gap-2 text-xs text-gray-700">
+                Konum filtre:
+                <input
+                  type="text"
+                  value={shelfFilter}
+                  onChange={(e) => setShelfFilter(e.target.value)}
+                  placeholder="örn. A-01"
+                  className="w-32 px-2 py-1 border border-gray-300 rounded text-sm font-mono"
+                />
+              </label>
+            </div>
+          )}
+
+          {/* FIFO öneri paneli */}
+          {locations && candidates.length > 0 && suggestion.suggestions.length > 0 && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded">
+              <div className="px-3 py-2 border-b border-emerald-100 flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-900">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Sistem önerisi (FIFO)
+                  {suggestion.remaining > 0 && (
+                    <span className="ml-2 text-amber-700">
+                      {suggestion.remaining} adet karşılanamıyor (yetersiz stok)
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => applySuggestions(suggestion.suggestions)}
+                  disabled={bulkAdding || suggestion.remaining > 0}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={
+                    suggestion.remaining > 0
+                      ? 'Tam karşılanamadığı için toplu ekleme kapalı'
+                      : 'Önerilen tüm konumlardan otomatik ekle'
+                  }
+                >
+                  {bulkAdding ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                  Tümünü Ekle ({suggestion.suggestions.reduce((s, x) => s + x.suggestedQty, 0)})
+                </button>
+              </div>
+              <ul className="divide-y divide-emerald-100">
+                {suggestion.suggestions.map((s) => (
+                  <li key={`${s.source}-${s.locationId}`} className="px-3 py-1.5 flex items-center gap-2 text-xs">
+                    <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold">
+                      {s.order}
+                    </span>
+                    <span className="font-mono font-medium text-gray-900">{s.shelfCode}</span>
+                    {s.boxNumber && (
+                      <span className="font-mono text-gray-500">@ {s.boxNumber}</span>
+                    )}
+                    <span className="text-gray-500 truncate flex-1">{s.rationale}</span>
+                    <span className="font-medium text-emerald-800">{s.suggestedQty} adet</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* Locations */}
           {isLoadingLocations ? (
             <div className="text-sm text-gray-500 text-center py-3">Konumlar yükleniyor…</div>
@@ -226,13 +363,15 @@ export function SingleOrderItemAdder({ warehouseCode, orderId, onSuccess }: Prop
           ) : (
             <div className="space-y-2">
               {/* Stocks */}
-              {locations.stocks.length > 0 && (
+              {locations.stocks.filter((s) => !shelfFilter || s.shelfCode.toUpperCase().includes(shelfFilter.toUpperCase())).length > 0 && (
                 <div className="bg-white border border-gray-200 rounded">
                   <div className="px-3 py-2 border-b border-gray-100 flex items-center gap-2 text-xs text-gray-600">
-                    <Package className="w-3 h-3" /> Tekil ürün ({locations.stocks.length})
+                    <Package className="w-3 h-3" /> Tekil ürün
                   </div>
                   <div className="divide-y divide-gray-100">
-                    {locations.stocks.map((s) => (
+                    {locations.stocks
+                      .filter((s) => !shelfFilter || s.shelfCode.toUpperCase().includes(shelfFilter.toUpperCase()))
+                      .map((s) => (
                       <LocationRow
                         key={s.id}
                         type="stock"
@@ -240,6 +379,7 @@ export function SingleOrderItemAdder({ warehouseCode, orderId, onSuccess }: Prop
                         sub={`${s.shelfType}`}
                         available={s.availableQty}
                         reserved={s.reservedQty}
+                        defaultQty={Math.min(needQty, s.availableQty)}
                         onAdd={(q) => addStockItem(s, q)}
                       />
                     ))}
@@ -248,13 +388,15 @@ export function SingleOrderItemAdder({ warehouseCode, orderId, onSuccess }: Prop
               )}
 
               {/* Boxes */}
-              {locations.boxes.length > 0 && (
+              {locations.boxes.filter((b) => !shelfFilter || b.shelfCode.toUpperCase().includes(shelfFilter.toUpperCase())).length > 0 && (
                 <div className="bg-white border border-gray-200 rounded">
                   <div className="px-3 py-2 border-b border-gray-100 flex items-center gap-2 text-xs text-gray-600">
-                    <BoxIcon className="w-3 h-3" /> Koli ({locations.boxes.length})
+                    <BoxIcon className="w-3 h-3" /> Koli
                   </div>
                   <div className="divide-y divide-gray-100">
-                    {locations.boxes.map((b) => (
+                    {locations.boxes
+                      .filter((b) => !shelfFilter || b.shelfCode.toUpperCase().includes(shelfFilter.toUpperCase()))
+                      .map((b) => (
                       <LocationRow
                         key={b.id}
                         type="box"
@@ -262,6 +404,7 @@ export function SingleOrderItemAdder({ warehouseCode, orderId, onSuccess }: Prop
                         sub={`@ ${b.shelfCode} • ${b.status}${b.marketplaceCode ? ' • ' + b.marketplaceCode : ''}`}
                         available={b.availableQty}
                         reserved={b.reservedQty}
+                        defaultQty={Math.min(needQty, b.availableQty)}
                         onAdd={(q) => addBoxItem(b, q)}
                       />
                     ))}
@@ -289,11 +432,13 @@ interface LocationRowProps {
   sub: string;
   available: number;
   reserved: number;
+  defaultQty?: number;
   onAdd: (qty: number) => void | Promise<void>;
 }
 
-function LocationRow({ type, label, sub, available, reserved, onAdd }: LocationRowProps) {
-  const [qty, setQty] = useState<number>(available);
+function LocationRow({ type, label, sub, available, reserved, defaultQty, onAdd }: LocationRowProps) {
+  const initial = Math.max(1, Math.min(defaultQty ?? available, available));
+  const [qty, setQty] = useState<number>(initial);
   const [adding, setAdding] = useState(false);
 
   return (
