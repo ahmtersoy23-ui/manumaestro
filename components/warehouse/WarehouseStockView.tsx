@@ -572,7 +572,7 @@ export default function WarehouseStockPage() {
                           <td className="px-2 py-1 text-gray-500 max-w-[120px]">
                             <span className="line-clamp-2 whitespace-normal leading-tight">{p.productCategory}</span>
                           </td>
-                          <td className="px-2 py-1 text-right text-gray-400">{p.desi != null ? p.desi.toFixed(1) : '-'}</td>
+                          <td className="px-2 py-1 text-right text-gray-400">{p.desi != null ? Number(p.desi).toFixed(1) : '-'}</td>
                           {showExtraCols && (
                           <td className="px-2 py-1 text-right bg-amber-50/30">
                             <EditableCell value={p.eskiStok} onSave={v => updateField(p.iwasku, 'eskiStok', v)} className="text-amber-700" />
