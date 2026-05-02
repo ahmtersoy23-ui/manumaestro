@@ -53,7 +53,6 @@ export async function POST(request: NextRequest) {
 
     const errors: string[] = [];
     const warnings: string[] = [];
-    const duplicates: string[] = [];
 
     // Batch product lookup: 1 query instead of N
     const uniqueIwaskus = [...new Set(requests.map(r => r.iwasku))];
@@ -66,7 +65,7 @@ export async function POST(request: NextRequest) {
       : [];
     const productMap = new Map(products.map((p: { iwasku: string; name: string; category: string; size: number | null }) => [p.iwasku, p]));
 
-    // Existing requests for same marketplace + productionMonth (duplicate guard)
+    // Existing requests for same marketplace + productionMonth (upsert hedefleri)
     const existing = uniqueIwaskus.length > 0
       ? await prisma.productionRequest.findMany({
           where: {
@@ -74,52 +73,73 @@ export async function POST(request: NextRequest) {
             productionMonth,
             iwasku: { in: uniqueIwaskus },
           },
-          select: { iwasku: true },
+          select: { id: true, iwasku: true },
         })
       : [];
-    const existingSet = new Set(existing.map(e => e.iwasku));
-    // Track within-batch duplicates (same iwasku appearing twice in the file)
-    const seenInBatch = new Set<string>();
-
-    // Validate + prepare batch data
-    const toCreate: Prisma.ProductionRequestCreateManyInput[] = [];
-
+    const existingMap = new Map(existing.map(e => [e.iwasku, e.id]));
+    // Aynı iwasku dosyada birden fazla satırdaysa: son satır kazansın (Excel sırası)
+    const dedupedRequests = new Map<string, typeof requests[number]>();
     for (const item of requests) {
+      dedupedRequests.set(item.iwasku, item);
+    }
+
+    // Validate + ayır: yeni create vs. update
+    const toCreate: Prisma.ProductionRequestCreateManyInput[] = [];
+    const toUpdate: Array<{ id: string; quantity: number; priority: 'HIGH' | 'MEDIUM' | 'LOW'; notes: string | null }> = [];
+
+    for (const item of dedupedRequests.values()) {
       const product = productMap.get(item.iwasku);
       if (!product) {
         errors.push(`Ürün bulunamadı: ${item.iwasku}`);
         continue;
       }
-      if (existingSet.has(item.iwasku) || seenInBatch.has(item.iwasku)) {
-        duplicates.push(item.iwasku);
-        continue;
-      }
-      seenInBatch.add(item.iwasku);
       if (!product.size) {
         warnings.push(`${item.iwasku}: Desi verisi eksik`);
       }
-      (toCreate as Array<Record<string, unknown>>).push({
-        iwasku: item.iwasku,
-        productName: product.name,
-        productCategory: product.category || 'Kategorisiz',
-        productSize: product.size ? parseFloat(String(product.size)) : null,
-        marketplaceId,
-        quantity: item.quantity,
-        requestDate,
-        productionMonth,
-        notes: item.notes || null,
-        priority: item.priority ?? 'MEDIUM',
-        entryType: EntryType.EXCEL,
-        status: RequestStatus.REQUESTED,
-        enteredById: user.id,
-      });
+      const existingId = existingMap.get(item.iwasku);
+      if (existingId) {
+        toUpdate.push({
+          id: existingId,
+          quantity: item.quantity,
+          priority: item.priority ?? 'MEDIUM',
+          notes: item.notes || null,
+        });
+      } else {
+        (toCreate as Array<Record<string, unknown>>).push({
+          iwasku: item.iwasku,
+          productName: product.name,
+          productCategory: product.category || 'Kategorisiz',
+          productSize: product.size ? parseFloat(String(product.size)) : null,
+          marketplaceId,
+          quantity: item.quantity,
+          requestDate,
+          productionMonth,
+          notes: item.notes || null,
+          priority: item.priority ?? 'MEDIUM',
+          entryType: EntryType.EXCEL,
+          status: RequestStatus.REQUESTED,
+          enteredById: user.id,
+        });
+      }
     }
 
-    // Batch create: 1 query instead of N
+    // Batch create
     if ((toCreate as unknown[]).length > 0) {
       await prisma.productionRequest.createMany({ data: toCreate as never });
     }
+    // Batch update (transaction icinde, paralel)
+    if (toUpdate.length > 0) {
+      await prisma.$transaction(
+        toUpdate.map(u =>
+          prisma.productionRequest.update({
+            where: { id: u.id },
+            data: { quantity: u.quantity, priority: u.priority, notes: u.notes },
+          })
+        )
+      );
+    }
     const createdCount = (toCreate as unknown[]).length;
+    const updatedCount = toUpdate.length;
 
     await logAction({
       userId: user.id,
@@ -127,18 +147,17 @@ export async function POST(request: NextRequest) {
       userEmail: user.email,
       action: 'BULK_UPLOAD',
       entityType: 'ProductionRequest',
-      description: `Toplu yükleme: ${createdCount} talep oluşturuldu, ${duplicates.length} duplicate atlandı, ${errors.length} hata (${productionMonth}, pazaryeri: ${marketplaceId})`,
-      metadata: { created: createdCount, errors, warnings, duplicates, marketplaceId, productionMonth },
+      description: `Toplu yükleme: ${createdCount} yeni, ${updatedCount} güncellendi, ${errors.length} hata (${productionMonth}, pazaryeri: ${marketplaceId})`,
+      metadata: { created: createdCount, updated: updatedCount, errors, warnings, marketplaceId, productionMonth },
     });
 
     return NextResponse.json({
       success: true,
       data: {
         created: createdCount,
-        skipped: duplicates.length,
+        updated: updatedCount,
         errors: errors.length > 0 ? errors : undefined,
         warnings: warnings.length > 0 ? warnings : undefined,
-        duplicates: duplicates.length > 0 ? duplicates : undefined,
       },
     });
   } catch (error) {

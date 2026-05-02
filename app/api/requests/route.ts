@@ -55,62 +55,66 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Duplicate guard: same iwasku + marketplace + productionMonth zaten var mı?
-    const existingDup = await prisma.productionRequest.findFirst({
+    // Upsert: ayni (iwasku, marketplace, productionMonth) varsa miktar + oncelik + notes guncelle
+    const existingReq = await prisma.productionRequest.findFirst({
       where: { iwasku, marketplaceId, productionMonth },
       select: { id: true, quantity: true },
     });
-    if (existingDup) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Bu ürün için ${productionMonth} ayında bu pazar yerine zaten ${existingDup.quantity} adetlik talep var. Mevcut talebi düzenleyin veya silip yeniden girin.`,
-          code: 'DUPLICATE_REQUEST',
-          existingRequestId: existingDup.id,
-        },
-        { status: 409 }
-      );
-    }
 
     // requestDate is always today (entry date)
     const requestDate = new Date();
 
-    // Create production request
-    const productionRequest = await prisma.productionRequest.create({
-      data: {
-        iwasku,
-        productName,
-        productCategory,
-        productSize: productSize ?? null,
-        marketplaceId,
-        quantity,
-        requestDate,
-        productionMonth, // YYYY-MM format (e.g., "2026-03")
-        notes: notes ?? null,
-        priority: priority ?? 'MEDIUM',
-        entryType: EntryType.MANUAL,
-        status: RequestStatus.REQUESTED,
-        enteredById: user.id, // Real authenticated user
-      },
-      include: {
-        marketplace: true,
-      },
-    });
+    let productionRequest;
+    let wasUpdated = false;
+    if (existingReq) {
+      productionRequest = await prisma.productionRequest.update({
+        where: { id: existingReq.id },
+        data: {
+          quantity,
+          priority: priority ?? 'MEDIUM',
+          notes: notes ?? null,
+        },
+        include: { marketplace: true },
+      });
+      wasUpdated = true;
+    } else {
+      productionRequest = await prisma.productionRequest.create({
+        data: {
+          iwasku,
+          productName,
+          productCategory,
+          productSize: productSize ?? null,
+          marketplaceId,
+          quantity,
+          requestDate,
+          productionMonth,
+          notes: notes ?? null,
+          priority: priority ?? 'MEDIUM',
+          entryType: EntryType.MANUAL,
+          status: RequestStatus.REQUESTED,
+          enteredById: user.id,
+        },
+        include: { marketplace: true },
+      });
+    }
 
     await logAction({
       userId: user.id,
       userName: user.name,
       userEmail: user.email,
-      action: 'CREATE_REQUEST',
+      action: wasUpdated ? 'UPDATE_REQUEST' : 'CREATE_REQUEST',
       entityType: 'ProductionRequest',
       entityId: productionRequest.id,
-      description: `Talep oluşturuldu: ${iwasku} — ${productName} (${quantity} adet, ${productionMonth})`,
-      metadata: { iwasku, productName, productCategory, quantity, productionMonth, priority, marketplaceId },
+      description: wasUpdated
+        ? `Talep güncellendi: ${iwasku} — ${productName} (${existingReq!.quantity} → ${quantity} adet, ${productionMonth})`
+        : `Talep oluşturuldu: ${iwasku} — ${productName} (${quantity} adet, ${productionMonth})`,
+      metadata: { iwasku, productName, productCategory, quantity, productionMonth, priority, marketplaceId, updated: wasUpdated },
     });
 
     return NextResponse.json({
       success: true,
       data: productionRequest,
+      updated: wasUpdated,
       warning: !productSize ? `${iwasku} ürününde desi verisi eksik. Lütfen PriceLab'den güncelleyin.` : undefined,
     });
   } catch (error) {
