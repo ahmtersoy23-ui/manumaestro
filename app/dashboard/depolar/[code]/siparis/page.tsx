@@ -9,8 +9,9 @@
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Plus, PackageOpen, Truck, Box as BoxIcon, AlertCircle, Search } from 'lucide-react';
+import { Plus, PackageOpen, Truck, Box as BoxIcon, AlertCircle, Search, FileStack } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { BulkLabelDialog } from '@/components/wms/BulkLabelDialog';
 
 const logger = createLogger('OutboundList');
 
@@ -53,6 +54,8 @@ export default function SiparisListPage({ params }: { params: Promise<{ code: st
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'DRAFT' | 'SHIPPED' | 'CANCELLED'>('ALL');
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'SINGLE' | 'FBA_PICKUP'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,7 +78,7 @@ export default function SiparisListPage({ params }: { params: Promise<{ code: st
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [code, statusFilter, typeFilter]);
+  }, [code, statusFilter, typeFilter, refreshKey]);
 
   const canCreate = ['PACKER', 'OPERATOR', 'MANAGER', 'ADMIN'].includes(role);
 
@@ -107,7 +110,14 @@ export default function SiparisListPage({ params }: { params: Promise<{ code: st
           </p>
         </div>
         {canCreate && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setBulkOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700"
+              title="Tek PDF içinde birden fazla sipariş etiketi yükle"
+            >
+              <FileStack className="w-4 h-4" /> Toplu Etiket
+            </button>
             <Link
               href={`/dashboard/depolar/${code}/siparis/yeni?type=SINGLE`}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
@@ -125,6 +135,13 @@ export default function SiparisListPage({ params }: { params: Promise<{ code: st
           </div>
         )}
       </div>
+
+      <BulkLabelDialog
+        warehouseCode={code}
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        onCompleted={() => setRefreshKey((k) => k + 1)}
+      />
 
       {/* Filtreler */}
       <div className="flex flex-wrap gap-3">
