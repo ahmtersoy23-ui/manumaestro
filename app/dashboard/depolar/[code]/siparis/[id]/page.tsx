@@ -10,6 +10,7 @@ import { ChevronLeft, AlertCircle, Truck, X, PackageOpen, Box as BoxIcon } from 
 import { createLogger } from '@/lib/logger';
 import { SingleOrderItemAdder } from '@/components/wms/SingleOrderItemAdder';
 import { FbaPickupBoxSelector } from '@/components/wms/FbaPickupBoxSelector';
+import { LabelUploader } from '@/components/wms/LabelUploader';
 
 const logger = createLogger('SiparisDetay');
 
@@ -216,6 +217,9 @@ export default function SiparisDetayPage({
           </div>
         </div>
       </div>
+
+      {/* Etiketler — DRAFT/SHIPPED'de hep görünür, yetkiye göre yükle/bas/sil */}
+      <LabelUploader warehouseCode={code} orderId={data.order.id} role={data.role} />
 
       {/* Kalem ekleme — yalnız DRAFT + yetkili */}
       {data.order.status === 'DRAFT' &&

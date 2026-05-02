@@ -36,6 +36,10 @@ const ROLE_CAN: Record<ShelfRoleLevel, {
   undoAny: boolean;              // herhangi bir hareketi
   // Eşleşmeyen kuyruğu
   resolveUnmatched: boolean;
+  // Etiket yönetimi (Faz 1.1)
+  uploadLabel: boolean; // kargo PDF / FNSKU / diğer yükle
+  printLabel: boolean; // basıldı işaretle
+  deleteLabel: boolean; // yüklenen etiketi sil
   // Yönetim
   managePermissions: boolean;
   manageWarehouseSettings: boolean;
@@ -48,6 +52,7 @@ const ROLE_CAN: Record<ShelfRoleLevel, {
     createOutbound: false, shipOutbound: false, cancelOutbound: false,
     undoOwnRecent: false, undoAny: false,
     resolveUnmatched: false,
+    uploadLabel: false, printLabel: false, deleteLabel: false,
     managePermissions: false, manageWarehouseSettings: false,
   },
   PACKER: {
@@ -58,6 +63,7 @@ const ROLE_CAN: Record<ShelfRoleLevel, {
     createOutbound: true, shipOutbound: false, cancelOutbound: true,
     undoOwnRecent: false, undoAny: false,
     resolveUnmatched: false,
+    uploadLabel: true, printLabel: true, deleteLabel: false,
     managePermissions: false, manageWarehouseSettings: false,
   },
   OPERATOR: {
@@ -68,6 +74,7 @@ const ROLE_CAN: Record<ShelfRoleLevel, {
     createOutbound: false, shipOutbound: false, cancelOutbound: false,
     undoOwnRecent: true, undoAny: false,
     resolveUnmatched: false,
+    uploadLabel: true, printLabel: true, deleteLabel: false,
     managePermissions: false, manageWarehouseSettings: false,
   },
   MANAGER: {
@@ -78,6 +85,7 @@ const ROLE_CAN: Record<ShelfRoleLevel, {
     createOutbound: true, shipOutbound: true, cancelOutbound: true,
     undoOwnRecent: true, undoAny: true,
     resolveUnmatched: true,
+    uploadLabel: true, printLabel: true, deleteLabel: true,
     managePermissions: false, manageWarehouseSettings: false,
   },
   ADMIN: {
@@ -88,6 +96,7 @@ const ROLE_CAN: Record<ShelfRoleLevel, {
     createOutbound: true, shipOutbound: true, cancelOutbound: true,
     undoOwnRecent: true, undoAny: true,
     resolveUnmatched: true,
+    uploadLabel: true, printLabel: true, deleteLabel: true,
     managePermissions: true, manageWarehouseSettings: true,
   },
 };

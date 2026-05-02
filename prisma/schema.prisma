@@ -719,7 +719,8 @@ model OutboundOrder {
   shippedAt       DateTime?
   updatedAt       DateTime       @updatedAt
 
-  items OutboundOrderItem[]
+  items  OutboundOrderItem[]
+  labels OrderLabel[]
 
   @@unique([warehouseCode, marketplaceCode, orderNumber])
   @@index([warehouseCode, status])
@@ -810,4 +811,34 @@ enum ResolutionType {
   LOCAL_ALIAS // Lokal alias (manumaestro_db) — ileride
   PSEUDO // Yeni pseudo-iwasku (streç vb. yardımcı malzeme) — planlanacak
   SKIP // Atlandı
+}
+
+// Sipariş bazlı etiket yüklemeleri (kargo PDF, FNSKU PDF, vb.)
+// FBA_PICKUP'ta FNSKU koliye özel olabilir → shipmentBoxId opsiyonel.
+model OrderLabel {
+  id              String         @id @default(uuid())
+  outboundOrderId String
+  shipmentBoxId   String? // FNSKU spesifik koliye bağlıysa (FBA_PICKUP)
+  type            OrderLabelType
+  fileName        String // Yüklenen orijinal dosya adı
+  storagePath     String // {UPLOAD_ROOT}/labels/{orderId}/{id}.pdf
+  mimeType        String // application/pdf, image/png, image/jpeg
+  fileSize        Int // bytes
+  uploadedById    String
+  uploadedAt      DateTime       @default(now())
+  printedAt       DateTime?
+  printedById     String?
+  notes           String?
+
+  outboundOrder OutboundOrder @relation(fields: [outboundOrderId], references: [id], onDelete: Cascade)
+
+  @@index([outboundOrderId, type])
+  @@index([shipmentBoxId])
+  @@map("order_labels")
+}
+
+enum OrderLabelType {
+  SHIPPING // Kargo etiketi (Aras, UPS, FedEx, USPS, DHL vb.)
+  FNSKU // Amazon FNSKU etiketi (FBA_PICKUP)
+  OTHER // Ticari fatura, packing list, diğer
 }

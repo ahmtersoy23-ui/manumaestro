@@ -47,3 +47,6 @@ next-env.d.ts
 
 /app/generated/prisma
 *.tar.gz
+
+# WMS yüklenen dosyalar (etiketler vb.) — production'da PM2 volume olarak korunur
+/uploads/
