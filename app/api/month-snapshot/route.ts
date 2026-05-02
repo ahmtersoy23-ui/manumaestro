@@ -12,88 +12,51 @@ import { verifyAuth } from '@/lib/auth/verify';
 import { isMonthLocked } from '@/lib/monthUtils';
 import { errorResponse } from '@/lib/api/response';
 import { createLogger } from '@/lib/logger';
-import { getSezonProducedByIwasku } from '@/lib/seasonal/sezonProduced';
+import { getATPBulk } from '@/lib/db/atp';
 
 const logger = createLogger('MonthSnapshot');
 
+// snapshot.warehouseStock = ATP (mevcut − sezonRez − sevkRez − liveDemand).
+// Tek kaynak: getATPBulk. Inventory ekranındaki ATP ile snapshot hep tutarlı.
 async function generateSnapshot(month: string): Promise<void> {
-  // 1. Get all production requests for this month, grouped by IWASKU
-  const requests = await prisma.productionRequest.groupBy({
-    by: ['iwasku'],
-    where: { productionMonth: month },
-    _sum: { quantity: true },
-  });
+  const [requests, warehouseProducts] = await Promise.all([
+    prisma.productionRequest.groupBy({
+      by: ['iwasku'],
+      where: { productionMonth: month },
+      _sum: { quantity: true },
+    }),
+    prisma.warehouseProduct.findMany({ select: { iwasku: true } }),
+  ]);
 
-  // 2. Get warehouse mevcut for ALL products (not just those with requests)
-  const warehouseProducts = await prisma.warehouseProduct.findMany({
-    include: { weeklyEntries: true },
-  });
-
-  const stockMap = new Map<string, number>();
-  for (const p of warehouseProducts) {
-    const weeklyProd = p.weeklyEntries.filter(w => w.type === 'PRODUCTION').reduce((s, w) => s + w.quantity, 0);
-    const weeklyShip = p.weeklyEntries.filter(w => w.type === 'SHIPMENT').reduce((s, w) => s + w.quantity, 0);
-    const mevcut = p.eskiStok + weeklyProd + p.ilaveStok - p.cikis - weeklyShip;
-    if (mevcut > 0) stockMap.set(p.iwasku, mevcut);
-  }
-
-  // 3. Sezon rezervi: (initialStock − shippedQuantity) + sezonProduced (dinamik)
-  // StockReserve.producedQuantity alanı DB'de güncellenmiyor — waterfall simülasyonu kullan
-  const seasonReserves = await prisma.stockReserve.findMany({
-    where: { pool: { poolType: 'SEASONAL' }, status: { not: 'CANCELLED' } },
-    select: { iwasku: true, initialStock: true, shippedQuantity: true },
-  });
-  const seasonMap = new Map<string, number>();
-  for (const r of seasonReserves) {
-    const reserved = r.initialStock - r.shippedQuantity;
-    if (reserved <= 0) continue;
-    seasonMap.set(r.iwasku, (seasonMap.get(r.iwasku) ?? 0) + reserved);
-  }
-
-  // 3b. Sezon havuzuna fiilen düşen üretim (waterfall simülasyonu)
   const requestMap = new Map(requests.map(r => [r.iwasku, r._sum.quantity || 0]));
-  const allIwaskus = new Set([...requestMap.keys(), ...stockMap.keys()]);
-  const sezonProducedMap = await getSezonProducedByIwasku([...allIwaskus]);
-  for (const [iwasku, produced] of sezonProducedMap) {
-    if (produced <= 0) continue;
-    seasonMap.set(iwasku, (seasonMap.get(iwasku) ?? 0) + produced);
-  }
+  const allIwaskus = [
+    ...new Set([...requestMap.keys(), ...warehouseProducts.map(p => p.iwasku)]),
+  ];
+  if (allIwaskus.length === 0) return;
 
-  // 3c. Sevkiyat rezerve: kolilenmiş ama henüz sevk edilmemiş (Ankara çıkışlı)
-  const shipItems = await prisma.shipmentItem.groupBy({
-    by: ['iwasku'],
-    where: { packed: true, sentAt: null },
-    _sum: { quantity: true },
-  });
-  const shipmentReservedMap = new Map<string, number>();
-  for (const s of shipItems) {
-    shipmentReservedMap.set(s.iwasku, s._sum.quantity ?? 0);
-  }
+  const atpResults = await getATPBulk(allIwaskus);
+  const atpMap = new Map(atpResults.map(r => [r.iwasku, r]));
 
-  if (allIwaskus.size === 0) return;
+  const upsertOps = allIwaskus
+    .map(iwasku => {
+      const totalRequested = requestMap.get(iwasku) || 0;
+      const warehouseStock = atpMap.get(iwasku)?.atp ?? 0;
+      if (totalRequested === 0 && warehouseStock === 0) return null;
+      const netProduction = Math.max(0, totalRequested - warehouseStock);
+      return prisma.monthSnapshot.upsert({
+        where: { month_iwasku: { month, iwasku } },
+        update: { totalRequested, warehouseStock, netProduction },
+        create: { month, iwasku, totalRequested, warehouseStock, netProduction },
+      });
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
 
-  // 5. Calculate and store snapshots
-  const upsertOps = Array.from(allIwaskus).map(iwasku => {
-    const totalRequested = requestMap.get(iwasku) || 0;
-    const rawStock = stockMap.get(iwasku) || 0;
-    const reserved = seasonMap.get(iwasku) || 0;
-    const shipmentReserved = shipmentReservedMap.get(iwasku) || 0;
-    // Sezon + sevkiyat rezerveleri düş — kolide olan ama sevk edilmemiş miktar da kullanılamaz
-    const warehouseStock = Math.max(0, rawStock - reserved - shipmentReserved);
-    const netProduction = Math.max(0, totalRequested - warehouseStock);
-
-    return prisma.monthSnapshot.upsert({
-      where: { month_iwasku: { month, iwasku } },
-      update: { totalRequested, warehouseStock, netProduction },
-      create: { month, iwasku, totalRequested, warehouseStock, netProduction },
-    });
-  });
+  if (upsertOps.length === 0) return;
 
   await prisma.$transaction(upsertOps);
 
   // Snapshot is informational only — does NOT trigger waterfall or change statuses.
-  // Waterfall runs independently when manufacturer enters producedQuantity.
-  logger.info(`Snapshot generated for ${month}: ${allIwaskus.size} products`);
+  logger.info(`Snapshot generated for ${month}: ${upsertOps.length} products`);
 }
 
 export async function GET(request: NextRequest) {

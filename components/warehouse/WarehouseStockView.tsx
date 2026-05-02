@@ -284,6 +284,26 @@ export default function WarehouseStockPage() {
     finally { setSnapshotLoading(false); }
   };
 
+  // Regenerate snapshot (admin only) — POST endpoint zaten upsert yapıyor
+  const [regenerating, setRegenerating] = useState(false);
+  const regenerateSnapshot = async () => {
+    if (!snapshotMonth) return;
+    setRegenerating(true);
+    try {
+      const res = await fetch('/api/month-snapshot', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ month: snapshotMonth }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        logger.error('Regenerate failed:', res.status, err);
+        return;
+      }
+      await fetchSnapshot(snapshotMonth);
+    } catch (err) { logger.error('Regenerate failed:', err); }
+    finally { setRegenerating(false); }
+  };
+
   // Sorting
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -648,7 +668,7 @@ export default function WarehouseStockPage() {
                           <td className="px-2 py-1 text-right text-orange-600 bg-orange-50/30">{p.reserved > 0 ? p.reserved : '-'}</td>
                           <td className="px-2 py-1 text-right text-blue-600 bg-blue-50/30" title="Kolilenmiş, henüz sevk edilmemiş">{p.shipmentReserved > 0 ? p.shipmentReserved : '-'}</td>
                           <td className="px-2 py-1 text-right font-bold text-emerald-700 bg-emerald-50/30">{p.atp}</td>
-                          <td className="px-2 py-1 text-right text-gray-400">{p.toplamDesi ?? '-'}</td>
+                          <td className="px-2 py-1 text-right text-gray-400">{p.toplamDesi != null ? Math.round(Number(p.toplamDesi)) : '-'}</td>
                         </tr>
                       );
                     })}
@@ -670,6 +690,16 @@ export default function WarehouseStockPage() {
               <option value="" className="text-gray-500">Ay seçin...</option>
               {snapshotMonths.map(m => <option key={m} value={m}>{new Date(m + '-01').toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}</option>)}
             </select>
+            {role === 'admin' && snapshotMonth && (
+              <button
+                onClick={regenerateSnapshot}
+                disabled={regenerating || snapshotLoading}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 disabled:opacity-50"
+                title="Mevcut canlı stok ve rezervlere göre snapshot'ı yeniden hesapla"
+              >
+                {regenerating ? 'Üretiliyor...' : '↻ Yeniden Üret'}
+              </button>
+            )}
             <p className="text-xs text-gray-500">Snapshot alınan aylar için veri görüntülenir</p>
           </div>
 
