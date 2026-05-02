@@ -9,6 +9,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
+import {
+  lockShelfBoxById,
+  lockShelfStockByPair,
+  assertNonNegative,
+} from '@/lib/wms/lockedStock';
 
 export async function POST(
   request: NextRequest,
@@ -37,15 +42,14 @@ export async function POST(
 
       for (const item of order.items) {
         if (item.shelfBoxId) {
-          // Koliden çıkış
-          const box = await tx.shelfBox.findUnique({ where: { id: item.shelfBoxId } });
+          // Koliden çıkış (FOR UPDATE lock)
+          const box = await lockShelfBoxById(tx, item.shelfBoxId);
           if (!box) throw new Error(`Koli artık yok: ${item.shelfBoxId}`);
           const newQty = box.quantity - item.quantity;
           const newReserved = box.reservedQty - item.quantity;
-          if (newQty < 0 || newReserved < 0) {
-            throw new Error(`Koli ${box.boxNumber} tutarsız (qty=${box.quantity}, rezerve=${box.reservedQty}, sevk=${item.quantity})`);
-          }
-          const newStatus = newQty === 0 ? 'EMPTY' : box.quantity === item.quantity ? 'EMPTY' : 'PARTIAL';
+          assertNonNegative(`Koli ${box.boxNumber} quantity`, newQty);
+          assertNonNegative(`Koli ${box.boxNumber} rezerve`, newReserved);
+          const newStatus = newQty === 0 ? 'EMPTY' : 'PARTIAL';
           await tx.shelfBox.update({
             where: { id: box.id },
             data: { quantity: newQty, reservedQty: newReserved, status: newStatus },
@@ -65,16 +69,13 @@ export async function POST(
             },
           });
         } else if (item.shelfId) {
-          // ShelfStock'tan çıkış
-          const stock = await tx.shelfStock.findUnique({
-            where: { shelfId_iwasku: { shelfId: item.shelfId, iwasku: item.iwasku } },
-          });
+          // ShelfStock'tan çıkış (FOR UPDATE lock)
+          const stock = await lockShelfStockByPair(tx, item.shelfId, item.iwasku);
           if (!stock) throw new Error(`Raf stoğu artık yok: ${item.iwasku}`);
           const newQty = stock.quantity - item.quantity;
           const newReserved = stock.reservedQty - item.quantity;
-          if (newQty < 0 || newReserved < 0) {
-            throw new Error(`Raf stoğu tutarsız: ${item.iwasku}`);
-          }
+          assertNonNegative(`Raf stoğu ${item.iwasku} quantity`, newQty);
+          assertNonNegative(`Raf stoğu ${item.iwasku} rezerve`, newReserved);
           if (newQty === 0) {
             await tx.shelfStock.delete({ where: { id: stock.id } });
           } else {

@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
+import { lockShelfBoxById, lockShelfStockById, assertNonNegative } from '@/lib/wms/lockedStock';
 
 async function loadItem(code: string, taskId: string, itemId: string) {
   const upperCode = code.toUpperCase();
@@ -93,18 +94,24 @@ export async function PATCH(
         },
       });
 
-      // ACCEPT → fiziksel adjust
+      // ACCEPT → fiziksel adjust (FOR UPDATE lock — concurrent OUTBOUND ile çakışmasın)
       if (body.resolution === 'ACCEPT' && diff !== 0) {
         if (item.source === 'STOCK' && item.shelfStockId) {
+          const locked = await lockShelfStockById(tx, item.shelfStockId);
+          if (!locked) throw new Error('Raf stoğu artık yok');
+          // reservedQty değişmesin; counted < reserved ise inventory negatif rezerve olur — uyar
+          assertNonNegative(`ShelfStock ${locked.iwasku} (counted - reserved)`, counted - locked.reservedQty);
           await tx.shelfStock.update({
-            where: { id: item.shelfStockId },
+            where: { id: locked.id },
             data: { quantity: counted },
           });
         }
         if (item.source === 'BOX' && item.shelfBoxId) {
-          // Box quantity 0'a düşerse status=EMPTY
+          const locked = await lockShelfBoxById(tx, item.shelfBoxId);
+          if (!locked) throw new Error('Koli artık yok');
+          assertNonNegative(`ShelfBox ${locked.boxNumber} (counted - reserved)`, counted - locked.reservedQty);
           await tx.shelfBox.update({
-            where: { id: item.shelfBoxId },
+            where: { id: locked.id },
             data: {
               quantity: counted,
               status: counted === 0 ? 'EMPTY' : undefined,

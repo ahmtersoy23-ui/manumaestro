@@ -15,6 +15,11 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
+import {
+  lockShelfBoxById,
+  lockShelfStockByPair,
+  NegativeInventoryError,
+} from '@/lib/wms/lockedStock';
 
 const AddItemSchema = z
   .object({
@@ -62,13 +67,15 @@ export async function POST(
       let resolvedIwasku: string;
 
       if (shelfBoxId) {
-        const box = await tx.shelfBox.findUnique({ where: { id: shelfBoxId } });
+        const box = await lockShelfBoxById(tx, shelfBoxId);
         if (!box) throw new Error('Koli bulunamadı');
         if (box.warehouseCode !== upperCode) throw new Error('Koli bu depoya ait değil');
         if (box.status === 'EMPTY') throw new Error('Boş koli kullanılamaz');
         const available = box.quantity - box.reservedQty;
         if (quantity > available) {
-          throw new Error(`Koliden alınabilir: ${available} (rezerve: ${box.reservedQty})`);
+          throw new NegativeInventoryError(
+            `Koli ${box.boxNumber}: alınabilir ${available} (rezerve ${box.reservedQty})`
+          );
         }
         if (order.orderType === 'FBA_PICKUP' && quantity !== box.quantity) {
           throw new Error('FBA_PICKUP modunda tam koli alınmalı (kısmi yok)');
@@ -82,19 +89,19 @@ export async function POST(
         resolvedBoxId = box.id;
         resolvedIwasku = box.iwasku;
       } else if (shelfId) {
-        const stock = await tx.shelfStock.findFirst({
-          where: { shelfId, warehouseCode: upperCode },
-        });
-        // Stock yoksa: parsed.data.iwasku ile spesifik bul
-        const target = stock || (parsed.data.iwasku
-          ? await tx.shelfStock.findUnique({
-              where: { shelfId_iwasku: { shelfId, iwasku: parsed.data.iwasku } },
-            })
-          : null);
+        // shelfId + iwasku kombinasyonu zorunlu — generic findFirst güvensiz
+        const targetIwasku = parsed.data.iwasku;
+        if (!targetIwasku) {
+          throw new Error('shelfId verildiğinde iwasku da verilmeli');
+        }
+        const target = await lockShelfStockByPair(tx, shelfId, targetIwasku);
         if (!target) throw new Error('Raf stoğu bulunamadı');
+        if (target.warehouseCode !== upperCode) throw new Error('Stok bu depoya ait değil');
         const available = target.quantity - target.reservedQty;
         if (quantity > available) {
-          throw new Error(`Raftan alınabilir: ${available} (rezerve: ${target.reservedQty})`);
+          throw new NegativeInventoryError(
+            `Raf stoğu ${target.iwasku}: alınabilir ${available} (rezerve ${target.reservedQty})`
+          );
         }
 
         await tx.shelfStock.update({
