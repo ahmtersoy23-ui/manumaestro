@@ -8,7 +8,18 @@
  * deploy'lar arası kararsız renkler (kart dolgusu bazen siliniyordu).
  * Tailwind v4 @source inline ile manuel safelist.
  */
-@source inline("bg-rose-{50,100} bg-sky-50 bg-teal-50 bg-blue-100 bg-emerald-100");
+@source inline("bg-rose-{50,100,125} bg-sky-{50,100,125} bg-teal-{50,100,125} bg-blue-100 bg-emerald-100");
+
+/*
+ * Custom 125 shade — Tailwind default'ta yok, 100 ve 200 arası tatlı nokta.
+ * Ay sayfası kategori kartlarının dolgu rengi 50/100'de yeterince
+ * fark edilmiyordu, 200 ise fazla doygun. 125 oklch interpolasyonu.
+ */
+@theme {
+  --color-rose-125: oklch(0.91 0.045 18);
+  --color-sky-125: oklch(0.93 0.04 233);
+  --color-teal-125: oklch(0.93 0.073 180.6);
+}
 @source inline("border-rose-300 border-sky-300 border-teal-300");
 @source inline("text-rose-{500,600,800} text-sky-{500,600,800} text-teal-{500,600,800}");
 @source inline("text-blue-600 text-emerald-600");

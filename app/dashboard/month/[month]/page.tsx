@@ -425,9 +425,9 @@ export default function MonthDetailPage() {
               }, { coveredQty: 0, coveredDesi: 0, netQty: 0, netDesi: 0 });
               const hasStock = categoryStockMap.size > 0;
               const groupColorMap = {
-                orange: { bg: 'bg-rose-50', border: 'border-rose-300', text: 'text-rose-800', label: 'text-rose-600', sub: 'text-rose-500' },
-                blue: { bg: 'bg-sky-50', border: 'border-sky-300', text: 'text-sky-800', label: 'text-sky-600', sub: 'text-sky-500' },
-                emerald: { bg: 'bg-teal-50', border: 'border-teal-300', text: 'text-teal-800', label: 'text-teal-600', sub: 'text-teal-500' },
+                orange: { bg: 'bg-rose-125', border: 'border-rose-300', text: 'text-rose-800', label: 'text-rose-600', sub: 'text-rose-500' },
+                blue: { bg: 'bg-sky-125', border: 'border-sky-300', text: 'text-sky-800', label: 'text-sky-600', sub: 'text-sky-500' },
+                emerald: { bg: 'bg-teal-125', border: 'border-teal-300', text: 'text-teal-800', label: 'text-teal-600', sub: 'text-teal-500' },
               };
               const gc = groupColorMap[group.color as keyof typeof groupColorMap];
               const displayQty = hasStock ? groupStock.netQty : totalQty;
