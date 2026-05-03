@@ -255,30 +255,50 @@ export function UnmatchedSeedTable({ warehouseCode, canResolve, refreshTick, onC
                         <table className="w-full text-xs">
                           <thead className="text-gray-500">
                             <tr>
-                              <th className="text-left py-1">Raf</th>
-                              <th className="text-left py-1">Koli</th>
-                              <th className="text-right py-1">Adet</th>
-                              <th className="text-left py-1">Açıklama</th>
-                              {canResolve && <th className="text-right py-1 w-20">İşlem</th>}
+                              <th className="text-left px-2 py-1">Raf</th>
+                              <th className="text-left px-2 py-1">Koli</th>
+                              <th className="text-right px-2 py-1 w-20">Adet</th>
+                              <th className="text-left px-2 py-1">Açıklama</th>
+                              {canResolve && <th className="text-right px-2 py-1 w-32">İşlem</th>}
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-200">
                             {detailRows.map((r) => (
                               <tr key={r.id} className="text-gray-700">
-                                <td className="py-1.5 font-mono">{r.shelfCode}</td>
-                                <td className="py-1.5 font-mono">{r.boxNumber ?? '—'}</td>
-                                <td className="py-1.5 text-right">{r.quantity}</td>
-                                <td className="py-1.5 truncate max-w-[260px] text-gray-500">
+                                <td className="px-2 py-1.5 font-mono">{r.shelfCode}</td>
+                                <td className="px-2 py-1.5 font-mono">{r.boxNumber ?? '—'}</td>
+                                <td className="px-2 py-1.5 text-right">{r.quantity}</td>
+                                <td className="px-2 py-1.5 truncate max-w-[260px] text-gray-500">
                                   {r.description ?? '—'}
                                 </td>
                                 {canResolve && (
-                                  <td className="py-1.5 text-right">
-                                    <button
-                                      onClick={() => skipSingleRow(r)}
-                                      className="text-[10px] text-red-700 bg-red-50 hover:bg-red-100 px-1.5 py-0.5 rounded"
-                                    >
-                                      Sil
-                                    </button>
+                                  <td className="px-2 py-1.5 text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                      <button
+                                        onClick={() =>
+                                          setResolveSource({
+                                            id: r.id,
+                                            rawLookup: r.rawLookup,
+                                            description: r.description,
+                                            shelfCode: r.shelfCode,
+                                            boxNumber: r.boxNumber,
+                                            quantity: r.quantity,
+                                            groupCount: 1, // tek satır mode
+                                            groupTotalQty: r.quantity,
+                                          })
+                                        }
+                                        className="text-[10px] text-blue-700 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded"
+                                        title="Bu satırı farklı bir iwasku'ya eşleştir"
+                                      >
+                                        Eşleştir
+                                      </button>
+                                      <button
+                                        onClick={() => skipSingleRow(r)}
+                                        className="text-[10px] text-red-700 bg-red-50 hover:bg-red-100 px-1.5 py-0.5 rounded"
+                                      >
+                                        Sil
+                                      </button>
+                                    </div>
                                   </td>
                                 )}
                               </tr>
