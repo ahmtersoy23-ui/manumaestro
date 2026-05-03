@@ -34,6 +34,7 @@ const nextConfig: NextConfig = {
               "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob:",
+              "media-src 'self' blob:", // kamera barkod scan için (zxing)
               "font-src 'self'",
               "connect-src 'self' https://apps.iwa.web.tr",
               "frame-ancestors 'none'",
@@ -42,9 +43,17 @@ const nextConfig: NextConfig = {
             ].join('; '),
           },
           {
+            // camera=(self) — WMS scan-to-confirm için zorunlu
             key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=()',
+            value: 'camera=(self), microphone=(), geolocation=()',
           },
+        ],
+      },
+      {
+        // SW kendisi browser cache'lenmesin — yeni deploy'da hemen aktif olsun
+        source: '/sw.js',
+        headers: [
+          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
         ],
       },
     ];

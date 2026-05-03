@@ -1,19 +1,17 @@
 /**
- * Minimum service worker — sadece PWA installability + statik asset cache.
- * API çağrıları cache edilmez (stale data riski).
+ * Minimal service worker — yalnızca PWA installability için.
+ *
+ * NOT (2026-05-03): Statik asset cache stratejisi kaldırıldı çünkü
+ * deploy sonrası eski CSS hash'leri tutarak kararsız stil davranışına
+ * sebep oluyordu. Next.js zaten /_next/static/ için immutable
+ * Cache-Control header gönderiyor — browser kendi HTTP cache'i ile
+ * doğru hash invalidation yapıyor. SW'in araya girmesi gereksiz.
+ *
+ * Önceki tüm cache'ler activate sırasında temizlenir (mevcut
+ * kullanıcılarda eski cache otomatik silinsin).
  */
 
-const CACHE_VERSION = 'manumaestro-v1';
-const STATIC_ASSETS = ['/', '/dashboard', '/manifest.json', '/icon.svg', '/logo.svg'];
-
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_VERSION).then((cache) =>
-      cache.addAll(STATIC_ASSETS).catch(() => {
-        // Bazı route'lar offline olabilir; fail silent
-      })
-    )
-  );
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
@@ -21,38 +19,14 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) =>
-        Promise.all(keys.filter((k) => k !== CACHE_VERSION).map((k) => caches.delete(k)))
-      )
+      .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
 
-self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-
-  // API çağrıları & POST/PATCH/DELETE → asla cache, network'e bırak
-  if (url.pathname.startsWith('/api/') || event.request.method !== 'GET') {
-    return; // default network handling
-  }
-
-  // Statik assets: cache-first
-  if (url.pathname.startsWith('/_next/static/') || url.pathname.match(/\.(svg|png|jpg|jpeg|ico|webp|woff2?)$/)) {
-    event.respondWith(
-      caches.match(event.request).then((cached) => {
-        if (cached) return cached;
-        return fetch(event.request).then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_VERSION).then((cache) => cache.put(event.request, clone));
-          }
-          return response;
-        });
-      })
-    );
-    return;
-  }
-
-  // HTML sayfaları: network-first, fallback yok (online şart)
-  // (offline pick queue Faz 3'te eklenecek)
+// Pasif fetch handler — bazı browser'lar PWA installable kabul etmek
+// için bir fetch listener'ın varlığını arar. Kayıt yapıyoruz ama
+// tüm istekleri network'e bırakıyoruz.
+self.addEventListener('fetch', () => {
+  // pass-through
 });
