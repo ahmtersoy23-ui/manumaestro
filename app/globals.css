@@ -1,6 +1,20 @@
 @import "tailwindcss";
 @import "../shared/tokens.css";
 
+/*
+ * Dinamik class garantisi — object value içinden runtime'da alınan Tailwind
+ * class'ları oxide tarayıcısı bazı build'lerde kaçırıyor (örn.
+ * app/dashboard/month/[month]/page.tsx içindeki groupColorMap). Sonuç:
+ * deploy'lar arası kararsız renkler (kart dolgusu bazen siliniyordu).
+ * Tailwind v4 @source inline ile manuel safelist.
+ */
+@source inline("bg-rose-{50,100} bg-sky-50 bg-teal-50 bg-blue-100 bg-emerald-100");
+@source inline("border-rose-300 border-sky-300 border-teal-300");
+@source inline("text-rose-{500,600,800} text-sky-{500,600,800} text-teal-{500,600,800}");
+@source inline("text-blue-600 text-emerald-600");
+@source inline("group-hover:bg-rose-200 group-hover:bg-blue-200 group-hover:bg-emerald-200");
+@source inline("hover:border-rose-500 hover:border-blue-500 hover:border-emerald-500");
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
