@@ -425,9 +425,9 @@ export default function MonthDetailPage() {
               }, { coveredQty: 0, coveredDesi: 0, netQty: 0, netDesi: 0 });
               const hasStock = categoryStockMap.size > 0;
               const groupColorMap = {
-                orange: { bg: 'bg-rose-125', border: 'border-rose-300', text: 'text-rose-800', label: 'text-rose-600', sub: 'text-rose-500' },
-                blue: { bg: 'bg-sky-125', border: 'border-sky-300', text: 'text-sky-800', label: 'text-sky-600', sub: 'text-sky-500' },
-                emerald: { bg: 'bg-teal-125', border: 'border-teal-300', text: 'text-teal-800', label: 'text-teal-600', sub: 'text-teal-500' },
+                orange: { bg: 'bg-rose-100', border: 'border-rose-300', text: 'text-rose-800', label: 'text-rose-600', sub: 'text-rose-500' },
+                blue: { bg: 'bg-sky-100', border: 'border-sky-300', text: 'text-sky-800', label: 'text-sky-600', sub: 'text-sky-500' },
+                emerald: { bg: 'bg-teal-100', border: 'border-teal-300', text: 'text-teal-800', label: 'text-teal-600', sub: 'text-teal-500' },
               };
               const gc = groupColorMap[group.color as keyof typeof groupColorMap];
               const displayQty = hasStock ? groupStock.netQty : totalQty;
@@ -467,7 +467,7 @@ export default function MonthDetailPage() {
         <div className="bg-white rounded-xl border border-emerald-200 overflow-hidden">
           <button
             onClick={() => setSnapshotOpen(!snapshotOpen)}
-            className="w-full flex items-center justify-between px-4 md:px-6 py-4 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+            className="w-full flex items-center justify-between px-4 md:px-6 py-4 bg-emerald-100 hover:bg-emerald-200 transition-colors"
           >
             <div className="flex items-center gap-3">
               <Warehouse className="w-5 h-5 text-emerald-600" />
