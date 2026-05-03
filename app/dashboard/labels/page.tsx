@@ -124,7 +124,7 @@ export default function LabelsPage() {
           Etiket Bas
         </h1>
         <p className="text-sm text-gray-600 mt-1">
-          Katalogdaki herhangi bir ürün için 100×30 mm QR etiketi bas. Talep olmayan ürünler de listede.
+          Katalogdaki herhangi bir ürün için 100×30 mm QR etiketi bas.
         </p>
       </div>
 
