@@ -4,20 +4,24 @@
  * Layout: Sol 26×26mm QR (içerik = full barcode) + Sağda ürün adı (12pt bold,
  * auto-shrink 6pt'a kadar) + iwasku-serial (8pt monospace).
  *
- * SwiftStock'taki Products.tsx ile birebir aynı tasarım — kullanıcı QR ve text'in
- * görünüm/okuma kalitesini orada onayladı, aynısını burada üretiyoruz.
- *
- * Kütüphane: qrcodejs CDN (popup içine yüklenir, bundle'a girmez).
+ * QR kodları popup'tan ÖNCE parent'ta `qrcode` npm paketi ile data URL olarak
+ * üretilip inline geçilir — CDN/network bağımlılığı yok, CSP kısıtlarından
+ * etkilenmez, popup tamamen self-contained.
  */
+
+interface SerialEntry {
+  fullBarcode: string;
+  qrDataUrl: string; // data:image/png;base64,...
+}
 
 interface OpenProductLabelPopupArgs {
   productName: string;
-  serials: string[]; // [{full_barcode}] formatında IWASKU-XXXXXX dizisi
   iwasku: string;
+  entries: SerialEntry[];
 }
 
-export function openProductLabelPopup({ productName, serials, iwasku }: OpenProductLabelPopupArgs): void {
-  if (serials.length === 0) return;
+export function openProductLabelPopup({ productName, iwasku, entries }: OpenProductLabelPopupArgs): void {
+  if (entries.length === 0) return;
 
   const printWindow = window.open('', '_blank', 'width=700,height=900');
   if (!printWindow) {
@@ -25,11 +29,26 @@ export function openProductLabelPopup({ productName, serials, iwasku }: OpenProd
     return;
   }
 
+  const safeProductName = escapeHtml(productName);
+  const safeIwasku = escapeHtml(iwasku);
+
+  const labelsHtml = entries
+    .map(
+      (e) => `
+    <div class="label">
+      <div class="qr-box"><img src="${e.qrDataUrl}" alt="QR" /></div>
+      <div class="text-area">
+        <div class="product-name">${safeProductName}</div>
+        <div class="iwasku-serial">${escapeHtml(e.fullBarcode)}</div>
+      </div>
+    </div>`
+    )
+    .join('');
+
   printWindow.document.write(`<!DOCTYPE html>
 <html>
   <head>
-    <title>Etiket Yazdir — ${escapeHtml(iwasku)}</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <title>Etiket Yazdir — ${safeIwasku}</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
@@ -49,7 +68,7 @@ export function openProductLabelPopup({ productName, serials, iwasku }: OpenProd
         page-break-inside: avoid; overflow: hidden;
       }
       .qr-box { width: 26mm; height: 26mm; flex-shrink: 0; }
-      .qr-box img, .qr-box canvas { width: 100% !important; height: 100% !important; display: block; }
+      .qr-box img { width: 100% !important; height: 100% !important; display: block; }
       .text-area {
         flex: 1; min-width: 0; height: 100%;
         display: flex; flex-direction: column; justify-content: center;
@@ -75,89 +94,31 @@ export function openProductLabelPopup({ productName, serials, iwasku }: OpenProd
   </head>
   <body>
     <div class="controls">
-      <h2 id="title-text"></h2>
+      <h2>${entries.length} Etiket — ${safeIwasku}</h2>
       <button class="btn btn-print" onclick="window.print()">Yazdir</button>
       <button class="btn btn-close" onclick="window.close()">Kapat</button>
     </div>
-    <div class="labels-container" id="labels-container"></div>
+    <div class="labels-container">${labelsHtml}</div>
+    <script>
+      // Auto-shrink: ürün adını text-area'ya sığana kadar küçült (12pt → 6pt)
+      function fitText(nameEl) {
+        var textArea = nameEl.parentElement;
+        if (!textArea) return;
+        var current = 12;
+        nameEl.style.fontSize = current + 'pt';
+        while (textArea.scrollHeight > textArea.clientHeight + 0.5 && current > 6) {
+          current = Math.max(6, current - 0.25);
+          nameEl.style.fontSize = current + 'pt';
+        }
+      }
+      // Tüm img'ler yüklenince fit et (QR yüklendikçe layout sabitlensin)
+      window.addEventListener('load', function() {
+        document.querySelectorAll('.product-name').forEach(fitText);
+      });
+    </script>
   </body>
 </html>`);
   printWindow.document.close();
-
-  type QRCodeCtor = new (
-    el: Element,
-    opts: { text: string; width: number; height: number; colorDark: string; colorLight: string; correctLevel: number }
-  ) => unknown;
-
-  const render = () => {
-    const win = printWindow as Window & { QRCode: QRCodeCtor };
-
-    const titleEl = printWindow.document.getElementById('title-text');
-    if (titleEl) titleEl.textContent = `${serials.length} Etiket — ${iwasku}`;
-
-    const container = printWindow.document.getElementById('labels-container');
-    if (!container) return;
-
-    const fitText = (nameEl: HTMLElement) => {
-      const textArea = nameEl.parentElement;
-      if (!textArea) return;
-      const maxFont = 12;
-      const minFont = 6;
-      const step = 0.25;
-      let current = maxFont;
-      nameEl.style.fontSize = current + 'pt';
-      while (textArea.scrollHeight > textArea.clientHeight + 0.5 && current > minFont) {
-        current = Math.max(minFont, current - step);
-        nameEl.style.fontSize = current + 'pt';
-      }
-    };
-
-    serials.forEach((fullBarcode) => {
-      const label = printWindow.document.createElement('div');
-      label.className = 'label';
-
-      const qrBox = printWindow.document.createElement('div');
-      qrBox.className = 'qr-box';
-      label.appendChild(qrBox);
-
-      const textArea = printWindow.document.createElement('div');
-      textArea.className = 'text-area';
-
-      const nameDiv = printWindow.document.createElement('div');
-      nameDiv.className = 'product-name';
-      nameDiv.textContent = productName;
-      textArea.appendChild(nameDiv);
-
-      const serialDiv = printWindow.document.createElement('div');
-      serialDiv.className = 'iwasku-serial';
-      serialDiv.textContent = fullBarcode;
-      textArea.appendChild(serialDiv);
-
-      label.appendChild(textArea);
-      container.appendChild(label);
-
-      try {
-        new win.QRCode(qrBox, {
-          text: fullBarcode,
-          width: 98,
-          height: 98,
-          colorDark: '#000000',
-          colorLight: '#ffffff',
-          correctLevel: 1, // M (medium error correction)
-        });
-      } catch {
-        /* skip */
-      }
-
-      fitText(nameDiv);
-    });
-  };
-
-  if ((printWindow as unknown as { QRCode?: unknown }).QRCode) {
-    render();
-  } else {
-    printWindow.addEventListener('load', render);
-  }
 }
 
 function escapeHtml(s: string): string {

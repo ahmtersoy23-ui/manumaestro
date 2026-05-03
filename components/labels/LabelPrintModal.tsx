@@ -10,6 +10,7 @@
 
 import { useState } from 'react';
 import { X, Loader2, Printer } from 'lucide-react';
+import QRCode from 'qrcode';
 import { openProductLabelPopup } from '@/lib/labels/productLabel';
 
 interface LabelPrintModalProps {
@@ -40,7 +41,19 @@ export function LabelPrintModal({ iwasku, productName, defaultQuantity, onClose 
         throw new Error(json.error || 'Etiket uretilemedi');
       }
       const serials: string[] = json.data.serials;
-      openProductLabelPopup({ iwasku, productName, serials });
+      // Her seri için inline QR data URL üret — popup self-contained, CDN bağımlılığı yok
+      const entries = await Promise.all(
+        serials.map(async (fullBarcode) => ({
+          fullBarcode,
+          qrDataUrl: await QRCode.toDataURL(fullBarcode, {
+            width: 200,
+            margin: 0,
+            errorCorrectionLevel: 'M',
+            color: { dark: '#000000', light: '#ffffff' },
+          }),
+        }))
+      );
+      openProductLabelPopup({ iwasku, productName, entries });
       onClose();
     } catch (err) {
       setError((err as Error).message);

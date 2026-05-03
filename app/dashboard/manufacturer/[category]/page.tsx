@@ -8,10 +8,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Package, Save, Calendar, Store, Download, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { ArrowLeft, Package, Save, Calendar, Store, Download, ChevronLeft, ChevronRight, Search, Printer, Loader2 } from 'lucide-react';
 import { formatMonthValue, parseMonthValue } from '@/lib/monthUtils';
 import { createLogger } from '@/lib/logger';
 import { ProductMarketplaceModal } from '@/components/modals/ProductMarketplaceModal';
+import { LabelPrintModal } from '@/components/labels/LabelPrintModal';
 
 const logger = createLogger('ManufacturerCategoryPage');
 
@@ -98,6 +99,7 @@ export default function ManufacturerCategoryPage() {
   const [editValues, setEditValues] = useState<EditValues>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<GroupedRequest | null>(null);
+  const [labelTarget, setLabelTarget] = useState<{ iwasku: string; productName: string; defaultQuantity: number } | null>(null);
   const [exporting, setExporting] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [apiSummary, setApiSummary] = useState<Record<string, number> | null>(null);
@@ -628,23 +630,34 @@ export default function ManufacturerCategoryPage() {
                       />
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-right">
-                      <button
-                        onClick={() => handleSave(group.iwasku)}
-                        disabled={saving === group.iwasku}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        {saving === group.iwasku ? (
-                          <>
-                            <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            Kaydediliyor...
-                          </>
-                        ) : (
-                          <>
-                            <Save className="w-3.5 h-3.5" />
-                            Kaydet
-                          </>
-                        )}
-                      </button>
+                      <div className="inline-flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleSave(group.iwasku)}
+                          disabled={saving === group.iwasku}
+                          className="p-2 text-white bg-orange-600 rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          title="Kaydet"
+                          aria-label="Kaydet"
+                        >
+                          {saving === group.iwasku ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Save className="w-4 h-4" />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLabelTarget({
+                            iwasku: group.iwasku,
+                            productName: group.productName,
+                            defaultQuantity: group.totalQuantity,
+                          })}
+                          className="p-2 text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors"
+                          title="Etiket Bas"
+                          aria-label="Etiket Bas"
+                        >
+                          <Printer className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                   );
@@ -707,6 +720,16 @@ export default function ManufacturerCategoryPage() {
           return acc;
         }, [] as Array<{ marketplaceName: string; quantity: number; colorTag?: string | null; priority: string; status?: string; manufacturerNotes?: string | null }>) || []}
       />
+
+      {/* Etiket Basım Modal */}
+      {labelTarget && (
+        <LabelPrintModal
+          iwasku={labelTarget.iwasku}
+          productName={labelTarget.productName}
+          defaultQuantity={labelTarget.defaultQuantity}
+          onClose={() => setLabelTarget(null)}
+        />
+      )}
     </div>
   );
 }

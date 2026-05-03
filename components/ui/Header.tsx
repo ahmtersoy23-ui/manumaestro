@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Bell, User, LogOut, FileText, Shield, Menu, X, Warehouse, CalendarRange, Ship, Home } from 'lucide-react';
+import { Bell, User, LogOut, FileText, Shield, Menu, X, Warehouse, CalendarRange, Ship, Home, Printer } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 export function Header() {
@@ -84,6 +84,14 @@ export function Header() {
             >
               <Ship className="w-4 h-4" />
               <span className="hidden lg:inline">Sevkiyat</span>
+            </Link>
+            <Link
+              href="/dashboard/labels"
+              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              title="Etiket"
+            >
+              <Printer className="w-4 h-4" />
+              <span className="hidden lg:inline">Etiket</span>
             </Link>
 
             {role === 'admin' && (
@@ -188,6 +196,10 @@ export function Header() {
             <Link href="/dashboard/shipments" onClick={() => setMenuOpen(false)}
               className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">
               <Ship className="w-4 h-4" /> Sevkiyat
+            </Link>
+            <Link href="/dashboard/labels" onClick={() => setMenuOpen(false)}
+              className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">
+              <Printer className="w-4 h-4" /> Etiket
             </Link>
 
             {role === 'admin' && (
