@@ -49,7 +49,16 @@ export async function GET(request: NextRequest) {
 
     const whereSql = conditions.join(' AND ');
 
-    type Row = { iwasku: string; product_name: string; category: string | null; parent: string | null };
+    type Row = {
+      iwasku: string;
+      product_name: string;
+      category: string | null;
+      parent: string | null;
+      width: string | null;
+      length: string | null;
+      height: string | null;
+      weight: string | null;
+    };
     type CountRow = { count: string };
 
     // Total count
@@ -62,7 +71,7 @@ export async function GET(request: NextRequest) {
     // Page rows
     params.push(PAGE_SIZE, offset);
     const rows = (await queryProductDb(
-      `SELECT product_sku AS iwasku, name AS product_name, category, parent
+      `SELECT product_sku AS iwasku, name AS product_name, category, parent, width, length, height, weight
        FROM products
        WHERE ${whereSql}
        ORDER BY name

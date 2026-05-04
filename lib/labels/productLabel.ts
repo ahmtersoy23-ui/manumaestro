@@ -17,10 +17,12 @@ interface SerialEntry {
 interface OpenProductLabelPopupArgs {
   productName: string;
   iwasku: string;
+  /** Boyut/ağırlık bilgisi — örn. "36×45×4 cm · 0.5 kg". Yoksa atla. */
+  meta?: string | null;
   entries: SerialEntry[];
 }
 
-export function openProductLabelPopup({ productName, iwasku, entries }: OpenProductLabelPopupArgs): void {
+export function openProductLabelPopup({ productName, iwasku, meta, entries }: OpenProductLabelPopupArgs): void {
   if (entries.length === 0) return;
 
   const printWindow = window.open('', '_blank', 'width=700,height=900');
@@ -31,6 +33,7 @@ export function openProductLabelPopup({ productName, iwasku, entries }: OpenProd
 
   const safeProductName = escapeHtml(productName);
   const safeIwasku = escapeHtml(iwasku);
+  const safeMeta = meta ? escapeHtml(meta) : '';
 
   const labelsHtml = entries
     .map(
@@ -39,7 +42,10 @@ export function openProductLabelPopup({ productName, iwasku, entries }: OpenProd
       <div class="qr-box"><img src="${e.qrDataUrl}" alt="QR" /></div>
       <div class="text-area">
         <div class="product-name">${safeProductName}</div>
-        <div class="iwasku-serial">${escapeHtml(e.fullBarcode)}</div>
+        <div class="iwasku-serial">
+          <span class="serial">${escapeHtml(e.fullBarcode)}</span>
+          ${safeMeta ? `<span class="meta">${safeMeta}</span>` : ''}
+        </div>
       </div>
     </div>`
     )
@@ -81,7 +87,11 @@ export function openProductLabelPopup({ productName, iwasku, entries }: OpenProd
       .iwasku-serial {
         font-size: 8pt; font-family: 'Courier New', monospace;
         letter-spacing: 0.3px; color: #333; flex-shrink: 0;
+        display: flex; justify-content: space-between; align-items: baseline;
+        gap: 2mm; white-space: nowrap;
       }
+      .iwasku-serial .serial { overflow: hidden; text-overflow: ellipsis; }
+      .iwasku-serial .meta { color: #555; font-family: Arial, sans-serif; font-size: 7.5pt; }
       @media print {
         body { padding: 0; background: white; }
         .controls { display: none !important; }

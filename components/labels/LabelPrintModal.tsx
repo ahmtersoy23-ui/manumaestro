@@ -16,11 +16,39 @@ import { openProductLabelPopup } from '@/lib/labels/productLabel';
 interface LabelPrintModalProps {
   iwasku: string;
   productName: string;
+  width?: string | number | null;
+  length?: string | number | null;
+  height?: string | number | null;
+  weight?: string | number | null;
   defaultQuantity?: number;
   onClose: () => void;
 }
 
-export function LabelPrintModal({ iwasku, productName, defaultQuantity, onClose }: LabelPrintModalProps) {
+function formatNumber(v: string | number | null | undefined): string | null {
+  if (v === null || v === undefined || v === '') return null;
+  const n = typeof v === 'number' ? v : parseFloat(v);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Number(n.toFixed(2)).toString();
+}
+
+function buildDimensionsLabel(
+  w: string | number | null | undefined,
+  l: string | number | null | undefined,
+  h: string | number | null | undefined
+): string | null {
+  const fw = formatNumber(w);
+  const fl = formatNumber(l);
+  const fh = formatNumber(h);
+  if (!fw || !fl || !fh) return null;
+  return `${fw}×${fl}×${fh} cm`;
+}
+
+function buildWeightLabel(weight: string | number | null | undefined): string | null {
+  const fw = formatNumber(weight);
+  return fw ? `${fw} kg` : null;
+}
+
+export function LabelPrintModal({ iwasku, productName, width, length, height, weight, defaultQuantity, onClose }: LabelPrintModalProps) {
   const [quantity, setQuantity] = useState<number>(defaultQuantity && defaultQuantity > 0 ? defaultQuantity : 1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +81,11 @@ export function LabelPrintModal({ iwasku, productName, defaultQuantity, onClose 
           }),
         }))
       );
-      openProductLabelPopup({ iwasku, productName, entries });
+      const dimensionsLabel = buildDimensionsLabel(width, length, height);
+      const weightLabel = buildWeightLabel(weight);
+      const metaParts = [dimensionsLabel, weightLabel].filter(Boolean) as string[];
+      const meta = metaParts.length > 0 ? metaParts.join(' · ') : null;
+      openProductLabelPopup({ iwasku, productName, meta, entries });
       onClose();
     } catch (err) {
       setError((err as Error).message);

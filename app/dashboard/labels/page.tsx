@@ -16,6 +16,10 @@ interface Product {
   product_name: string;
   category: string | null;
   parent: string | null;
+  width: string | null;
+  length: string | null;
+  height: string | null;
+  weight: string | null;
 }
 
 interface Pagination {
@@ -282,6 +286,10 @@ export default function LabelsPage() {
         <LabelPrintModal
           iwasku={labelTarget.iwasku}
           productName={labelTarget.product_name}
+          width={labelTarget.width}
+          length={labelTarget.length}
+          height={labelTarget.height}
+          weight={labelTarget.weight}
           onClose={() => setLabelTarget(null)}
         />
       )}
