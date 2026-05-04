@@ -11,7 +11,6 @@ import {
   createPaginationMeta,
 } from '@/lib/api/response';
 import {
-  ApiError,
   ValidationError,
   NotFoundError,
   UnauthorizedError,

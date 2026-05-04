@@ -7,8 +7,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import Link from 'next/link';
-import { Warehouse, Upload, Search, Plus, Download, ChevronDown, ChevronUp, Camera, ArrowUpDown } from 'lucide-react';
+import { Warehouse, Upload, Search, Plus, Download, Camera, ArrowUpDown } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
 // XLSX lazy-loaded at point of use — 500KB not in initial bundle
@@ -48,14 +47,6 @@ function getWeekStarts(): string[] {
     weeks.push(d.toISOString().split('T')[0]);
   }
   return weeks;
-}
-
-function getCurrentWeekStart(): string {
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - ((dayOfWeek + 6) % 7));
-  return monday.toISOString().split('T')[0];
 }
 
 function formatWeekLabel(dateStr: string): { range: string; month: string } {
@@ -116,8 +107,6 @@ export default function WarehouseStockPage() {
   const [demandModal, setDemandModal] = useState<DemandModalState | null>(null);
 
   const weekStarts = getWeekStarts();
-  const currentWeek = getCurrentWeekStart();
-  const prevWeek = weekStarts[0] || '';
 
   useEffect(() => { setCanEdit(role === 'admin' || role === 'editor'); }, [role]);
 

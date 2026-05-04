@@ -9,9 +9,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
-  Factory,
-  Settings,
-  Plus,
   ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';

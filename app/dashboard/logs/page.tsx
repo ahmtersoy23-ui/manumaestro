@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { FileText, Filter, RefreshCw } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 
@@ -34,11 +34,7 @@ export default function AuditLogsPage() {
   const [loading, setLoading] = useState(true);
   const [filterAction, setFilterAction] = useState('');
 
-  useEffect(() => {
-    fetchLogs();
-  }, [filterAction]);
-
-  async function fetchLogs() {
+  const fetchLogs = useCallback(async () => {
     setLoading(true);
     try {
       const url = new URL('/api/audit-logs', window.location.origin);
@@ -57,7 +53,11 @@ export default function AuditLogsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [filterAction]);
+
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);

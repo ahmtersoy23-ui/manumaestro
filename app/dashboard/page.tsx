@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react';
 import { Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import Link from 'next/link';
-import { getActiveMonths, getAllMonthsForViewing, formatMonthValue } from '@/lib/monthUtils';
+import { getActiveMonths, getAllMonthsForViewing } from '@/lib/monthUtils';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('DashboardPage');
@@ -41,7 +41,7 @@ export default function DashboardPage() {
     async function fetchStats() {
       try {
         // Fetch stats for all months in a single batch request
-        const monthValues = allMonths.map(m => m.value).join(',');
+        const monthValues = getAllMonthsForViewing(6).map(m => m.value).join(',');
         const res = await fetch(`/api/dashboard/stats?months=${monthValues}`);
         const data = await res.json();
 
@@ -69,31 +69,6 @@ export default function DashboardPage() {
       itemsWithoutSize: 0,
     };
   };
-
-  // Calculate overall production summary for active months
-  const activeMonthsStats = monthStats.filter(stat =>
-    availableMonths.some(m => m.value === stat.month)
-  );
-
-  const overallSummary = activeMonthsStats.reduce(
-    (acc, stat) => ({
-      totalRequests: acc.totalRequests + stat.totalRequests,
-      totalQuantity: acc.totalQuantity + stat.totalQuantity,
-      totalProduced: acc.totalProduced + stat.totalProduced,
-      totalDesi: acc.totalDesi + stat.totalDesi,
-      totalProducedDesi: acc.totalProducedDesi + stat.totalProducedDesi,
-      itemsWithoutSize: acc.itemsWithoutSize + stat.itemsWithoutSize,
-    }),
-    { totalRequests: 0, totalQuantity: 0, totalProduced: 0, totalDesi: 0, totalProducedDesi: 0, itemsWithoutSize: 0 }
-  );
-
-  const completionRate = overallSummary.totalQuantity > 0
-    ? Math.round((overallSummary.totalProduced / overallSummary.totalQuantity) * 100)
-    : 0;
-
-  const desiCompletionRate = overallSummary.totalDesi > 0
-    ? Math.round((overallSummary.totalProducedDesi / overallSummary.totalDesi) * 100)
-    : 0;
 
   if (loading) {
     return (

@@ -25,7 +25,7 @@ interface Product {
   category: string | null;
 }
 
-export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: ManualEntryFormProps) {
+export function ManualEntryForm({ marketplaceId, onSuccess }: ManualEntryFormProps) {
   const { isSuperAdmin } = useAuth();
   const [iwasku, setIwasku] = useState('');
   const [quantity, setQuantity] = useState('');
@@ -48,8 +48,8 @@ export function ManualEntryForm({ marketplaceId, marketplaceName, onSuccess }: M
 
   // Auto-select first available month on mount
   useEffect(() => {
-    if (!productionMonth && availableMonths.length > 0) {
-      setProductionMonth(availableMonths[0].value);
+    if (availableMonths.length > 0) {
+      setProductionMonth(prev => prev || availableMonths[0].value);
     }
   }, [availableMonths]);
 

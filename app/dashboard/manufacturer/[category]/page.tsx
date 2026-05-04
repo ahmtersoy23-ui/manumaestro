@@ -79,21 +79,13 @@ interface EditValues {
   };
 }
 
-const statusOptions = [
-  { value: 'REQUESTED', label: 'Talep Edildi' },
-  { value: 'IN_PRODUCTION', label: 'Üretimde' },
-  { value: 'PARTIALLY_PRODUCED', label: 'Kısmen Üretildi' },
-  { value: 'COMPLETED', label: 'Tamamlandı' },
-  { value: 'CANCELLED', label: 'İptal Edildi' },
-];
-
 export default function ManufacturerCategoryPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const category = decodeURIComponent(params.category as string);
   const month = searchParams.get('month') || formatMonthValue(new Date());
 
-  const [requests, setRequests] = useState<Request[]>([]);
+  const [_requests, setRequests] = useState<Request[]>([]);
   const [groupedRequests, setGroupedRequests] = useState<GroupedRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [editValues, setEditValues] = useState<EditValues>({});
@@ -101,7 +93,6 @@ export default function ManufacturerCategoryPage() {
   const [selectedProduct, setSelectedProduct] = useState<GroupedRequest | null>(null);
   const [labelTarget, setLabelTarget] = useState<{ iwasku: string; productName: string; defaultQuantity: number } | null>(null);
   const [exporting, setExporting] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [apiSummary, setApiSummary] = useState<Record<string, number> | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -253,7 +244,7 @@ export default function ManufacturerCategoryPage() {
 
         if (refetchData.success) {
           // Update local state with fresh data from server (includes waterfall changes)
-          const freshRequests = refetchData.data as typeof requests;
+          const freshRequests = refetchData.data as typeof _requests;
           setRequests((prev) =>
             prev.map((r) => {
               const fresh = freshRequests.find((f: typeof r) => f.id === r.id);

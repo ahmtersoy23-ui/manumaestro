@@ -23,17 +23,6 @@ interface Marketplace {
   code: string;
 }
 
-interface ProductionRequest {
-  requestDate: string;
-  iwasku: string;
-  productName: string;
-  productCategory: string;
-  quantity: number;
-  productionMonth: string;
-  status: string;
-  notes: string | null;
-}
-
 export default function MarketplacePage({ params }: { params: Promise<{ slug: string }> }) {
   const searchParams = useSearchParams();
   const month = searchParams.get('month');

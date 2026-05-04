@@ -315,7 +315,7 @@ export default function ShipmentDetailPage() {
 
   const handleToggleSelect = (itemId: string) => {
     const next = new Set(selectedIds);
-    next.has(itemId) ? next.delete(itemId) : next.add(itemId);
+    if (next.has(itemId)) next.delete(itemId); else next.add(itemId);
     setSelectedIds(next);
   };
 
@@ -555,7 +555,7 @@ export default function ShipmentDetailPage() {
 
   const handleToggleBoxSelect = (boxId: string) => {
     const next = new Set(selectedBoxIds);
-    next.has(boxId) ? next.delete(boxId) : next.add(boxId);
+    if (next.has(boxId)) next.delete(boxId); else next.add(boxId);
     setSelectedBoxIds(next);
   };
 
@@ -1302,7 +1302,7 @@ export default function ShipmentDetailPage() {
                         <td className="px-3 py-3">
                           <button onClick={() => {
                             const next = new Set(selectedSentIds);
-                            next.has(item.id) ? next.delete(item.id) : next.add(item.id);
+                            if (next.has(item.id)) next.delete(item.id); else next.add(item.id);
                             setSelectedSentIds(next);
                           }} className="text-gray-500 hover:text-purple-600">
                             {selectedSentIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-purple-600" /> : <Square className="w-5 h-5" />}

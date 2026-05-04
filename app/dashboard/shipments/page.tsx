@@ -10,7 +10,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  Ship, Plus, Settings, AlertCircle, Loader2,
+  Ship, Plus, Settings, Loader2,
   Anchor, Truck as TruckIcon, Plane, ChevronDown, Calendar,
 } from 'lucide-react';
 

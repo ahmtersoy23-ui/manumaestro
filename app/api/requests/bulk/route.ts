@@ -6,15 +6,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma, EntryType, RequestStatus } from '@prisma/client';
 import { prisma, queryProductDb } from '@/lib/db/prisma';
-import { createLogger } from '@/lib/logger';
 import { BulkRequestSchema, formatValidationError } from '@/lib/validation/schemas';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { verifyAuth, checkMarketplacePermission, isSuperAdmin } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
 import { errorResponse } from '@/lib/api/response';
 import { isMonthLocked } from '@/lib/monthUtils';
-
-const logger = createLogger('Bulk Requests API');
 
 export async function POST(request: NextRequest) {
   try {

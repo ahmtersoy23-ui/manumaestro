@@ -8,7 +8,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, use } from 'react';
-import { Search, Layers, Package, Box, AlertTriangle, History, ExternalLink } from 'lucide-react';
+import { Search, Layers, Package, Box, AlertTriangle, History } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import WarehouseStockView from '@/components/warehouse/WarehouseStockView';
 import { IwaskuLocationsModal } from '@/components/wms/IwaskuLocationsModal';

@@ -7,7 +7,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { GripVertical, Save, Loader2, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
+import { GripVertical, Save, Loader2 } from 'lucide-react';
 
 interface Marketplace {
   id: string;
@@ -28,7 +28,7 @@ interface Props {
 
 export function MarketplacePriority({ month }: Props) {
   const [priorities, setPriorities] = useState<PriorityItem[]>([]);
-  const [marketplaces, setMarketplaces] = useState<Marketplace[]>([]);
+  const [_marketplaces, setMarketplaces] = useState<Marketplace[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);

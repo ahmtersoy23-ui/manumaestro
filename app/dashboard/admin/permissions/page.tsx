@@ -6,7 +6,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
 import { Shield, ChevronDown, AlertTriangle, CheckSquare, Square, RefreshCw, Ship, Plus, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';

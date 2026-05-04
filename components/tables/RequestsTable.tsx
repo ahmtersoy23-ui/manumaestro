@@ -147,7 +147,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
     setSelectedIds(new Set());
     setPage(1);
     setShipmentsLoaded(false);
-  }, [marketplaceId, month, refreshTrigger, archiveMode]);
+  }, [marketplaceId, month, refreshTrigger, archiveMode, onSummary]);
 
   // Fetch available shipments
   useEffect(() => {
@@ -195,7 +195,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
 
   const handleToggleSelect = (id: string) => {
     const next = new Set(selectedIds);
-    next.has(id) ? next.delete(id) : next.add(id);
+    if (next.has(id)) next.delete(id); else next.add(id);
     setSelectedIds(next);
   };
 

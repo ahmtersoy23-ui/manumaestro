@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react';
 import { Upload, Download, FileSpreadsheet, X, Calendar, AlertCircle, Check } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { getAvailableMonthsForEntry, formatMonthDisplay, getCurrentMonth } from '@/lib/monthUtils';
+import { getAvailableMonthsForEntry } from '@/lib/monthUtils';
 import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
 
@@ -44,8 +44,8 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
 
   // Auto-select first available month on mount
   useEffect(() => {
-    if (!productionMonth && availableMonths.length > 0) {
-      setProductionMonth(availableMonths[0].value);
+    if (availableMonths.length > 0) {
+      setProductionMonth(prev => prev || availableMonths[0].value);
     }
   }, [availableMonths]);
 

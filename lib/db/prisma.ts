@@ -10,7 +10,6 @@ import { Pool } from 'pg';
 
 // Declare global type for dev environment
 declare global {
-  // eslint-disable-next-line no-var
   var prisma: PrismaClient | undefined;
 }
 
