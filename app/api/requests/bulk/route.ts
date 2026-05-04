@@ -9,9 +9,10 @@ import { prisma, queryProductDb } from '@/lib/db/prisma';
 import { createLogger } from '@/lib/logger';
 import { BulkRequestSchema, formatValidationError } from '@/lib/validation/schemas';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-import { requireSuperAdmin } from '@/lib/auth/verify';
+import { verifyAuth, checkMarketplacePermission, isSuperAdmin } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
 import { errorResponse } from '@/lib/api/response';
+import { isMonthLocked } from '@/lib/monthUtils';
 
 const logger = createLogger('Bulk Requests API');
 
@@ -23,12 +24,15 @@ export async function POST(request: NextRequest) {
       return rateLimitExceededResponse(rateLimitResult);
     }
 
-    // Authorization: Süper-admin gerekli (toplu talep yükleme kritik aksiyon)
-    const authResult = await requireSuperAdmin(request);
-    if (authResult instanceof NextResponse) {
-      return authResult;
+    // Authentication
+    const authResult = await verifyAuth(request);
+    if (!authResult.success || !authResult.user) {
+      return NextResponse.json(
+        { success: false, error: authResult.error || 'Yetkisiz erişim' },
+        { status: 401 }
+      );
     }
-    const { user } = authResult;
+    const user = authResult.user;
 
     const body = await request.json();
 
@@ -47,6 +51,24 @@ export async function POST(request: NextRequest) {
     }
 
     const { marketplaceId, productionMonth, requests } = validation.data;
+
+    // Yetkilendirme: süper-admin değilse, kilitli ay yasak + marketplace edit izni gerekli
+    const userIsSuperAdmin = isSuperAdmin(user.email);
+    if (!userIsSuperAdmin) {
+      if (isMonthLocked(productionMonth)) {
+        return NextResponse.json(
+          { success: false, error: `${productionMonth} ayı kilitli. Bu ay için talep girişi süper-admin yetkisi gerektirir.` },
+          { status: 403 }
+        );
+      }
+      const permCheck = await checkMarketplacePermission(user.id, user.role, marketplaceId, 'edit');
+      if (!permCheck.allowed) {
+        return NextResponse.json(
+          { success: false, error: permCheck.reason || 'Bu pazar yerine talep oluşturamazsınız' },
+          { status: 403 }
+        );
+      }
+    }
 
     // requestDate is always today (entry date)
     const requestDate = new Date();

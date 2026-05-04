@@ -9,10 +9,11 @@ import { Prisma, EntryType, RequestStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { enrichProductSize } from '@/lib/db/enrichProductSize';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-import { verifyAuth, requireSuperAdmin, checkMarketplacePermission } from '@/lib/auth/verify';
+import { verifyAuth, checkMarketplacePermission, isSuperAdmin } from '@/lib/auth/verify';
 import { ProductionRequestSchema, formatValidationError } from '@/lib/validation/schemas';
 import { errorResponse } from '@/lib/api/response';
 import { logAction } from '@/lib/auditLog';
+import { isMonthLocked } from '@/lib/monthUtils';
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,12 +23,15 @@ export async function POST(request: NextRequest) {
       return rateLimitExceededResponse(rateLimitResult);
     }
 
-    // Authorization: Süper-admin gerekli (yeni talep girişi kritik aksiyon)
-    const authResult = await requireSuperAdmin(request);
-    if (authResult instanceof NextResponse) {
-      return authResult;
+    // Authentication
+    const authResult = await verifyAuth(request);
+    if (!authResult.success || !authResult.user) {
+      return NextResponse.json(
+        { success: false, error: authResult.error || 'Yetkisiz erişim' },
+        { status: 401 }
+      );
     }
-    const { user } = authResult;
+    const user = authResult.user;
 
     const body = await request.json();
 
@@ -46,13 +50,22 @@ export async function POST(request: NextRequest) {
 
     const { iwasku, productName, productCategory, productSize, marketplaceId, quantity, productionMonth, notes, priority } = validation.data;
 
-    // Marketplace permission check for OPERATOR users
-    const permCheck = await checkMarketplacePermission(user.id, user.role, marketplaceId, 'edit');
-    if (!permCheck.allowed) {
-      return NextResponse.json(
-        { success: false, error: permCheck.reason || 'Bu pazar yerine talep oluşturamazsınız' },
-        { status: 403 }
-      );
+    // Yetkilendirme: süper-admin değilse, kilitli ay yasak + marketplace edit izni gerekli
+    const userIsSuperAdmin = isSuperAdmin(user.email);
+    if (!userIsSuperAdmin) {
+      if (isMonthLocked(productionMonth)) {
+        return NextResponse.json(
+          { success: false, error: `${productionMonth} ayı kilitli. Bu ay için talep girişi süper-admin yetkisi gerektirir.` },
+          { status: 403 }
+        );
+      }
+      const permCheck = await checkMarketplacePermission(user.id, user.role, marketplaceId, 'edit');
+      if (!permCheck.allowed) {
+        return NextResponse.json(
+          { success: false, error: permCheck.reason || 'Bu pazar yerine talep oluşturamazsınız' },
+          { status: 403 }
+        );
+      }
     }
 
     // Upsert: ayni (iwasku, marketplace, productionMonth) varsa miktar + oncelik + notes guncelle
