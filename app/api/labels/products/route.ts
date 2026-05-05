@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
       length: string | null;
       height: string | null;
       weight: string | null;
+      verified_package: boolean | null;
     };
     type CountRow = { count: string };
 
@@ -71,7 +72,7 @@ export async function GET(request: NextRequest) {
     // Page rows
     params.push(PAGE_SIZE, offset);
     const rows = (await queryProductDb(
-      `SELECT product_sku AS iwasku, name AS product_name, category, parent, width, length, height, weight
+      `SELECT product_sku AS iwasku, name AS product_name, category, parent, width, length, height, weight, verified_package
        FROM products
        WHERE ${whereSql}
        ORDER BY name

@@ -20,6 +20,7 @@ interface Product {
   length: string | null;
   height: string | null;
   weight: string | null;
+  verified_package: boolean | null;
 }
 
 interface Pagination {
@@ -290,6 +291,7 @@ export default function LabelsPage() {
           length={labelTarget.length}
           height={labelTarget.height}
           weight={labelTarget.weight}
+          verified={labelTarget.verified_package === true}
           onClose={() => setLabelTarget(null)}
         />
       )}

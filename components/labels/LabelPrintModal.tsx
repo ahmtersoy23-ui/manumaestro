@@ -20,6 +20,7 @@ interface LabelPrintModalProps {
   length?: string | number | null;
   height?: string | number | null;
   weight?: string | number | null;
+  verified?: boolean;
   defaultQuantity?: number;
   onClose: () => void;
 }
@@ -48,7 +49,7 @@ function buildWeightLabel(weight: string | number | null | undefined): string | 
   return fw ? `${fw} kg` : null;
 }
 
-export function LabelPrintModal({ iwasku, productName, width, length, height, weight, defaultQuantity, onClose }: LabelPrintModalProps) {
+export function LabelPrintModal({ iwasku, productName, width, length, height, weight, verified, defaultQuantity, onClose }: LabelPrintModalProps) {
   const [quantity, setQuantity] = useState<number>(defaultQuantity && defaultQuantity > 0 ? defaultQuantity : 1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,7 +85,8 @@ export function LabelPrintModal({ iwasku, productName, width, length, height, we
       const dimensionsLabel = buildDimensionsLabel(width, length, height);
       const weightLabel = buildWeightLabel(weight);
       const metaParts = [dimensionsLabel, weightLabel].filter(Boolean) as string[];
-      const meta = metaParts.length > 0 ? metaParts.join(' · ') : null;
+      let meta = metaParts.length > 0 ? metaParts.join(' · ') : null;
+      if (meta && verified) meta = `${meta} ✓`;
       openProductLabelPopup({ iwasku, productName, meta, entries });
       onClose();
     } catch (err) {

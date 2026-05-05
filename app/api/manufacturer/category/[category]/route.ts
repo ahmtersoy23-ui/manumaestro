@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db/prisma';
+import { prisma, queryProductDb } from '@/lib/db/prisma';
 import { enrichProductSize } from '@/lib/db/enrichProductSize';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { formatMonthValue } from '@/lib/monthUtils';
@@ -100,6 +100,26 @@ export async function GET(
     // 4. Enrich productSize from pricelab_db (tek kaynak)
     await enrichProductSize(requests);
 
+    // 4b. Etiket için boyut/ağırlık + verified_package — sayfa IWASKU'ları için
+    type DimRow = {
+      product_sku: string;
+      width: string | null;
+      length: string | null;
+      height: string | null;
+      weight: string | null;
+      verified_package: boolean | null;
+    };
+    const dimMap = new Map<string, DimRow>();
+    if (pageIwaskus.length > 0) {
+      const placeholders = pageIwaskus.map((_, i) => `$${i + 1}`).join(',');
+      const dimRows = (await queryProductDb(
+        `SELECT product_sku, width, length, height, weight, verified_package
+         FROM products WHERE product_sku IN (${placeholders})`,
+        pageIwaskus
+      )) as DimRow[];
+      for (const row of dimRows) dimMap.set(row.product_sku, row);
+    }
+
     // 5. Snapshot stock (fixed) — sayfa IWASKU'ları için
     const snapshots = pageIwaskus.length > 0
       ? await prisma.monthSnapshot.findMany({
@@ -177,22 +197,30 @@ export async function GET(
     };
 
     // 7. Format
-    const formattedRequests = requests.map((r) => ({
-      id: r.id,
-      iwasku: r.iwasku,
-      productName: r.productName,
-      productCategory: r.productCategory,
-      productSize: r.productSize ?? null,
-      marketplaceName: r.marketplace.name,
-      marketplaceColorTag: r.marketplace.colorTag,
-      quantity: r.quantity,
-      producedQuantity: producedMap.get(r.iwasku) ?? r.producedQuantity ?? 0,
-      manufacturerNotes: r.manufacturerNotes,
-      status: r.status,
-      priority: r.priority,
-      requestDate: r.requestDate.toISOString(),
-      warehouseStock: stockMap.get(r.iwasku) ?? null,
-    }));
+    const formattedRequests = requests.map((r) => {
+      const dim = dimMap.get(r.iwasku);
+      return {
+        id: r.id,
+        iwasku: r.iwasku,
+        productName: r.productName,
+        productCategory: r.productCategory,
+        productSize: r.productSize ?? null,
+        marketplaceName: r.marketplace.name,
+        marketplaceColorTag: r.marketplace.colorTag,
+        quantity: r.quantity,
+        producedQuantity: producedMap.get(r.iwasku) ?? r.producedQuantity ?? 0,
+        manufacturerNotes: r.manufacturerNotes,
+        status: r.status,
+        priority: r.priority,
+        requestDate: r.requestDate.toISOString(),
+        warehouseStock: stockMap.get(r.iwasku) ?? null,
+        width: dim?.width ?? null,
+        length: dim?.length ?? null,
+        height: dim?.height ?? null,
+        weight: dim?.weight ?? null,
+        verifiedPackage: dim?.verified_package === true,
+      };
+    });
 
     // 6. Available marketplaces (unfiltered, for filter UI)
     const distinctMarketplaces = await prisma.productionRequest.findMany({

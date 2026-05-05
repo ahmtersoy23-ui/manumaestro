@@ -58,6 +58,11 @@ interface Request {
   priority: string;
   requestDate: string;
   warehouseStock: number | null;
+  width?: string | null;
+  length?: string | null;
+  height?: string | null;
+  weight?: string | null;
+  verifiedPackage?: boolean;
 }
 
 interface GroupedRequest {
@@ -69,6 +74,11 @@ interface GroupedRequest {
   netNeed: number;
   requestIds: string[];
   requests: Request[];
+  width: string | null;
+  length: string | null;
+  height: string | null;
+  weight: string | null;
+  verifiedPackage: boolean;
 }
 
 interface EditValues {
@@ -91,7 +101,16 @@ export default function ManufacturerCategoryPage() {
   const [editValues, setEditValues] = useState<EditValues>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<GroupedRequest | null>(null);
-  const [labelTarget, setLabelTarget] = useState<{ iwasku: string; productName: string; defaultQuantity: number } | null>(null);
+  const [labelTarget, setLabelTarget] = useState<{
+    iwasku: string;
+    productName: string;
+    defaultQuantity: number;
+    width: string | null;
+    length: string | null;
+    height: string | null;
+    weight: string | null;
+    verified: boolean;
+  } | null>(null);
   const [exporting, setExporting] = useState(false);
   const [apiSummary, setApiSummary] = useState<Record<string, number> | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -161,6 +180,11 @@ export default function ManufacturerCategoryPage() {
                 netNeed: Math.max(0, request.quantity - (stock ?? 0)),
                 requestIds: [request.id],
                 requests: [request],
+                width: request.width ?? null,
+                length: request.length ?? null,
+                height: request.height ?? null,
+                weight: request.weight ?? null,
+                verifiedPackage: request.verifiedPackage === true,
               });
             }
             return acc;
@@ -641,6 +665,11 @@ export default function ManufacturerCategoryPage() {
                             iwasku: group.iwasku,
                             productName: group.productName,
                             defaultQuantity: group.totalQuantity,
+                            width: group.width,
+                            length: group.length,
+                            height: group.height,
+                            weight: group.weight,
+                            verified: group.verifiedPackage,
                           })}
                           className="p-2 text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors"
                           title="Etiket Bas"
@@ -718,6 +747,11 @@ export default function ManufacturerCategoryPage() {
           iwasku={labelTarget.iwasku}
           productName={labelTarget.productName}
           defaultQuantity={labelTarget.defaultQuantity}
+          width={labelTarget.width}
+          length={labelTarget.length}
+          height={labelTarget.height}
+          weight={labelTarget.weight}
+          verified={labelTarget.verified}
           onClose={() => setLabelTarget(null)}
         />
       )}
