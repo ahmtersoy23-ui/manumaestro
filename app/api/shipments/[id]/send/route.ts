@@ -51,11 +51,10 @@ export async function POST(request: NextRequest, { params }: Params) {
   const now = new Date();
 
   if (closeShipment) {
-    // Deniz sevkiyatı kapama — tüm itemlere sentAt ata + status IN_TRANSIT
+    // Deniz sevkiyatı kapama — tüm itemlere sentAt ata + status IN_TRANSIT + kolileri arşivle (atomik)
     const unsentItems = shipment.items.filter(i => !i.sentAt);
 
-    await prisma.$transaction(async (tx) => {
-      // sentAt ata
+    const result = await prisma.$transaction(async (tx) => {
       if (unsentItems.length > 0) {
         await tx.shipmentItem.updateMany({
           where: { shipmentId: id, sentAt: null },
@@ -63,7 +62,7 @@ export async function POST(request: NextRequest, { params }: Params) {
         });
       }
 
-      // Reserve güncelleme (depo çıkışı artık ayrı onay modalından yapılıyor)
+      // Reserve güncelleme (depo çıkışı ayrı onay modalından yapılıyor)
       for (const item of unsentItems) {
         if (item.reserveId) {
           await tx.stockReserve.update({
@@ -73,46 +72,46 @@ export async function POST(request: NextRequest, { params }: Params) {
         }
       }
 
-      // Sevkiyat statusunu güncelle
       await tx.shipment.update({
         where: { id },
         data: { status: 'IN_TRANSIT', actualDate: now },
       });
-    });
 
-    // Kolileri arşivle
-    const boxes = await prisma.shipmentBox.findMany({ where: { shipmentId: id } });
-    if (boxes.length > 0) {
-      await prisma.shipmentBoxArchive.createMany({
-        data: boxes.map(b => ({
-          shipmentId: id,
-          shipmentName: shipment.name,
-          destinationTab: shipment.destinationTab,
-          shippingMethod: shipment.shippingMethod,
-          boxNumber: b.boxNumber,
-          iwasku: b.iwasku,
-          fnsku: b.fnsku,
-          productName: b.productName,
-          productCategory: b.productCategory,
-          marketplaceCode: b.marketplaceCode,
-          destination: b.destination,
-          quantity: b.quantity,
-          width: b.width,
-          height: b.height,
-          depth: b.depth,
-          weight: b.weight,
-          closedAt: now,
-        })),
-      });
-    }
+      const boxes = await tx.shipmentBox.findMany({ where: { shipmentId: id } });
+      if (boxes.length > 0) {
+        await tx.shipmentBoxArchive.createMany({
+          data: boxes.map(b => ({
+            shipmentId: id,
+            shipmentName: shipment.name,
+            destinationTab: shipment.destinationTab,
+            shippingMethod: shipment.shippingMethod,
+            boxNumber: b.boxNumber,
+            iwasku: b.iwasku,
+            fnsku: b.fnsku,
+            productName: b.productName,
+            productCategory: b.productCategory,
+            marketplaceCode: b.marketplaceCode,
+            destination: b.destination,
+            quantity: b.quantity,
+            width: b.width,
+            height: b.height,
+            depth: b.depth,
+            weight: b.weight,
+            closedAt: now,
+          })),
+        });
+      }
+
+      return { sent: unsentItems.length, archived: boxes.length };
+    });
 
     await logAction({
       userId: user.id, userName: user.name, userEmail: user.email,
       action: 'ROUTE_TO_SHIPMENT', entityType: 'Shipment', entityId: id,
-      description: `Sevkiyat kapatıldı: ${shipment.name} (${unsentItems.length} yeni item gönderildi, ${boxes.length} koli arşivlendi)`,
+      description: `Sevkiyat kapatıldı: ${shipment.name} (${result.sent} yeni item gönderildi, ${result.archived} koli arşivlendi)`,
     });
 
-    return NextResponse.json({ success: true, data: { sent: unsentItems.length, closed: true, archived: boxes.length } });
+    return NextResponse.json({ success: true, data: { sent: result.sent, closed: true, archived: result.archived } });
   }
 
   // Karayolu/hava — seçili itemleri gönder
