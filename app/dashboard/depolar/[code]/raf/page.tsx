@@ -6,13 +6,14 @@
 
 import { useEffect, useState, use, useMemo } from 'react';
 import Link from 'next/link';
-import { Search, Layers, Package, Box, AlertCircle, Plus, PackagePlus, Layers3, AlertTriangle } from 'lucide-react';
+import { Search, Layers, Package, Box, AlertCircle, Plus, PackagePlus, Layers3, AlertTriangle, FileSpreadsheet, LayoutGrid } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { NewShelfDialog } from '@/components/wms/NewShelfDialog';
 import { BulkShelfDialog } from '@/components/wms/BulkShelfDialog';
 import { ManualBoxDialog } from '@/components/wms/ManualBoxDialog';
 import { LooseStockDialog } from '@/components/wms/LooseStockDialog';
 import { UnmatchedSeedTable } from '@/components/wms/UnmatchedSeedTable';
+import { ActionDropdown } from '@/components/wms/ActionDropdown';
 
 const logger = createLogger('RafSekmesi');
 
@@ -217,29 +218,56 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
       {/* Action butonları */}
       {(canCreateShelf || canBulkShelf || canManualBox) && (
         <div className="flex flex-wrap gap-2">
-          {canCreateShelf && (
-            <button
-              onClick={() => setDialog('NEW_SHELF')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              <Plus className="w-4 h-4" /> Yeni Raf
-            </button>
-          )}
-          {canBulkShelf && (
-            <button
-              onClick={() => setDialog('BULK_SHELF')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white border border-gray-200 text-gray-700 rounded-md hover:bg-gray-50"
-            >
-              <Layers3 className="w-4 h-4" /> Toplu Raf
-            </button>
+          {(canCreateShelf || canBulkShelf) && (
+            <ActionDropdown
+              label="Raf"
+              icon={<LayoutGrid className="w-4 h-4" />}
+              variant="primary"
+              items={[
+                ...(canCreateShelf
+                  ? [{
+                      key: 'NEW_SHELF',
+                      label: 'Yeni Raf',
+                      description: 'Tek raf yarat (kod + tip)',
+                      icon: <Plus className="w-4 h-4 text-blue-600" />,
+                      onClick: () => setDialog('NEW_SHELF'),
+                    }]
+                  : []),
+                ...(canBulkShelf
+                  ? [{
+                      key: 'BULK_SHELF',
+                      label: 'Toplu Raf',
+                      description: 'Birden fazla raf — kod listesi',
+                      icon: <Layers3 className="w-4 h-4 text-purple-600" />,
+                      onClick: () => setDialog('BULK_SHELF'),
+                    }]
+                  : []),
+              ]}
+            />
           )}
           {canManualBox && isShelfPrimaryWh && (
-            <button
-              onClick={() => setDialog('MANUAL_BOX')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white border border-gray-200 text-gray-700 rounded-md hover:bg-gray-50"
-            >
-              <PackagePlus className="w-4 h-4" /> Yeni Koli (Manuel)
-            </button>
+            <ActionDropdown
+              label="Koli Ekle"
+              icon={<PackagePlus className="w-4 h-4" />}
+              items={[
+                {
+                  key: 'MANUAL_BOX',
+                  label: 'Tek Koli',
+                  description: 'iwasku + adet + hedef',
+                  icon: <PackagePlus className="w-4 h-4 text-blue-600" />,
+                  onClick: () => setDialog('MANUAL_BOX'),
+                },
+                {
+                  key: 'BULK_BOX_EXCEL',
+                  label: 'Excel ile Toplu',
+                  description: 'Yakında — CSV/Excel'+"'"+'den batch koli',
+                  icon: <FileSpreadsheet className="w-4 h-4 text-emerald-600" />,
+                  disabled: true,
+                  disabledReason: 'Yakında gelecek (Faz 4)',
+                  onClick: () => {},
+                },
+              ]}
+            />
           )}
           {canManualBox && isShelfPrimaryWh && (
             <button
