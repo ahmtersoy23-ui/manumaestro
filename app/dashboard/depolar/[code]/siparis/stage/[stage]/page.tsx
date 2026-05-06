@@ -186,7 +186,7 @@ export default function StagePage({
                 <th className="text-left px-4 py-2">Pazaryeri</th>
                 <th className="text-left px-4 py-2">Sipariş No</th>
                 <th className="text-left px-4 py-2">Adres</th>
-                <th className="text-right px-4 py-2">Kalem</th>
+                <th className="text-right px-4 py-2">Ürün</th>
                 <th className="text-left px-4 py-2">Tarih</th>
               </tr>
             </thead>

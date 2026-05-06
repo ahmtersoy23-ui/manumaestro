@@ -185,7 +185,7 @@ export function ShipModal({
   const handleSubmit = async () => {
     setError(null);
     if (!allOk) {
-      setError('Tüm kalemleri tam adetle eşle.');
+      setError('Tüm ürünleri tam adetle eşle.');
       return;
     }
 
@@ -278,7 +278,7 @@ export function ShipModal({
           {loading && <div className="text-center py-8 text-gray-500 text-sm">Öneriler yükleniyor…</div>}
 
           {!loading && plans.length === 0 && (
-            <div className="text-center py-8 text-gray-400 text-sm">Sipariş kalemi yok.</div>
+            <div className="text-center py-8 text-gray-400 text-sm">Sipariş ürünü yok.</div>
           )}
 
           {!loading &&

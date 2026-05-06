@@ -211,7 +211,7 @@ export default function MarketplaceOrderPage({
               <tr>
                 <th className="text-left px-4 py-2">Sipariş No</th>
                 <th className="text-left px-4 py-2">Adres</th>
-                <th className="text-right px-4 py-2">Kalem</th>
+                <th className="text-right px-4 py-2">Ürün</th>
                 <th className="text-left px-4 py-2">Durum</th>
                 <th className="text-left px-4 py-2">Tarih</th>
               </tr>

@@ -1,5 +1,5 @@
 /**
- * Sipariş Detay Sayfası — kalemler + Onayla & Gönder + İptal aksiyonları.
+ * Sipariş Detay Sayfası — ürünler + Çıkış Yap + İptal aksiyonları.
  */
 
 'use client';
@@ -85,7 +85,7 @@ export default function SiparisDetayPage({
   // SINGLE: ShipModal ile raf seçimi.
   async function shipFbaLegacy() {
     if (!data) return;
-    if (!confirm(`${data.items.length} kalemli sipariş gönderilecek. Onaylıyor musun?`)) return;
+    if (!confirm(`${data.items.length} ürünlü sipariş gönderilecek. Onaylıyor musun?`)) return;
     setSubmitting(true);
     try {
       const res = await fetch(`/api/depolar/${code}/siparis/${id}/ship`, {
@@ -128,8 +128,31 @@ export default function SiparisDetayPage({
     }
   }
 
+  async function revertShip() {
+    if (!confirm('Sevkiyat geri alınacak — stok geri yüklenir, sipariş DRAFT olur. Onaylıyor musun?'))
+      return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/depolar/${code}/siparis/${id}/revert`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const d = await res.json();
+      if (!res.ok || !d.success) {
+        alert(d.error || 'Geri alınamadı');
+        return;
+      }
+      setRefreshKey((k) => k + 1);
+    } catch (e) {
+      logger.error('Revert hatası', e);
+      alert('Sunucu hatası');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function removeItem(itemId: string) {
-    if (!confirm('Bu kalem silinecek (rezerve serbest). Onaylıyor musun?')) return;
+    if (!confirm('Bu ürün silinecek (rezerve serbest). Onaylıyor musun?')) return;
     try {
       const res = await fetch(`/api/depolar/${code}/siparis/${id}/items?itemId=${itemId}`, {
         method: 'DELETE',
@@ -159,6 +182,7 @@ export default function SiparisDetayPage({
 
   const canShip = ['MANAGER', 'ADMIN'].includes(data.role) && data.order.status === 'DRAFT' && data.items.length > 0;
   const canCancel = ['PACKER', 'OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role) && data.order.status === 'DRAFT';
+  const canRevert = data.role === 'ADMIN' && data.order.status === 'SHIPPED';
   const totalQty = data.items.reduce((s, x) => s + x.quantity, 0);
 
   return (
@@ -218,6 +242,16 @@ export default function SiparisDetayPage({
                 <X className="w-4 h-4" /> İptal
               </button>
             )}
+            {canRevert && (
+              <button
+                onClick={revertShip}
+                disabled={submitting}
+                title="Sevkiyatı geri al — stok geri yüklenir, DRAFT'a döner (admin)"
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-amber-800 bg-amber-50 hover:bg-amber-100 rounded-md disabled:opacity-50"
+              >
+                <X className="w-4 h-4" /> Çıkışı Geri Al
+              </button>
+            )}
             {canShip && (
               data.order.orderType === 'SINGLE' ? (
                 <button
@@ -265,16 +299,16 @@ export default function SiparisDetayPage({
             />
           ))}
 
-      {/* Kalemler */}
+      {/* Ürünler */}
       <div className="bg-white border border-gray-200 rounded-lg">
         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-gray-700">Kalemler ({data.items.length})</h2>
+          <h2 className="text-sm font-medium text-gray-700">Ürünler ({data.items.length})</h2>
           <span className="text-xs text-gray-500">Toplam adet: {totalQty}</span>
         </div>
         {data.items.length === 0 ? (
           <div className="px-4 py-6 text-sm text-gray-400 text-center">
             <PackageOpen className="w-6 h-6 mx-auto mb-2 text-gray-300" />
-            Henüz kalem yok. Yeni sipariş yaratma arayüzü inşa aşamasında — şimdilik kalem ekleme sonraki adımda.
+            Henüz ürün yok. Sipariş yaratırken ürün satırı eklenir.
           </div>
         ) : (
           <table className="w-full text-sm">
@@ -311,7 +345,7 @@ export default function SiparisDetayPage({
                       <button
                         onClick={() => removeItem(item.id)}
                         className="text-[11px] text-red-700 bg-red-50 hover:bg-red-100 px-2 py-1 rounded"
-                        title="Kalemi sil"
+                        title="Ürünü sil"
                       >
                         Sil
                       </button>
