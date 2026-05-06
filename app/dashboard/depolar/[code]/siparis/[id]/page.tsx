@@ -11,6 +11,7 @@ import { createLogger } from '@/lib/logger';
 import { SingleOrderItemAdder } from '@/components/wms/SingleOrderItemAdder';
 import { FbaPickupBoxSelector } from '@/components/wms/FbaPickupBoxSelector';
 import { LabelUploader } from '@/components/wms/LabelUploader';
+import { ShipModal } from '@/components/wms/ShipModal';
 
 const logger = createLogger('SiparisDetay');
 
@@ -60,6 +61,7 @@ export default function SiparisDetayPage({
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [shipModalOpen, setShipModalOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,7 +81,9 @@ export default function SiparisDetayPage({
     return () => { cancelled = true; };
   }, [code, id, refreshKey]);
 
-  async function ship() {
+  // FBA_PICKUP eski path: items.shelfBoxId pre-set olduğu için tek tıkla ship.
+  // SINGLE: ShipModal ile raf seçimi.
+  async function shipFbaLegacy() {
     if (!data) return;
     if (!confirm(`${data.items.length} kalemli sipariş gönderilecek. Onaylıyor musun?`)) return;
     setSubmitting(true);
@@ -215,13 +219,23 @@ export default function SiparisDetayPage({
               </button>
             )}
             {canShip && (
-              <button
-                onClick={ship}
-                disabled={submitting}
-                className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-white bg-green-600 hover:bg-green-700 rounded-md disabled:opacity-50"
-              >
-                <Truck className="w-4 h-4" /> Onayla & Gönder ({totalQty})
-              </button>
+              data.order.orderType === 'SINGLE' ? (
+                <button
+                  onClick={() => setShipModalOpen(true)}
+                  disabled={submitting}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-white bg-green-600 hover:bg-green-700 rounded-md disabled:opacity-50"
+                >
+                  <Truck className="w-4 h-4" /> Çıkış Yap ({totalQty})
+                </button>
+              ) : (
+                <button
+                  onClick={shipFbaLegacy}
+                  disabled={submitting}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-white bg-green-600 hover:bg-green-700 rounded-md disabled:opacity-50"
+                >
+                  <Truck className="w-4 h-4" /> Onayla & Gönder ({totalQty})
+                </button>
+              )
             )}
           </div>
         </div>
@@ -309,6 +323,16 @@ export default function SiparisDetayPage({
           </table>
         )}
       </div>
+
+      {/* Çıkış modal — SINGLE için */}
+      <ShipModal
+        isOpen={shipModalOpen}
+        warehouseCode={code}
+        orderId={data.order.id}
+        orderNumber={data.order.orderNumber}
+        onClose={() => setShipModalOpen(false)}
+        onSuccess={() => setRefreshKey((k) => k + 1)}
+      />
     </div>
   );
 }
