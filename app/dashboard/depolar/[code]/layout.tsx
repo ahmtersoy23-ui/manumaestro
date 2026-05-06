@@ -43,7 +43,7 @@ export default function DepoDetayLayout({
 
   const tabs = [
     { href: baseHref, label: 'Dashboard', icon: LayoutDashboard, exact: true },
-    { href: `${baseHref}/raf`, label: 'Raf Düzeni', icon: LayoutGrid, exact: false },
+    { href: `${baseHref}/raf`, label: 'Depo İşlem', icon: LayoutGrid, exact: false },
     ...(showOutbound
       ? [{ href: `${baseHref}/siparis`, label: 'Sipariş Çıkış', icon: PackageOpen, exact: false }]
       : []),

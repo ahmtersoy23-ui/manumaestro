@@ -10,9 +10,8 @@
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { ClipboardList, Truck, AlertCircle, FileStack } from 'lucide-react';
+import { ClipboardList, Truck, AlertCircle } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
-import { BulkLabelDialog } from '@/components/wms/BulkLabelDialog';
 
 const logger = createLogger('OutboundLobby');
 
@@ -49,8 +48,6 @@ export default function SiparisLobbyPage({ params }: { params: Promise<{ code: s
   const [data, setData] = useState<LobbyData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [bulkOpen, setBulkOpen] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,9 +69,7 @@ export default function SiparisLobbyPage({ params }: { params: Promise<{ code: s
     return () => {
       cancelled = true;
     };
-  }, [code, refreshKey]);
-
-  const canUpload = data && ['PACKER', 'OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role);
+  }, [code]);
 
   return (
     <div className="space-y-5">
@@ -85,23 +80,7 @@ export default function SiparisLobbyPage({ params }: { params: Promise<{ code: s
             Pazaryeri seçerek talepleri gir ve takip et.
           </p>
         </div>
-        {canUpload && (
-          <button
-            onClick={() => setBulkOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700"
-            title="Tek PDF içinde birden fazla sipariş etiketi yükle"
-          >
-            <FileStack className="w-4 h-4" /> Toplu Etiket
-          </button>
-        )}
       </div>
-
-      <BulkLabelDialog
-        warehouseCode={code}
-        open={bulkOpen}
-        onClose={() => setBulkOpen(false)}
-        onCompleted={() => setRefreshKey((k) => k + 1)}
-      />
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700 flex items-center gap-2">

@@ -1,5 +1,5 @@
 /**
- * Raf Düzeni Sekmesi — raf grid + canlı arama + yeni raf/koli operasyonları.
+ * Depo İşlem Sekmesi — raf grid + canlı arama + yeni raf/koli/tekil/transfer/sil operasyonları.
  */
 
 'use client';
