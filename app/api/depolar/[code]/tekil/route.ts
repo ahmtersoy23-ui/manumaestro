@@ -1,9 +1,9 @@
 /**
- * POST /api/depolar/[code]/raflar/[shelfId]/tekil
+ * POST /api/depolar/[code]/tekil
  * Sevkiyat-dışı manuel TEKİL (loose) ürün ekleme. Koli wrapper'ı yaratmaz.
  * ShelfStock upsert (aynı iwasku varsa qty artar) + ShelfMovement(INBOUND_MANUAL) log.
  *
- * shelfId hem gerçek UUID hem de raf kodu (URL friendly) olabilir.
+ * targetShelfId boşsa POOL'a düşer (Manuel Koli pattern'iyle simetrik).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -15,14 +15,15 @@ import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
 const LooseStockSchema = z.object({
   iwasku: z.string().trim().min(1),
   quantity: z.number().int().positive().max(100000),
+  targetShelfId: z.string().trim().optional(),
   notes: z.string().trim().max(500).optional(),
 });
 
 export async function POST(
   request: NextRequest,
-  context: { params: Promise<{ code: string; shelfId: string }> }
+  context: { params: Promise<{ code: string }> }
 ) {
-  const { code, shelfId: shelfIdOrCode } = await context.params;
+  const { code } = await context.params;
   const upperCode = code.toUpperCase();
 
   if (!ALL_WAREHOUSES.includes(upperCode as typeof ALL_WAREHOUSES[number])) {
@@ -47,33 +48,37 @@ export async function POST(
     );
   }
 
-  const { iwasku, quantity, notes } = parsed.data;
+  const { iwasku, quantity, targetShelfId, notes } = parsed.data;
 
-  // Raf'ı ID veya code ile bul
-  const shelf = await prisma.shelf.findFirst({
-    where: {
-      warehouseCode: upperCode,
-      isActive: true,
-      OR: [
-        { id: shelfIdOrCode },
-        { code: decodeURIComponent(shelfIdOrCode) },
-      ],
-    },
-  });
-
-  if (!shelf) {
-    return NextResponse.json({ success: false, error: 'Raf bulunamadı' }, { status: 404 });
+  // Hedef raf — belirtilmediyse POOL
+  let targetShelf;
+  if (targetShelfId) {
+    targetShelf = await prisma.shelf.findFirst({
+      where: { id: targetShelfId, warehouseCode: upperCode, isActive: true },
+    });
+    if (!targetShelf) {
+      return NextResponse.json({ success: false, error: 'Hedef raf bulunamadı' }, { status: 404 });
+    }
+  } else {
+    targetShelf = await prisma.shelf.findFirst({
+      where: { warehouseCode: upperCode, shelfType: 'POOL', isActive: true },
+    });
+    if (!targetShelf) {
+      return NextResponse.json(
+        { success: false, error: `${upperCode} deposunda POOL raf yok` },
+        { status: 400 }
+      );
+    }
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    // ShelfStock upsert: aynı (shelfId, iwasku) varsa qty artır
     const stock = await tx.shelfStock.upsert({
       where: {
-        shelfId_iwasku: { shelfId: shelf.id, iwasku },
+        shelfId_iwasku: { shelfId: targetShelf!.id, iwasku },
       },
       create: {
         warehouseCode: upperCode,
-        shelfId: shelf.id,
+        shelfId: targetShelf!.id,
         iwasku,
         quantity,
         reservedQty: 0,
@@ -87,7 +92,7 @@ export async function POST(
       data: {
         warehouseCode: upperCode,
         type: 'INBOUND_MANUAL',
-        toShelfId: shelf.id,
+        toShelfId: targetShelf!.id,
         iwasku,
         quantity,
         refType: 'MANUAL_LOOSE',
@@ -104,7 +109,7 @@ export async function POST(
     {
       success: true,
       data: {
-        shelfCode: shelf.code,
+        shelfCode: targetShelf!.code,
         iwasku,
         quantity,
         newQuantity: result.stock.quantity,

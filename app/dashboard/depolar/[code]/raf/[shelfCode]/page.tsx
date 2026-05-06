@@ -7,11 +7,10 @@
 
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Package, Box, History, AlertCircle, ArrowRightLeft, PackageOpen, Scissors, Plus } from 'lucide-react';
+import { ChevronLeft, Package, Box, History, AlertCircle, ArrowRightLeft, PackageOpen, Scissors } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { TransferDialog, type TransferSource } from '@/components/wms/TransferDialog';
 import { BreakBoxDialog, type BreakBoxSource } from '@/components/wms/BreakBoxDialog';
-import { LooseStockDialog } from '@/components/wms/LooseStockDialog';
 
 const logger = createLogger('RafDetay');
 
@@ -90,7 +89,6 @@ export default function RafDetayPage({
   const [transferSource, setTransferSource] = useState<TransferSource | null>(null);
   const [breakSource, setBreakSource] = useState<BreakBoxSource | null>(null);
   const [openingBoxId, setOpeningBoxId] = useState<string | null>(null);
-  const [looseDialogOpen, setLooseDialogOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,7 +112,6 @@ export default function RafDetayPage({
 
   const canTransfer = data && ['OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role);
   const canBoxOps = data && ['OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role);
-  const canAddLoose = data && ['OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role);
   const handleSuccess = () => setRefreshKey((k) => k + 1);
 
   async function openBox(boxId: string, boxNumber: string) {
@@ -215,15 +212,6 @@ export default function RafDetayPage({
             <h2 className="text-sm font-medium text-gray-700">Tekil Ürünler</h2>
             <span className="text-xs text-gray-400">({data.stocks.length})</span>
           </div>
-          {canAddLoose && (
-            <button
-              type="button"
-              onClick={() => setLooseDialogOpen(true)}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded"
-            >
-              <Plus className="w-3 h-3" /> Tekil Ürün Ekle
-            </button>
-          )}
         </div>
         {data.stocks.length === 0 ? (
           <div className="px-4 py-6 text-sm text-gray-400">Bu rafta tekil ürün yok.</div>
@@ -493,16 +481,6 @@ export default function RafDetayPage({
         warehouseCode={code}
         source={breakSource}
         onClose={() => setBreakSource(null)}
-        onSuccess={handleSuccess}
-      />
-
-      {/* Tekil ürün ekleme modal */}
-      <LooseStockDialog
-        isOpen={looseDialogOpen}
-        warehouseCode={code}
-        shelfId={data.shelf.id}
-        shelfCode={data.shelf.code}
-        onClose={() => setLooseDialogOpen(false)}
         onSuccess={handleSuccess}
       />
     </div>

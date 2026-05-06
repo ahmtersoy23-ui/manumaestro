@@ -1,7 +1,8 @@
 /**
  * Tekil Ürün Ekle — modal.
- * Bir rafa loose stock (koli wrapper'ı OLMADAN) ekler.
- * Backend: POST /api/depolar/[code]/raflar/[shelfId]/tekil
+ * Bir rafa loose stock (koli wrapper'ı OLMADAN) ekler. Hedef raf seçilmezse
+ * POOL'a düşer (Manuel Koli ile simetrik).
+ * Backend: POST /api/depolar/[code]/tekil
  */
 
 'use client';
@@ -18,23 +19,20 @@ interface ProductHit {
   category: string | null;
 }
 
+interface ShelfOption {
+  id: string;
+  code: string;
+  shelfType: string;
+}
+
 interface Props {
   isOpen: boolean;
   warehouseCode: string;
-  shelfId: string;
-  shelfCode: string;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export function LooseStockDialog({
-  isOpen,
-  warehouseCode,
-  shelfId,
-  shelfCode,
-  onClose,
-  onSuccess,
-}: Props) {
+export function LooseStockDialog({ isOpen, warehouseCode, onClose, onSuccess }: Props) {
   const [iwasku, setIwasku] = useState('');
   const [productHits, setProductHits] = useState<ProductHit[]>([]);
   const [productSearchQuery, setProductSearchQuery] = useState('');
@@ -42,8 +40,10 @@ export function LooseStockDialog({
   const [productDisplay, setProductDisplay] = useState('');
 
   const [quantity, setQuantity] = useState<number | ''>('');
+  const [targetShelfId, setTargetShelfId] = useState('');
   const [notes, setNotes] = useState('');
 
+  const [shelves, setShelves] = useState<ShelfOption[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const productInputRef = useRef<HTMLInputElement>(null);
@@ -61,6 +61,21 @@ export function LooseStockDialog({
     if (!isOpen) return;
     productInputRef.current?.focus();
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    fetch(`/api/depolar/${warehouseCode}/raflar`, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        if (d.success) setShelves(d.data.shelves || []);
+      })
+      .catch((e) => logger.error('Raf fetch', e));
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, warehouseCode]);
 
   useEffect(() => {
     const q = productSearchQuery.trim();
@@ -99,6 +114,7 @@ export function LooseStockDialog({
     setProductDisplay('');
     setProductSearchQuery('');
     setQuantity('');
+    setTargetShelfId('');
     setNotes('');
     setError(null);
   };
@@ -110,19 +126,17 @@ export function LooseStockDialog({
 
     setSubmitting(true);
     try {
-      const res = await fetch(
-        `/api/depolar/${warehouseCode}/raflar/${shelfId}/tekil`,
-        {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            iwasku,
-            quantity: Number(quantity),
-            notes: notes.trim() || undefined,
-          }),
-        }
-      );
+      const res = await fetch(`/api/depolar/${warehouseCode}/tekil`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          iwasku,
+          quantity: Number(quantity),
+          targetShelfId: targetShelfId || undefined,
+          notes: notes.trim() || undefined,
+        }),
+      });
       const data = await res.json();
       if (!res.ok || !data.success) {
         setError(data.error || 'Ekleme başarısız');
@@ -148,13 +162,12 @@ export function LooseStockDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="loose-stock-dialog-title"
-        className="bg-white rounded-xl shadow-xl w-full max-w-md p-5"
+        className="bg-white rounded-xl shadow-xl w-full max-w-lg p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
           <h2 id="loose-stock-dialog-title" className="text-lg font-semibold">
-            Tekil Ürün Ekle —{' '}
-            <span className="font-mono text-sm text-gray-600">{shelfCode}</span>
+            Tekil Ürün Ekle — {warehouseCode}
           </h2>
           <button
             type="button"
@@ -234,23 +247,46 @@ export function LooseStockDialog({
             )}
           </div>
 
-          <div>
-            <label
-              htmlFor="loose-quantity"
-              className="block text-xs font-medium text-gray-700 mb-1"
-            >
-              Adet *
-            </label>
-            <input
-              id="loose-quantity"
-              type="number"
-              min="1"
-              value={quantity}
-              onChange={(e) =>
-                setQuantity(e.target.value === '' ? '' : Number(e.target.value))
-              }
-              className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label
+                htmlFor="loose-quantity"
+                className="block text-xs font-medium text-gray-700 mb-1"
+              >
+                Adet *
+              </label>
+              <input
+                id="loose-quantity"
+                type="number"
+                min="1"
+                value={quantity}
+                onChange={(e) =>
+                  setQuantity(e.target.value === '' ? '' : Number(e.target.value))
+                }
+                className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="loose-target-shelf"
+                className="block text-xs font-medium text-gray-700 mb-1"
+              >
+                Hedef raf (opsiyonel)
+              </label>
+              <select
+                id="loose-target-shelf"
+                value={targetShelfId}
+                onChange={(e) => setTargetShelfId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
+              >
+                <option value="">POOL (varsayılan)</option>
+                {shelves.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.code} ({s.shelfType})
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div>

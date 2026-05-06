@@ -11,6 +11,7 @@ import { createLogger } from '@/lib/logger';
 import { NewShelfDialog } from '@/components/wms/NewShelfDialog';
 import { BulkShelfDialog } from '@/components/wms/BulkShelfDialog';
 import { ManualBoxDialog } from '@/components/wms/ManualBoxDialog';
+import { LooseStockDialog } from '@/components/wms/LooseStockDialog';
 import { UnmatchedSeedTable } from '@/components/wms/UnmatchedSeedTable';
 
 const logger = createLogger('RafSekmesi');
@@ -61,7 +62,7 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
   const [searchResults, setSearchResults] = useState<SearchResult | null>(null);
   const [searching, setSearching] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [dialog, setDialog] = useState<'NEW_SHELF' | 'BULK_SHELF' | 'MANUAL_BOX' | null>(null);
+  const [dialog, setDialog] = useState<'NEW_SHELF' | 'BULK_SHELF' | 'MANUAL_BOX' | 'LOOSE_STOCK' | null>(null);
   const [view, setView] = useState<'shelves' | 'unmatched'>('shelves');
   const [pendingUnmatched, setPendingUnmatched] = useState<number>(0);
 
@@ -238,6 +239,14 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white border border-gray-200 text-gray-700 rounded-md hover:bg-gray-50"
             >
               <PackagePlus className="w-4 h-4" /> Yeni Koli (Manuel)
+            </button>
+          )}
+          {canManualBox && isShelfPrimaryWh && (
+            <button
+              onClick={() => setDialog('LOOSE_STOCK')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white border border-gray-200 text-gray-700 rounded-md hover:bg-gray-50"
+            >
+              <Package className="w-4 h-4" /> Tekil Ürün Ekle
             </button>
           )}
         </div>
@@ -495,6 +504,12 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
       />
       <ManualBoxDialog
         isOpen={dialog === 'MANUAL_BOX'}
+        warehouseCode={code}
+        onClose={() => setDialog(null)}
+        onSuccess={handleSuccess}
+      />
+      <LooseStockDialog
+        isOpen={dialog === 'LOOSE_STOCK'}
         warehouseCode={code}
         onClose={() => setDialog(null)}
         onSuccess={handleSuccess}
