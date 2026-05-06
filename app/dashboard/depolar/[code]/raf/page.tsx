@@ -6,7 +6,7 @@
 
 import { useEffect, useState, use, useMemo } from 'react';
 import Link from 'next/link';
-import { Search, Layers, Package, Box, AlertCircle, Plus, PackagePlus, Layers3, AlertTriangle, FileSpreadsheet, LayoutGrid } from 'lucide-react';
+import { Search, Layers, Package, Box, AlertCircle, Plus, PackagePlus, Layers3, AlertTriangle, FileSpreadsheet, LayoutGrid, ArrowRightLeft } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { NewShelfDialog } from '@/components/wms/NewShelfDialog';
 import { BulkShelfDialog } from '@/components/wms/BulkShelfDialog';
@@ -14,6 +14,8 @@ import { ManualBoxDialog } from '@/components/wms/ManualBoxDialog';
 import { LooseStockDialog } from '@/components/wms/LooseStockDialog';
 import { UnmatchedSeedTable } from '@/components/wms/UnmatchedSeedTable';
 import { ActionDropdown } from '@/components/wms/ActionDropdown';
+import { TransferDialog, type TransferSource } from '@/components/wms/TransferDialog';
+import { TransferSourcePicker } from '@/components/wms/TransferSourcePicker';
 
 const logger = createLogger('RafSekmesi');
 
@@ -64,6 +66,8 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
   const [searching, setSearching] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [dialog, setDialog] = useState<'NEW_SHELF' | 'BULK_SHELF' | 'MANUAL_BOX' | 'LOOSE_STOCK' | null>(null);
+  const [transferPickerOpen, setTransferPickerOpen] = useState(false);
+  const [transferSource, setTransferSource] = useState<TransferSource | null>(null);
   const [view, setView] = useState<'shelves' | 'unmatched'>('shelves');
   const [pendingUnmatched, setPendingUnmatched] = useState<number>(0);
 
@@ -125,6 +129,7 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
   const canCreateShelf = ['OPERATOR', 'MANAGER', 'ADMIN'].includes(role);
   const canBulkShelf = ['OPERATOR', 'MANAGER', 'ADMIN'].includes(role);
   const canManualBox = ['OPERATOR', 'MANAGER', 'ADMIN'].includes(role);
+  const canTransfer = ['OPERATOR', 'MANAGER', 'ADMIN'].includes(role);
   const canResolveUnmatched = ['MANAGER', 'ADMIN'].includes(role);
   // Manuel koli sadece SHELF_PRIMARY depolarda mantıklı (NJ + SHOWROOM)
   const isShelfPrimaryWh = code === 'NJ' || code === 'SHOWROOM';
@@ -275,6 +280,15 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white border border-gray-200 text-gray-700 rounded-md hover:bg-gray-50"
             >
               <Package className="w-4 h-4" /> Tekil Ürün Ekle
+            </button>
+          )}
+          {canTransfer && (
+            <button
+              onClick={() => setTransferPickerOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white border border-gray-200 text-gray-700 rounded-md hover:bg-gray-50"
+              title="Ürün seçip raflar arası transfer yap"
+            >
+              <ArrowRightLeft className="w-4 h-4" /> Transfer
             </button>
           )}
         </div>
@@ -540,6 +554,22 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
         isOpen={dialog === 'LOOSE_STOCK'}
         warehouseCode={code}
         onClose={() => setDialog(null)}
+        onSuccess={handleSuccess}
+      />
+      <TransferSourcePicker
+        isOpen={transferPickerOpen}
+        warehouseCode={code}
+        onClose={() => setTransferPickerOpen(false)}
+        onSelect={(src) => {
+          setTransferPickerOpen(false);
+          setTransferSource(src);
+        }}
+      />
+      <TransferDialog
+        isOpen={!!transferSource}
+        warehouseCode={code}
+        source={transferSource}
+        onClose={() => setTransferSource(null)}
         onSuccess={handleSuccess}
       />
     </div>
