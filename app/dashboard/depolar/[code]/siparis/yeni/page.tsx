@@ -8,11 +8,12 @@
 
 'use client';
 
-import { useEffect, useState, useRef, use } from 'react';
+import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronLeft, AlertCircle, Box as BoxIcon, Plus, Trash2, Search } from 'lucide-react';
+import { ChevronLeft, AlertCircle, Box as BoxIcon, Plus, Trash2 } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { ProductSearch, type ProductHit as PSProductHit } from '@/components/wms/ProductSearch';
 
 const logger = createLogger('YeniSiparis');
 
@@ -22,11 +23,7 @@ interface Marketplace {
   marketplaceType?: string;
 }
 
-interface ProductHit {
-  iwasku: string;
-  name: string;
-  category: string | null;
-}
+type ProductHit = PSProductHit;
 
 interface ItemRow {
   id: string; // local row id
@@ -341,90 +338,20 @@ interface ItemRowInputProps {
 }
 
 function ItemRowInput({ row, canRemove, onChange, onRemove }: ItemRowInputProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [hits, setHits] = useState<ProductHit[]>([]);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const q = searchQuery.trim();
-    let cancelled = false;
-    const handle = setTimeout(() => {
-      if (cancelled) return;
-      if (q.length < 2) {
-        setHits([]);
-        return;
-      }
-      fetch(`/api/products/search?q=${encodeURIComponent(q)}`, { credentials: 'include' })
-        .then((r) => r.json())
-        .then((d) => {
-          if (cancelled) return;
-          if (d.success) setHits(d.data || []);
-        })
-        .catch(() => {});
-    }, 250);
-    return () => {
-      cancelled = true;
-      clearTimeout(handle);
-    };
-  }, [searchQuery]);
-
-  const select = (p: ProductHit) => {
-    onChange({ iwasku: p.iwasku, display: `${p.iwasku} — ${p.name}` });
-    setSearchQuery('');
-    setShowDropdown(false);
-  };
-
-  const clearProduct = () => {
-    onChange({ iwasku: '', display: '' });
-    setTimeout(() => inputRef.current?.focus(), 0);
-  };
+  // ProductSearch interface ile uyumlu adapter:
+  const selected: ProductHit | null = row.iwasku
+    ? { iwasku: row.iwasku, name: row.display.split(' — ')[1] ?? '', category: null }
+    : null;
 
   return (
     <div className="flex gap-2 items-start">
-      <div className="flex-1 relative">
-        {row.display ? (
-          <div className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-md bg-blue-50 text-sm">
-            <span className="font-mono text-xs">{row.iwasku}</span>
-            <span className="text-gray-700 truncate flex-1">{row.display.split(' — ')[1]}</span>
-            <button type="button" onClick={clearProduct} className="text-xs text-blue-700 hover:underline">
-              Değiştir
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                ref={inputRef}
-                type="text"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setShowDropdown(true);
-                }}
-                onFocus={() => setShowDropdown(true)}
-                placeholder="iwasku veya ürün adı (en az 2 karakter)"
-                className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
-              />
-            </div>
-            {showDropdown && hits.length > 0 && (
-              <div className="absolute z-10 mt-1 w-full max-h-56 overflow-y-auto bg-white border border-gray-200 rounded-md shadow-lg">
-                {hits.map((p) => (
-                  <button
-                    key={p.iwasku}
-                    type="button"
-                    onClick={() => select(p)}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
-                  >
-                    <div className="font-mono text-xs text-gray-500">{p.iwasku}</div>
-                    <div className="text-gray-800 truncate">{p.name}</div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </>
-        )}
+      <div className="flex-1">
+        <ProductSearch
+          selected={selected}
+          onSelect={(p) => onChange({ iwasku: p.iwasku, display: `${p.iwasku} — ${p.name}` })}
+          onClear={() => onChange({ iwasku: '', display: '' })}
+          compact
+        />
       </div>
       <input
         type="number"
@@ -432,7 +359,7 @@ function ItemRowInput({ row, canRemove, onChange, onRemove }: ItemRowInputProps)
         value={row.quantity}
         onChange={(e) => onChange({ quantity: e.target.value === '' ? '' : Number(e.target.value) })}
         placeholder="Adet"
-        className="w-24 px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
+        className="w-24 px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400 text-gray-900"
       />
       <button
         type="button"

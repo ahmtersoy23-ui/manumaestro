@@ -80,6 +80,7 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [undoingId, setUndoingId] = useState<string | null>(null);
   const [iwaskuModal, setIwaskuModal] = useState<{ iwasku: string; productName: string | null } | null>(null);
@@ -153,16 +154,35 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
 
   return (
     <div className="space-y-6">
-      {/* Prominent arama kutusu — sonraki adımda canlanacak */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <input
-          type="text"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="SKU / ürün adı / kategori — alt tabloyu filtreler"
-          className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400"
-        />
+      {/* Arama + kategori filtresi — alt tabloyu filtreler */}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="SKU / ürün adı / kategori — alt tabloyu filtreler"
+            className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 text-gray-900"
+          />
+        </div>
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="px-3 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 text-gray-900 max-w-[220px]"
+          title="Kategori filtresi"
+        >
+          <option value="">Tüm kategoriler</option>
+          {Array.from(
+            new Set((aggregate ?? []).map((r) => r.category).filter((c): c is string => !!c))
+          )
+            .sort()
+            .map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+        </select>
       </div>
 
       {/* NJ/Showroom — SHELF_PRIMARY view */}
@@ -211,6 +231,7 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
           <IwaskuAggregateTable
             rows={aggregate}
             searchTerm={searchTerm}
+            categoryFilter={categoryFilter}
             onSelect={(iwasku, productName) => setIwaskuModal({ iwasku, productName })}
           />
         </>
@@ -298,23 +319,26 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
 interface IwaskuAggregateTableProps {
   rows: AggregateRow[] | null;
   searchTerm: string;
+  categoryFilter: string;
   onSelect: (iwasku: string, productName: string | null) => void;
 }
 
-function IwaskuAggregateTable({ rows, searchTerm, onSelect }: IwaskuAggregateTableProps) {
+function IwaskuAggregateTable({ rows, searchTerm, categoryFilter, onSelect }: IwaskuAggregateTableProps) {
   const filtered = useMemo(() => {
     if (!rows) return [];
     const q = searchTerm.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(
-      (r) =>
+    return rows.filter((r) => {
+      if (categoryFilter && r.category !== categoryFilter) return false;
+      if (!q) return true;
+      return (
         r.iwasku.toLowerCase().includes(q) ||
         (r.fnsku ?? '').toLowerCase().includes(q) ||
         (r.asin ?? '').toLowerCase().includes(q) ||
         (r.productName ?? '').toLowerCase().includes(q) ||
         (r.category ?? '').toLowerCase().includes(q)
-    );
-  }, [rows, searchTerm]);
+      );
+    });
+  }, [rows, searchTerm, categoryFilter]);
 
   if (rows === null) {
     return (

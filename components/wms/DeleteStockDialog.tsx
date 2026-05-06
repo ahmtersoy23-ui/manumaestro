@@ -11,9 +11,8 @@
 
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  Search,
   X,
   AlertCircle,
   ArrowLeft,
@@ -22,14 +21,9 @@ import {
   Trash2,
 } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { ProductSearch, type ProductHit } from '@/components/wms/ProductSearch';
 
 const logger = createLogger('DeleteStockDialog');
-
-interface ProductHit {
-  iwasku: string;
-  name: string;
-  category: string | null;
-}
 
 interface StockLoc {
   id: string;
@@ -73,9 +67,6 @@ interface Props {
 
 export function DeleteStockDialog({ isOpen, warehouseCode, onClose, onSuccess }: Props) {
   const [step, setStep] = useState<'search' | 'pick' | 'confirm'>('search');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [hits, setHits] = useState<ProductHit[]>([]);
-  const [showDropdown, setShowDropdown] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ProductHit | null>(null);
   const [konumlar, setKonumlar] = useState<KonumlarResponse | null>(null);
   const [loadingKonum, setLoadingKonum] = useState(false);
@@ -83,14 +74,11 @@ export function DeleteStockDialog({ isOpen, warehouseCode, onClose, onSuccess }:
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isOpen) {
       const t = setTimeout(() => {
         setStep('search');
-        setSearchQuery('');
-        setHits([]);
         setSelectedProduct(null);
         setKonumlar(null);
         setTarget(null);
@@ -99,8 +87,6 @@ export function DeleteStockDialog({ isOpen, warehouseCode, onClose, onSuccess }:
       }, 0);
       return () => clearTimeout(t);
     }
-    const f = setTimeout(() => inputRef.current?.focus(), 0);
-    return () => clearTimeout(f);
   }, [isOpen]);
 
   useEffect(() => {
@@ -112,33 +98,8 @@ export function DeleteStockDialog({ isOpen, warehouseCode, onClose, onSuccess }:
     return () => window.removeEventListener('keydown', onKey);
   }, [isOpen, onClose, submitting]);
 
-  useEffect(() => {
-    const q = searchQuery.trim();
-    let cancelled = false;
-    const handle = setTimeout(() => {
-      if (cancelled) return;
-      if (q.length < 2) {
-        setHits([]);
-        return;
-      }
-      fetch(`/api/products/search?q=${encodeURIComponent(q)}`, { credentials: 'include' })
-        .then((r) => r.json())
-        .then((d) => {
-          if (cancelled) return;
-          if (d.success) setHits(d.data || []);
-        })
-        .catch(() => {});
-    }, 250);
-    return () => {
-      cancelled = true;
-      clearTimeout(handle);
-    };
-  }, [searchQuery]);
-
   const selectProduct = (p: ProductHit) => {
     setSelectedProduct(p);
-    setShowDropdown(false);
-    setSearchQuery('');
     setStep('pick');
     setLoadingKonum(true);
     setError(null);
@@ -263,36 +224,12 @@ export function DeleteStockDialog({ isOpen, warehouseCode, onClose, onSuccess }:
                 Bu aksiyon kalıcıdır. ShelfMovement audit log&apos;una &ldquo;DELETE&rdquo; ref&apos;iyle yazılır,
                 rezerve olan kayıtlar silinemez.
               </div>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setShowDropdown(true);
-                  }}
-                  onFocus={() => setShowDropdown(true)}
-                  placeholder="iwasku veya ürün adı (en az 2 karakter)"
-                  className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
-                />
-              </div>
-              {showDropdown && hits.length > 0 && (
-                <div className="border border-gray-200 rounded-md divide-y divide-gray-100 max-h-72 overflow-y-auto">
-                  {hits.map((p) => (
-                    <button
-                      key={p.iwasku}
-                      type="button"
-                      onClick={() => selectProduct(p)}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50"
-                    >
-                      <div className="font-mono text-xs text-gray-500">{p.iwasku}</div>
-                      <div className="text-gray-800 truncate">{p.name}</div>
-                    </button>
-                  ))}
-                </div>
-              )}
+              <ProductSearch
+                selected={null}
+                onSelect={selectProduct}
+                onClear={() => {}}
+                autoFocus
+              />
             </>
           )}
 

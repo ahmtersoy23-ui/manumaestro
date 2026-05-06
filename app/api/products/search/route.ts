@@ -28,28 +28,44 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams;
     const query = searchParams.get('q');
+    const category = searchParams.get('category')?.trim() || null;
 
-    if (!query || query.length < 2) {
+    // Kategori filtresi varsa q opsiyonel; yoksa eskisi gibi q zorunlu (en az 2)
+    if (!category && (!query || query.length < 2)) {
       return NextResponse.json(
-        { error: 'Arama sorgusu en az 2 karakter olmalı' },
+        { error: 'Arama sorgusu en az 2 karakter olmalı (veya kategori seçin)' },
         { status: 400 }
       );
     }
 
-    // Query the products table from pricelab_db
-    const searchPattern = `%${query}%`;
-    const products = await queryProductDb(`
+    // Dinamik WHERE ve params
+    const conditions: string[] = [];
+    const params: (string | null)[] = [];
+    if (query && query.length >= 2) {
+      const pat = `%${query}%`;
+      params.push(pat, pat);
+      conditions.push(`(product_sku ILIKE $${params.length - 1} OR name ILIKE $${params.length})`);
+    }
+    if (category) {
+      params.push(category);
+      conditions.push(`category = $${params.length}`);
+    }
+    const whereSql = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const products = await queryProductDb(
+      `
       SELECT
         product_sku as iwasku,
         name,
         category,
         COALESCE(manual_size, size) as size
       FROM products
-      WHERE
-        product_sku ILIKE $1
-        OR name ILIKE $2
-      LIMIT 20
-    `, [searchPattern, searchPattern]);
+      ${whereSql}
+      ORDER BY name
+      LIMIT 50
+    `,
+      params
+    );
 
     return NextResponse.json({
       success: true,

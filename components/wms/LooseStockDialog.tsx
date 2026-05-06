@@ -7,18 +7,13 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { X, Search } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { warehouseLabel } from '@/lib/warehouseLabels';
+import { ProductSearch, type ProductHit } from '@/components/wms/ProductSearch';
 
 const logger = createLogger('LooseStockDialog');
-
-interface ProductHit {
-  iwasku: string;
-  name: string;
-  category: string | null;
-}
 
 interface ShelfOption {
   id: string;
@@ -34,12 +29,7 @@ interface Props {
 }
 
 export function LooseStockDialog({ isOpen, warehouseCode, onClose, onSuccess }: Props) {
-  const [iwasku, setIwasku] = useState('');
-  const [productHits, setProductHits] = useState<ProductHit[]>([]);
-  const [productSearchQuery, setProductSearchQuery] = useState('');
-  const [showProductDropdown, setShowProductDropdown] = useState(false);
-  const [productDisplay, setProductDisplay] = useState('');
-
+  const [product, setProduct] = useState<ProductHit | null>(null);
   const [quantity, setQuantity] = useState<number | ''>('');
   const [targetShelfId, setTargetShelfId] = useState('');
   const [notes, setNotes] = useState('');
@@ -47,7 +37,6 @@ export function LooseStockDialog({ isOpen, warehouseCode, onClose, onSuccess }: 
   const [shelves, setShelves] = useState<ShelfOption[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const productInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -57,11 +46,6 @@ export function LooseStockDialog({ isOpen, warehouseCode, onClose, onSuccess }: 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [isOpen, onClose]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    productInputRef.current?.focus();
-  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -78,42 +62,10 @@ export function LooseStockDialog({ isOpen, warehouseCode, onClose, onSuccess }: 
     };
   }, [isOpen, warehouseCode]);
 
-  useEffect(() => {
-    const q = productSearchQuery.trim();
-    if (q.length < 2) {
-      setProductHits([]);
-      return;
-    }
-    let cancelled = false;
-    const handle = setTimeout(() => {
-      if (cancelled) return;
-      fetch(`/api/products/search?q=${encodeURIComponent(q)}`, { credentials: 'include' })
-        .then((r) => r.json())
-        .then((d) => {
-          if (cancelled) return;
-          if (d.success) setProductHits(d.data || []);
-        })
-        .catch((e) => logger.error('Product search', e));
-    }, 250);
-    return () => {
-      cancelled = true;
-      clearTimeout(handle);
-    };
-  }, [productSearchQuery]);
-
   if (!isOpen) return null;
 
-  const selectProduct = (hit: ProductHit) => {
-    setIwasku(hit.iwasku);
-    setProductDisplay(`${hit.iwasku} — ${hit.name}`);
-    setProductSearchQuery('');
-    setShowProductDropdown(false);
-  };
-
   const reset = () => {
-    setIwasku('');
-    setProductDisplay('');
-    setProductSearchQuery('');
+    setProduct(null);
     setQuantity('');
     setTargetShelfId('');
     setNotes('');
@@ -122,7 +74,8 @@ export function LooseStockDialog({ isOpen, warehouseCode, onClose, onSuccess }: 
 
   const handleSubmit = async () => {
     setError(null);
-    if (!iwasku) return setError('Ürün seçin');
+    if (!product) return setError('Ürün seçin');
+    const iwasku = product.iwasku;
     if (!quantity || quantity <= 0) return setError('Adet girin');
 
     setSubmitting(true);
@@ -181,71 +134,16 @@ export function LooseStockDialog({ isOpen, warehouseCode, onClose, onSuccess }: 
         </div>
 
         <div className="space-y-3">
-          <div className="relative">
-            <label
-              htmlFor="loose-product"
-              className="block text-xs font-medium text-gray-700 mb-1"
-            >
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
               Ürün (SKU/iwasku) *
             </label>
-            {productDisplay ? (
-              <div className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-md bg-blue-50 text-sm">
-                <span className="font-mono text-xs">{iwasku}</span>
-                <span className="text-gray-700 truncate flex-1">
-                  {productDisplay.split(' — ')[1]}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIwasku('');
-                    setProductDisplay('');
-                  }}
-                  className="text-xs text-blue-700 hover:underline"
-                >
-                  Değiştir
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="relative">
-                  <Search
-                    className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
-                    aria-hidden="true"
-                  />
-                  <input
-                    ref={productInputRef}
-                    id="loose-product"
-                    type="text"
-                    value={productSearchQuery}
-                    onChange={(e) => {
-                      setProductSearchQuery(e.target.value);
-                      setShowProductDropdown(true);
-                    }}
-                    onFocus={() => setShowProductDropdown(true)}
-                    placeholder="iwasku veya ürün adı yaz (en az 2 karakter)"
-                    className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
-                  />
-                </div>
-                {showProductDropdown && productHits.length > 0 && (
-                  <div className="absolute z-10 mt-1 w-full max-h-64 overflow-y-auto bg-white border border-gray-200 rounded-md shadow-lg">
-                    {productHits.map((p) => (
-                      <button
-                        key={p.iwasku}
-                        type="button"
-                        onClick={() => selectProduct(p)}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
-                      >
-                        <div className="font-mono text-xs text-gray-500">{p.iwasku}</div>
-                        <div className="text-gray-800 truncate">{p.name}</div>
-                        {p.category && (
-                          <div className="text-[10px] text-gray-400">{p.category}</div>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
+            <ProductSearch
+              selected={product}
+              onSelect={setProduct}
+              onClear={() => setProduct(null)}
+              autoFocus
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -326,7 +224,7 @@ export function LooseStockDialog({ isOpen, warehouseCode, onClose, onSuccess }: 
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={submitting || !iwasku || !quantity}
+              disabled={submitting || !product || !quantity}
               className="px-3 py-1.5 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
             >
               {submitting ? 'Ekleniyor…' : 'Ekle'}
