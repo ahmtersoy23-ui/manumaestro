@@ -189,18 +189,28 @@ export default function YeniSiparisPage({
             <label className="block text-xs font-medium text-gray-700 mb-1">
               {orderType === 'FBA_PICKUP' ? 'Pazaryeri (Amazon)' : 'Pazaryeri'}
             </label>
-            <select
-              value={marketplaceCode}
-              onChange={(e) => setMarketplaceCode(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
-            >
-              <option value="">Seçin…</option>
-              {marketplaces.map((m) => (
-                <option key={m.code} value={m.code}>
-                  {m.code} — {m.name}
-                </option>
-              ))}
-            </select>
+            {prefilledMarketplace && returnTo === 'marketplace' ? (
+              // Pazaryeri sayfasından geldi — değiştirilemez, salt-okunur rozet
+              <div className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-sm">
+                <span className="font-medium text-gray-900">
+                  {marketplaces.find((m) => m.code === marketplaceCode)?.name ?? marketplaceCode}
+                </span>
+                <span className="font-mono text-xs text-gray-500">{marketplaceCode}</span>
+              </div>
+            ) : (
+              <select
+                value={marketplaceCode}
+                onChange={(e) => setMarketplaceCode(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
+              >
+                <option value="">Seçin…</option>
+                {marketplaces.map((m) => (
+                  <option key={m.code} value={m.code}>
+                    {m.code} — {m.name}
+                  </option>
+                ))}
+              </select>
+            )}
             {orderType === 'FBA_PICKUP' && marketplaces.length === 0 && (
               <p className="text-[11px] text-amber-700 mt-1">Amazon pazaryeri bulunamadı.</p>
             )}
