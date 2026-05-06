@@ -8,10 +8,20 @@
 'use client';
 
 import { useEffect, useState, useMemo, use } from 'react';
-import { Search, Layers, Package, Box, AlertTriangle, History } from 'lucide-react';
+import Link from 'next/link';
+import { Search, Layers, Package, Box, AlertTriangle, History, Truck, ClipboardList } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import WarehouseStockView from '@/components/warehouse/WarehouseStockView';
 import { IwaskuLocationsModal } from '@/components/wms/IwaskuLocationsModal';
+
+const US_MARKETPLACES = [
+  { code: 'AMZN_US',    label: 'Amazon US' },
+  { code: 'WAYFAIR_US', label: 'Wayfair US' },
+  { code: 'CUSTOM_05',  label: 'Walmart' },
+  { code: 'CUSTOM_04',  label: 'eBay' },
+  { code: 'CUSTOM_03',  label: 'Etsy' },
+  { code: 'CUSTOM_07',  label: 'Shopify' },
+];
 
 const logger = createLogger('DepoDashboard');
 
@@ -63,6 +73,7 @@ type Summary =
       looseTotalQty: number;
       boxesByStatus: { status: string; count: number; quantity: number }[];
       pendingUnmatched: number;
+      outboundCounts: { kargoBekleyen: number; cikisBekleyen: number };
     };
 
 interface DepoData {
@@ -168,6 +179,43 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
       {/* NJ/Showroom — SHELF_PRIMARY view */}
       {data.summary.mode === 'SHELF_PRIMARY' && (
         <>
+          {/* İşlem kartı — kargo etiketi + çıkış sayaçları */}
+          <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <div className="flex items-center gap-2 text-gray-500 text-xs mb-3">
+              <ClipboardList className="w-4 h-4" /> İşlem
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Link
+                href={`/dashboard/depolar/${code}/siparis?stage=kargo`}
+                className="block rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 p-4 transition-colors"
+              >
+                <div className="text-xs font-medium text-amber-800 mb-1">
+                  Kargo etiketi bekleyen
+                </div>
+                <p className="text-3xl font-semibold text-amber-900">
+                  {data.summary.outboundCounts.kargoBekleyen}
+                </p>
+                <p className="text-[11px] text-amber-700 mt-1">
+                  PDF + tracking yüklenecek
+                </p>
+              </Link>
+              <Link
+                href={`/dashboard/depolar/${code}/siparis?stage=cikis`}
+                className="block rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 p-4 transition-colors"
+              >
+                <div className="text-xs font-medium text-blue-800 mb-1">
+                  Çıkış bekleyen
+                </div>
+                <p className="text-3xl font-semibold text-blue-900">
+                  {data.summary.outboundCounts.cikisBekleyen}
+                </p>
+                <p className="text-[11px] text-blue-700 mt-1">
+                  Etiket hazır, sevk bekleniyor
+                </p>
+              </Link>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="bg-white border border-gray-200 rounded-lg p-4">
               <div className="flex items-center gap-2 text-gray-500 text-xs">
@@ -213,6 +261,24 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
             searchTerm={searchTerm}
             onSelect={(iwasku, productName) => setIwaskuModal({ iwasku, productName })}
           />
+
+          {/* Pazaryeri kartları — yeni sipariş girişi (US only) */}
+          <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <div className="flex items-center gap-2 text-gray-500 text-xs mb-3">
+              <Truck className="w-4 h-4" /> Pazaryerleri (Yeni Sipariş)
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+              {US_MARKETPLACES.map((m) => (
+                <Link
+                  key={m.code}
+                  href={`/dashboard/depolar/${code}/siparis/yeni?type=SINGLE&marketplace=${m.code}`}
+                  className="block rounded-lg border border-gray-200 bg-gray-50 hover:border-blue-300 hover:bg-blue-50 p-3 text-center transition-colors"
+                >
+                  <span className="text-sm font-medium text-gray-800">{m.label}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
         </>
       )}
 
