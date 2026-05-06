@@ -110,36 +110,11 @@ async function revertAllocation(
   userId: string,
   movementByKey: Map<string, { id: string; iwasku: string | null; quantity: number | null; shelfBoxId: string | null; fromShelfId: string | null }>
 ) {
-  if (alloc.shelfBoxId) {
-    // Box stoğunu geri ekle
-    const box = await tx.shelfBox.findUnique({ where: { id: alloc.shelfBoxId } });
-    if (!box) throw new Error(`Koli bulunamadı (geri alma): ${alloc.shelfBoxId}`);
-    const newQty = box.quantity + alloc.quantity;
-    const newStatus: 'SEALED' | 'PARTIAL' | 'EMPTY' =
-      box.status === 'EMPTY' ? 'PARTIAL' : box.status as 'SEALED' | 'PARTIAL';
-    await tx.shelfBox.update({
-      where: { id: box.id },
-      data: { quantity: newQty, status: newStatus },
-    });
-    const key = `${item.iwasku}|${alloc.quantity}|${box.id}|${box.shelfId}`;
-    const orig = movementByKey.get(key);
-    await tx.shelfMovement.create({
-      data: {
-        warehouseCode,
-        type: 'REVERSAL',
-        toShelfId: box.shelfId,
-        iwasku: item.iwasku,
-        quantity: alloc.quantity,
-        shelfBoxId: box.id,
-        refType: 'OUTBOUND_REVERT',
-        refId: order.id,
-        userId,
-        notes: `Sevk geri alındı: sipariş ${order.orderNumber}, koli ${box.boxNumber} (${alloc.quantity})`,
-        ...(orig ? { reverseOfId: orig.id } : {}),
-      },
-    });
-  } else if (alloc.shelfId) {
-    // ShelfStock'a upsert ile geri ekle
+  // Yeni davranış: BOX pick → koli açılır + tekil rafa aktarılır + oradan çıkış.
+  // Bu durumda allocation'da shelfId DOLU (tekil çıkış kaynağı), shelfBoxId
+  // sadece origin audit için tutuluyor. shelfId öncelikli kontrol et.
+  if (alloc.shelfId) {
+    // Tekil rafa geri ekle
     const stock = await tx.shelfStock.findUnique({
       where: { shelfId_iwasku: { shelfId: alloc.shelfId, iwasku: item.iwasku } },
     });
@@ -172,6 +147,36 @@ async function revertAllocation(
         refId: order.id,
         userId,
         notes: `Sevk geri alındı: sipariş ${order.orderNumber}, ${item.iwasku} (${alloc.quantity})`,
+        ...(orig ? { reverseOfId: orig.id } : {}),
+      },
+    });
+    return;
+  }
+  // Sadece shelfBoxId set ise: legacy box-bazlı pick (eski ship-allocate / FBA ship)
+  if (alloc.shelfBoxId) {
+    const box = await tx.shelfBox.findUnique({ where: { id: alloc.shelfBoxId } });
+    if (!box) throw new Error(`Koli bulunamadı (geri alma): ${alloc.shelfBoxId}`);
+    const newQty = box.quantity + alloc.quantity;
+    const newStatus: 'SEALED' | 'PARTIAL' | 'EMPTY' =
+      box.status === 'EMPTY' ? 'PARTIAL' : (box.status as 'SEALED' | 'PARTIAL');
+    await tx.shelfBox.update({
+      where: { id: box.id },
+      data: { quantity: newQty, status: newStatus },
+    });
+    const key = `${item.iwasku}|${alloc.quantity}|${box.id}|${box.shelfId}`;
+    const orig = movementByKey.get(key);
+    await tx.shelfMovement.create({
+      data: {
+        warehouseCode,
+        type: 'REVERSAL',
+        toShelfId: box.shelfId,
+        iwasku: item.iwasku,
+        quantity: alloc.quantity,
+        shelfBoxId: box.id,
+        refType: 'OUTBOUND_REVERT',
+        refId: order.id,
+        userId,
+        notes: `Sevk geri alındı: sipariş ${order.orderNumber}, koli ${box.boxNumber} (${alloc.quantity})`,
         ...(orig ? { reverseOfId: orig.id } : {}),
       },
     });

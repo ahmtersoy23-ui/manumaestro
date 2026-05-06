@@ -175,7 +175,12 @@ export async function POST(
               },
             });
           } else {
-            // BOX
+            // BOX pick → SINGLE'da koli OTOMATİK AÇILIR:
+            //   1) Kutudaki tüm adet (totalInBox) tekil ShelfStock'a aktarılır
+            //   2) Kutu EMPTY hale gelir (quantity=0)
+            //   3) ShelfMovement(BOX_OPEN) audit log
+            //   4) Sonra tekil rafdan pick.qty kadar OUTBOUND (ShelfStock decrement)
+            //   5) Allocation kaydında hem shelfId hem shelfBoxId tutulur (audit izi)
             const box = await lockShelfBoxById(tx, p.shelfBoxId!);
             if (!box) throw new Error(`Koli bulunamadı: ${p.shelfBoxId}`);
             if (box.iwasku !== item.iwasku) {
@@ -183,23 +188,63 @@ export async function POST(
                 `Koli iwasku uyumsuz: beklenen ${item.iwasku}, bulunan ${box.iwasku}`
               );
             }
-            const newQty = box.quantity - p.qty;
-            assertNonNegative(`Koli ${box.boxNumber} quantity`, newQty);
-            const newReserved = Math.max(0, box.reservedQty);
-            const newStatus: 'SEALED' | 'PARTIAL' | 'EMPTY' =
-              newQty === 0 ? 'EMPTY' : 'PARTIAL';
+            const totalInBox = box.quantity;
+            assertNonNegative(`Koli ${box.boxNumber} pick`, totalInBox - p.qty);
+
+            // 1) Kutuyu boşalt
             await tx.shelfBox.update({
               where: { id: box.id },
-              data: { quantity: newQty, reservedQty: newReserved, status: newStatus },
+              data: { quantity: 0, reservedQty: 0, status: 'EMPTY' },
             });
+            // 2) Audit: BOX_OPEN
+            await tx.shelfMovement.create({
+              data: {
+                warehouseCode: upperCode,
+                type: 'BOX_OPEN',
+                toShelfId: box.shelfId,
+                iwasku: item.iwasku,
+                quantity: totalInBox,
+                shelfBoxId: box.id,
+                refType: 'OUTBOUND_PICK_OPEN',
+                refId: order.id,
+                userId: auth.user.id,
+                notes: `Sipariş ${order.orderNumber}: koli ${box.boxNumber} açıldı (${totalInBox} adet rafa)`,
+              },
+            });
+            // 3) Tekil rafa kalan + alınan kadar yaz (toplam = totalInBox)
+            //    Sonra pick.qty düşülür → net etki: rafta (totalInBox - p.qty), pick gitti.
+            const stock = await tx.shelfStock.upsert({
+              where: { shelfId_iwasku: { shelfId: box.shelfId, iwasku: item.iwasku } },
+              create: {
+                warehouseCode: upperCode,
+                shelfId: box.shelfId,
+                iwasku: item.iwasku,
+                quantity: totalInBox,
+                reservedQty: 0,
+              },
+              update: { quantity: { increment: totalInBox } },
+            });
+            // 4) Tekil rafdan pick.qty düş
+            const newStockQty = stock.quantity - p.qty;
+            assertNonNegative(`Raf stoğu ${item.iwasku} pick`, newStockQty);
+            if (newStockQty === 0) {
+              await tx.shelfStock.delete({ where: { id: stock.id } });
+            } else {
+              await tx.shelfStock.update({
+                where: { id: stock.id },
+                data: { quantity: newStockQty },
+              });
+            }
+            // 5) Allocation: hem shelfId (asıl çıkış kaynağı) hem shelfBoxId (origin audit)
             await tx.outboundOrderItemAllocation.create({
               data: {
                 orderItemId: item.id,
-                shelfId: null,
+                shelfId: box.shelfId,
                 shelfBoxId: box.id,
                 quantity: p.qty,
               },
             });
+            // 6) OUTBOUND audit
             await tx.shelfMovement.create({
               data: {
                 warehouseCode: upperCode,
@@ -207,11 +252,10 @@ export async function POST(
                 fromShelfId: box.shelfId,
                 iwasku: item.iwasku,
                 quantity: p.qty,
-                shelfBoxId: box.id,
                 refType,
                 refId: order.id,
                 userId: auth.user.id,
-                notes: `Sipariş ${order.orderNumber}: koli ${box.boxNumber} (${p.qty})`,
+                notes: `Sipariş ${order.orderNumber}: ${item.iwasku} (${p.qty}, koli ${box.boxNumber} açıldı)`,
               },
             });
           }

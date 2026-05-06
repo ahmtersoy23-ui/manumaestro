@@ -66,6 +66,13 @@ export default function YeniSiparisPage({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // SINGLE'da en az 1 ürün satırı eksiksiz olmalı (iwasku + qty>0).
+  const hasValidItems =
+    orderType !== 'SINGLE' ||
+    items.some(
+      (r) => r.iwasku.trim().length > 0 && typeof r.quantity === 'number' && r.quantity > 0
+    );
+
   useEffect(() => {
     let cancelled = false;
     fetch('/api/marketplaces?limit=200', { credentials: 'include' })
@@ -296,7 +303,12 @@ export default function YeniSiparisPage({
           </Link>
           <button
             onClick={handleSubmit}
-            disabled={submitting || !marketplaceCode || !orderNumber.trim()}
+            disabled={submitting || !marketplaceCode || !orderNumber.trim() || !hasValidItems}
+            title={
+              !hasValidItems && orderType === 'SINGLE'
+                ? 'En az 1 ürün ve adet girilmeli'
+                : undefined
+            }
             className={`px-3 py-1.5 text-sm text-white rounded-md disabled:opacity-50 ${
               orderType === 'FBA_PICKUP'
                 ? 'bg-orange-500 hover:bg-orange-600'
