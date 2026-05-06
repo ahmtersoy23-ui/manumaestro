@@ -113,13 +113,16 @@ export default function SiparisLobbyPage({ params }: { params: Promise<{ code: s
 
       {data && (
         <>
-          {/* İşlem kartı — depo geneli */}
+          {/* İşlem kartı — depo geneli (her bölüm clickable, kendi alt sayfasına) */}
           <div className="bg-white border border-gray-200 rounded-lg p-4">
             <div className="flex items-center gap-2 text-gray-500 text-xs mb-3">
               <ClipboardList className="w-4 h-4" /> İşlem (depo geneli)
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <Link
+                href={`/dashboard/depolar/${code}/siparis/stage/kargo`}
+                className="block rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 p-4 transition-colors"
+              >
                 <div className="text-xs font-medium text-amber-800 mb-1">
                   Kargo etiketi bekleyen
                 </div>
@@ -129,8 +132,11 @@ export default function SiparisLobbyPage({ params }: { params: Promise<{ code: s
                 <p className="text-[11px] text-amber-700 mt-1">
                   PDF + tracking yüklenecek
                 </p>
-              </div>
-              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+              </Link>
+              <Link
+                href={`/dashboard/depolar/${code}/siparis/stage/cikis`}
+                className="block rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 p-4 transition-colors"
+              >
                 <div className="text-xs font-medium text-blue-800 mb-1">Çıkış bekleyen</div>
                 <p className="text-3xl font-semibold text-blue-900">
                   {data.totals.cikisBekleyen}
@@ -138,7 +144,7 @@ export default function SiparisLobbyPage({ params }: { params: Promise<{ code: s
                 <p className="text-[11px] text-blue-700 mt-1">
                   Etiket hazır, sevk bekleniyor
                 </p>
-              </div>
+              </Link>
             </div>
           </div>
 
