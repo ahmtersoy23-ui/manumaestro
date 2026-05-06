@@ -225,7 +225,7 @@ export function DeleteStockDialog({ isOpen, warehouseCode, onClose, onSuccess }:
       <div
         role="dialog"
         aria-modal="true"
-        className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col"
+        className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col text-gray-900"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 border-b border-gray-200">

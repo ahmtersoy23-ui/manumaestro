@@ -251,7 +251,7 @@ export function ShipModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="ship-modal-title"
-        className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col"
+        className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col text-gray-900"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-5 border-b border-gray-200">

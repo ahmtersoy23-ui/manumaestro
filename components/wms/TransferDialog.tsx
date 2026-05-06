@@ -177,7 +177,7 @@ export function TransferDialog({ isOpen, warehouseCode, source, onClose, onSucce
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-5" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-5 text-gray-900" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">Transfer</h2>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
@@ -366,18 +366,19 @@ interface GroupProps {
 function Group({ title, options, warehouseCode, onSelect, selectedId }: GroupProps) {
   return (
     <div>
-      <div className="px-3 py-1.5 text-[10px] uppercase tracking-wide text-gray-500 bg-gray-50 sticky top-0">
+      <div className="px-3 py-1.5 text-[10px] uppercase tracking-wide text-gray-700 bg-gray-100 sticky top-0 font-semibold">
         {title}
       </div>
       {options.map((s) => {
         const cross = s.warehouseCode && s.warehouseCode !== warehouseCode;
+        const selected = selectedId === s.id;
         return (
           <button
             key={s.id}
             type="button"
             onClick={() => onSelect(s.id)}
-            className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-blue-50 ${
-              selectedId === s.id ? 'bg-blue-50 font-semibold' : ''
+            className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-blue-50 border-b border-gray-50 last:border-b-0 ${
+              selected ? 'bg-blue-50 font-semibold text-blue-900' : 'text-gray-900'
             }`}
           >
             <span className="font-mono">{s.code}</span>

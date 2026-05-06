@@ -73,7 +73,7 @@ export function BreakBoxDialog({ isOpen, warehouseCode, source, onClose, onSucce
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-5 text-gray-900" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <Scissors className="w-4 h-4 text-amber-600" /> Koli Parçala

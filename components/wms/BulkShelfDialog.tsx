@@ -78,7 +78,7 @@ export function BulkShelfDialog({ isOpen, warehouseCode, onClose, onSuccess }: P
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={handleClose}>
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-5" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-5 text-gray-900" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">Toplu Raf Yarat — {warehouseLabel(warehouseCode)}</h2>
           <button onClick={handleClose} className="p-1 hover:bg-gray-100 rounded">

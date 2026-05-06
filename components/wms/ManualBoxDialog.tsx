@@ -165,7 +165,7 @@ export function ManualBoxDialog({ isOpen, warehouseCode, onClose, onSuccess }: P
         role="dialog"
         aria-modal="true"
         aria-labelledby="manual-box-dialog-title"
-        className="bg-white rounded-xl shadow-xl w-full max-w-lg p-5"
+        className="bg-white rounded-xl shadow-xl w-full max-w-lg p-5 text-gray-900"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
