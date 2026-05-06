@@ -131,6 +131,24 @@ export function getCurrentMonth(): string {
 }
 
 /**
+ * Get the default month for a new entry (first unlocked month from today onwards).
+ * Super admin de dahil herkes için "doğal hedef" — kilitli ay manuel seçilebilir kalsa
+ * bile auto-select buradan döner.
+ * @returns Month string in format "YYYY-MM"
+ */
+export function getDefaultEntryMonth(): string {
+  const today = new Date();
+  for (let i = 0; i < 12; i++) {
+    const date = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    const monthValue = formatMonthValue(date);
+    if (!isMonthLocked(monthValue)) {
+      return monthValue;
+    }
+  }
+  return formatMonthValue(new Date(today.getFullYear(), today.getMonth() + 1, 1));
+}
+
+/**
  * Get month name from month value
  * @param monthValue - Month string in format "YYYY-MM"
  * @returns Month name (e.g., "January")

@@ -7,7 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import { Search, Plus, Check, Calendar, AlertCircle } from 'lucide-react';
-import { getAvailableMonthsForEntry, formatMonthDisplay, getCurrentMonth } from '@/lib/monthUtils';
+import { getAvailableMonthsForEntry, formatMonthDisplay, getCurrentMonth, getDefaultEntryMonth, isMonthLocked } from '@/lib/monthUtils';
 import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
 
@@ -42,16 +42,15 @@ export function ManualEntryForm({ marketplaceId, onSuccess }: ManualEntryFormPro
   const [monthError, setMonthError] = useState('');
 
   const availableMonths = getAvailableMonthsForEntry(isSuperAdmin);
-  const today = new Date();
-  const dayOfMonth = today.getDate();
   const currentMonth = getCurrentMonth();
+  const defaultMonth = getDefaultEntryMonth();
+  const currentMonthLocked = isMonthLocked(currentMonth);
+  const showLockWarning = currentMonthLocked && !isSuperAdmin;
 
-  // Auto-select first available month on mount
+  // Auto-select first unlocked month on mount (super admin için de aynı default)
   useEffect(() => {
-    if (availableMonths.length > 0) {
-      setProductionMonth(prev => prev || availableMonths[0].value);
-    }
-  }, [availableMonths]);
+    setProductionMonth(prev => prev || defaultMonth);
+  }, [defaultMonth]);
 
   // Debounced search
   useEffect(() => {
@@ -96,9 +95,9 @@ export function ManualEntryForm({ marketplaceId, onSuccess }: ManualEntryFormPro
       return;
     }
 
-    // Validate: Cannot enter for current month after 5th
-    if (dayOfMonth > 5 && productionMonth === currentMonth) {
-      setMonthError('Ayın 5\'inden sonra mevcut ay için talep girilemez. Lütfen sonraki ayı seçin.');
+    // Validate: Kilitli aya giriş — super admin bypass eder
+    if (!isSuperAdmin && isMonthLocked(productionMonth)) {
+      setMonthError(`${formatMonthDisplay(productionMonth)} kilitlendi. Yeni aya geçildiği için bu ay için talep girilemez. Lütfen sonraki ayı seçin.`);
       return;
     }
 
@@ -166,8 +165,8 @@ export function ManualEntryForm({ marketplaceId, onSuccess }: ManualEntryFormPro
         </div>
       )}
 
-      {/* Production Month Warning */}
-      {dayOfMonth > 5 && (
+      {/* Production Month Warning — yeni aya geçildiyse mevcut ay kilitli */}
+      {showLockWarning && (
         <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
           <div>
@@ -175,7 +174,7 @@ export function ManualEntryForm({ marketplaceId, onSuccess }: ManualEntryFormPro
               Mevcut Ay Girişi Kapandı
             </p>
             <p className="text-sm text-orange-800">
-              Bugün ayın {dayOfMonth}&apos;i. {formatMonthDisplay(currentMonth)} talepleri kapanmıştır.
+              Yeni aya geçildiği için {formatMonthDisplay(currentMonth)} talepleri kapanmıştır.
               Lütfen sonraki ay için giriş yapın.
             </p>
           </div>
