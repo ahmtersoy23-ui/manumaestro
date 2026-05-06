@@ -71,6 +71,7 @@ export async function GET(
         marketplaceCode: order.marketplaceCode,
         orderNumber: order.orderNumber,
         description: order.description,
+        addressNote: order.addressNote,
         status: order.status,
         createdAt: order.createdAt,
         shippedAt: order.shippedAt,

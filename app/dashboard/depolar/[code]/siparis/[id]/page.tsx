@@ -33,6 +33,7 @@ interface OrderData {
     marketplaceCode: string;
     orderNumber: string;
     description: string | null;
+    addressNote: string | null;
     status: 'DRAFT' | 'SHIPPED' | 'CANCELLED';
     createdAt: string;
     shippedAt: string | null;
@@ -193,6 +194,14 @@ export default function SiparisDetayPage({
             {data.order.description && (
               <p className="text-sm text-gray-700 mt-2">{data.order.description}</p>
             )}
+            {data.order.addressNote && (
+              <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded text-sm text-gray-700 whitespace-pre-wrap">
+                <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">
+                  Adres / Açıklama
+                </div>
+                {data.order.addressNote}
+              </div>
+            )}
           </div>
 
           <div className="flex gap-2">
@@ -221,23 +230,26 @@ export default function SiparisDetayPage({
       {/* Etiketler — DRAFT/SHIPPED'de hep görünür, yetkiye göre yükle/bas/sil */}
       <LabelUploader warehouseCode={code} orderId={data.order.id} role={data.role} />
 
-      {/* Kalem ekleme — yalnız DRAFT + yetkili */}
+      {/* Kalem ekleme: SINGLE artık girişte oluşur — sadece boş legacy DRAFT'lar
+          için adder görünür. FBA_PICKUP eski akış: koliler detayda eklenir. */}
       {data.order.status === 'DRAFT' &&
         ['PACKER', 'OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role) &&
-        (data.order.orderType === 'SINGLE' ? (
-          <SingleOrderItemAdder
-            warehouseCode={code}
-            orderId={data.order.id}
-            onSuccess={() => setRefreshKey((k) => k + 1)}
-          />
-        ) : (
-          <FbaPickupBoxSelector
-            warehouseCode={code}
-            orderId={data.order.id}
-            onSuccess={() => setRefreshKey((k) => k + 1)}
-            alreadyAddedIds={new Set(data.items.map((i) => i.shelfBoxId).filter(Boolean) as string[])}
-          />
-        ))}
+        (data.order.orderType === 'SINGLE'
+          ? data.items.length === 0 && (
+              <SingleOrderItemAdder
+                warehouseCode={code}
+                orderId={data.order.id}
+                onSuccess={() => setRefreshKey((k) => k + 1)}
+              />
+            )
+          : (
+            <FbaPickupBoxSelector
+              warehouseCode={code}
+              orderId={data.order.id}
+              onSuccess={() => setRefreshKey((k) => k + 1)}
+              alreadyAddedIds={new Set(data.items.map((i) => i.shelfBoxId).filter(Boolean) as string[])}
+            />
+          ))}
 
       {/* Kalemler */}
       <div className="bg-white border border-gray-200 rounded-lg">
