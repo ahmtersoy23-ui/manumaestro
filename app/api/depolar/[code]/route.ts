@@ -60,7 +60,7 @@ export async function GET(
       pendingUnmatched,
     };
   } else {
-    const [stockAgg, boxStatusGroup, draftOrders] = await Promise.all([
+    const [stockAgg, boxStatusGroup] = await Promise.all([
       prisma.shelfStock.aggregate({
         where: { warehouseCode: upperCode },
         _sum: { quantity: true },
@@ -72,30 +72,7 @@ export async function GET(
         _count: true,
         _sum: { quantity: true },
       }),
-      prisma.outboundOrder.findMany({
-        where: {
-          warehouseCode: upperCode,
-          status: 'DRAFT',
-          orderType: 'SINGLE',
-        },
-        select: {
-          id: true,
-          labels: {
-            where: { type: 'SHIPPING', archivedAt: null },
-            select: { id: true },
-            take: 1,
-          },
-        },
-      }),
     ]);
-
-    let kargoBekleyen = 0;
-    let cikisBekleyen = 0;
-    for (const o of draftOrders) {
-      if (o.labels.length > 0) cikisBekleyen += 1;
-      else kargoBekleyen += 1;
-    }
-
     summary = {
       mode: 'SHELF_PRIMARY' as const,
       shelfCount,
@@ -107,10 +84,6 @@ export async function GET(
         quantity: g._sum.quantity ?? 0,
       })),
       pendingUnmatched,
-      outboundCounts: {
-        kargoBekleyen,
-        cikisBekleyen,
-      },
     };
   }
 

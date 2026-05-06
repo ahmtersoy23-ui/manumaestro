@@ -55,6 +55,7 @@ export default function YeniSiparisPage({
     | 'SINGLE'
     | 'FBA_PICKUP';
   const prefilledMarketplace = searchParams.get('marketplace') ?? '';
+  const returnTo = searchParams.get('returnTo') ?? '';
 
   const [marketplaces, setMarketplaces] = useState<Marketplace[]>([]);
   const [marketplaceCode, setMarketplaceCode] = useState(prefilledMarketplace);
@@ -131,11 +132,15 @@ export default function YeniSiparisPage({
         setError(data.error || 'Sipariş yaratılamadı');
         return;
       }
-      // SINGLE: listeye dön (kargo bekleyen kovasında); FBA_PICKUP: detaya git (koli ekleyecek)
+      // SINGLE: marketplace alt sayfasına geri dön (kargo sekmesi); FBA_PICKUP: detaya git
       if (orderType === 'FBA_PICKUP') {
         router.push(`/dashboard/depolar/${code}/siparis/${data.data.id}`);
+      } else if (returnTo === 'marketplace' && marketplaceCode) {
+        router.push(
+          `/dashboard/depolar/${code}/siparis/marketplace/${marketplaceCode}?stage=kargo`
+        );
       } else {
-        router.push(`/dashboard/depolar/${code}/siparis?stage=kargo`);
+        router.push(`/dashboard/depolar/${code}/siparis`);
       }
     } catch (e) {
       logger.error('Submit hatası', e);
@@ -280,7 +285,11 @@ export default function YeniSiparisPage({
 
         <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
           <Link
-            href={`/dashboard/depolar/${code}/siparis`}
+            href={
+              returnTo === 'marketplace' && marketplaceCode
+                ? `/dashboard/depolar/${code}/siparis/marketplace/${marketplaceCode}`
+                : `/dashboard/depolar/${code}/siparis`
+            }
             className="px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
           >
             İptal

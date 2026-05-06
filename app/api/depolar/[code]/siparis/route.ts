@@ -51,6 +51,7 @@ export async function GET(
   const { searchParams } = new URL(request.url);
   const statusFilter = searchParams.get('status');
   const typeFilter = searchParams.get('orderType');
+  const marketplaceFilter = searchParams.get('marketplaceCode');
 
   const where: Prisma.OutboundOrderWhereInput = { warehouseCode: upperCode };
   if (statusFilter && ['DRAFT', 'SHIPPED', 'CANCELLED'].includes(statusFilter)) {
@@ -58,6 +59,9 @@ export async function GET(
   }
   if (typeFilter && ['SINGLE', 'FBA_PICKUP'].includes(typeFilter)) {
     where.orderType = typeFilter as 'SINGLE' | 'FBA_PICKUP';
+  }
+  if (marketplaceFilter) {
+    where.marketplaceCode = marketplaceFilter;
   }
 
   const orders = await prisma.outboundOrder.findMany({
