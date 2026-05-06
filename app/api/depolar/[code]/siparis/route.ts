@@ -14,11 +14,18 @@ import type { Prisma } from '@prisma/client';
 
 const SHELF_PRIMARY = new Set(['NJ', 'SHOWROOM']);
 
+const CreateOrderItemSchema = z.object({
+  iwasku: z.string().trim().min(1),
+  quantity: z.number().int().positive().max(100000),
+});
+
 const CreateOrderSchema = z.object({
   orderType: z.enum(['SINGLE', 'FBA_PICKUP']),
   marketplaceCode: z.string().trim().min(1).max(50),
   orderNumber: z.string().trim().min(1).max(100),
   description: z.string().trim().max(500).optional(),
+  addressNote: z.string().trim().max(2000).optional(),
+  items: z.array(CreateOrderItemSchema).max(50).optional(),
 });
 
 export async function GET(
@@ -57,7 +64,14 @@ export async function GET(
     where,
     orderBy: { createdAt: 'desc' },
     take: 200,
-    include: { _count: { select: { items: true } } },
+    include: {
+      _count: { select: { items: true } },
+      labels: {
+        where: { type: 'SHIPPING', archivedAt: null },
+        select: { id: true },
+        take: 1,
+      },
+    },
   });
 
   // Toplu sayı: DRAFT/SHIPPED/CANCELLED + SINGLE/FBA_PICKUP
@@ -77,8 +91,10 @@ export async function GET(
         marketplaceCode: o.marketplaceCode,
         orderNumber: o.orderNumber,
         description: o.description,
+        addressNote: o.addressNote,
         status: o.status,
         itemCount: o._count.items,
+        hasShippingLabel: o.labels.length > 0,
         createdAt: o.createdAt,
         shippedAt: o.shippedAt,
       })),
@@ -115,7 +131,16 @@ export async function POST(
       { status: 400 }
     );
   }
-  const { orderType, marketplaceCode, orderNumber, description } = parsed.data;
+  const { orderType, marketplaceCode, orderNumber, description, addressNote, items } = parsed.data;
+
+  // FBA_PICKUP'ta items entry stage'de boş gelir (koliler detay ekranında eklenir);
+  // SINGLE'da en az 1 item bekleriz (yeni akış).
+  if (orderType === 'SINGLE' && (!items || items.length === 0)) {
+    return NextResponse.json(
+      { success: false, error: 'En az 1 ürün satırı girin' },
+      { status: 400 }
+    );
+  }
 
   // Aynı (warehouse, marketplace, orderNumber) zaten DRAFT/SHIPPED ise hata
   const dup = await prisma.outboundOrder.findUnique({
@@ -134,16 +159,32 @@ export async function POST(
     );
   }
 
-  const created = await prisma.outboundOrder.create({
-    data: {
-      warehouseCode: upperCode,
-      orderType,
-      marketplaceCode,
-      orderNumber,
-      description: description ?? null,
-      status: 'DRAFT',
-      createdById: auth.user.id,
-    },
+  const created = await prisma.$transaction(async (tx) => {
+    const order = await tx.outboundOrder.create({
+      data: {
+        warehouseCode: upperCode,
+        orderType,
+        marketplaceCode,
+        orderNumber,
+        description: description ?? null,
+        addressNote: addressNote ?? null,
+        status: 'DRAFT',
+        createdById: auth.user.id,
+      },
+    });
+
+    if (items && items.length > 0) {
+      await tx.outboundOrderItem.createMany({
+        data: items.map((it) => ({
+          outboundOrderId: order.id,
+          iwasku: it.iwasku,
+          quantity: it.quantity,
+          // shelfId/shelfBoxId çıkış aşamasında allocation üzerinden bağlanır
+        })),
+      });
+    }
+
+    return order;
   });
 
   return NextResponse.json({ success: true, data: created }, { status: 201 });

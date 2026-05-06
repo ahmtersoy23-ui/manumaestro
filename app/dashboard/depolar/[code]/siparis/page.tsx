@@ -8,7 +8,7 @@
 
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
+import { redirect, useSearchParams } from 'next/navigation';
 import { Plus, PackageOpen, Truck, Box as BoxIcon, AlertCircle, Search, FileStack } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { BulkLabelDialog } from '@/components/wms/BulkLabelDialog';
@@ -21,11 +21,15 @@ interface OrderRow {
   marketplaceCode: string;
   orderNumber: string;
   description: string | null;
+  addressNote: string | null;
   status: 'DRAFT' | 'SHIPPED' | 'CANCELLED';
   itemCount: number;
+  hasShippingLabel: boolean;
   createdAt: string;
   shippedAt: string | null;
 }
+
+type Stage = 'ALL' | 'KARGO' | 'CIKIS';
 
 const STATUS_BADGE: Record<string, string> = {
   DRAFT: 'bg-amber-100 text-amber-700',
@@ -41,6 +45,9 @@ const STATUS_LABEL: Record<string, string> = {
 export default function SiparisListPage({ params }: { params: Promise<{ code: string }> }) {
   const { code: rawCode } = use(params);
   const code = rawCode.toUpperCase();
+  const sp = useSearchParams();
+  const initialStage: Stage =
+    sp.get('stage') === 'kargo' ? 'KARGO' : sp.get('stage') === 'cikis' ? 'CIKIS' : 'ALL';
 
   // Ankara'da sipariş çıkış yok
   if (code === 'ANKARA') {
@@ -51,7 +58,10 @@ export default function SiparisListPage({ params }: { params: Promise<{ code: st
   const [role, setRole] = useState<string>('VIEWER');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'DRAFT' | 'SHIPPED' | 'CANCELLED'>('ALL');
+  const [stage, setStage] = useState<Stage>(initialStage);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'DRAFT' | 'SHIPPED' | 'CANCELLED'>(
+    initialStage === 'ALL' ? 'ALL' : 'DRAFT'
+  );
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'SINGLE' | 'FBA_PICKUP'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -83,18 +93,23 @@ export default function SiparisListPage({ params }: { params: Promise<{ code: st
   const canCreate = ['PACKER', 'OPERATOR', 'MANAGER', 'ADMIN'].includes(role);
 
   const filtered = orders.filter((o) => {
+    // Stage filter (sadece DRAFT için)
+    if (stage === 'KARGO' && !(o.status === 'DRAFT' && !o.hasShippingLabel)) return false;
+    if (stage === 'CIKIS' && !(o.status === 'DRAFT' && o.hasShippingLabel)) return false;
+
     const q = searchTerm.trim().toLowerCase();
     if (!q) return true;
     return (
       o.orderNumber.toLowerCase().includes(q) ||
       o.marketplaceCode.toLowerCase().includes(q) ||
-      (o.description ?? '').toLowerCase().includes(q)
+      (o.description ?? '').toLowerCase().includes(q) ||
+      (o.addressNote ?? '').toLowerCase().includes(q)
     );
   });
 
   const counts = {
-    draftSingle: orders.filter((o) => o.status === 'DRAFT' && o.orderType === 'SINGLE').length,
-    draftFba: orders.filter((o) => o.status === 'DRAFT' && o.orderType === 'FBA_PICKUP').length,
+    kargoBekleyen: orders.filter((o) => o.status === 'DRAFT' && !o.hasShippingLabel).length,
+    cikisBekleyen: orders.filter((o) => o.status === 'DRAFT' && o.hasShippingLabel).length,
     shipped: orders.filter((o) => o.status === 'SHIPPED').length,
     cancelled: orders.filter((o) => o.status === 'CANCELLED').length,
   };
@@ -106,7 +121,7 @@ export default function SiparisListPage({ params }: { params: Promise<{ code: st
         <div>
           <h1 className="text-lg font-semibold text-gray-900">Sipariş Çıkış</h1>
           <p className="text-xs text-gray-500">
-            DRAFT: {counts.draftSingle + counts.draftFba} • Gönderildi: {counts.shipped} • İptal: {counts.cancelled}
+            Kargo bekleyen: {counts.kargoBekleyen} • Çıkış bekleyen: {counts.cikisBekleyen} • Gönderildi: {counts.shipped} • İptal: {counts.cancelled}
           </p>
         </div>
         {canCreate && (
@@ -145,6 +160,28 @@ export default function SiparisListPage({ params }: { params: Promise<{ code: st
 
       {/* Filtreler */}
       <div className="flex flex-wrap gap-3">
+        <div className="flex gap-1">
+          {([
+            { value: 'ALL', label: 'Hepsi' },
+            { value: 'KARGO', label: `Kargo (${counts.kargoBekleyen})` },
+            { value: 'CIKIS', label: `Çıkış (${counts.cikisBekleyen})` },
+          ] as { value: Stage; label: string }[]).map((s) => (
+            <button
+              key={s.value}
+              onClick={() => {
+                setStage(s.value);
+                if (s.value !== 'ALL') setStatusFilter('DRAFT');
+              }}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium ${
+                stage === s.value
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
         <div className="flex gap-1">
           {(['ALL', 'DRAFT', 'SHIPPED', 'CANCELLED'] as const).map((s) => (
             <button
@@ -194,7 +231,7 @@ export default function SiparisListPage({ params }: { params: Promise<{ code: st
       ) : filtered.length === 0 ? (
         <div className="bg-white border border-dashed border-gray-300 rounded-lg p-10 text-center text-gray-500">
           <PackageOpen className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-          {searchTerm || statusFilter !== 'ALL' || typeFilter !== 'ALL'
+          {searchTerm || stage !== 'ALL' || statusFilter !== 'ALL' || typeFilter !== 'ALL'
             ? 'Filtreyle eşleşen sipariş yok.'
             : 'Henüz sipariş yok. Sağ üstten yeni sipariş yarat.'}
         </div>
@@ -238,9 +275,19 @@ export default function SiparisListPage({ params }: { params: Promise<{ code: st
                   </td>
                   <td className="px-4 py-2 text-right">{o.itemCount}</td>
                   <td className="px-4 py-2">
-                    <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded ${STATUS_BADGE[o.status]}`}>
-                      {STATUS_LABEL[o.status]}
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded ${STATUS_BADGE[o.status]}`}>
+                        {STATUS_LABEL[o.status]}
+                      </span>
+                      {o.status === 'DRAFT' && o.hasShippingLabel && (
+                        <span
+                          className="text-[10px] uppercase px-1.5 py-0.5 rounded bg-blue-100 text-blue-700"
+                          title="Kargo etiketi yüklendi, çıkış bekliyor"
+                        >
+                          Etiket ✓
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-2 text-xs text-gray-500">
                     {o.shippedAt ? (
