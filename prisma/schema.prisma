@@ -714,6 +714,7 @@ model OutboundOrder {
   marketplaceCode String // SINGLE'da seçilen; FBA_PICKUP'da "AMZN_US" sabit
   orderNumber     String // SINGLE: order#; FBA_PICKUP: appointment/pickup ID
   description     String?
+  addressNote     String? // Adres ve serbest açıklama — SINGLE entry sırasında
   status          OutboundStatus @default(DRAFT)
   createdById     String
   createdAt       DateTime       @default(now())
@@ -734,14 +735,34 @@ model OutboundOrderItem {
   outboundOrderId String
   iwasku          String
   quantity        Int
-  shelfId         String? // tekil rafından çıkıyorsa
-  shelfBoxId      String? // koliden çıkıyorsa
+  shelfId         String? // (legacy / single-source pick) tekil rafından çıkıyorsa
+  shelfBoxId      String? // (legacy / single-source pick) koliden çıkıyorsa
 
-  order OutboundOrder @relation(fields: [outboundOrderId], references: [id], onDelete: Cascade)
+  order       OutboundOrder                  @relation(fields: [outboundOrderId], references: [id], onDelete: Cascade)
+  allocations OutboundOrderItemAllocation[]
 
   @@index([outboundOrderId])
   @@index([iwasku])
   @@map("outbound_order_items")
+}
+
+// Bir OutboundOrderItem'ın stoğa bağlanmasının ayrıntısı.
+// Aynı iwasku birden fazla rafa/koli'ye bölünebilir; her allocation tek bir
+// kaynağa (shelfId VEYA shelfBoxId) işaret eder. Çıkış (SHIPPED) anında
+// bu satırlar kullanılarak ShelfStock/ShelfBox'tan düşülür.
+model OutboundOrderItemAllocation {
+  id          String @id @default(uuid())
+  orderItemId String
+  shelfId     String? // tekil rafından
+  shelfBoxId  String? // koliden
+  quantity    Int
+
+  orderItem OutboundOrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  @@index([orderItemId])
+  @@index([shelfId])
+  @@index([shelfBoxId])
+  @@map("outbound_order_item_allocations")
 }
 
 enum OrderType {
