@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import { X, Package, Box as BoxIcon, AlertCircle } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { warehouseLabel } from '@/lib/warehouseLabels';
 
 const logger = createLogger('IwaskuLocationsModal');
 
@@ -96,7 +97,7 @@ export function IwaskuLocationsModal({ isOpen, warehouseCode, iwasku, productNam
                   ASIN: {visibleData.asin}
                 </span>
               )}
-              <span className="text-xs text-gray-500 font-normal">@ {warehouseCode}</span>
+              <span className="text-xs text-gray-500 font-normal">@ {warehouseLabel(warehouseCode)}</span>
             </h2>
             {(productName || visibleData?.productName) && (
               <p className="text-xs text-gray-600 mt-0.5">{productName ?? visibleData?.productName}</p>

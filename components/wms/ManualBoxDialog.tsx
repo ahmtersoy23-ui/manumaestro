@@ -9,6 +9,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Search } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { warehouseLabel } from '@/lib/warehouseLabels';
 
 const logger = createLogger('ManualBoxDialog');
 
@@ -168,7 +169,7 @@ export function ManualBoxDialog({ isOpen, warehouseCode, onClose, onSuccess }: P
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 id="manual-box-dialog-title" className="text-lg font-semibold">Yeni Koli (Manuel) — {warehouseCode}</h2>
+          <h2 id="manual-box-dialog-title" className="text-lg font-semibold">Yeni Koli (Manuel) — {warehouseLabel(warehouseCode)}</h2>
           <button type="button" onClick={onClose} aria-label="Kapat" className="p-1 hover:bg-gray-100 rounded">
             <X className="w-4 h-4" aria-hidden="true" />
           </button>

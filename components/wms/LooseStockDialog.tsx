@@ -10,6 +10,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Search } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { warehouseLabel } from '@/lib/warehouseLabels';
 
 const logger = createLogger('LooseStockDialog');
 
@@ -167,7 +168,7 @@ export function LooseStockDialog({ isOpen, warehouseCode, onClose, onSuccess }: 
       >
         <div className="flex items-center justify-between mb-4">
           <h2 id="loose-stock-dialog-title" className="text-lg font-semibold">
-            Tekil Ürün Ekle — {warehouseCode}
+            Tekil Ürün Ekle — {warehouseLabel(warehouseCode)}
           </h2>
           <button
             type="button"

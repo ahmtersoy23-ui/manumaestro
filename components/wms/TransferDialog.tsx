@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { X, ArrowRight, AlertCircle, Search, ChevronDown } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { warehouseLabel } from '@/lib/warehouseLabels';
 
 const logger = createLogger('TransferDialog');
 
@@ -187,7 +188,7 @@ export function TransferDialog({ isOpen, warehouseCode, source, onClose, onSucce
         {/* Kaynak banner */}
         <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-3 text-sm">
           <div className="text-xs text-blue-700 mb-1">
-            Kaynak: <span className="font-mono">{source.fromShelfCode}</span> ({warehouseCode})
+            Kaynak: <span className="font-mono">{source.fromShelfCode}</span> ({warehouseLabel(warehouseCode)})
           </div>
           <div className="font-medium text-gray-900 truncate">
             {source.type === 'box' ? `Koli ${source.boxNumber}` : source.iwasku}
@@ -221,7 +222,7 @@ export function TransferDialog({ isOpen, warehouseCode, source, onClose, onSucce
                   {selectedTarget.warehouseCode &&
                     selectedTarget.warehouseCode !== warehouseCode && (
                       <span className="ml-2 text-[10px] uppercase text-purple-700">
-                        {selectedTarget.warehouseCode}
+                        {warehouseLabel(selectedTarget.warehouseCode)}
                       </span>
                     )}
                 </span>
@@ -382,7 +383,7 @@ function Group({ title, options, warehouseCode, onSelect, selectedId }: GroupPro
             <span className="font-mono">{s.code}</span>
             {cross && (
               <span className="text-[10px] uppercase px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">
-                {s.warehouseCode}
+                {warehouseLabel(s.warehouseCode!)}
               </span>
             )}
           </button>

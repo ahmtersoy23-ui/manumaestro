@@ -9,15 +9,10 @@ import { ReactNode, use } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, LayoutGrid, PackageOpen, ChevronRight, ClipboardCheck } from 'lucide-react';
+import { warehouseLabelLong } from '@/lib/warehouseLabels';
 
 const VALID_CODES = ['ANKARA', 'NJ', 'SHOWROOM'] as const;
 type WarehouseCode = (typeof VALID_CODES)[number];
-
-const WAREHOUSE_LABELS: Record<WarehouseCode, string> = {
-  ANKARA: 'Ankara Depo',
-  NJ: 'Somerset Depo',
-  SHOWROOM: 'Fairfield Depo',
-};
 
 export default function DepoDetayLayout({
   children,
@@ -61,7 +56,7 @@ export default function DepoDetayLayout({
           Depolar
         </Link>
         <ChevronRight className="w-4 h-4" />
-        <span className="text-gray-900 font-medium">{WAREHOUSE_LABELS[code]}</span>
+        <span className="text-gray-900 font-medium">{warehouseLabelLong(code)}</span>
       </nav>
 
       {/* Tab navigation */}
