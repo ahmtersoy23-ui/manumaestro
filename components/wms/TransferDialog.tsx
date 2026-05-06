@@ -6,8 +6,8 @@
 
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { X, ArrowRight, AlertCircle } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { X, ArrowRight, AlertCircle, Search, ChevronDown } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('TransferDialog');
@@ -16,6 +16,7 @@ interface ShelfOption {
   id: string;
   code: string;
   shelfType: 'POOL' | 'TEMP' | 'NORMAL';
+  warehouseCode?: string; // cross-warehouse opsiyonları için işaret
 }
 
 export interface TransferSource {
@@ -45,14 +46,17 @@ const CROSS_TARGETS: Record<string, string> = {
 export function TransferDialog({ isOpen, warehouseCode, source, onClose, onSuccess }: Props) {
   const [shelves, setShelves] = useState<ShelfOption[]>([]);
   const [crossShelves, setCrossShelves] = useState<ShelfOption[]>([]);
-  const [crossEnabled, setCrossEnabled] = useState(false);
   const [toShelfId, setToShelfId] = useState('');
   const [quantity, setQuantity] = useState<number | ''>('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Combobox: arama + dropdown
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const comboboxRef = useRef<HTMLDivElement>(null);
+
   const crossTargetWh = CROSS_TARGETS[warehouseCode];
-  const canCross = !!crossTargetWh && source?.type === 'box' || !!crossTargetWh; // her iki tür için açık
 
   // Modal açılınca raf listelerini yükle
   useEffect(() => {
@@ -63,9 +67,10 @@ export function TransferDialog({ isOpen, warehouseCode, source, onClose, onSucce
       .then((d) => {
         if (cancelled) return;
         if (d.success) {
-          // Kaynak rafı çıkar
           setShelves(
-            (d.data.shelves || []).filter((s: ShelfOption) => s.id !== source?.fromShelfId)
+            (d.data.shelves || [])
+              .filter((s: ShelfOption) => s.id !== source?.fromShelfId)
+              .map((s: ShelfOption) => ({ ...s, warehouseCode }))
           );
         }
       })
@@ -77,11 +82,11 @@ export function TransferDialog({ isOpen, warehouseCode, source, onClose, onSucce
         .then((d) => {
           if (cancelled) return;
           if (d.success) {
-            // Sadece POOL ve TEMP
+            // Sadece POOL ve TEMP cross-warehouse hedef olabilir
             setCrossShelves(
-              (d.data.shelves || []).filter(
-                (s: ShelfOption) => s.shelfType === 'POOL' || s.shelfType === 'TEMP'
-              )
+              (d.data.shelves || [])
+                .filter((s: ShelfOption) => s.shelfType === 'POOL' || s.shelfType === 'TEMP')
+                .map((s: ShelfOption) => ({ ...s, warehouseCode: crossTargetWh }))
             );
           }
         })
@@ -96,14 +101,39 @@ export function TransferDialog({ isOpen, warehouseCode, source, onClose, onSucce
     if (!isOpen) return;
     setToShelfId('');
     setQuantity(source?.type === 'stock' ? source.available : '');
-    setCrossEnabled(false);
+    setSearchTerm('');
+    setDropdownOpen(false);
     setError(null);
   }, [isOpen, source]);
 
-  const visibleTargets = useMemo(
-    () => (crossEnabled ? crossShelves : shelves),
-    [crossEnabled, crossShelves, shelves]
+  // Click outside dropdown'u kapatır
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (comboboxRef.current && !comboboxRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [dropdownOpen]);
+
+  // Tüm hedef raflar tek listede; POOL en üstte gruplu, sonra TEMP, sonra NORMAL
+  const allTargets = useMemo(() => [...shelves, ...crossShelves], [shelves, crossShelves]);
+  const filteredTargets = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return allTargets;
+    return allTargets.filter((s) => s.code.toLowerCase().includes(q));
+  }, [allTargets, searchTerm]);
+  const grouped = useMemo(
+    () => ({
+      POOL: filteredTargets.filter((s) => s.shelfType === 'POOL'),
+      TEMP: filteredTargets.filter((s) => s.shelfType === 'TEMP'),
+      NORMAL: filteredTargets.filter((s) => s.shelfType === 'NORMAL'),
+    }),
+    [filteredTargets]
   );
+  const selectedTarget = allTargets.find((s) => s.id === toShelfId);
 
   if (!isOpen || !source) return null;
 
@@ -173,49 +203,100 @@ export function TransferDialog({ isOpen, warehouseCode, source, onClose, onSucce
         </div>
 
         <div className="space-y-3">
-          {/* Cross-warehouse toggle */}
-          {canCross && (
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input
-                type="checkbox"
-                checked={crossEnabled}
-                onChange={(e) => {
-                  setCrossEnabled(e.target.checked);
-                  setToShelfId('');
-                }}
-                className="rounded"
-              />
-              <span className="text-gray-700">
-                Diğer depoya gönder ({crossTargetWh}) — yalnız POOL/TEMP rafları
-              </span>
-            </label>
-          )}
-
-          {/* Hedef raf */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Hedef raf {crossEnabled && `(${crossTargetWh})`}
-            </label>
-            <select
-              value={toShelfId}
-              onChange={(e) => setToShelfId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
+          {/* Hedef raf — combobox (arama + grup) */}
+          <div ref={comboboxRef} className="relative">
+            <label className="block text-xs font-medium text-gray-700 mb-1">Hedef raf</label>
+            <button
+              type="button"
+              onClick={() => setDropdownOpen((v) => !v)}
+              aria-expanded={dropdownOpen}
+              className="w-full flex items-center justify-between px-3 py-2 border border-gray-200 rounded-md text-sm bg-white hover:border-blue-300 focus:outline-none focus:border-blue-400"
             >
-              <option value="">Seçin…</option>
-              {visibleTargets.length === 0 ? (
-                <option disabled>
-                  {crossEnabled
-                    ? `${crossTargetWh}'de POOL/TEMP raf yok`
-                    : 'Hedef raf yok'}
-                </option>
+              {selectedTarget ? (
+                <span className="font-mono text-sm text-gray-900">
+                  {selectedTarget.code}
+                  <span className="ml-2 text-[10px] uppercase text-gray-500">
+                    {selectedTarget.shelfType}
+                  </span>
+                  {selectedTarget.warehouseCode &&
+                    selectedTarget.warehouseCode !== warehouseCode && (
+                      <span className="ml-2 text-[10px] uppercase text-purple-700">
+                        {selectedTarget.warehouseCode}
+                      </span>
+                    )}
+                </span>
               ) : (
-                visibleTargets.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.code} ({s.shelfType})
-                  </option>
-                ))
+                <span className="text-gray-400">Raf seç…</span>
               )}
-            </select>
+              <ChevronDown className="w-4 h-4 text-gray-400" />
+            </button>
+
+            {dropdownOpen && (
+              <div className="absolute z-30 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-72 overflow-hidden flex flex-col">
+                <div className="p-2 border-b border-gray-100 sticky top-0 bg-white">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                    <input
+                      autoFocus
+                      type="text"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      placeholder="Raf kodu ara…"
+                      className="w-full pl-8 pr-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                </div>
+                <div className="overflow-y-auto">
+                  {filteredTargets.length === 0 ? (
+                    <div className="px-3 py-3 text-sm text-gray-400 text-center">
+                      Eşleşen raf yok.
+                    </div>
+                  ) : (
+                    <>
+                      {grouped.POOL.length > 0 && (
+                        <Group
+                          title="Havuz Rafları"
+                          options={grouped.POOL}
+                          warehouseCode={warehouseCode}
+                          onSelect={(id) => {
+                            setToShelfId(id);
+                            setDropdownOpen(false);
+                            setSearchTerm('');
+                          }}
+                          selectedId={toShelfId}
+                        />
+                      )}
+                      {grouped.TEMP.length > 0 && (
+                        <Group
+                          title="Geçici"
+                          options={grouped.TEMP}
+                          warehouseCode={warehouseCode}
+                          onSelect={(id) => {
+                            setToShelfId(id);
+                            setDropdownOpen(false);
+                            setSearchTerm('');
+                          }}
+                          selectedId={toShelfId}
+                        />
+                      )}
+                      {grouped.NORMAL.length > 0 && (
+                        <Group
+                          title="Normal"
+                          options={grouped.NORMAL}
+                          warehouseCode={warehouseCode}
+                          onSelect={(id) => {
+                            setToShelfId(id);
+                            setDropdownOpen(false);
+                            setSearchTerm('');
+                          }}
+                          selectedId={toShelfId}
+                        />
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Miktar — yalnız stock için */}
@@ -238,7 +319,7 @@ export function TransferDialog({ isOpen, warehouseCode, source, onClose, onSucce
             <span className="font-mono px-2 py-1 bg-gray-100 rounded">{source.fromShelfCode}</span>
             <ArrowRight className="w-4 h-4 text-gray-400" />
             <span className="font-mono px-2 py-1 bg-blue-50 rounded">
-              {visibleTargets.find((s) => s.id === toShelfId)?.code ?? '?'}
+              {selectedTarget?.code ?? '?'}
             </span>
           </div>
 
@@ -269,6 +350,44 @@ export function TransferDialog({ isOpen, warehouseCode, source, onClose, onSucce
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+interface GroupProps {
+  title: string;
+  options: ShelfOption[];
+  warehouseCode: string;
+  onSelect: (id: string) => void;
+  selectedId: string;
+}
+
+function Group({ title, options, warehouseCode, onSelect, selectedId }: GroupProps) {
+  return (
+    <div>
+      <div className="px-3 py-1.5 text-[10px] uppercase tracking-wide text-gray-500 bg-gray-50 sticky top-0">
+        {title}
+      </div>
+      {options.map((s) => {
+        const cross = s.warehouseCode && s.warehouseCode !== warehouseCode;
+        return (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => onSelect(s.id)}
+            className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-blue-50 ${
+              selectedId === s.id ? 'bg-blue-50 font-semibold' : ''
+            }`}
+          >
+            <span className="font-mono">{s.code}</span>
+            {cross && (
+              <span className="text-[10px] uppercase px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">
+                {s.warehouseCode}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
