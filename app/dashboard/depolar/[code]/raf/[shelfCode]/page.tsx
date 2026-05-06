@@ -7,10 +7,11 @@
 
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Package, Box, History, AlertCircle, ArrowRightLeft, PackageOpen, Scissors } from 'lucide-react';
+import { ChevronLeft, Package, Box, History, AlertCircle, ArrowRightLeft, PackageOpen, Scissors, Trash2 } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { TransferDialog, type TransferSource } from '@/components/wms/TransferDialog';
 import { BreakBoxDialog, type BreakBoxSource } from '@/components/wms/BreakBoxDialog';
+import { DeleteRowConfirm, type DeleteRowTarget } from '@/components/wms/DeleteRowConfirm';
 
 const logger = createLogger('RafDetay');
 
@@ -89,6 +90,7 @@ export default function RafDetayPage({
   const [transferSource, setTransferSource] = useState<TransferSource | null>(null);
   const [breakSource, setBreakSource] = useState<BreakBoxSource | null>(null);
   const [openingBoxId, setOpeningBoxId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteRowTarget | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,6 +114,7 @@ export default function RafDetayPage({
 
   const canTransfer = data && ['OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role);
   const canBoxOps = data && ['OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role);
+  const canDelete = data?.role === 'ADMIN';
   const handleSuccess = () => setRefreshKey((k) => k + 1);
 
   async function openBox(boxId: string, boxNumber: string) {
@@ -246,29 +249,55 @@ export default function RafDetayPage({
                     <td className="px-4 py-2 text-right font-semibold text-gray-900">
                       {s.availableQty}
                     </td>
-                    {canTransfer && (
+                    {(canTransfer || canDelete) && (
                       <td className="px-4 py-2 text-right">
-                        {s.availableQty > 0 ? (
-                          <button
-                            onClick={() =>
-                              setTransferSource({
-                                type: 'stock',
-                                id: s.id,
-                                iwasku: s.iwasku,
-                                productName: s.productName,
-                                available: s.availableQty,
-                                fromShelfId: data.shelf.id,
-                                fromShelfCode: data.shelf.code,
-                              })
-                            }
-                            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-blue-700 bg-blue-50 hover:bg-blue-100 rounded"
-                            title="Transfer"
-                          >
-                            <ArrowRightLeft className="w-3 h-3" /> Transfer
-                          </button>
-                        ) : (
-                          <span className="text-[11px] text-gray-400">—</span>
-                        )}
+                        <div className="inline-flex items-center gap-1 justify-end">
+                          {canTransfer && s.availableQty > 0 && (
+                            <button
+                              onClick={() =>
+                                setTransferSource({
+                                  type: 'stock',
+                                  id: s.id,
+                                  iwasku: s.iwasku,
+                                  productName: s.productName,
+                                  available: s.availableQty,
+                                  fromShelfId: data.shelf.id,
+                                  fromShelfCode: data.shelf.code,
+                                })
+                              }
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-blue-700 bg-blue-50 hover:bg-blue-100 rounded"
+                              title="Transfer"
+                            >
+                              <ArrowRightLeft className="w-3 h-3" /> Transfer
+                            </button>
+                          )}
+                          {canDelete && (
+                            <button
+                              onClick={() =>
+                                setDeleteTarget({
+                                  kind: 'STOCK',
+                                  shelfStockId: s.id,
+                                  iwasku: s.iwasku,
+                                  productName: s.productName,
+                                  shelfCode: data.shelf.code,
+                                  quantity: s.quantity,
+                                })
+                              }
+                              disabled={s.reservedQty > 0}
+                              title={
+                                s.reservedQty > 0
+                                  ? `Rezerve ${s.reservedQty} — önce sipariş iptal/sevk`
+                                  : 'Sil'
+                              }
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-red-700 bg-red-50 hover:bg-red-100 rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                          {!canTransfer && !canDelete && (
+                            <span className="text-[11px] text-gray-400">—</span>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -323,28 +352,30 @@ export default function RafDetayPage({
                         {b.status}
                       </span>
                     </td>
-                    {canTransfer && (
+                    {(canTransfer || canDelete) && (
                       <td className="px-4 py-2 text-right">
                         {b.status !== 'EMPTY' && b.reservedQty === 0 ? (
                           <div className="inline-flex flex-wrap gap-1 justify-end">
-                            <button
-                              onClick={() =>
-                                setTransferSource({
-                                  type: 'box',
-                                  id: b.id,
-                                  iwasku: b.iwasku,
-                                  productName: b.productName,
-                                  available: b.quantity,
-                                  boxNumber: b.boxNumber,
-                                  fromShelfId: data.shelf.id,
-                                  fromShelfCode: data.shelf.code,
-                                })
-                              }
-                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-blue-700 bg-blue-50 hover:bg-blue-100 rounded"
-                              title="Transfer"
-                            >
-                              <ArrowRightLeft className="w-3 h-3" /> Transfer
-                            </button>
+                            {canTransfer && (
+                              <button
+                                onClick={() =>
+                                  setTransferSource({
+                                    type: 'box',
+                                    id: b.id,
+                                    iwasku: b.iwasku,
+                                    productName: b.productName,
+                                    available: b.quantity,
+                                    boxNumber: b.boxNumber,
+                                    fromShelfId: data.shelf.id,
+                                    fromShelfCode: data.shelf.code,
+                                  })
+                                }
+                                className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-blue-700 bg-blue-50 hover:bg-blue-100 rounded"
+                                title="Transfer"
+                              >
+                                <ArrowRightLeft className="w-3 h-3" /> Transfer
+                              </button>
+                            )}
                             {canBoxOps && (
                               <>
                                 <button
@@ -373,6 +404,25 @@ export default function RafDetayPage({
                                   <PackageOpen className="w-3 h-3" /> {openingBoxId === b.id ? '...' : 'Aç'}
                                 </button>
                               </>
+                            )}
+                            {canDelete && (
+                              <button
+                                onClick={() =>
+                                  setDeleteTarget({
+                                    kind: 'BOX',
+                                    shelfBoxId: b.id,
+                                    iwasku: b.iwasku,
+                                    productName: b.productName,
+                                    shelfCode: data.shelf.code,
+                                    boxNumber: b.boxNumber,
+                                    quantity: b.quantity,
+                                  })
+                                }
+                                className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-red-700 bg-red-50 hover:bg-red-100 rounded"
+                                title="Sil"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
                             )}
                           </div>
                         ) : (
@@ -481,6 +531,15 @@ export default function RafDetayPage({
         warehouseCode={code}
         source={breakSource}
         onClose={() => setBreakSource(null)}
+        onSuccess={handleSuccess}
+      />
+
+      {/* Sil onay (admin) */}
+      <DeleteRowConfirm
+        isOpen={!!deleteTarget}
+        warehouseCode={code}
+        target={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
         onSuccess={handleSuccess}
       />
     </div>
