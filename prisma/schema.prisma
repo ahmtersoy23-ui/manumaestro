@@ -362,7 +362,7 @@ model StockReserve {
   iwasku           String
   targetQuantity   Int
   targetDesi       Float?
-  desiPerUnit      Float? // Sabit: ürünün birim desisi (import'tan, değişmez)
+  desiPerUnit      Float? // DB cache: import anındaki birim desi. UI pricelab.products'tan canlı override eder, allocator cache'i kullanır.
   initialStock     Int           @default(0) // Depo başlangıç stoğu (mark-stock ile tek seferlik)
   producedQuantity Int           @default(0) // Sezon boyunca yeni üretim (haftalık girişlerden)
   shippedQuantity  Int           @default(0)

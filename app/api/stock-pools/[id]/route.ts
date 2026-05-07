@@ -44,18 +44,25 @@ export async function GET(request: NextRequest, { params }: Params) {
     return NextResponse.json({ success: false, error: 'Havuz bulunamadı' }, { status: 404 });
   }
 
-  // Enrich reserves with product names from pricelab_db
+  // Enrich reserves with product names + canli desi from pricelab_db.
+  // Cache (StockReserve.desiPerUnit) bayatlayabilir — UI'da pricelab.products'in
+  // canli COALESCE(manual_size, size) degeri override eder. Allocator/üretim
+  // hesaplarinin DB cache'i kullanmasi degismedi.
   const iwaskus = pool.reserves.map(r => r.iwasku);
-  const productMap: Record<string, { name: string }> = {};
+  const productMap: Record<string, { name: string; desi: number | null }> = {};
   if (iwaskus.length > 0) {
     try {
       const ph = iwaskus.map((_, i) => `$${i + 1}`).join(',');
       const rows = await queryProductDb(
-        `SELECT product_sku, name FROM products WHERE product_sku IN (${ph})`,
+        `SELECT product_sku, name, COALESCE(manual_size, size) AS desi FROM products WHERE product_sku IN (${ph})`,
         iwaskus
       );
-      for (const row of rows as { product_sku: string; name: string }[]) {
-        productMap[row.product_sku] = { name: row.name };
+      for (const row of rows as { product_sku: string; name: string; desi: string | number | null }[]) {
+        const desiNum = row.desi == null ? null : (typeof row.desi === 'number' ? row.desi : parseFloat(String(row.desi)));
+        productMap[row.product_sku] = {
+          name: row.name,
+          desi: desiNum != null && Number.isFinite(desiNum) ? desiNum : null,
+        };
       }
     } catch { /* continue without names */ }
   }
@@ -67,14 +74,31 @@ export async function GET(request: NextRequest, { params }: Params) {
 
   const enrichedReserves = pool.reserves.map(r => {
     const actualProduced = sezonProduced.byIwaskuQty.get(r.iwasku) ?? 0;
+    const liveDesi = productMap[r.iwasku]?.desi ?? null;
+    const effectiveDesi = liveDesi ?? r.desiPerUnit ?? null;
     return {
       ...r,
       productName: productMap[r.iwasku]?.name ?? null,
       producedQuantity: actualProduced,
+      desiPerUnit: effectiveDesi,
+      targetDesi: effectiveDesi != null ? r.targetQuantity * effectiveDesi : r.targetDesi,
+      allocations: r.allocations.map(a => ({
+        ...a,
+        plannedDesi: effectiveDesi != null ? a.plannedQty * effectiveDesi : a.plannedDesi,
+      })),
     };
   });
 
-  return NextResponse.json({ success: true, data: { ...pool, reserves: enrichedReserves } });
+  // Pool toplamini canli desi ile yeniden hesapla
+  const liveTotalDesi = enrichedReserves.reduce(
+    (sum, r) => sum + (r.targetDesi ?? 0),
+    0,
+  );
+
+  return NextResponse.json({
+    success: true,
+    data: { ...pool, totalTargetDesi: liveTotalDesi, reserves: enrichedReserves },
+  });
 }
 
 export async function PATCH(request: NextRequest, { params }: Params) {
