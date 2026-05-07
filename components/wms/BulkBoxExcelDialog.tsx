@@ -6,11 +6,11 @@
  *   3. Yarat — backend'e POST, sonuç raporu (created + errors)
  *
  * CSV formatı (header satırı zorunlu):
- *   iwasku,quantity,marketplaceCode,destination,boxNumber,targetShelfCode
+ *   boxNumber,iwasku,quantity,marketplaceCode,destination,targetShelfCode
  *
- * Sadece iwasku/quantity/marketplaceCode zorunlu; diğerleri boş bırakılabilir.
- * destination boşsa "DEPO", boxNumber boşsa otomatik MAN-{code}-N,
- * targetShelfCode boşsa POOL.
+ * Sadece iwasku/quantity zorunlu; diğerleri boş bırakılabilir.
+ * boxNumber boşsa otomatik MAN-{code}-N, marketplaceCode boş bırakılabilir,
+ * destination boşsa "DEPO", targetShelfCode boşsa POOL.
  */
 
 'use client';
@@ -48,7 +48,7 @@ interface Props {
   onSuccess: () => void;
 }
 
-const TEMPLATE = 'iwasku,quantity,marketplaceCode,destination,boxNumber,targetShelfCode\n';
+const TEMPLATE = 'boxNumber,iwasku,quantity,marketplaceCode,destination,targetShelfCode\n';
 
 export function BulkBoxExcelDialog({ isOpen, warehouseCode, onClose, onSuccess }: Props) {
   const [csvText, setCsvText] = useState('');
@@ -81,9 +81,8 @@ export function BulkBoxExcelDialog({ isOpen, warehouseCode, onClose, onSuccess }
   const parseCsv = (text: string): ParsedRow[] => {
     const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
     if (lines.length === 0) return [];
-    // Header doğrulaması
     const header = lines[0].split(/[,;]/).map((h) => h.trim().toLowerCase());
-    const headerExpected = ['iwasku', 'quantity', 'marketplacecode'];
+    const headerExpected = ['iwasku', 'quantity'];
     const missing = headerExpected.filter((h) => !header.includes(h));
     if (missing.length > 0) {
       setError(`Header eksik: ${missing.join(', ')}. Şablonu indirip kullan.`);
@@ -91,11 +90,11 @@ export function BulkBoxExcelDialog({ isOpen, warehouseCode, onClose, onSuccess }
     }
     setError(null);
     const idx = (k: string) => header.indexOf(k);
+    const iBn = idx('boxnumber');
     const iIw = idx('iwasku');
     const iQ = idx('quantity');
     const iMp = idx('marketplacecode');
     const iDest = idx('destination');
-    const iBn = idx('boxnumber');
     const iSh = idx('targetshelfcode');
 
     return lines.slice(1).map((line, i) => {
@@ -103,7 +102,7 @@ export function BulkBoxExcelDialog({ isOpen, warehouseCode, onClose, onSuccess }
       const iwasku = cols[iIw] ?? '';
       const qStr = cols[iQ] ?? '';
       const quantity = qStr ? Number(qStr) : NaN;
-      const marketplaceCode = cols[iMp] ?? '';
+      const marketplaceCode = iMp >= 0 ? cols[iMp] || '' : '';
       const destination = (iDest >= 0 ? cols[iDest] : '') || 'DEPO';
       const boxNumber = iBn >= 0 ? cols[iBn] || '' : '';
       const targetShelfCode = iSh >= 0 ? cols[iSh] || '' : '';
@@ -112,7 +111,6 @@ export function BulkBoxExcelDialog({ isOpen, warehouseCode, onClose, onSuccess }
       if (!iwasku) errors.push('iwasku zorunlu');
       if (!quantity || !Number.isFinite(quantity) || quantity <= 0)
         errors.push('quantity > 0 olmalı');
-      if (!marketplaceCode) errors.push('marketplaceCode zorunlu');
       if (destination && !['FBA', 'DEPO', 'SHOWROOM'].includes(destination.toUpperCase()))
         errors.push('destination FBA/DEPO/SHOWROOM olmalı');
 
@@ -169,7 +167,7 @@ export function BulkBoxExcelDialog({ isOpen, warehouseCode, onClose, onSuccess }
         rows: validRows.map((r) => ({
           iwasku: r.iwasku,
           quantity: r.quantity!,
-          marketplaceCode: r.marketplaceCode,
+          marketplaceCode: r.marketplaceCode || undefined,
           destination: r.destination as 'FBA' | 'DEPO' | 'SHOWROOM',
           boxNumber: r.boxNumber || undefined,
           targetShelfCode: r.targetShelfCode || undefined,
@@ -231,11 +229,11 @@ export function BulkBoxExcelDialog({ isOpen, warehouseCode, onClose, onSuccess }
               <div className="bg-blue-50 border border-blue-200 rounded p-3 text-xs text-blue-900 space-y-1">
                 <p className="font-semibold">CSV formatı:</p>
                 <p className="font-mono">
-                  iwasku,quantity,marketplaceCode,destination,boxNumber,targetShelfCode
+                  boxNumber,iwasku,quantity,marketplaceCode,destination,targetShelfCode
                 </p>
                 <p>
-                  Sadece <b>iwasku, quantity, marketplaceCode</b> zorunlu. Boşsa: destination=DEPO,
-                  boxNumber=otomatik, targetShelfCode=POOL.
+                  Sadece <b>iwasku, quantity</b> zorunlu. Boşsa: boxNumber=otomatik
+                  MAN-{`{depo}`}-N, marketplaceCode=boş, destination=DEPO, targetShelfCode=POOL.
                 </p>
               </div>
 
@@ -269,7 +267,7 @@ export function BulkBoxExcelDialog({ isOpen, warehouseCode, onClose, onSuccess }
                   value={csvText}
                   onChange={(e) => handleParse(e.target.value)}
                   rows={6}
-                  placeholder="iwasku,quantity,marketplaceCode,destination,boxNumber,targetShelfCode&#10;IWA001,10,AMZN_US,DEPO,,&#10;IWA002,5,WAYFAIR_US,DEPO,,FF-HAVUZ"
+                  placeholder="boxNumber,iwasku,quantity,marketplaceCode,destination,targetShelfCode&#10;,IWA001,10,,,&#10;BOX-A1,IWA002,5,,,FF-HAVUZ"
                   className="w-full px-3 py-2 border border-gray-200 rounded-md text-xs font-mono focus:outline-none focus:border-blue-400"
                 />
               </div>
@@ -297,11 +295,11 @@ export function BulkBoxExcelDialog({ isOpen, warehouseCode, onClose, onSuccess }
                       <thead className="bg-gray-50 text-gray-500 text-[10px] uppercase">
                         <tr>
                           <th className="text-left px-2 py-1.5">#</th>
+                          <th className="text-left px-2 py-1.5">Koli no</th>
                           <th className="text-left px-2 py-1.5">iwasku</th>
                           <th className="text-right px-2 py-1.5">qty</th>
                           <th className="text-left px-2 py-1.5">MP</th>
                           <th className="text-left px-2 py-1.5">Hedef</th>
-                          <th className="text-left px-2 py-1.5">Koli no</th>
                           <th className="text-left px-2 py-1.5">Raf</th>
                           <th className="text-left px-2 py-1.5">Hata</th>
                         </tr>
@@ -313,13 +311,15 @@ export function BulkBoxExcelDialog({ isOpen, warehouseCode, onClose, onSuccess }
                             className={r.errors.length > 0 ? 'bg-red-50/30' : 'text-gray-700'}
                           >
                             <td className="px-2 py-1 text-gray-400">{r.index + 1}</td>
-                            <td className="px-2 py-1 font-mono">{r.iwasku || '—'}</td>
-                            <td className="px-2 py-1 text-right">{r.quantity ?? '—'}</td>
-                            <td className="px-2 py-1 font-mono">{r.marketplaceCode || '—'}</td>
-                            <td className="px-2 py-1">{r.destination}</td>
                             <td className="px-2 py-1 font-mono text-gray-500">
                               {r.boxNumber || 'oto'}
                             </td>
+                            <td className="px-2 py-1 font-mono">{r.iwasku || '—'}</td>
+                            <td className="px-2 py-1 text-right">{r.quantity ?? '—'}</td>
+                            <td className="px-2 py-1 font-mono text-gray-500">
+                              {r.marketplaceCode || '—'}
+                            </td>
+                            <td className="px-2 py-1">{r.destination}</td>
                             <td className="px-2 py-1 font-mono text-gray-500">
                               {r.targetShelfCode || 'POOL'}
                             </td>

@@ -7,13 +7,15 @@
 
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Package, Box, History, AlertCircle, ArrowRightLeft, PackageOpen, Scissors, Trash2, Settings, Printer } from 'lucide-react';
+import { ChevronLeft, Package, Box, History, AlertCircle, ArrowRightLeft, PackageOpen, Scissors, Trash2, Settings, Printer, PackagePlus, Plus } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { slugToCode, codeToSlug } from '@/lib/warehouseLabels';
 import { TransferDialog, type TransferSource } from '@/components/wms/TransferDialog';
 import { BreakBoxDialog, type BreakBoxSource } from '@/components/wms/BreakBoxDialog';
 import { DeleteRowConfirm, type DeleteRowTarget } from '@/components/wms/DeleteRowConfirm';
 import { EditShelfDialog } from '@/components/wms/EditShelfDialog';
+import { ManualBoxDialog } from '@/components/wms/ManualBoxDialog';
+import { LooseStockDialog } from '@/components/wms/LooseStockDialog';
 import { generateShelfLabelsPdf, downloadPdf } from '@/lib/wms/shelfLabelPdf';
 
 const logger = createLogger('RafDetay');
@@ -96,6 +98,8 @@ export default function RafDetayPage({
   const [deleteTarget, setDeleteTarget] = useState<DeleteRowTarget | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [printingLabel, setPrintingLabel] = useState(false);
+  const [addBoxOpen, setAddBoxOpen] = useState(false);
+  const [addLooseOpen, setAddLooseOpen] = useState(false);
 
   async function printLabel() {
     if (!data) return;
@@ -140,6 +144,8 @@ export default function RafDetayPage({
   const canTransfer = data && ['OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role);
   const canBoxOps = data && ['OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role);
   const canDelete = data?.role === 'ADMIN';
+  const canAdd = data && ['OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role);
+  const isShelfPrimaryWh = code === 'NJ' || code === 'SHOWROOM';
   const handleSuccess = () => setRefreshKey((k) => k + 1);
 
   async function openBox(boxId: string, boxNumber: string) {
@@ -227,6 +233,26 @@ export default function RafDetayPage({
               <span className="text-[10px] uppercase px-2 py-0.5 rounded bg-gray-200 text-gray-700">
                 Pasif
               </span>
+            )}
+            {canAdd && isShelfPrimaryWh && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setAddBoxOpen(true)}
+                  className="inline-flex items-center gap-1 px-2 py-1 text-xs text-blue-700 bg-blue-50 hover:bg-blue-100 rounded"
+                  title="Bu rafa koli ekle"
+                >
+                  <PackagePlus className="w-3 h-3" /> Koli Ekle
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAddLooseOpen(true)}
+                  className="inline-flex items-center gap-1 px-2 py-1 text-xs text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded"
+                  title="Bu rafa tekil ürün ekle"
+                >
+                  <Plus className="w-3 h-3" /> Tekil Ekle
+                </button>
+              </>
             )}
             <button
               type="button"
@@ -598,6 +624,24 @@ export default function RafDetayPage({
         warehouseCode={code}
         shelf={data.shelf}
         onClose={() => setEditOpen(false)}
+        onSuccess={handleSuccess}
+      />
+
+      {/* Bu rafa koli/tekil ekle (preset shelf) */}
+      <ManualBoxDialog
+        isOpen={addBoxOpen}
+        warehouseCode={code}
+        fixedShelfId={data.shelf.id}
+        fixedShelfCode={data.shelf.code}
+        onClose={() => setAddBoxOpen(false)}
+        onSuccess={handleSuccess}
+      />
+      <LooseStockDialog
+        isOpen={addLooseOpen}
+        warehouseCode={code}
+        fixedShelfId={data.shelf.id}
+        fixedShelfCode={data.shelf.code}
+        onClose={() => setAddLooseOpen(false)}
         onSuccess={handleSuccess}
       />
     </div>

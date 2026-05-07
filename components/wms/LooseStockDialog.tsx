@@ -24,14 +24,17 @@ interface ShelfOption {
 interface Props {
   isOpen: boolean;
   warehouseCode: string;
+  /** Raf detayından açıldıysa hedef raf preset olur ve dropdown gizlenir */
+  fixedShelfId?: string;
+  fixedShelfCode?: string;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export function LooseStockDialog({ isOpen, warehouseCode, onClose, onSuccess }: Props) {
+export function LooseStockDialog({ isOpen, warehouseCode, fixedShelfId, fixedShelfCode, onClose, onSuccess }: Props) {
   const [product, setProduct] = useState<ProductHit | null>(null);
   const [quantity, setQuantity] = useState<number | ''>('');
-  const [targetShelfId, setTargetShelfId] = useState('');
+  const [targetShelfId, setTargetShelfId] = useState(fixedShelfId ?? '');
   const [notes, setNotes] = useState('');
 
   const [shelves, setShelves] = useState<ShelfOption[]>([]);
@@ -170,21 +173,27 @@ export function LooseStockDialog({ isOpen, warehouseCode, onClose, onSuccess }: 
                 htmlFor="loose-target-shelf"
                 className="block text-xs font-medium text-gray-700 mb-1"
               >
-                Hedef raf (opsiyonel)
+                {fixedShelfId ? 'Hedef raf' : 'Hedef raf (opsiyonel)'}
               </label>
-              <select
-                id="loose-target-shelf"
-                value={targetShelfId}
-                onChange={(e) => setTargetShelfId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
-              >
-                <option value="">POOL (varsayılan)</option>
-                {shelves.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.code} ({s.shelfType})
-                  </option>
-                ))}
-              </select>
+              {fixedShelfId ? (
+                <div className="px-3 py-2 border border-gray-200 rounded-md text-sm bg-gray-50 font-mono">
+                  {fixedShelfCode ?? fixedShelfId}
+                </div>
+              ) : (
+                <select
+                  id="loose-target-shelf"
+                  value={targetShelfId}
+                  onChange={(e) => setTargetShelfId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
+                >
+                  <option value="">POOL (varsayılan)</option>
+                  {shelves.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.code} ({s.shelfType})
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
 
