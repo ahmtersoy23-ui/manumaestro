@@ -9,7 +9,7 @@ import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, History, AlertCircle, Search, X as XIcon } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
-import { warehouseLabel } from '@/lib/warehouseLabels';
+import { warehouseLabel, slugToCode, codeToSlug } from '@/lib/warehouseLabels';
 
 const logger = createLogger('HareketGecmisi');
 
@@ -59,7 +59,7 @@ export default function HareketGecmisiPage({
   params: Promise<{ code: string }>;
 }) {
   const { code: rawCode } = use(params);
-  const code = rawCode.toUpperCase();
+  const code = slugToCode(rawCode) ?? rawCode.toUpperCase();
 
   const [rows, setRows] = useState<MovementRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -126,7 +126,7 @@ export default function HareketGecmisiPage({
   return (
     <div className="space-y-5">
       <Link
-        href={`/dashboard/depolar/${code}`}
+        href={`/dashboard/depolar/${codeToSlug(code)}`}
         className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
       >
         <ChevronLeft className="w-4 h-4" /> {warehouseLabel(code)} Dashboard

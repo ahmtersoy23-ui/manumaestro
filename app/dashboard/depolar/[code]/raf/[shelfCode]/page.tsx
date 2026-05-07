@@ -9,6 +9,7 @@ import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, Package, Box, History, AlertCircle, ArrowRightLeft, PackageOpen, Scissors, Trash2, Settings, Printer } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { slugToCode, codeToSlug } from '@/lib/warehouseLabels';
 import { TransferDialog, type TransferSource } from '@/components/wms/TransferDialog';
 import { BreakBoxDialog, type BreakBoxSource } from '@/components/wms/BreakBoxDialog';
 import { DeleteRowConfirm, type DeleteRowTarget } from '@/components/wms/DeleteRowConfirm';
@@ -82,7 +83,7 @@ export default function RafDetayPage({
   params: Promise<{ code: string; shelfCode: string }>;
 }) {
   const { code: rawCode, shelfCode: rawShelfCode } = use(params);
-  const code = rawCode.toUpperCase();
+  const code = slugToCode(rawCode) ?? rawCode.toUpperCase();
   const shelfCode = decodeURIComponent(rawShelfCode);
 
   const [data, setData] = useState<RafData | null>(null);
@@ -212,7 +213,7 @@ export default function RafDetayPage({
       <div className="flex items-start justify-between">
         <div>
           <Link
-            href={`/dashboard/depolar/${code}/raf`}
+            href={`/dashboard/depolar/${codeToSlug(code)}/raf`}
             className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900 mb-2"
           >
             <ChevronLeft className="w-4 h-4" /> Depo İşlem

@@ -8,6 +8,7 @@ import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, AlertCircle, Truck, X, PackageOpen, Box as BoxIcon } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { slugToCode, codeToSlug } from '@/lib/warehouseLabels';
 import { SingleOrderItemAdder } from '@/components/wms/SingleOrderItemAdder';
 import { FbaPickupBoxSelector } from '@/components/wms/FbaPickupBoxSelector';
 import { LabelUploader } from '@/components/wms/LabelUploader';
@@ -54,7 +55,7 @@ export default function SiparisDetayPage({
   params: Promise<{ code: string; id: string }>;
 }) {
   const { code: rawCode, id } = use(params);
-  const code = rawCode.toUpperCase();
+  const code = slugToCode(rawCode) ?? rawCode.toUpperCase();
 
   const [data, setData] = useState<OrderData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -188,7 +189,7 @@ export default function SiparisDetayPage({
   return (
     <div className="space-y-5">
       <Link
-        href={`/dashboard/depolar/${code}/siparis`}
+        href={`/dashboard/depolar/${codeToSlug(code)}/siparis`}
         className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
       >
         <ChevronLeft className="w-4 h-4" /> Sipariş Çıkış

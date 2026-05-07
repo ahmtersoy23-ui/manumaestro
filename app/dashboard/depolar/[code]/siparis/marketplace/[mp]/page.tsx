@@ -19,6 +19,7 @@ import {
   Search,
 } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { slugToCode, codeToSlug } from '@/lib/warehouseLabels';
 
 const logger = createLogger('OutboundMarketplace');
 
@@ -64,7 +65,7 @@ export default function MarketplaceOrderPage({
   params: Promise<{ code: string; mp: string }>;
 }) {
   const { code: rawCode, mp } = use(params);
-  const code = rawCode.toUpperCase();
+  const code = slugToCode(rawCode) ?? rawCode.toUpperCase();
   const sp = useSearchParams();
   const initialStage: Stage =
     sp.get('stage') === 'kargo'
@@ -136,7 +137,7 @@ export default function MarketplaceOrderPage({
   return (
     <div className="space-y-5">
       <Link
-        href={`/dashboard/depolar/${code}/siparis`}
+        href={`/dashboard/depolar/${codeToSlug(code)}/siparis`}
         className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
       >
         <ChevronLeft className="w-4 h-4" /> Sipariş Çıkış
@@ -149,7 +150,7 @@ export default function MarketplaceOrderPage({
         </div>
         {canCreate && (
           <Link
-            href={`/dashboard/depolar/${code}/siparis/yeni?type=SINGLE&marketplace=${mp}&returnTo=marketplace`}
+            href={`/dashboard/depolar/${codeToSlug(code)}/siparis/yeni?type=SINGLE&marketplace=${mp}&returnTo=marketplace`}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
           >
             <Plus className="w-4 h-4" /> Yeni Sipariş
@@ -221,7 +222,7 @@ export default function MarketplaceOrderPage({
                 <tr key={o.id} className="text-gray-700 hover:bg-gray-50">
                   <td className="px-4 py-2">
                     <Link
-                      href={`/dashboard/depolar/${code}/siparis/${o.id}`}
+                      href={`/dashboard/depolar/${codeToSlug(code)}/siparis/${o.id}`}
                       className="font-mono text-xs text-blue-700 hover:underline"
                     >
                       {o.orderNumber}

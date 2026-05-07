@@ -8,6 +8,7 @@ import { useEffect, useState, use, useMemo } from 'react';
 import Link from 'next/link';
 import { Search, Layers, Package, Box, AlertCircle, Plus, PackagePlus, Layers3, AlertTriangle, FileSpreadsheet, LayoutGrid, ArrowRightLeft, Printer } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { slugToCode, codeToSlug } from '@/lib/warehouseLabels';
 import { NewShelfDialog } from '@/components/wms/NewShelfDialog';
 import { BulkShelfDialog } from '@/components/wms/BulkShelfDialog';
 import { ManualBoxDialog } from '@/components/wms/ManualBoxDialog';
@@ -56,7 +57,7 @@ const TYPE_BADGE: Record<string, { label: string; cls: string }> = {
 
 export default function RafPage({ params }: { params: Promise<{ code: string }> }) {
   const { code: rawCode } = use(params);
-  const code = rawCode.toUpperCase();
+  const code = slugToCode(rawCode) ?? rawCode.toUpperCase();
 
   const [shelves, setShelves] = useState<ShelfRow[]>([]);
   const [role, setRole] = useState<string>('VIEWER');
@@ -359,7 +360,7 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
                 {visibleSearchResults.shelves.map((s) => (
                   <Link
                     key={s.id}
-                    href={`/dashboard/depolar/${code}/raf/${encodeURIComponent(s.code)}`}
+                    href={`/dashboard/depolar/${codeToSlug(code)}/raf/${encodeURIComponent(s.code)}`}
                     className="text-xs px-2 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 font-mono"
                   >
                     {s.code}
@@ -390,7 +391,7 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
                       <tr key={s.id}>
                         <td className="py-1.5">
                           <Link
-                            href={`/dashboard/depolar/${code}/raf/${encodeURIComponent(s.shelfCode)}`}
+                            href={`/dashboard/depolar/${codeToSlug(code)}/raf/${encodeURIComponent(s.shelfCode)}`}
                             className="font-mono text-xs text-blue-700 hover:underline"
                           >
                             {s.shelfCode}
@@ -434,7 +435,7 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
                       <tr key={b.id}>
                         <td className="py-1.5">
                           <Link
-                            href={`/dashboard/depolar/${code}/raf/${encodeURIComponent(b.shelfCode)}`}
+                            href={`/dashboard/depolar/${codeToSlug(code)}/raf/${encodeURIComponent(b.shelfCode)}`}
                             className="font-mono text-xs text-blue-700 hover:underline"
                           >
                             {b.shelfCode}
@@ -524,7 +525,7 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
                       return (
                         <Link
                           key={s.id}
-                          href={`/dashboard/depolar/${code}/raf/${encodeURIComponent(s.code)}`}
+                          href={`/dashboard/depolar/${codeToSlug(code)}/raf/${encodeURIComponent(s.code)}`}
                           className="block bg-white border border-gray-200 rounded-lg p-3 hover:border-blue-400 hover:shadow-sm transition"
                         >
                           <div className="flex items-center justify-between">

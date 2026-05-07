@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ChevronLeft, AlertCircle, Box as BoxIcon, Plus, Trash2 } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { slugToCode, codeToSlug } from '@/lib/warehouseLabels';
 import { ProductSearch, type ProductHit as PSProductHit } from '@/components/wms/ProductSearch';
 
 const logger = createLogger('YeniSiparis');
@@ -45,7 +46,7 @@ export default function YeniSiparisPage({
   params: Promise<{ code: string }>;
 }) {
   const { code: rawCode } = use(params);
-  const code = rawCode.toUpperCase();
+  const code = slugToCode(rawCode) ?? rawCode.toUpperCase();
   const router = useRouter();
   const searchParams = useSearchParams();
   const orderType = (searchParams.get('type') === 'FBA_PICKUP' ? 'FBA_PICKUP' : 'SINGLE') as
@@ -138,13 +139,13 @@ export default function YeniSiparisPage({
       }
       // SINGLE: marketplace alt sayfasına geri dön (kargo sekmesi); FBA_PICKUP: detaya git
       if (orderType === 'FBA_PICKUP') {
-        router.push(`/dashboard/depolar/${code}/siparis/${data.data.id}`);
+        router.push(`/dashboard/depolar/${codeToSlug(code)}/siparis/${data.data.id}`);
       } else if (returnTo === 'marketplace' && marketplaceCode) {
         router.push(
-          `/dashboard/depolar/${code}/siparis/marketplace/${marketplaceCode}?stage=kargo`
+          `/dashboard/depolar/${codeToSlug(code)}/siparis/marketplace/${marketplaceCode}?stage=kargo`
         );
       } else {
-        router.push(`/dashboard/depolar/${code}/siparis`);
+        router.push(`/dashboard/depolar/${codeToSlug(code)}/siparis`);
       }
     } catch (e) {
       logger.error('Submit hatası', e);
@@ -157,7 +158,7 @@ export default function YeniSiparisPage({
   return (
     <div className="space-y-4 max-w-2xl">
       <Link
-        href={`/dashboard/depolar/${code}/siparis`}
+        href={`/dashboard/depolar/${codeToSlug(code)}/siparis`}
         className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
       >
         <ChevronLeft className="w-4 h-4" /> Sipariş Çıkış
@@ -301,8 +302,8 @@ export default function YeniSiparisPage({
           <Link
             href={
               returnTo === 'marketplace' && marketplaceCode
-                ? `/dashboard/depolar/${code}/siparis/marketplace/${marketplaceCode}`
-                : `/dashboard/depolar/${code}/siparis`
+                ? `/dashboard/depolar/${codeToSlug(code)}/siparis/marketplace/${marketplaceCode}`
+                : `/dashboard/depolar/${codeToSlug(code)}/siparis`
             }
             className="px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
           >

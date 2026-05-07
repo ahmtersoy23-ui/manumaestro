@@ -8,6 +8,7 @@ import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { ClipboardCheck, AlertCircle, RefreshCw, Plus, ChevronRight, Loader2 } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { slugToCode, codeToSlug } from '@/lib/warehouseLabels';
 
 const logger = createLogger('SayimList');
 
@@ -46,7 +47,7 @@ const ABC_BADGE: Record<string, string> = {
 
 export default function SayimListPage({ params }: { params: Promise<{ code: string }> }) {
   const { code: rawCode } = use(params);
-  const code = rawCode.toUpperCase();
+  const code = slugToCode(rawCode) ?? rawCode.toUpperCase();
 
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [role, setRole] = useState<string>('VIEWER');
@@ -183,7 +184,7 @@ export default function SayimListPage({ params }: { params: Promise<{ code: stri
             {tasks.map((task) => (
               <li key={task.id}>
                 <Link
-                  href={`/dashboard/depolar/${code}/sayim/${task.id}`}
+                  href={`/dashboard/depolar/${codeToSlug(code)}/sayim/${task.id}`}
                   className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50"
                 >
                   <span

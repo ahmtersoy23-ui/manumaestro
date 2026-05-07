@@ -8,6 +8,7 @@ import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, AlertCircle, Play, CheckCircle2, Loader2, Box as BoxIcon, Package, Eye, EyeOff } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { slugToCode, codeToSlug } from '@/lib/warehouseLabels';
 
 const logger = createLogger('SayimDetay');
 
@@ -56,7 +57,7 @@ export default function SayimDetayPage({
   params: Promise<{ code: string; id: string }>;
 }) {
   const { code: rawCode, id } = use(params);
-  const code = rawCode.toUpperCase();
+  const code = slugToCode(rawCode) ?? rawCode.toUpperCase();
 
   const [data, setData] = useState<TaskData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -201,7 +202,7 @@ export default function SayimDetayPage({
   return (
     <div className="space-y-5">
       <Link
-        href={`/dashboard/depolar/${code}/sayim`}
+        href={`/dashboard/depolar/${codeToSlug(code)}/sayim`}
         className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
       >
         <ChevronLeft className="w-4 h-4" /> Sayım Listesi

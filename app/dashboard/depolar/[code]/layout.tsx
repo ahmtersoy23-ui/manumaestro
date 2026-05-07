@@ -1,18 +1,22 @@
 /**
- * Depo Detay Layout — 3 sekme: Dashboard | Raf | Sipariş Çıkış
- * Sipariş sekmesi yalnız NJ + SHOWROOM'da görünür (ANKARA'da gizli).
+ * Depo Detay Layout — sekmeler.
+ * URL parametresi `code` aslında SLUG'dur (somerset/fairfield/ankara).
+ * Eski büyük-harf URL'ler (NJ/SHOWROOM/ANKARA) yeni slug'a redirect olur.
+ * Backend code (NJ/SHOWROOM/ANKARA) child sayfalarda slugToCode ile bulunur.
  */
 
 'use client';
 
-import { ReactNode, use } from 'react';
+import { ReactNode, use, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { LayoutDashboard, LayoutGrid, PackageOpen, ChevronRight, ClipboardCheck } from 'lucide-react';
-import { warehouseLabelLong } from '@/lib/warehouseLabels';
-
-const VALID_CODES = ['ANKARA', 'NJ', 'SHOWROOM'] as const;
-type WarehouseCode = (typeof VALID_CODES)[number];
+import {
+  warehouseLabelLong,
+  slugToCode,
+  codeToSlug,
+  isLegacyCode,
+} from '@/lib/warehouseLabels';
 
 export default function DepoDetayLayout({
   children,
@@ -21,20 +25,30 @@ export default function DepoDetayLayout({
   children: ReactNode;
   params: Promise<{ code: string }>;
 }) {
-  const { code: rawCode } = use(params);
-  const code = rawCode.toUpperCase() as WarehouseCode;
+  const { code: rawParam } = use(params);
   const pathname = usePathname();
+  const router = useRouter();
 
-  if (!VALID_CODES.includes(code)) {
+  // Eski URL geriye uyum: /depolar/SHOWROOM/... → /depolar/fairfield/...
+  useEffect(() => {
+    if (isLegacyCode(rawParam)) {
+      const newPath = pathname.replace(`/depolar/${rawParam}`, `/depolar/${codeToSlug(rawParam)}`);
+      router.replace(newPath);
+    }
+  }, [rawParam, pathname, router]);
+
+  const code = slugToCode(rawParam);
+  if (!code) {
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
-        Bilinmeyen depo: <span className="font-mono">{rawCode}</span>
+        Bilinmeyen depo: <span className="font-mono">{rawParam}</span>
       </div>
     );
   }
 
+  const slug = codeToSlug(code);
   const showOutbound = code !== 'ANKARA';
-  const baseHref = `/dashboard/depolar/${code}`;
+  const baseHref = `/dashboard/depolar/${slug}`;
 
   const tabs = [
     { href: baseHref, label: 'Dashboard', icon: LayoutDashboard, exact: true },

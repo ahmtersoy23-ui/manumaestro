@@ -19,6 +19,7 @@ import {
   Search,
 } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { slugToCode, codeToSlug } from '@/lib/warehouseLabels';
 
 const logger = createLogger('OutboundStage');
 
@@ -69,13 +70,13 @@ export default function StagePage({
   params: Promise<{ code: string; stage: string }>;
 }) {
   const { code: rawCode, stage } = use(params);
-  const code = rawCode.toUpperCase();
+  const code = slugToCode(rawCode) ?? rawCode.toUpperCase();
 
   if (!STAGE_META[stage]) {
-    redirect(`/dashboard/depolar/${code}/siparis`);
+    redirect(`/dashboard/depolar/${codeToSlug(code)}/siparis`);
   }
   if (code === 'ANKARA') {
-    redirect(`/dashboard/depolar/${code}`);
+    redirect(`/dashboard/depolar/${codeToSlug(code)}`);
   }
 
   const meta = STAGE_META[stage];
@@ -138,7 +139,7 @@ export default function StagePage({
   return (
     <div className="space-y-5">
       <Link
-        href={`/dashboard/depolar/${code}/siparis`}
+        href={`/dashboard/depolar/${codeToSlug(code)}/siparis`}
         className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
       >
         <ChevronLeft className="w-4 h-4" /> Sipariş Çıkış
@@ -195,7 +196,7 @@ export default function StagePage({
                 <tr key={o.id} className="text-gray-700 hover:bg-gray-50">
                   <td className="px-4 py-2 text-xs">
                     <Link
-                      href={`/dashboard/depolar/${code}/siparis/marketplace/${o.marketplaceCode}`}
+                      href={`/dashboard/depolar/${codeToSlug(code)}/siparis/marketplace/${o.marketplaceCode}`}
                       className="text-gray-700 hover:underline"
                     >
                       {MARKETPLACE_LABELS[o.marketplaceCode] ?? o.marketplaceCode}
@@ -203,7 +204,7 @@ export default function StagePage({
                   </td>
                   <td className="px-4 py-2">
                     <Link
-                      href={`/dashboard/depolar/${code}/siparis/${o.id}`}
+                      href={`/dashboard/depolar/${codeToSlug(code)}/siparis/${o.id}`}
                       className="font-mono text-xs text-blue-700 hover:underline"
                     >
                       {o.orderNumber}

@@ -11,6 +11,7 @@ import { useEffect, useState, useMemo, use } from 'react';
 import Link from 'next/link';
 import { Search, Layers, Package, Box, AlertTriangle, History, Download } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { slugToCode, codeToSlug } from '@/lib/warehouseLabels';
 import WarehouseStockView from '@/components/warehouse/WarehouseStockView';
 import { IwaskuLocationsModal } from '@/components/wms/IwaskuLocationsModal';
 import { rowsToCsv, downloadCsv } from '@/lib/wms/exportCsv';
@@ -76,7 +77,7 @@ interface DepoData {
 
 export default function DepoDashboardPage({ params }: { params: Promise<{ code: string }> }) {
   const { code: rawCode } = use(params);
-  const code = rawCode.toUpperCase();
+  const code = slugToCode(rawCode) ?? rawCode.toUpperCase();
 
   const [data, setData] = useState<DepoData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -248,7 +249,7 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
             <h3 className="text-sm font-medium text-gray-700">Son Hareketler</h3>
           </div>
           <Link
-            href={`/dashboard/depolar/${code}/hareketler`}
+            href={`/dashboard/depolar/${codeToSlug(code)}/hareketler`}
             className="text-xs text-blue-700 hover:underline"
           >
             Tüm geçmiş →

@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ClipboardList, Truck, AlertCircle } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { slugToCode, codeToSlug } from '@/lib/warehouseLabels';
 
 const logger = createLogger('OutboundLobby');
 
@@ -39,10 +40,10 @@ interface LobbyData {
 
 export default function SiparisLobbyPage({ params }: { params: Promise<{ code: string }> }) {
   const { code: rawCode } = use(params);
-  const code = rawCode.toUpperCase();
+  const code = slugToCode(rawCode) ?? rawCode.toUpperCase();
 
   if (code === 'ANKARA') {
-    redirect(`/dashboard/depolar/${code}`);
+    redirect(`/dashboard/depolar/${codeToSlug(code)}`);
   }
 
   const [data, setData] = useState<LobbyData | null>(null);
@@ -99,7 +100,7 @@ export default function SiparisLobbyPage({ params }: { params: Promise<{ code: s
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Link
-                href={`/dashboard/depolar/${code}/siparis/stage/kargo`}
+                href={`/dashboard/depolar/${codeToSlug(code)}/siparis/stage/kargo`}
                 className="block rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 p-4 transition-colors"
               >
                 <div className="text-xs font-medium text-amber-800 mb-1">
@@ -113,7 +114,7 @@ export default function SiparisLobbyPage({ params }: { params: Promise<{ code: s
                 </p>
               </Link>
               <Link
-                href={`/dashboard/depolar/${code}/siparis/stage/cikis`}
+                href={`/dashboard/depolar/${codeToSlug(code)}/siparis/stage/cikis`}
                 className="block rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 p-4 transition-colors"
               >
                 <div className="text-xs font-medium text-blue-800 mb-1">Çıkış bekleyen</div>
@@ -143,7 +144,7 @@ export default function SiparisLobbyPage({ params }: { params: Promise<{ code: s
                 return (
                   <Link
                     key={m.code}
-                    href={`/dashboard/depolar/${code}/siparis/marketplace/${m.code}`}
+                    href={`/dashboard/depolar/${codeToSlug(code)}/siparis/marketplace/${m.code}`}
                     className="block rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50/40 p-4 transition-colors"
                   >
                     <div className="text-sm font-medium text-gray-900 mb-2">{m.label}</div>

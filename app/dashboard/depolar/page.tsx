@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Warehouse as WarehouseIcon, AlertTriangle, Package, Box, Layers } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { codeToSlug } from '@/lib/warehouseLabels';
 
 const logger = createLogger('DepolarLobby');
 
@@ -84,7 +85,7 @@ export default function DepolarLobbyPage() {
         {warehouses.map((w) => (
           <Link
             key={w.code}
-            href={`/dashboard/depolar/${w.code}`}
+            href={`/dashboard/depolar/${codeToSlug(w.code)}`}
             className="block bg-white border border-gray-200 rounded-xl p-5 hover:border-blue-400 hover:shadow-md transition-all"
           >
             <div className="flex items-start justify-between">
