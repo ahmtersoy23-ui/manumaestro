@@ -7,12 +7,13 @@
 
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Package, Box, History, AlertCircle, ArrowRightLeft, PackageOpen, Scissors, Trash2, Settings } from 'lucide-react';
+import { ChevronLeft, Package, Box, History, AlertCircle, ArrowRightLeft, PackageOpen, Scissors, Trash2, Settings, Printer } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { TransferDialog, type TransferSource } from '@/components/wms/TransferDialog';
 import { BreakBoxDialog, type BreakBoxSource } from '@/components/wms/BreakBoxDialog';
 import { DeleteRowConfirm, type DeleteRowTarget } from '@/components/wms/DeleteRowConfirm';
 import { EditShelfDialog } from '@/components/wms/EditShelfDialog';
+import { generateShelfLabelsPdf, downloadPdf } from '@/lib/wms/shelfLabelPdf';
 
 const logger = createLogger('RafDetay');
 
@@ -93,6 +94,27 @@ export default function RafDetayPage({
   const [openingBoxId, setOpeningBoxId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteRowTarget | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [printingLabel, setPrintingLabel] = useState(false);
+
+  async function printLabel() {
+    if (!data) return;
+    setPrintingLabel(true);
+    try {
+      const blob = await generateShelfLabelsPdf([
+        {
+          code: data.shelf.code,
+          shelfType: data.shelf.shelfType,
+          warehouseCode: data.shelf.warehouseCode,
+        },
+      ]);
+      downloadPdf(blob, `raf-${data.shelf.code}.pdf`);
+    } catch (e) {
+      logger.error('Print label', e);
+      alert('Etiket oluşturulamadı');
+    } finally {
+      setPrintingLabel(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -205,6 +227,15 @@ export default function RafDetayPage({
                 Pasif
               </span>
             )}
+            <button
+              type="button"
+              onClick={printLabel}
+              disabled={printingLabel}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs text-gray-700 bg-gray-100 hover:bg-gray-200 rounded disabled:opacity-50"
+              title="Raf etiketi PDF (kod + QR)"
+            >
+              <Printer className="w-3 h-3" /> {printingLabel ? '…' : 'Etiket'}
+            </button>
             {canDelete && (
               <button
                 type="button"

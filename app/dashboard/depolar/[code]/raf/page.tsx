@@ -6,7 +6,7 @@
 
 import { useEffect, useState, use, useMemo } from 'react';
 import Link from 'next/link';
-import { Search, Layers, Package, Box, AlertCircle, Plus, PackagePlus, Layers3, AlertTriangle, FileSpreadsheet, LayoutGrid, ArrowRightLeft } from 'lucide-react';
+import { Search, Layers, Package, Box, AlertCircle, Plus, PackagePlus, Layers3, AlertTriangle, FileSpreadsheet, LayoutGrid, ArrowRightLeft, Printer } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { NewShelfDialog } from '@/components/wms/NewShelfDialog';
 import { BulkShelfDialog } from '@/components/wms/BulkShelfDialog';
@@ -17,6 +17,7 @@ import { ActionDropdown } from '@/components/wms/ActionDropdown';
 import { TransferDialog, type TransferSource } from '@/components/wms/TransferDialog';
 import { TransferSourcePicker } from '@/components/wms/TransferSourcePicker';
 import { BulkBoxExcelDialog } from '@/components/wms/BulkBoxExcelDialog';
+import { generateShelfLabelsPdf, downloadPdf } from '@/lib/wms/shelfLabelPdf';
 
 const logger = createLogger('RafSekmesi');
 
@@ -69,6 +70,27 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
   const [dialog, setDialog] = useState<'NEW_SHELF' | 'BULK_SHELF' | 'MANUAL_BOX' | 'LOOSE_STOCK' | 'BULK_BOX_EXCEL' | null>(null);
   const [transferPickerOpen, setTransferPickerOpen] = useState(false);
   const [transferSource, setTransferSource] = useState<TransferSource | null>(null);
+  const [printingAll, setPrintingAll] = useState(false);
+
+  async function printAllLabels() {
+    if (shelves.length === 0) return;
+    setPrintingAll(true);
+    try {
+      const blob = await generateShelfLabelsPdf(
+        shelves.map((s) => ({
+          code: s.code,
+          shelfType: s.shelfType,
+          warehouseCode: code,
+        }))
+      );
+      downloadPdf(blob, `raf-etiketleri-${code}.pdf`);
+    } catch (e) {
+      logger.error('Print all labels', e);
+      alert('Etiketler oluşturulamadı');
+    } finally {
+      setPrintingAll(false);
+    }
+  }
   const [view, setView] = useState<'shelves' | 'unmatched'>('shelves');
   const [pendingUnmatched, setPendingUnmatched] = useState<number>(0);
 
@@ -288,6 +310,16 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
               title="Ürün seçip raflar arası transfer yap"
             >
               <ArrowRightLeft className="w-4 h-4" /> Transfer
+            </button>
+          )}
+          {shelves.length > 0 && (
+            <button
+              onClick={printAllLabels}
+              disabled={printingAll}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white border border-gray-200 text-gray-700 rounded-md hover:bg-gray-50 disabled:opacity-50"
+              title="Bu depodaki tüm aktif raflar için QR'lı etiket PDF'i"
+            >
+              <Printer className="w-4 h-4" /> {printingAll ? '…' : 'Tüm Etiketler'}
             </button>
           )}
         </div>
