@@ -7,11 +7,12 @@
 
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Package, Box, History, AlertCircle, ArrowRightLeft, PackageOpen, Scissors, Trash2 } from 'lucide-react';
+import { ChevronLeft, Package, Box, History, AlertCircle, ArrowRightLeft, PackageOpen, Scissors, Trash2, Settings } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { TransferDialog, type TransferSource } from '@/components/wms/TransferDialog';
 import { BreakBoxDialog, type BreakBoxSource } from '@/components/wms/BreakBoxDialog';
 import { DeleteRowConfirm, type DeleteRowTarget } from '@/components/wms/DeleteRowConfirm';
+import { EditShelfDialog } from '@/components/wms/EditShelfDialog';
 
 const logger = createLogger('RafDetay');
 
@@ -55,7 +56,7 @@ interface Movement {
   reversedBy: { id: string }[];
 }
 interface RafData {
-  shelf: { id: string; code: string; shelfType: string; notes: string | null; warehouseCode: string };
+  shelf: { id: string; code: string; shelfType: string; notes: string | null; isActive: boolean; warehouseCode: string };
   role: string;
   stocks: ShelfStockRow[];
   boxes: ShelfBoxRow[];
@@ -91,6 +92,7 @@ export default function RafDetayPage({
   const [breakSource, setBreakSource] = useState<BreakBoxSource | null>(null);
   const [openingBoxId, setOpeningBoxId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteRowTarget | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -198,6 +200,21 @@ export default function RafDetayPage({
             <span className={`text-[10px] uppercase px-2 py-0.5 rounded ${badge.cls}`}>
               {badge.label}
             </span>
+            {!data.shelf.isActive && (
+              <span className="text-[10px] uppercase px-2 py-0.5 rounded bg-gray-200 text-gray-700">
+                Pasif
+              </span>
+            )}
+            {canDelete && (
+              <button
+                type="button"
+                onClick={() => setEditOpen(true)}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs text-gray-700 bg-gray-100 hover:bg-gray-200 rounded"
+                title="Rafı düzenle (admin)"
+              >
+                <Settings className="w-3 h-3" /> Düzenle
+              </button>
+            )}
           </div>
           {data.shelf.notes && <p className="text-sm text-gray-500 mt-1">{data.shelf.notes}</p>}
         </div>
@@ -540,6 +557,15 @@ export default function RafDetayPage({
         warehouseCode={code}
         target={deleteTarget}
         onClose={() => setDeleteTarget(null)}
+        onSuccess={handleSuccess}
+      />
+
+      {/* Rafı düzenle (admin) — code rename + isActive + notlar */}
+      <EditShelfDialog
+        isOpen={editOpen}
+        warehouseCode={code}
+        shelf={data.shelf}
+        onClose={() => setEditOpen(false)}
         onSuccess={handleSuccess}
       />
     </div>
