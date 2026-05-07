@@ -17,6 +17,7 @@ import {
   PackageOpen,
   AlertCircle,
   Search,
+  Printer,
 } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { slugToCode, codeToSlug } from '@/lib/warehouseLabels';
@@ -146,12 +147,25 @@ export default function StagePage({
       </Link>
 
       {/* Başlık */}
-      <div className={`rounded-lg border ${accentBorderCls} ${accentBgCls} p-4`}>
-        <div className={`text-xs font-medium ${accentSubCls} mb-1`}>{meta.subtitle}</div>
-        <div className="flex items-baseline gap-3">
-          <h1 className={`text-2xl font-semibold ${accentTextCls}`}>{meta.title}</h1>
-          <span className={`text-sm ${accentSubCls}`}>({sorted.length})</span>
+      <div className={`rounded-lg border ${accentBorderCls} ${accentBgCls} p-4 flex items-center justify-between`}>
+        <div>
+          <div className={`text-xs font-medium ${accentSubCls} mb-1`}>{meta.subtitle}</div>
+          <div className="flex items-baseline gap-3">
+            <h1 className={`text-2xl font-semibold ${accentTextCls}`}>{meta.title}</h1>
+            <span className={`text-sm ${accentSubCls}`}>({sorted.length})</span>
+          </div>
         </div>
+        {stage === 'cikis' && sorted.length > 0 && (
+          <a
+            href={`/api/depolar/${code}/labels/merge?stage=cikis`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            title="Tüm hazır SHIPPING etiketlerini tek PDF'te indir (her sayfada altta sipariş + ürün bilgisi şeridi)"
+          >
+            <Printer className="w-4 h-4" /> Hazır Etiketleri Toplu İndir
+          </a>
+        )}
       </div>
 
       {/* Arama */}
