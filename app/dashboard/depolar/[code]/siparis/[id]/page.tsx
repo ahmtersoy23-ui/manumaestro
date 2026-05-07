@@ -181,7 +181,7 @@ export default function SiparisDetayPage({
     );
   if (!data) return null;
 
-  const canShip = ['MANAGER', 'ADMIN'].includes(data.role) && data.order.status === 'DRAFT' && data.items.length > 0;
+  const canShip = ['PACKER', 'OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role) && data.order.status === 'DRAFT' && data.items.length > 0;
   const canCancel = ['PACKER', 'OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role) && data.order.status === 'DRAFT';
   const canRevert = data.role === 'ADMIN' && data.order.status === 'SHIPPED';
   const totalQty = data.items.reduce((s, x) => s + x.quantity, 0);

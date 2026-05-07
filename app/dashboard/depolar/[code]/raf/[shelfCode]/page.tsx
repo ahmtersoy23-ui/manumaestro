@@ -16,6 +16,7 @@ import { DeleteRowConfirm, type DeleteRowTarget } from '@/components/wms/DeleteR
 import { EditShelfDialog } from '@/components/wms/EditShelfDialog';
 import { ManualBoxDialog } from '@/components/wms/ManualBoxDialog';
 import { LooseStockDialog } from '@/components/wms/LooseStockDialog';
+import { EmptyShelfDialog } from '@/components/wms/EmptyShelfDialog';
 import { generateShelfLabelsPdf, downloadPdf } from '@/lib/wms/shelfLabelPdf';
 
 const logger = createLogger('RafDetay');
@@ -100,6 +101,7 @@ export default function RafDetayPage({
   const [printingLabel, setPrintingLabel] = useState(false);
   const [addBoxOpen, setAddBoxOpen] = useState(false);
   const [addLooseOpen, setAddLooseOpen] = useState(false);
+  const [emptyOpen, setEmptyOpen] = useState(false);
 
   async function printLabel() {
     if (!data) return;
@@ -264,14 +266,26 @@ export default function RafDetayPage({
               <Printer className="w-3 h-3" /> {printingLabel ? '…' : 'Etiket'}
             </button>
             {canDelete && (
-              <button
-                type="button"
-                onClick={() => setEditOpen(true)}
-                className="inline-flex items-center gap-1 px-2 py-1 text-xs text-gray-700 bg-gray-100 hover:bg-gray-200 rounded"
-                title="Rafı düzenle (admin)"
-              >
-                <Settings className="w-3 h-3" /> Düzenle
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => setEditOpen(true)}
+                  className="inline-flex items-center gap-1 px-2 py-1 text-xs text-gray-700 bg-gray-100 hover:bg-gray-200 rounded"
+                  title="Rafı düzenle (admin)"
+                >
+                  <Settings className="w-3 h-3" /> Düzenle
+                </button>
+                {(data.stocks.length > 0 || data.boxes.filter((b) => b.status !== 'EMPTY').length > 0) && (
+                  <button
+                    type="button"
+                    onClick={() => setEmptyOpen(true)}
+                    className="inline-flex items-center gap-1 px-2 py-1 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100 rounded"
+                    title="Rafın tüm içeriğini hedef rafa taşı (admin)"
+                  >
+                    <ArrowRightLeft className="w-3 h-3" /> Rafı Boşalt
+                  </button>
+                )}
+              </>
             )}
           </div>
           {data.shelf.notes && <p className="text-sm text-gray-500 mt-1">{data.shelf.notes}</p>}
@@ -642,6 +656,17 @@ export default function RafDetayPage({
         fixedShelfId={data.shelf.id}
         fixedShelfCode={data.shelf.code}
         onClose={() => setAddLooseOpen(false)}
+        onSuccess={handleSuccess}
+      />
+
+      {/* Rafı Boşalt (admin) */}
+      <EmptyShelfDialog
+        isOpen={emptyOpen}
+        warehouseCode={code}
+        shelf={data.shelf}
+        stockCount={data.stocks.length}
+        boxCount={data.boxes.filter((b) => b.status !== 'EMPTY').length}
+        onClose={() => setEmptyOpen(false)}
         onSuccess={handleSuccess}
       />
     </div>
