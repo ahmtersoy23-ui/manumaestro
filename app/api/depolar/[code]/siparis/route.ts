@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
+import { getMarketplaceAccess, canViewMarketplace, canEditMarketplace } from '@/lib/auth/marketplaceAccess';
 import type { Prisma } from '@prisma/client';
 
 const SHELF_PRIMARY = new Set(['NJ', 'SHOWROOM']);
@@ -61,6 +62,14 @@ export async function GET(
     where.orderType = typeFilter as 'SINGLE' | 'FBA_PICKUP';
   }
   if (marketplaceFilter) {
+    // Marketplace-bazlı filtre — kullanıcının canView yetkisi yoksa 403
+    const mpAccess = await getMarketplaceAccess(auth.user.id, auth.user.role);
+    if (!canViewMarketplace(mpAccess, marketplaceFilter)) {
+      return NextResponse.json(
+        { success: false, error: 'Bu pazaryeri için yetkiniz yok' },
+        { status: 403 }
+      );
+    }
     where.marketplaceCode = marketplaceFilter;
   }
 
@@ -85,10 +94,20 @@ export async function GET(
     _count: true,
   });
 
+  // Eğer marketplaceFilter varsa, kullanıcının o pazaryerinde edit yetkisi
+  // bilgisini de döndür (marketplace alt sayfası "Yeni Sipariş" butonunu
+  // bu bilgiye göre gösterir).
+  let canEditMp: boolean | undefined;
+  if (marketplaceFilter) {
+    const mpAccess = await getMarketplaceAccess(auth.user.id, auth.user.role);
+    canEditMp = canEditMarketplace(mpAccess, marketplaceFilter);
+  }
+
   return NextResponse.json({
     success: true,
     data: {
       role: auth.shelfRole,
+      ...(canEditMp !== undefined ? { canEditMarketplace: canEditMp } : {}),
       orders: orders.map((o) => ({
         id: o.id,
         orderType: o.orderType,
@@ -136,6 +155,15 @@ export async function POST(
     );
   }
   const { orderType, marketplaceCode, orderNumber, description, addressNote, items } = parsed.data;
+
+  // Marketplace edit yetkisi: SINGLE için zorunlu (FBA_PICKUP da aynı kural)
+  const mpAccess = await getMarketplaceAccess(auth.user.id, auth.user.role);
+  if (!canEditMarketplace(mpAccess, marketplaceCode)) {
+    return NextResponse.json(
+      { success: false, error: `${marketplaceCode} pazaryerinde sipariş yaratma yetkiniz yok` },
+      { status: 403 }
+    );
+  }
 
   // FBA_PICKUP'ta items entry stage'de boş gelir (koliler detay ekranında eklenir);
   // SINGLE'da en az 1 item bekleriz (yeni akış).

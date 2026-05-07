@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
+import { getMarketplaceAccess, canViewMarketplace } from '@/lib/auth/marketplaceAccess';
 
 const SHELF_PRIMARY = new Set(['NJ', 'SHOWROOM']);
 
@@ -31,6 +32,8 @@ export async function GET(
 
   const auth = await requireShelfAction(request, upperCode, 'view');
   if (auth instanceof NextResponse) return auth;
+
+  const mpAccess = await getMarketplaceAccess(auth.user.id, auth.user.role);
 
   // Tüm orderları çek (en fazla son 1000), label durumuna göre kovaya at
   const orders = await prisma.outboundOrder.findMany({
@@ -55,6 +58,8 @@ export async function GET(
   >();
 
   for (const o of orders) {
+    // Kullanıcı bu marketplace'i göremiyorsa toplamlara dahil etme
+    if (!canViewMarketplace(mpAccess, o.marketplaceCode)) continue;
     const stats = mpMap.get(o.marketplaceCode) ?? {
       kargoBekleyen: 0,
       cikisBekleyen: 0,
@@ -85,6 +90,11 @@ export async function GET(
       role: auth.shelfRole,
       totals,
       byMarketplace,
+      access: {
+        allMarketplaces: mpAccess.allAccess,
+        viewable: Array.from(mpAccess.viewableCodes),
+        editable: Array.from(mpAccess.editableCodes),
+      },
     },
   });
 }

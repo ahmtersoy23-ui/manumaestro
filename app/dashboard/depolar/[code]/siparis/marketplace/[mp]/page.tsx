@@ -78,6 +78,7 @@ export default function MarketplaceOrderPage({
 
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [role, setRole] = useState<string>('VIEWER');
+  const [canEditMp, setCanEditMp] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>(initialStage);
@@ -96,6 +97,7 @@ export default function MarketplaceOrderPage({
         if (d.success) {
           setOrders(d.data.orders);
           setRole(d.data.role ?? 'VIEWER');
+          setCanEditMp(!!d.data.canEditMarketplace);
         } else setError(d.error || 'Yüklenemedi');
       })
       .catch((e) => {
@@ -111,7 +113,9 @@ export default function MarketplaceOrderPage({
     };
   }, [code, mp]);
 
-  const canCreate = ['PACKER', 'OPERATOR', 'MANAGER', 'ADMIN'].includes(role);
+  // Yeni sipariş yaratma: hem shelf rolü (PACKER+) hem marketplace edit yetkisi gerekir
+  const canCreate =
+    ['PACKER', 'OPERATOR', 'MANAGER', 'ADMIN'].includes(role) && canEditMp;
 
   const counts = {
     kargo: orders.filter((o) => o.status === 'DRAFT' && !o.hasShippingLabel).length,
