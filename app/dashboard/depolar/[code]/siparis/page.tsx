@@ -134,23 +134,8 @@ export default function SiparisLobbyPage({ params }: { params: Promise<{ code: s
             <div className="flex items-center gap-2 text-gray-500 text-xs mb-3">
               <Truck className="w-4 h-4" /> Pazaryerleri
             </div>
-            {(() => {
-              const visible = US_MARKETPLACES.filter(
-                (m) => data.access.allMarketplaces || data.access.viewable.includes(m.code)
-              );
-              if (visible.length === 0) {
-                return (
-                  <div className="px-3 py-6 text-sm text-gray-400 text-center">
-                    Yetkili olduğun pazaryeri yok. İzin Yönetimi → Pazar Yeri İzinleri&apos;ne bak.
-                  </div>
-                );
-              }
-              return null;
-            })()}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {US_MARKETPLACES.filter(
-                (m) => data.access.allMarketplaces || data.access.viewable.includes(m.code)
-              ).map((m) => {
+              {US_MARKETPLACES.map((m) => {
                 const stats = data.byMarketplace.find((s) => s.marketplaceCode === m.code) ?? {
                   marketplaceCode: m.code,
                   kargoBekleyen: 0,

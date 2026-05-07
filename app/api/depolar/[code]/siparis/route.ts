@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
-import { getMarketplaceAccess, canViewMarketplace, canEditMarketplace } from '@/lib/auth/marketplaceAccess';
+import { getMarketplaceAccess, canEditMarketplace } from '@/lib/auth/marketplaceAccess';
 import type { Prisma } from '@prisma/client';
 
 const SHELF_PRIMARY = new Set(['NJ', 'SHOWROOM']);
@@ -62,14 +62,8 @@ export async function GET(
     where.orderType = typeFilter as 'SINGLE' | 'FBA_PICKUP';
   }
   if (marketplaceFilter) {
-    // Marketplace-bazlı filtre — kullanıcının canView yetkisi yoksa 403
-    const mpAccess = await getMarketplaceAccess(auth.user.id, auth.user.role);
-    if (!canViewMarketplace(mpAccess, marketplaceFilter)) {
-      return NextResponse.json(
-        { success: false, error: 'Bu pazaryeri için yetkiniz yok' },
-        { status: 403 }
-      );
-    }
+    // View herkese açık (depo personeli tüm pazaryerlerini VIEWER olarak görür).
+    // canEdit sadece "Yeni Sipariş" yaratma akışında gate'lenir (POST'ta).
     where.marketplaceCode = marketplaceFilter;
   }
 

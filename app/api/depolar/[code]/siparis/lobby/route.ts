@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
-import { getMarketplaceAccess, canViewMarketplace } from '@/lib/auth/marketplaceAccess';
+import { getMarketplaceAccess } from '@/lib/auth/marketplaceAccess';
 
 const SHELF_PRIMARY = new Set(['NJ', 'SHOWROOM']);
 
@@ -57,9 +57,11 @@ export async function GET(
     { kargoBekleyen: number; cikisBekleyen: number; shipped: number }
   >();
 
+  // Lobi'de tüm marketplace kartları herkese görünür (depo personeli VIEWER
+  // olarak tüm pazaryerlerini görebilir — kargo etiketi/çıkış işleri marketplace
+  // bağımsız). canView yetkisi sadece "Yeni Sipariş" butonu için gate olarak
+  // kullanılır (alt sayfada).
   for (const o of orders) {
-    // Kullanıcı bu marketplace'i göremiyorsa toplamlara dahil etme
-    if (!canViewMarketplace(mpAccess, o.marketplaceCode)) continue;
     const stats = mpMap.get(o.marketplaceCode) ?? {
       kargoBekleyen: 0,
       cikisBekleyen: 0,
