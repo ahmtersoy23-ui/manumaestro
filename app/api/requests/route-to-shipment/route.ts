@@ -4,7 +4,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma, queryProductDb } from '@/lib/db/prisma';
+import { prisma } from '@/lib/db/prisma';
+import { enrichProductSize } from '@/lib/db/enrichProductSize';
 import { requireShipmentAction } from '@/lib/auth/requireShipmentRole';
 import { RouteToShipmentSchema, formatValidationError } from '@/lib/validation/schemas';
 import { errorResponse } from '@/lib/api/response';
@@ -100,36 +101,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // productSize null olanlar için pricelab_db'den desi çek
-    const missingDesiIwaskus = requests
-      .filter(r => r.productSize == null)
-      .map(r => r.iwasku);
-
-    const desiMap = new Map<string, number>();
-    if (missingDesiIwaskus.length > 0) {
-      const uniqueIwaskus = [...new Set(missingDesiIwaskus)];
-      const placeholders = uniqueIwaskus.map((_, i) => `$${i + 1}`).join(',');
-      const rows = await queryProductDb(
-        `SELECT p.product_sku AS iwasku, COALESCE(p.manual_size, p.size)::float AS desi
-         FROM products p
-         WHERE p.product_sku IN (${placeholders}) AND COALESCE(p.manual_size, p.size) IS NOT NULL`,
-        uniqueIwaskus
-      );
-      for (const row of rows) {
-        desiMap.set(row.iwasku, row.desi);
-      }
-    }
+    // Pricelab.products'tan canli desi (cache bayatsa bile dogru deger)
+    await enrichProductSize(requests);
 
     // Transaction: ShipmentItem'lar oluştur
     const items = await prisma.$transaction(
       requests.map(req => {
-        const desi = req.productSize ?? desiMap.get(req.iwasku) ?? null;
         return prisma.shipmentItem.create({
           data: {
             shipmentId,
             iwasku: req.iwasku,
             quantity: req.quantity,
-            desi,
+            desi: req.productSize ?? null,
             marketplaceId: req.marketplaceId,
             productionRequestId: req.id,
           },

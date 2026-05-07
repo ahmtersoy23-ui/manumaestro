@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
+import { enrichProductSize } from '@/lib/db/enrichProductSize';
 import { errorResponse } from '@/lib/api/response';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { verifyAuth } from '@/lib/auth/verify';
@@ -70,6 +71,9 @@ export async function GET(request: NextRequest) {
         productionMonth: true,
       },
     });
+
+    // Pricelab.products'tan canli desi (cache bayatlamasin)
+    await enrichProductSize(requests);
 
     // Build stats per month in memory (avoiding N separate DB round trips)
     const statsMap = new Map<string, {

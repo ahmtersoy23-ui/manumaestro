@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
+import { enrichProductSize } from '@/lib/db/enrichProductSize';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { verifyAuth } from '@/lib/auth/verify';
 import {
@@ -80,6 +81,9 @@ export async function GET(request: NextRequest) {
         { iwasku: 'asc' },
       ],
     });
+
+    // Pricelab.products'tan canli desi (cache bayatlamasin)
+    await enrichProductSize(requests);
 
     // Fetch snapshot stock and produced values for this month
     const productionMonth = month || requests[0]?.productionMonth;
