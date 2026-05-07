@@ -9,10 +9,11 @@
 
 import { useEffect, useState, useMemo, use } from 'react';
 import Link from 'next/link';
-import { Search, Layers, Package, Box, AlertTriangle, History } from 'lucide-react';
+import { Search, Layers, Package, Box, AlertTriangle, History, Download } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import WarehouseStockView from '@/components/warehouse/WarehouseStockView';
 import { IwaskuLocationsModal } from '@/components/wms/IwaskuLocationsModal';
+import { rowsToCsv, downloadCsv } from '@/lib/wms/exportCsv';
 
 const logger = createLogger('DepoDashboard');
 
@@ -233,6 +234,7 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
             rows={aggregate}
             searchTerm={searchTerm}
             categoryFilter={categoryFilter}
+            warehouseCode={code}
             onSelect={(iwasku, productName) => setIwaskuModal({ iwasku, productName })}
           />
         </>
@@ -329,10 +331,11 @@ interface IwaskuAggregateTableProps {
   rows: AggregateRow[] | null;
   searchTerm: string;
   categoryFilter: string;
+  warehouseCode: string;
   onSelect: (iwasku: string, productName: string | null) => void;
 }
 
-function IwaskuAggregateTable({ rows, searchTerm, categoryFilter, onSelect }: IwaskuAggregateTableProps) {
+function IwaskuAggregateTable({ rows, searchTerm, categoryFilter, warehouseCode, onSelect }: IwaskuAggregateTableProps) {
   const filtered = useMemo(() => {
     if (!rows) return [];
     const q = searchTerm.trim().toLowerCase();
@@ -357,6 +360,38 @@ function IwaskuAggregateTable({ rows, searchTerm, categoryFilter, onSelect }: Iw
     );
   }
 
+  const exportCsv = () => {
+    const headers = [
+      'iwasku',
+      'fnsku',
+      'asin',
+      'urun_adi',
+      'kategori',
+      'tekil',
+      'tekil_raf_sayisi',
+      'koli',
+      'koli_sayisi',
+      'toplam',
+      'rezerve',
+    ];
+    const data = filtered.map((r) => [
+      r.iwasku,
+      r.fnsku ?? '',
+      r.asin ?? '',
+      r.productName ?? '',
+      r.category ?? '',
+      r.looseQty,
+      r.looseShelves,
+      r.boxQty,
+      r.boxCount,
+      r.totalQty,
+      r.totalReservedQty,
+    ]);
+    const csv = rowsToCsv(headers, data);
+    const date = new Date().toISOString().slice(0, 10);
+    downloadCsv(csv, `stok-${warehouseCode}-${date}.csv`);
+  };
+
   return (
     <div className="bg-white border border-gray-200 rounded-lg">
       <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
@@ -364,7 +399,19 @@ function IwaskuAggregateTable({ rows, searchTerm, categoryFilter, onSelect }: Iw
           Ürünler ({filtered.length}
           {filtered.length !== rows.length && `/${rows.length}`})
         </h3>
-        <span className="text-xs text-gray-500">Bir satıra tıkla → konum dağılımı modal</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-500">Bir satıra tıkla → konum dağılımı modal</span>
+          {filtered.length > 0 && (
+            <button
+              type="button"
+              onClick={exportCsv}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded"
+              title="Filtrelenmiş satırları CSV olarak indir (Excel'de açılır)"
+            >
+              <Download className="w-3 h-3" /> Excel/CSV
+            </button>
+          )}
+        </div>
       </div>
       {filtered.length === 0 ? (
         <div className="px-4 py-6 text-sm text-gray-400 text-center">Eşleşen ürün yok.</div>
