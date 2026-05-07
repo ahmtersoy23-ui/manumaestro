@@ -8,6 +8,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, use } from 'react';
+import Link from 'next/link';
 import { Search, Layers, Package, Box, AlertTriangle, History } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import WarehouseStockView from '@/components/warehouse/WarehouseStockView';
@@ -239,9 +240,17 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
 
       {/* Son hareketler — her iki mod için */}
       <div className="bg-white border border-gray-200 rounded-lg">
-        <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
-          <History className="w-4 h-4 text-gray-500" />
-          <h3 className="text-sm font-medium text-gray-700">Son Hareketler</h3>
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <History className="w-4 h-4 text-gray-500" />
+            <h3 className="text-sm font-medium text-gray-700">Son Hareketler</h3>
+          </div>
+          <Link
+            href={`/dashboard/depolar/${code}/hareketler`}
+            className="text-xs text-blue-700 hover:underline"
+          >
+            Tüm geçmiş →
+          </Link>
         </div>
         {data.recentMovements.length === 0 ? (
           <div className="px-4 py-6 text-sm text-gray-400">Henüz hareket yok.</div>
