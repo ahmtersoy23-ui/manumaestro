@@ -15,11 +15,15 @@
  * Faz 3 (son 2 ay) — remaining:
  *   Kalan talebi direkt ata, kota hesabı yok
  *
+ * Kuyruk yutma:
+ *   Bir ürünün kalan adedi MIN_TAIL (=3) altına düştüyse hiç planlanmaz —
+ *   tek seferlik 1-2 birimlik gereksiz batch'leri önler. Tüm fazlarda geçerli.
+ *
  * Sıralama: Weighted lead time DESC (AU/CA önce), sonra toplam desi DESC.
  * Global quota — kategoriler arası boşluk geri devredilir.
  */
 
-import { getMinBatchSize, getPhase, getWeightedLeadTime, isSeasonalEligibleCategory, type AllocPhase } from './config';
+import { getMinBatchSize, getMinTailSize, getPhase, getWeightedLeadTime, isSeasonalEligibleCategory, type AllocPhase } from './config';
 
 // ============================================
 // TYPES
@@ -113,9 +117,15 @@ export function allocateReserves(
 
     if (phase === 'remaining') {
       // Faz 3: dump all remaining into this month (no quota check)
+      const minTail = getMinTailSize();
       for (const reserve of sorted) {
         const remQty = remaining.get(reserve.iwasku)!;
         if (remQty <= 0) continue;
+        if (remQty < minTail) {
+          // Kuyruk yutma: 3 birimden az kaldıysa üretme, talebi düşür
+          remaining.set(reserve.iwasku, 0);
+          continue;
+        }
         results.push({
           iwasku: reserve.iwasku,
           month: month.month,
@@ -155,6 +165,10 @@ export function allocateReserves(
         // Faz 1 küçük ürün veya Faz 2: 15'e tamamla (eğer remaining ≥ 15 ise)
         if (remQty >= minBatch) {
           allocQty = minBatch;
+        } else if (remQty < getMinTailSize()) {
+          // Kuyruk yutma: 3 birimden az kaldıysa üretme, talebi düşür
+          remaining.set(reserve.iwasku, 0);
+          continue;
         } else {
           // Remaining itself is below 15 → dump all (will finish this product)
           allocQty = remQty;
@@ -189,9 +203,15 @@ export function allocateReserves(
 
   // Safety: any unallocated demand goes to last month
   const lastMonth = months[months.length - 1]!;
+  const minTailSafety = getMinTailSize();
   for (const reserve of sorted) {
     const remQty = remaining.get(reserve.iwasku)!;
     if (remQty > 0) {
+      if (remQty < minTailSafety) {
+        // Kuyruk yutma: 3 birimden az kaldıysa üretme, talebi düşür
+        remaining.set(reserve.iwasku, 0);
+        continue;
+      }
       const existing = results.find(
         r => r.iwasku === reserve.iwasku && r.month === lastMonth.month
       );

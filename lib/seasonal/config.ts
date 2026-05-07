@@ -18,6 +18,14 @@ export function getMinBatchSize(): number {
   return MIN_BATCH;
 }
 
+// Kuyruk eşiği — bir ürünün kalan talebi bu değerin altındaysa allocator hiç planlamaz
+// (talep düşürülür). 16 adet talebin "15+1" şeklinde bölünmesini engeller.
+export const MIN_TAIL = 3;
+
+export function getMinTailSize(): number {
+  return MIN_TAIL;
+}
+
 // Monthly capacity configuration (desi per working day)
 export const CAPACITY_CONFIG = {
   normalDesiPerDay: 500,

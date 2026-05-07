@@ -16,6 +16,7 @@ import { UnmatchedSeedTable } from '@/components/wms/UnmatchedSeedTable';
 import { ActionDropdown } from '@/components/wms/ActionDropdown';
 import { TransferDialog, type TransferSource } from '@/components/wms/TransferDialog';
 import { TransferSourcePicker } from '@/components/wms/TransferSourcePicker';
+import { BulkBoxExcelDialog } from '@/components/wms/BulkBoxExcelDialog';
 
 const logger = createLogger('RafSekmesi');
 
@@ -65,7 +66,7 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
   const [searchResults, setSearchResults] = useState<SearchResult | null>(null);
   const [searching, setSearching] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [dialog, setDialog] = useState<'NEW_SHELF' | 'BULK_SHELF' | 'MANUAL_BOX' | 'LOOSE_STOCK' | null>(null);
+  const [dialog, setDialog] = useState<'NEW_SHELF' | 'BULK_SHELF' | 'MANUAL_BOX' | 'LOOSE_STOCK' | 'BULK_BOX_EXCEL' | null>(null);
   const [transferPickerOpen, setTransferPickerOpen] = useState(false);
   const [transferSource, setTransferSource] = useState<TransferSource | null>(null);
   const [view, setView] = useState<'shelves' | 'unmatched'>('shelves');
@@ -265,11 +266,9 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
                 {
                   key: 'BULK_BOX_EXCEL',
                   label: 'Excel ile Toplu',
-                  description: 'Yakında — CSV/Excel'+"'"+'den batch koli',
+                  description: 'CSV/Excel'+"'"+'den batch koli + hata raporu',
                   icon: <FileSpreadsheet className="w-4 h-4 text-emerald-600" />,
-                  disabled: true,
-                  disabledReason: 'Yakında gelecek (Faz 4)',
-                  onClick: () => {},
+                  onClick: () => setDialog('BULK_BOX_EXCEL'),
                 },
               ]}
             />
@@ -552,6 +551,12 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
       />
       <LooseStockDialog
         isOpen={dialog === 'LOOSE_STOCK'}
+        warehouseCode={code}
+        onClose={() => setDialog(null)}
+        onSuccess={handleSuccess}
+      />
+      <BulkBoxExcelDialog
+        isOpen={dialog === 'BULK_BOX_EXCEL'}
         warehouseCode={code}
         onClose={() => setDialog(null)}
         onSuccess={handleSuccess}

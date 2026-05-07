@@ -157,6 +157,31 @@ describe('allocateReserves', () => {
 
       expect(totalQty(results, 'SKU-TINY')).toBe(8);
     });
+
+    it('drops tail < 3 (kuyruk yutma) — 16 unit demand → 15 allocated, 1 dropped', () => {
+      // Real scenario from production data: 16 unit demand, Apr quota tight forces split.
+      // totalDesi=32, Apr quota=30 → share=0.9375 → idealQty=round(16*0.9375)=15, allocQty=15.
+      // remQty=1. In May (still strict), remQty(1) < MIN_TAIL(3) → drop. Total = 15.
+      const tightMonths = [
+        month('2026-04', 30),
+        month('2026-05', 5000),
+        month('2026-06', 5000),
+        month('2026-07', 5000),
+      ];
+      const reserves = [reserve('SKU-TAIL-16', 16, 2)];
+      const results = allocateReserves(reserves, tightMonths);
+
+      expect(totalQty(results, 'SKU-TAIL-16')).toBe(15);
+      expect(forSku(results, 'SKU-TAIL-16')).toHaveLength(1);
+    });
+
+    it('drops original demand < 3 entirely (no production)', () => {
+      // 2-unit total demand, falls below MIN_TAIL → never allocated
+      const reserves = [reserve('SKU-TINY-2', 2, 2)];
+      const results = allocateReserves(reserves, fourMonths);
+
+      expect(totalQty(results, 'SKU-TINY-2')).toBe(0);
+    });
   });
 
   // =========================================================================
