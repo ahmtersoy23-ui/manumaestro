@@ -162,7 +162,10 @@ export async function GET(request: NextRequest) {
     const rawPage = parseInt(searchParams.get('page') || '1');
     const rawLimit = parseInt(searchParams.get('limit') || '50');
     const page = Math.max(rawPage, 1);
-    const limit = Math.min(Math.max(rawLimit, 1), 200);
+    // Cap 2000: aylik (marketplace, month) request kumelerinin hepsini summary
+    // hesabi icin tek sayfada cekebilmek icin. SEZON Nisan 273 kayit; mevcut
+    // tepe deger ~300, 2000 buyume payi. Asilirsa summary truncate olur.
+    const limit = Math.min(Math.max(rawLimit, 1), 2000);
     const skip = (page - 1) * limit;
 
     const where: Prisma.ProductionRequestWhereInput = {};
