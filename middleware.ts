@@ -23,6 +23,18 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Auth bootstrap — SSO portal URL fragment ile yolladığı token'ı client-side
+  // /api/auth/login'e POST edip cookie'ye çeviren public sayfa. Middleware
+  // auth check'i bu path'te çalıştırılmaz.
+  if (request.nextUrl.pathname === '/auth/bootstrap') {
+    return NextResponse.next();
+  }
+
+  // /api/auth/login public — cookie henüz yok, body'den token alır
+  if (request.nextUrl.pathname === '/api/auth/login') {
+    return NextResponse.next();
+  }
+
   logger.debug('Request:', request.nextUrl.pathname);
 
   // Apply rate limiting based on endpoint
@@ -73,8 +85,12 @@ export async function middleware(request: NextRequest) {
   logger.debug('Token from cookie:', tokenFromCookie ? 'exists' : 'none');
   logger.debug('Token from URL:', tokenFromUrl ? 'exists' : 'none');
 
-  // If token in URL, save to cookie and redirect to clean URL
+  // DEPRECATED: token'ı query param'dan alma yolu — token URL'de görünür,
+  // server log + browser history + referer sızıntı riski var. Apps-SSO
+  // portal /auth/bootstrap#token=... fragment akışına geçtikten sonra bu
+  // dal silinecek. Geçiş döneminde geri uyumluluk için tutuluyor.
   if (tokenFromUrl) {
+    logger.warn('DEPRECATED query-param token akışı: portal /auth/bootstrap#token= akışına geçirilmeli');
     const response = NextResponse.redirect(new URL(request.nextUrl.pathname, request.url));
     response.cookies.set('sso_access_token', tokenFromUrl, {
       httpOnly: true,

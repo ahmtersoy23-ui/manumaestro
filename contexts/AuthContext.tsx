@@ -7,6 +7,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('AuthContext');
@@ -57,7 +58,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [marketplacePermissions, setMarketplacePermissions] = useState<MarketplacePerm[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const pathname = usePathname();
+
   useEffect(() => {
+    // /auth/* path'lerinde cookie henüz set edilmemiş olabilir (bootstrap akışı).
+    // /api/auth/me çağrısı 401 döner ve SSO loop'una düşeriz — bu path'lerde skip.
+    if (pathname?.startsWith('/auth/')) {
+      setLoading(false);
+      return;
+    }
+
     // Fetch user info from API endpoint that reads middleware headers
     const fetchUserInfo = async () => {
       try {
@@ -81,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     fetchUserInfo();
-  }, []);
+  }, [pathname]);
 
   const hasRoleCheck = (requiredRoles: string[]): boolean => {
     if (!role) return false;
