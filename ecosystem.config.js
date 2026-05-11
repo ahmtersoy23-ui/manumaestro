@@ -7,13 +7,12 @@ module.exports = {
     script: 'npm',
     args: 'start',
     cwd: '/var/www/manumaestro',
+    // .env'deki tum kayitlari child process'e gec (Sentry, JWT, Prisma, vb.)
+    // Eklenen yeni env vars otomatik gecsin diye spread kullanildi.
     env: {
+      ...process.env,
       NODE_ENV: 'production',
       PORT: 3000,
-      DATABASE_URL: process.env.DATABASE_URL,
-      PRODUCT_DB_URL: process.env.PRODUCT_DB_URL,
-      SSO_URL: process.env.SSO_URL,
-      SSO_APP_CODE: process.env.SSO_APP_CODE
     },
     max_memory_restart: '500M',
     error_file: '/var/log/manumaestro/error.log',
