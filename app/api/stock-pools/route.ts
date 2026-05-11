@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireRole, requireSuperAdmin } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
+import { errorResponse } from '@/lib/api/response';
 import { z } from 'zod';
 
 const CreatePoolSchema = z.object({
@@ -23,64 +24,69 @@ const CreatePoolSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  // Süper-admin gerekli (yeni sezon havuzu oluşturma kritik aksiyon)
-  const authResult = await requireSuperAdmin(request);
-  if (authResult instanceof NextResponse) return authResult;
-  const { user } = authResult;
+  try {
+    // Süper-admin gerekli (yeni sezon havuzu oluşturma kritik aksiyon)
+    const authResult = await requireSuperAdmin(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const { user } = authResult;
 
-  const body = await request.json();
-  const validation = CreatePoolSchema.safeParse(body);
-  if (!validation.success) {
-    return NextResponse.json(
-      { success: false, error: 'Doğrulama hatası', details: validation.error.flatten().fieldErrors },
-      { status: 400 }
-    );
+    const body = await request.json();
+    const validation = CreatePoolSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json(
+        { success: false, error: 'Doğrulama hatası', details: validation.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+
+    const data = validation.data;
+
+    // Check unique code
+    const existing = await prisma.stockPool.findUnique({ where: { code: data.code } });
+    if (existing) {
+      return NextResponse.json(
+        { success: false, error: `'${data.code}' kodu zaten kullanımda` },
+        { status: 409 }
+      );
+    }
+
+    const pool = await prisma.stockPool.create({
+      data: {
+        name: data.name,
+        code: data.code,
+        poolType: data.poolType,
+        targetQuarter: data.targetQuarter,
+        productionStart: data.productionStart ? new Date(data.productionStart) : null,
+        targetShipDate: data.targetShipDate ? new Date(data.targetShipDate) : null,
+        totalTargetDesi: data.totalTargetDesi,
+        totalTargetUnits: data.totalTargetUnits,
+        notes: data.notes,
+      },
+    });
+
+    await logAction({
+      userId: user.id, userName: user.name, userEmail: user.email,
+      action: 'CREATE_REQUEST', entityType: 'StockPool', entityId: pool.id,
+      description: `Sezon havuzu oluşturuldu: ${pool.name}`,
+      metadata: { code: pool.code, poolType: pool.poolType },
+    });
+
+    return NextResponse.json({ success: true, data: pool }, { status: 201 });
+  } catch (error) {
+    return errorResponse(error, 'Sezon havuzu oluşturulamadı');
   }
-
-  const data = validation.data;
-
-  // Check unique code
-  const existing = await prisma.stockPool.findUnique({ where: { code: data.code } });
-  if (existing) {
-    return NextResponse.json(
-      { success: false, error: `'${data.code}' kodu zaten kullanımda` },
-      { status: 409 }
-    );
-  }
-
-  const pool = await prisma.stockPool.create({
-    data: {
-      name: data.name,
-      code: data.code,
-      poolType: data.poolType,
-      targetQuarter: data.targetQuarter,
-      productionStart: data.productionStart ? new Date(data.productionStart) : null,
-      targetShipDate: data.targetShipDate ? new Date(data.targetShipDate) : null,
-      totalTargetDesi: data.totalTargetDesi,
-      totalTargetUnits: data.totalTargetUnits,
-      notes: data.notes,
-    },
-  });
-
-  await logAction({
-    userId: user.id, userName: user.name, userEmail: user.email,
-    action: 'CREATE_REQUEST', entityType: 'StockPool', entityId: pool.id,
-    description: `Sezon havuzu oluşturuldu: ${pool.name}`,
-    metadata: { code: pool.code, poolType: pool.poolType },
-  });
-
-  return NextResponse.json({ success: true, data: pool }, { status: 201 });
 }
 
 export async function GET(request: NextRequest) {
-  const authResult = await requireRole(request, ['admin', 'editor', 'viewer']);
-  if (authResult instanceof NextResponse) return authResult;
+  try {
+    const authResult = await requireRole(request, ['admin', 'editor', 'viewer']);
+    if (authResult instanceof NextResponse) return authResult;
 
-  const { searchParams } = new URL(request.url);
-  const status = searchParams.get('status');
-  const poolType = searchParams.get('poolType');
+    const { searchParams } = new URL(request.url);
+    const status = searchParams.get('status');
+    const poolType = searchParams.get('poolType');
 
-  const pools = await prisma.stockPool.findMany({
+    const pools = await prisma.stockPool.findMany({
     where: {
       ...(status ? { status: status as 'ACTIVE' | 'RELEASING' | 'COMPLETED' | 'CANCELLED' } : {}),
       ...(poolType ? { poolType: poolType as 'SEASONAL' | 'ROUTINE' } : {}),
@@ -123,5 +129,8 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  return NextResponse.json({ success: true, data: poolsWithStats });
+    return NextResponse.json({ success: true, data: poolsWithStats });
+  } catch (error) {
+    return errorResponse(error, 'Sezon havuzları yüklenemedi');
+  }
 }

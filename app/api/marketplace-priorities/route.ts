@@ -1,14 +1,15 @@
 /**
  * Marketplace Priority API
- * GET: Get priorities for a month
- * POST: Set/update priorities for a month (batch)
+ * GET: Get priorities for a month (admin only)
+ * POST: Set/update priorities for a month (admin only, triggers waterfall)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db/prisma';
-import { requireRole } from '@/lib/auth/verify';
-import { waterfallComplete } from '@/lib/waterfallComplete';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { prisma } from '@/lib/db/prisma';
+import { waterfallComplete } from '@/lib/waterfallComplete';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
 const SetPrioritiesSchema = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/),
@@ -18,10 +19,7 @@ const SetPrioritiesSchema = z.object({
   })).min(1),
 });
 
-export async function GET(request: NextRequest) {
-  const authResult = await requireRole(request, ['admin']);
-  if (authResult instanceof NextResponse) return authResult;
-
+export const GET = withRoute({ rateLimit: 'read', roles: ['admin'] }, async ({ request }) => {
   const month = new URL(request.url).searchParams.get('month');
   if (!month) {
     return NextResponse.json({ success: false, error: 'month parametresi gerekli' }, { status: 400 });
@@ -33,13 +31,10 @@ export async function GET(request: NextRequest) {
     orderBy: { priority: 'asc' },
   });
 
-  return NextResponse.json({ success: true, data: priorities });
-}
+  return successResponse(priorities);
+});
 
-export async function POST(request: NextRequest) {
-  const authResult = await requireRole(request, ['admin']);
-  if (authResult instanceof NextResponse) return authResult;
-
+export const POST = withRoute({ rateLimit: 'write', roles: ['admin'] }, async ({ request }) => {
   const body = await request.json();
   const validation = SetPrioritiesSchema.safeParse(body);
   if (!validation.success) {
@@ -74,8 +69,5 @@ export async function POST(request: NextRequest) {
     waterfallChanged += await waterfallComplete(iwasku, month);
   }
 
-  return NextResponse.json({
-    success: true,
-    data: { month, count: priorities.length, waterfallChanged },
-  });
-}
+  return successResponse({ month, count: priorities.length, waterfallChanged });
+});

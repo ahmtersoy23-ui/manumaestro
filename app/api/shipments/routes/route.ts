@@ -1,13 +1,14 @@
 /**
  * Shipping Routes API (Settings)
- * GET: List all routes
- * POST: Create/update route
+ * GET: List all routes (admin only)
+ * POST: Create/update route (admin only)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db/prisma';
-import { requireRole } from '@/lib/auth/verify';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { prisma } from '@/lib/db/prisma';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
 const RouteSchema = z.object({
   marketplaceId: z.string().uuid(),
@@ -17,22 +18,15 @@ const RouteSchema = z.object({
   notes: z.string().optional(),
 });
 
-export async function GET(request: NextRequest) {
-  const authResult = await requireRole(request, ['admin']);
-  if (authResult instanceof NextResponse) return authResult;
-
+export const GET = withRoute({ rateLimit: 'read', roles: ['admin'] }, async () => {
   const routes = await prisma.shippingRoute.findMany({
     include: { marketplace: { select: { id: true, name: true, code: true, region: true } } },
     orderBy: { destinationTab: 'asc' },
   });
+  return successResponse(routes);
+});
 
-  return NextResponse.json({ success: true, data: routes });
-}
-
-export async function POST(request: NextRequest) {
-  const authResult = await requireRole(request, ['admin']);
-  if (authResult instanceof NextResponse) return authResult;
-
+export const POST = withRoute({ rateLimit: 'write', roles: ['admin'] }, async ({ request }) => {
   const body = await request.json();
   const validation = RouteSchema.safeParse(body);
   if (!validation.success) {
@@ -55,5 +49,5 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ success: true, data: route });
-}
+  return successResponse(route);
+});

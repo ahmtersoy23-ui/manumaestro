@@ -10,12 +10,14 @@ import { prisma, queryProductDb } from '@/lib/db/prisma';
 import { requireShipmentView, requireShipmentAction } from '@/lib/auth/requireShipmentRole';
 import { getShipmentRole, canDoAction, ShipmentAction } from '@/lib/auth/shipmentPermission';
 import { logAction } from '@/lib/auditLog';
+import { errorResponse } from '@/lib/api/response';
 import { z } from 'zod';
 
 type Params = { params: Promise<{ id: string }> };
 
 // --- GET: Detail ---
 export async function GET(request: NextRequest, { params }: Params) {
+  try {
   const authResult = await requireShipmentView(request);
   if (authResult instanceof NextResponse) return authResult;
 
@@ -127,6 +129,9 @@ export async function GET(request: NextRequest, { params }: Params) {
     data: { ...shipment, items: enrichedItems },
     permissions,
   });
+  } catch (error) {
+    return errorResponse(error, 'Sevkiyat yüklenemedi');
+  }
 }
 
 // --- PATCH: Update status/dates ---
@@ -139,6 +144,7 @@ const UpdateShipmentSchema = z.object({
 });
 
 export async function PATCH(request: NextRequest, { params }: Params) {
+  try {
   const { id } = await params;
   // Shipment'in destinasyonunu bul
   const shipmentForAuth = await prisma.shipment.findUnique({ where: { id }, select: { destinationTab: true } });
@@ -213,6 +219,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   });
 
   return NextResponse.json({ success: true, data: updated, arrival: arrivalSummary });
+  } catch (error) {
+    return errorResponse(error, 'Sevkiyat güncellenemedi');
+  }
 }
 
 // --- POST: Add items to shipment ---
@@ -227,6 +236,7 @@ const AddItemSchema = z.object({
 });
 
 export async function POST(request: NextRequest, { params }: Params) {
+  try {
   const { id } = await params;
   const shipment = await prisma.shipment.findUnique({ where: { id } });
   if (!shipment) {
@@ -282,4 +292,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   });
 
   return NextResponse.json({ success: true, data: { added: created.count } });
+  } catch (error) {
+    return errorResponse(error, 'Sevkiyata ürün eklenemedi');
+  }
 }
