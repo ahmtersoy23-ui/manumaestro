@@ -30,9 +30,13 @@ const nextConfig: NextConfig = {
           },
           {
             key: 'Content-Security-Policy',
+            // unsafe-eval sadece dev mode'da (Next/Turbopack HMR eval kullaniyor).
+            // Production'da kaldirildi — XSS yuzeyini azaltir.
+            // unsafe-inline Next.js production'da hala gerekli (RSC payload + style chunks);
+            // nonce-based CSP'ye geciste ayri ele alinacak.
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+              `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV !== 'production' ? " 'unsafe-eval'" : ''}`,
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob:",
               "media-src 'self' blob:", // kamera barkod scan için (zxing)
