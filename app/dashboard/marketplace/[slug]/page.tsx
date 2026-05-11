@@ -7,11 +7,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ManualEntryForm } from '@/components/forms/ManualEntryForm';
-import { ExcelUpload } from '@/components/forms/ExcelUpload';
 import { RequestsTable, RequestSummary } from '@/components/tables/RequestsTable';
+
+// xlsx (~400KB) sadece Excel sekmesine girildiğinde yüklensin
+const ExcelUpload = dynamic(
+  () => import('@/components/forms/ExcelUpload').then((m) => ({ default: m.ExcelUpload })),
+  { ssr: false, loading: () => <div className="p-8 text-center text-gray-500">Yükleniyor…</div> },
+);
 import { Download, Upload, PlusCircle, Clock, Archive, ArrowLeft, Package, Check, AlertCircle, ChevronDown } from 'lucide-react';
 import { parseMonthValue, getActiveMonths } from '@/lib/monthUtils';
 import { createLogger } from '@/lib/logger';

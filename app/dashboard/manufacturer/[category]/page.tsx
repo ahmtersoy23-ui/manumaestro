@@ -8,11 +8,17 @@
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { ArrowLeft, Package, Save, Calendar, Store, Download, ChevronLeft, ChevronRight, Search, Printer, Loader2 } from 'lucide-react';
 import { formatMonthValue, parseMonthValue } from '@/lib/monthUtils';
 import { createLogger } from '@/lib/logger';
 import { ProductMarketplaceModal } from '@/components/modals/ProductMarketplaceModal';
-import { LabelPrintModal } from '@/components/labels/LabelPrintModal';
+
+// qrcode (~80KB) sadece etiket modalı açıldığında yüklensin
+const LabelPrintModal = dynamic(
+  () => import('@/components/labels/LabelPrintModal').then((m) => ({ default: m.LabelPrintModal })),
+  { ssr: false },
+);
 
 const logger = createLogger('ManufacturerCategoryPage');
 

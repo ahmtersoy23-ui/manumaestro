@@ -13,6 +13,16 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Sentry verify endpoint — DSN/instrumentation çalışıyor mu test için, auth gerektirmez
+  if (request.nextUrl.pathname === '/api/sentry-verify') {
+    return NextResponse.next();
+  }
+
+  // Sentry tunnel route — client'tan gelen Sentry envelope'ları proxy eder
+  if (request.nextUrl.pathname.startsWith('/monitoring')) {
+    return NextResponse.next();
+  }
+
   logger.debug('Request:', request.nextUrl.pathname);
 
   // Apply rate limiting based on endpoint

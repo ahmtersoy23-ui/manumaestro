@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   /* config options here */
@@ -60,4 +61,17 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Sentry — DSN ve org/project env'leri eksikse withSentryConfig hata vermez; yalnızca
+// source-map upload + tunnel route'u skip eder. Bu yüzden DSN olmadığında build sorunsuz.
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: !process.env.CI,
+  tunnelRoute: '/monitoring',
+  sourcemaps: { disable: false, deleteSourcemapsAfterUpload: true },
+  webpack: {
+    treeshake: { removeDebugLogging: true },
+    reactComponentAnnotation: { enabled: false },
+  },
+});

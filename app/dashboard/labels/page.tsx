@@ -8,8 +8,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { Search, Printer, Loader2, Package, ChevronLeft, ChevronRight } from 'lucide-react';
-import { LabelPrintModal } from '@/components/labels/LabelPrintModal';
+
+// qrcode (~80KB) sadece etiket modalı açıldığında yüklensin
+const LabelPrintModal = dynamic(
+  () => import('@/components/labels/LabelPrintModal').then((m) => ({ default: m.LabelPrintModal })),
+  { ssr: false },
+);
 
 interface Product {
   iwasku: string;

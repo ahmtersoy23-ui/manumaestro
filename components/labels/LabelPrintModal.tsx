@@ -10,7 +10,6 @@
 
 import { useState } from 'react';
 import { X, Loader2, Printer } from 'lucide-react';
-import QRCode from 'qrcode';
 import { openProductLabelPopup } from '@/lib/labels/productLabel';
 
 interface LabelPrintModalProps {
@@ -70,6 +69,8 @@ export function LabelPrintModal({ iwasku, productName, width, length, height, we
         throw new Error(json.error || 'Etiket uretilemedi');
       }
       const serials: string[] = json.data.serials;
+      // qrcode (~80KB) modalle birlikte route bundle'a girmesin — modal açıldığında lazy yükle
+      const QRCode = (await import('qrcode')).default;
       // Her seri için inline QR data URL üret — popup self-contained, CDN bağımlılığı yok
       const entries = await Promise.all(
         serials.map(async (fullBarcode) => ({

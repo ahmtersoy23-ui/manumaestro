@@ -31,7 +31,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
@@ -40,30 +39,10 @@ import {
   lockShelfStockById,
   assertNonNegative,
 } from '@/lib/wms/lockedStock';
-
-const PickSchema = z
-  .object({
-    source: z.enum(['STOCK', 'BOX']),
-    shelfId: z.string().trim().optional(),
-    shelfStockId: z.string().trim().optional(),
-    shelfBoxId: z.string().trim().optional(),
-    qty: z.number().int().positive().max(100000),
-  })
-  .refine(
-    (p) =>
-      (p.source === 'STOCK' && !!p.shelfStockId && !!p.shelfId) ||
-      (p.source === 'BOX' && !!p.shelfBoxId),
-    { message: 'STOCK için shelfStockId+shelfId, BOX için shelfBoxId zorunlu' }
-  );
-
-const AllocationSchema = z.object({
-  itemId: z.string().trim().min(1),
-  picks: z.array(PickSchema).min(1).max(20),
-});
-
-const ShipAllocateSchema = z.object({
-  allocations: z.array(AllocationSchema).min(1).max(50),
-});
+import {
+  ShipAllocateSchema,
+  validateAllocationsCoverage,
+} from '@/lib/wms/shipAllocateSchemas';
 
 export async function POST(
   request: NextRequest,
@@ -107,25 +86,9 @@ export async function POST(
 
       const itemMap = new Map(order.items.map((i) => [i.id, i]));
 
-      // 1) Her allocation için item geçerli mi + sum(qty) == item.quantity
-      for (const a of allocations) {
-        const item = itemMap.get(a.itemId);
-        if (!item) throw new Error(`Sipariş kalemi bulunamadı: ${a.itemId}`);
-        const sum = a.picks.reduce((s, p) => s + p.qty, 0);
-        if (sum !== item.quantity) {
-          throw new Error(
-            `${item.iwasku}: ${item.quantity} adet bekleniyor, ${sum} adet seçilmiş`
-          );
-        }
-      }
-
-      // Her sipariş kaleminin allocation'ı verilmeli
-      const allocatedItemIds = new Set(allocations.map((a) => a.itemId));
-      for (const item of order.items) {
-        if (!allocatedItemIds.has(item.id)) {
-          throw new Error(`${item.iwasku}: raf seçimi eksik`);
-        }
-      }
+      // 1) Allocation kapsam + miktar doğrulaması (pure helper, tests'de cover ediliyor)
+      const coverageErr = validateAllocationsCoverage(allocations, order.items);
+      if (coverageErr) throw new Error(coverageErr);
 
       const refType = 'OUTBOUND_ORDER';
 
