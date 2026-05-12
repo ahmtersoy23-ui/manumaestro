@@ -140,7 +140,9 @@ export default function WarehouseStockPage() {
         const res = await fetch(`/api/products/search?q=${encodeURIComponent(addQuery)}`);
         const data = await res.json();
         if (data.success) setAddResults(data.data);
-      } catch { /* ignore */ }
+      } catch (err) {
+        logger.error('product search failed', err);
+      }
     }, 300);
     return () => clearTimeout(timer);
   }, [addQuery]);

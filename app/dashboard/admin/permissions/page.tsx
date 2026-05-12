@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Shield, ChevronDown, AlertTriangle, CheckSquare, Square, RefreshCw, Ship, Plus, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
+import { notify } from '@/lib/ui/notify';
 
 const logger = createLogger('AdminPermissionsPage');
 
@@ -897,7 +898,10 @@ function ShipmentPermissionsSection({ availableUsers }: { availableUsers: { id: 
       const res = await fetch('/api/admin/shipment-permissions');
       const data = await res.json();
       if (data.success) setPerms(data.data);
-    } catch { /* */ } finally { setLoading(false); }
+    } catch (err) {
+      logger.error('fetchPerms failed', err);
+      notify.error('İzinler yüklenemedi');
+    } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { fetchPerms(); }, [fetchPerms]);

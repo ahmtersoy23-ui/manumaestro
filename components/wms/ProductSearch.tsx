@@ -113,7 +113,7 @@ export function ProductSearch({
           if (cancelled) return;
           if (d.success) setHits(d.data || []);
         })
-        .catch(() => {})
+        .catch(err => logger.error('product search failed', err))
         .finally(() => {
           if (!cancelled) setLoading(false);
         });

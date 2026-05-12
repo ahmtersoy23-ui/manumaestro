@@ -9,6 +9,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { notify } from '@/lib/ui/notify';
+import { createLogger } from '@/lib/logger';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { ExitItemsModal } from '@/components/shipments/ExitItemsModal';
 import { SPExportModal } from '@/components/shipments/SPExportModal';
@@ -43,6 +44,7 @@ const methodIcons: Record<string, typeof Anchor> = { sea: Anchor, road: TruckIco
 const methodLabels: Record<string, string> = { sea: 'Deniz', road: 'Karayolu', air: 'Hava' };
 const BOX_ENTRY_METHODS = new Set(['sea']);
 const loadXLSX = () => import('xlsx');
+const logger = createLogger('ShipmentDetailPage');
 
 
 export default function ShipmentDetailPage() {
@@ -122,7 +124,10 @@ export default function ShipmentDetailPage() {
       const res = await fetch(`/api/shipments/${id}`);
       const data = await res.json();
       if (data.success) { setShipment(data.data); if (data.permissions) setPerms(data.permissions); }
-    } catch { /* */ } finally { setLoading(false); }
+    } catch (err) {
+      logger.error('fetchShipment failed', err);
+      notify.error('Sevkiyat yüklenemedi');
+    } finally { setLoading(false); }
   }, [id]);
 
   const fetchBoxes = useCallback(async () => {
@@ -130,7 +135,10 @@ export default function ShipmentDetailPage() {
       const res = await fetch(`/api/shipments/${id}/boxes`);
       const data = await res.json();
       if (data.success) setBoxes(data.data);
-    } catch { /* */ }
+    } catch (err) {
+      logger.error('fetchBoxes failed', err);
+      notify.error('Koli listesi yüklenemedi');
+    }
   }, [id]);
 
   useEffect(() => { fetchShipment(); fetchBoxes(); }, [fetchShipment, fetchBoxes]);
@@ -139,7 +147,7 @@ export default function ShipmentDetailPage() {
   useEffect(() => {
     fetch('/api/marketplaces').then(r => r.json()).then(data => {
       if (data.success) setAllMarketplaces(data.data);
-    }).catch(() => {});
+    }).catch(err => logger.error('marketplaces fetch failed', err));
   }, []);
 
   // Marketplace code → name mapping (koliler tablosu icin) — hook, early return'den once olmali
@@ -307,7 +315,11 @@ export default function ShipmentDetailPage() {
       const res = await fetch(`/api/shipments/${id}/items/${itemId}`, { method: 'PATCH' });
       const data = await res.json();
       if (data.success) setShipment(prev => prev ? { ...prev, items: prev.items.map(i => i.id === itemId ? { ...i, packed: data.data.packed } : i) } : prev);
-    } catch { /* */ } finally { setTogglingId(null); }
+      else notify.error(data.error || 'Hazırla işlemi başarısız');
+    } catch (err) {
+      logger.error('togglePacked failed', err);
+      notify.error('Hazırla işlemi başarısız');
+    } finally { setTogglingId(null); }
   };
 
   const handleToggleSelect = (itemId: string) => {
@@ -528,8 +540,11 @@ export default function ShipmentDetailPage() {
       if (data.success) {
         setBoxes(prev => prev.map(b => ids.includes(b.id) ? { ...b, destination } : b));
         setSelectedBoxIds(new Set());
-      }
-    } catch { /* */ } finally { setSettingDest(false); }
+      } else notify.error(data.error || 'Hedef ayarlanamadı');
+    } catch (err) {
+      logger.error('setDestination failed', err);
+      notify.error('Hedef ayarlanamadı');
+    } finally { setSettingDest(false); }
   };
 
   const handleBulkFbaSubmit = async (dest: 'FBA' | 'DEPO' | 'SHOWROOM') => {
@@ -546,8 +561,11 @@ export default function ShipmentDetailPage() {
         setBulkFbaResult(data.data);
         await fetchBoxes();
         if (data.data.updated > 0) setBulkFbaText('');
-      }
-    } catch { /* */ } finally { setSettingDest(false); }
+      } else notify.error(data.error || 'Toplu işaretleme başarısız');
+    } catch (err) {
+      logger.error('bulkFbaSubmit failed', err);
+      notify.error('Toplu işaretleme başarısız');
+    } finally { setSettingDest(false); }
   };
 
   const handleToggleBoxSelect = (boxId: string) => {
@@ -792,7 +810,8 @@ export default function ShipmentDetailPage() {
     }
 
     doc.save(`${box.boxNumber}.pdf`);
-    // DB'de labelPrinted işaretle
+    // DB'de labelPrinted işaretle (PDF zaten yazıldı, bu başarısız olsa da
+    // kullanıcı için kritik değil — sadece log)
     try {
       await fetch(`/api/shipments/${id}/boxes`, {
         method: 'PUT',
@@ -800,7 +819,9 @@ export default function ShipmentDetailPage() {
         body: JSON.stringify({ boxId: box.id, labelPrinted: true }),
       });
       fetchBoxes();
-    } catch { /* */ }
+    } catch (err) {
+      logger.error('labelPrinted update failed (PDF zaten basıldı)', err);
+    }
   };
 
   const handleFnskuSaved = (itemId: string, fnsku: string) => {
@@ -939,8 +960,13 @@ export default function ShipmentDetailPage() {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
       });
-      if ((await res.json()).success) fetchBoxes();
-    } catch { /* */ }
+      const data = await res.json();
+      if (data.success) fetchBoxes();
+      else notify.error(data.error || 'Ölçü kopyalanamadı');
+    } catch (err) {
+      logger.error('copyDimensions failed', err);
+      notify.error('Ölçü kopyalanamadı');
+    }
   };
 
   const handleSPCopy = async (type: 'fba' | 'depo') => {

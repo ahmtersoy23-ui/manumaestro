@@ -115,7 +115,7 @@ export default function MonthDetailPage() {
   const toggleSection = (key: string) => {
     setOpenSections(prev => {
       const next = { ...prev, [key]: !prev[key] };
-      try { localStorage.setItem('mm-sections', JSON.stringify(next)); } catch { /* */ }
+      try { localStorage.setItem('mm-sections', JSON.stringify(next)); } catch { /* localStorage quota/disabled — UI state korunur, persist edilemez */ }
       return next;
     });
   };

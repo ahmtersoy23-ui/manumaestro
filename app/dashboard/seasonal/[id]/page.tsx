@@ -8,6 +8,9 @@
 
 import { useState, useEffect, useCallback, Fragment } from 'react';
 import { notify } from '@/lib/ui/notify';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('SeasonalPoolPage');
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -150,7 +153,7 @@ export default function PoolDetailPage() {
         const list = (d.data as Marketplace[]).filter(m => m.code !== 'SEZON');
         setMarketplaces(list);
       })
-      .catch(() => {});
+      .catch(err => logger.error('marketplaces fetch failed', err));
   }, []);
 
   const fetchPool = useCallback(async () => {
@@ -1581,7 +1584,10 @@ function MonthlyProductionTab({ poolId, statUnit }: { poolId: string; statUnit: 
     fetch(`/api/stock-pools/${poolId}/monthly-production`)
       .then(res => res.json())
       .then(res => { if (res.success) setData(res.data); })
-      .catch(() => {})
+      .catch(err => {
+        logger.error('monthly-production fetch failed', err);
+        notify.error('Aylık üretim verisi yüklenemedi');
+      })
       .finally(() => setLoading(false));
   }, [poolId]);
 
