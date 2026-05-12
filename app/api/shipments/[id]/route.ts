@@ -5,23 +5,21 @@
  * POST: Add items to shipment / Dispatch (send)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma, queryProductDb } from '@/lib/db/prisma';
 import { requireShipmentView, requireShipmentAction } from '@/lib/auth/requireShipmentRole';
 import { getShipmentRole, canDoAction, ShipmentAction } from '@/lib/auth/shipmentPermission';
 import { logAction } from '@/lib/auditLog';
-import { errorResponse } from '@/lib/api/response';
-import { z } from 'zod';
-
-type Params = { params: Promise<{ id: string }> };
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
 // --- GET: Detail ---
-export async function GET(request: NextRequest, { params }: Params) {
-  try {
+export const GET = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'read', fallbackMessage: 'Sevkiyat yüklenemedi' }, async ({ request, params }) => {
   const authResult = await requireShipmentView(request);
   if (authResult instanceof NextResponse) return authResult;
 
-  const { id } = await params;
+  const { id } = params;
 
   const shipment = await prisma.shipment.findUnique({
     where: { id },
@@ -124,15 +122,8 @@ export async function GET(request: NextRequest, { params }: Params) {
   const actions: ShipmentAction[] = ['view', 'createShipment', 'routeItems', 'deleteItems', 'setDestination', 'manageBoxes', 'packItems', 'sendItems', 'unsendItems', 'closeShipment'];
   const permissions = Object.fromEntries(actions.map(a => [a, canDoAction(userRole, a)]));
 
-  return NextResponse.json({
-    success: true,
-    data: { ...shipment, items: enrichedItems },
-    permissions,
-  });
-  } catch (error) {
-    return errorResponse(error, 'Sevkiyat yüklenemedi');
-  }
-}
+  return successResponse({ ...shipment, items: enrichedItems }, { permissions });
+});
 
 // --- PATCH: Update status/dates ---
 const UpdateShipmentSchema = z.object({
@@ -143,9 +134,8 @@ const UpdateShipmentSchema = z.object({
   notes: z.string().max(1000).optional(),
 });
 
-export async function PATCH(request: NextRequest, { params }: Params) {
-  try {
-  const { id } = await params;
+export const PATCH = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'write', fallbackMessage: 'Sevkiyat güncellenemedi' }, async ({ request, params }) => {
+  const { id } = params;
   // Shipment'in destinasyonunu bul
   const shipmentForAuth = await prisma.shipment.findUnique({ where: { id }, select: { destinationTab: true } });
   if (!shipmentForAuth) return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadi' }, { status: 404 });
@@ -218,11 +208,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     metadata: arrivalSummary ? { arrival: arrivalSummary } : undefined,
   });
 
-  return NextResponse.json({ success: true, data: updated, arrival: arrivalSummary });
-  } catch (error) {
-    return errorResponse(error, 'Sevkiyat güncellenemedi');
-  }
-}
+  return successResponse(updated, { arrival: arrivalSummary });
+});
 
 // --- POST: Add items to shipment ---
 const AddItemSchema = z.object({
@@ -235,9 +222,8 @@ const AddItemSchema = z.object({
   })).min(1).max(500),
 });
 
-export async function POST(request: NextRequest, { params }: Params) {
-  try {
-  const { id } = await params;
+export const POST = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'write', fallbackMessage: 'Sevkiyata ürün eklenemedi' }, async ({ request, params }) => {
+  const { id } = params;
   const shipment = await prisma.shipment.findUnique({ where: { id } });
   if (!shipment) {
     return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadi' }, { status: 404 });
@@ -291,8 +277,5 @@ export async function POST(request: NextRequest, { params }: Params) {
     description: `Sevkiyata ${created.count} ürün eklendi: ${shipment.name}`,
   });
 
-  return NextResponse.json({ success: true, data: { added: created.count } });
-  } catch (error) {
-    return errorResponse(error, 'Sevkiyata ürün eklenemedi');
-  }
-}
+  return successResponse({ added: created.count });
+});

@@ -4,11 +4,14 @@
  * POST: Create new shipment (gemi/TIR)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { requireShipmentView, requireShipmentAction } from '@/lib/auth/requireShipmentRole';
+import { getShipmentRole, canDoAction } from '@/lib/auth/shipmentPermission';
 import { logAction } from '@/lib/auditLog';
-import { z } from 'zod';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse, createdResponse } from '@/lib/api/response';
 
 const CreateShipmentSchema = z.object({
   name: z.string().min(1).max(100),
@@ -19,7 +22,11 @@ const CreateShipmentSchema = z.object({
   notes: z.string().max(1000).optional(),
 });
 
-export async function GET(request: NextRequest) {
+// Shipment route'ları destinasyon-bazlı özel yetki sistemi kullanıyor
+// (requireShipmentView/Action). withRoute'un generic auth'u skip ediliyor,
+// sadece rate-limit + try/catch + errorResponse standartlaşması için.
+
+export const GET = withRoute({ skipAuth: true, rateLimit: 'read' }, async ({ request }) => {
   const authResult = await requireShipmentView(request);
   if (authResult instanceof NextResponse) return authResult;
 
@@ -33,9 +40,7 @@ export async function GET(request: NextRequest) {
       ...(status ? { status: status as 'PLANNING' | 'LOADING' | 'IN_TRANSIT' | 'DELIVERED' } : {}),
     },
     include: {
-      items: {
-        select: { iwasku: true, quantity: true, desi: true, marketplaceId: true },
-      },
+      items: { select: { iwasku: true, quantity: true, desi: true, marketplaceId: true } },
       _count: { select: { items: true } },
     },
     orderBy: { createdAt: 'desc' },
@@ -48,38 +53,31 @@ export async function GET(request: NextRequest) {
     const { items: _items, ...shipmentData } = s;
     return {
       ...shipmentData,
-      stats: {
-        itemCount: s._count.items,
-        totalQty,
-        totalDesi: Math.round(totalDesi),
-      },
+      stats: { itemCount: s._count.items, totalQty, totalDesi: Math.round(totalDesi) },
     };
   });
 
-  // Kullanicinin bu destinasyon icin createShipment izni var mi
-  const { getShipmentRole, canDoAction } = await import('@/lib/auth/shipmentPermission');
   const destTab = destinationTab ?? 'US';
   const userShipRole = await getShipmentRole(authResult.user.id, authResult.user.role, destTab);
   const canCreate = canDoAction(userShipRole, 'createShipment');
 
-  return NextResponse.json({ success: true, data: shipmentsWithStats, permissions: { canCreate } });
-}
+  return successResponse(shipmentsWithStats, { permissions: { canCreate } });
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withRoute({ skipAuth: true, rateLimit: 'write' }, async ({ request }) => {
   const body = await request.json();
   const validation = CreateShipmentSchema.safeParse(body);
   if (!validation.success) {
     return NextResponse.json(
       { success: false, error: 'Doğrulama hatası', details: validation.error.flatten().fieldErrors },
-      { status: 400 }
+      { status: 400 },
     );
   }
-
   const data = validation.data;
 
-  const authResult2 = await requireShipmentAction(request, data.destinationTab, 'createShipment');
-  if (authResult2 instanceof NextResponse) return authResult2;
-  const { user } = authResult2;
+  const authResult = await requireShipmentAction(request, data.destinationTab, 'createShipment');
+  if (authResult instanceof NextResponse) return authResult;
+  const { user } = authResult;
 
   const shipment = await prisma.shipment.create({
     data: {
@@ -99,5 +97,5 @@ export async function POST(request: NextRequest) {
     description: `Sevkiyat oluşturuldu: ${shipment.name} (${shipment.destinationTab})`,
   });
 
-  return NextResponse.json({ success: true, data: shipment }, { status: 201 });
-}
+  return createdResponse(shipment);
+});

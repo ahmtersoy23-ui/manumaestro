@@ -5,10 +5,12 @@
  * DELETE: Remove a box (via ?boxId=xxx)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma, queryProductDb } from '@/lib/db/prisma';
 import { requireShipmentView, requireShipmentAction } from '@/lib/auth/requireShipmentRole';
-import { z } from 'zod';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse, createdResponse } from '@/lib/api/response';
 
 /** Marketplace code → sku_master country_code */
 function marketplaceToCountry(code: string | null | undefined): string | null {
@@ -19,8 +21,6 @@ function marketplaceToCountry(code: string | null | undefined): string | null {
   };
   return map[code] ?? null;
 }
-
-type Params = { params: Promise<{ id: string }> };
 
 /**
  * Kategori → koli numarası digit mapping
@@ -54,19 +54,17 @@ function getShipmentPrefix(name: string): string {
 }
 
 // --- GET: List boxes ---
-export async function GET(request: NextRequest, { params }: Params) {
+export const GET = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'read', fallbackMessage: 'Koliler yüklenemedi' }, async ({ request, params }) => {
   const authResult = await requireShipmentView(request);
   if (authResult instanceof NextResponse) return authResult;
 
-  const { id } = await params;
-
   const boxes = await prisma.shipmentBox.findMany({
-    where: { shipmentId: id },
+    where: { shipmentId: params.id },
     orderBy: { boxNumber: 'asc' },
   });
 
-  return NextResponse.json({ success: true, data: boxes });
-}
+  return successResponse(boxes);
+});
 
 // --- POST: Create box ---
 const CreateBoxSchema = z.object({
@@ -84,8 +82,8 @@ const CreateBoxSchema = z.object({
   weight: z.number().positive().optional().nullable(),
 });
 
-export async function POST(request: NextRequest, { params }: Params) {
-  const { id } = await params;
+export const POST = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'write', fallbackMessage: 'Koli oluşturulamadı' }, async ({ request, params }) => {
+  const { id } = params;
   const shipment = await prisma.shipment.findUnique({ where: { id } });
   if (!shipment) {
     return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadi' }, { status: 404 });
@@ -163,12 +161,12 @@ export async function POST(request: NextRequest, { params }: Params) {
     });
   }
 
-  return NextResponse.json({ success: true, data: box }, { status: 201 });
-}
+  return createdResponse(box);
+});
 
 // --- DELETE: Remove box ---
-export async function DELETE(request: NextRequest, { params }: Params) {
-  const { id } = await params;
+export const DELETE = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'write', fallbackMessage: 'Koli silinemedi' }, async ({ request, params }) => {
+  const { id } = params;
   const shipmentForAuth = await prisma.shipment.findUnique({ where: { id }, select: { destinationTab: true } });
   if (!shipmentForAuth) return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadi' }, { status: 404 });
   const authResult = await requireShipmentAction(request, shipmentForAuth.destinationTab, 'manageBoxes');
@@ -200,8 +198,8 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     }
   }
 
-  return NextResponse.json({ success: true });
-}
+  return successResponse(null);
+});
 
 // --- PATCH: Set destination by box IDs or box numbers ---
 const SetDestinationSchema = z.object({
@@ -210,8 +208,8 @@ const SetDestinationSchema = z.object({
   destination: z.enum(['FBA', 'DEPO', 'SHOWROOM']),
 });
 
-export async function PATCH(request: NextRequest, { params }: Params) {
-  const { id } = await params;
+export const PATCH = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'write', fallbackMessage: 'Hedef ayarlanamadı' }, async ({ request, params }) => {
+  const { id } = params;
   const shipmentForAuth = await prisma.shipment.findUnique({ where: { id }, select: { destinationTab: true } });
   if (!shipmentForAuth) return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadi' }, { status: 404 });
   const authResult = await requireShipmentAction(request, shipmentForAuth.destinationTab, 'setDestination');
@@ -247,11 +245,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     data: { destination },
   });
 
-  return NextResponse.json({
-    success: true,
-    data: { updated: result.count, destination, ...(notFound.length > 0 ? { notFound } : {}) },
-  });
-}
+  return successResponse({ updated: result.count, destination, ...(notFound.length > 0 ? { notFound } : {}) });
+});
 
 // --- PUT: Update box dimensions/weight/fnsku ---
 const UpdateBoxSchema = z.object({
@@ -264,8 +259,8 @@ const UpdateBoxSchema = z.object({
   syncFnsku: z.boolean().optional(), // sku_master'dan güncel fnsku çek
 });
 
-export async function PUT(request: NextRequest, { params }: Params) {
-  const { id } = await params;
+export const PUT = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'write', fallbackMessage: 'Koli güncellenemedi' }, async ({ request, params }) => {
+  const { id } = params;
   const shipmentForAuth = await prisma.shipment.findUnique({ where: { id }, select: { destinationTab: true } });
   if (!shipmentForAuth) return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadi' }, { status: 404 });
   const authResult = await requireShipmentAction(request, shipmentForAuth.destinationTab, 'manageBoxes');
@@ -301,5 +296,5 @@ export async function PUT(request: NextRequest, { params }: Params) {
     data,
   });
 
-  return NextResponse.json({ success: true, data: box });
-}
+  return successResponse(box);
+});

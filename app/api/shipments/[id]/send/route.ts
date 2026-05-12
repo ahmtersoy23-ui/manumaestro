@@ -5,13 +5,13 @@
  *   - Deniz: ?closeShipment=true ile tüm itemleri gönder + sevkiyatı kapat
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { requireShipmentAction } from '@/lib/auth/requireShipmentRole';
 import { logAction } from '@/lib/auditLog';
-import { z } from 'zod';
-
-type Params = { params: Promise<{ id: string }> };
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
 const SendItemsSchema = z.object({
   itemIds: z.array(z.string().uuid()).optional(),       // Eski format (tam miktar)
@@ -22,8 +22,8 @@ const SendItemsSchema = z.object({
   closeShipment: z.boolean().optional(),
 });
 
-export async function POST(request: NextRequest, { params }: Params) {
-  const { id } = await params;
+export const POST = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'write', fallbackMessage: 'Gönderim başarısız' }, async ({ request, params }) => {
+  const { id } = params;
 
   const body = await request.json();
   const validation = SendItemsSchema.safeParse(body);
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       description: `Sevkiyat kapatıldı: ${shipment.name} (${result.sent} yeni item gönderildi, ${result.archived} koli arşivlendi)`,
     });
 
-    return NextResponse.json({ success: true, data: { sent: result.sent, closed: true, archived: result.archived } });
+    return successResponse({ sent: result.sent, closed: true, archived: result.archived });
   }
 
   // Karayolu/hava — seçili itemleri gönder
@@ -182,5 +182,5 @@ export async function POST(request: NextRequest, { params }: Params) {
     description: `${itemsToSend.length} item gönderildi (${totalSent} adet): ${shipment.name}`,
   });
 
-  return NextResponse.json({ success: true, data: { sent: itemsToSend.length } });
-}
+  return successResponse({ sent: itemsToSend.length });
+});

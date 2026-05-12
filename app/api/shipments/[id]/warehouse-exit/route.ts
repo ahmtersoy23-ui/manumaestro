@@ -3,24 +3,24 @@
  * POST: Gönderim sonrası depo çıkışını WarehouseWeekly SHIPMENT entry'sine yazar
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { requireShipmentAction } from '@/lib/auth/requireShipmentRole';
 import { logAction } from '@/lib/auditLog';
-import { z } from 'zod';
-
-type Params = { params: Promise<{ id: string }> };
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
 const WarehouseExitSchema = z.object({
   items: z.array(z.object({
-    iwasku: z.string().min(1),
+    iwasku: z.string().min(1).max(50),
     quantity: z.number().int().positive(),
-  })).min(1),
+  })).min(1).max(1000),
   weekStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD (Pazartesi)
 });
 
-export async function POST(request: NextRequest, { params }: Params) {
-  const { id } = await params;
+export const POST = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'write', fallbackMessage: 'Depo çıkışı kaydedilemedi' }, async ({ request, params }) => {
+  const { id } = params;
 
   const shipment = await prisma.shipment.findUnique({
     where: { id },
@@ -88,8 +88,5 @@ export async function POST(request: NextRequest, { params }: Params) {
     description: `Depo çıkışı onaylandı: ${shipment.name} — ${items.length} urun, hafta ${weekStart}`,
   });
 
-  return NextResponse.json({
-    success: true,
-    data: { updated: totalUpdated, weekStart },
-  });
-}
+  return successResponse({ updated: totalUpdated, weekStart });
+});
