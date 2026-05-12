@@ -5,11 +5,102 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/db/prisma';
 import { enrichProductSize } from '@/lib/db/enrichProductSize';
 import { errorResponse } from '@/lib/api/response';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { verifyAuth } from '@/lib/auth/verify';
+
+/**
+ * Hesaplanmış stats'i 5dk cache'le. Tag: 'dashboard-stats'.
+ * ProductionRequest / MonthSnapshot mutate eden route'larda
+ * revalidateTag('dashboard-stats') ile invalid edilir.
+ *
+ * Months array'i input cache key'inin parçası — farklı ay seçimleri
+ * ayrı cache slot'larında.
+ */
+const computeStats = unstable_cache(
+  async (months: string[]) => {
+    const requests = await prisma.productionRequest.findMany({
+      where: { productionMonth: { in: months } },
+      select: {
+        iwasku: true,
+        productCategory: true,
+        productSize: true,
+        quantity: true,
+        producedQuantity: true,
+        productionMonth: true,
+      },
+    });
+
+    await enrichProductSize(requests);
+
+    const statsMap = new Map<string, {
+      totalRequests: number;
+      totalQuantity: number;
+      totalDesi: number;
+      itemsWithoutSize: number;
+      productMap: Map<string, { producedQty: number; productSize: number }>;
+    }>();
+
+    for (const month of months) {
+      statsMap.set(month, {
+        totalRequests: 0,
+        totalQuantity: 0,
+        totalDesi: 0,
+        itemsWithoutSize: 0,
+        productMap: new Map(),
+      });
+    }
+
+    const allSnapshots = await prisma.monthSnapshot.findMany({
+      where: { month: { in: months } },
+      select: { month: true, iwasku: true, produced: true },
+    });
+    const snapshotProducedMap = new Map<string, number>();
+    for (const s of allSnapshots) {
+      snapshotProducedMap.set(`${s.month}|${s.iwasku}`, s.produced);
+    }
+
+    for (const r of requests) {
+      const entry = statsMap.get(r.productionMonth)!;
+      entry.totalRequests += 1;
+      entry.totalQuantity += r.quantity;
+      entry.totalDesi += (r.productSize || 0) * r.quantity;
+      if (!r.productSize) entry.itemsWithoutSize += 1;
+
+      const existing = entry.productMap.get(r.iwasku);
+      if (!existing) {
+        entry.productMap.set(r.iwasku, {
+          producedQty: snapshotProducedMap.get(`${r.productionMonth}|${r.iwasku}`) ?? 0,
+          productSize: r.productSize || 0,
+        });
+      }
+    }
+
+    return months.map(month => {
+      const entry = statsMap.get(month)!;
+      let totalProduced = 0;
+      let totalProducedDesi = 0;
+      for (const product of entry.productMap.values()) {
+        totalProduced += product.producedQty;
+        totalProducedDesi += product.productSize * product.producedQty;
+      }
+      return {
+        month,
+        totalRequests: entry.totalRequests,
+        totalQuantity: entry.totalQuantity,
+        totalProduced,
+        totalDesi: entry.totalDesi,
+        totalProducedDesi,
+        itemsWithoutSize: entry.itemsWithoutSize,
+      };
+    });
+  },
+  ['dashboard-stats'],
+  { tags: ['dashboard-stats'], revalidate: 300 },
+);
 
 export async function GET(request: NextRequest) {
   try {
@@ -57,97 +148,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Single query: fetch all requests for all requested months at once
-    const requests = await prisma.productionRequest.findMany({
-      where: {
-        productionMonth: { in: months },
-      },
-      select: {
-        iwasku: true,
-        productCategory: true,
-        productSize: true,
-        quantity: true,
-        producedQuantity: true,
-        productionMonth: true,
-      },
-    });
-
-    // Pricelab.products'tan canli desi (cache bayatlamasin)
-    await enrichProductSize(requests);
-
-    // Build stats per month in memory (avoiding N separate DB round trips)
-    const statsMap = new Map<string, {
-      totalRequests: number;
-      totalQuantity: number;
-      totalDesi: number;
-      itemsWithoutSize: number;
-      // Track unique products per month for produced calculation
-      productMap: Map<string, { producedQty: number; productSize: number }>;
-    }>();
-
-    // Initialize all requested months (so months with 0 requests still appear)
-    for (const month of months) {
-      statsMap.set(month, {
-        totalRequests: 0,
-        totalQuantity: 0,
-        totalDesi: 0,
-        itemsWithoutSize: 0,
-        productMap: new Map(),
-      });
-    }
-
-    // Get MonthSnapshot.produced for all months (single source of truth)
-    const allSnapshots = await prisma.monthSnapshot.findMany({
-      where: { month: { in: months } },
-      select: { month: true, iwasku: true, produced: true },
-    });
-    const snapshotProducedMap = new Map<string, number>(); // "month|iwasku" → produced
-    for (const s of allSnapshots) {
-      snapshotProducedMap.set(`${s.month}|${s.iwasku}`, s.produced);
-    }
-
-    // Aggregate in a single pass over the result set
-    for (const r of requests) {
-      const entry = statsMap.get(r.productionMonth)!;
-      entry.totalRequests += 1;
-      entry.totalQuantity += r.quantity;
-      entry.totalDesi += (r.productSize || 0) * r.quantity;
-      if (!r.productSize) {
-        entry.itemsWithoutSize += 1;
-      }
-
-      // Track unique products — produced from MonthSnapshot
-      const existing = entry.productMap.get(r.iwasku);
-      if (!existing) {
-        entry.productMap.set(r.iwasku, {
-          producedQty: snapshotProducedMap.get(`${r.productionMonth}|${r.iwasku}`) ?? 0,
-          productSize: r.productSize || 0,
-        });
-      }
-    }
-
-    // Build the response
-    const result = months.map(month => {
-      const entry = statsMap.get(month)!;
-
-      // Sum produced from unique products only
-      let totalProduced = 0;
-      let totalProducedDesi = 0;
-      for (const product of entry.productMap.values()) {
-        totalProduced += product.producedQty;
-        totalProducedDesi += product.productSize * product.producedQty;
-      }
-
-      return {
-        month,
-        totalRequests: entry.totalRequests,
-        totalQuantity: entry.totalQuantity,
-        totalProduced,
-        totalDesi: entry.totalDesi,
-        totalProducedDesi,
-        itemsWithoutSize: entry.itemsWithoutSize,
-      };
-    });
+    // Sort months for cache key stability (aynı set farklı sıralarda
+    // gelmiş olsa da cache hit olsun)
+    const sortedMonths = [...months].sort();
+    const result = await computeStats(sortedMonths);
 
     return NextResponse.json({
       success: true,

@@ -12,6 +12,7 @@ import { verifyAuth } from '@/lib/auth/verify';
 import { isMonthLocked } from '@/lib/monthUtils';
 import { errorResponse } from '@/lib/api/response';
 import { createLogger } from '@/lib/logger';
+import { revalidateTag } from 'next/cache';
 import { getATPBulk } from '@/lib/db/atp';
 
 const logger = createLogger('MonthSnapshot');
@@ -155,6 +156,8 @@ export async function POST(request: NextRequest) {
     await generateSnapshot(month);
 
     const count = await prisma.monthSnapshot.count({ where: { month } });
+
+    revalidateTag('dashboard-stats', 'default');
 
     return NextResponse.json({
       success: true,

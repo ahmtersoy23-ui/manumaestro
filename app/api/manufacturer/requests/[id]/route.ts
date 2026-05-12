@@ -11,6 +11,7 @@ import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLi
 import { requireRole, checkCategoryPermission } from '@/lib/auth/verify';
 import { errorResponse } from '@/lib/api/response';
 import { logAction } from '@/lib/auditLog';
+import { revalidateTag } from 'next/cache';
 import { waterfallComplete } from '@/lib/waterfallComplete';
 
 export async function PATCH(
@@ -140,6 +141,8 @@ export async function PATCH(
       // kayıtlar varsa (warehouseStock veya totalRequested değişmiş olabilir) tutarlı hale getirir.
       await waterfallComplete(existingRequest.iwasku, existingRequest.productionMonth);
     }
+
+    revalidateTag('dashboard-stats', 'default');
 
     return NextResponse.json({ success: true });
   } catch (error) {

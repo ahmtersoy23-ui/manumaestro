@@ -13,6 +13,7 @@ import { verifyAuth, checkMarketplacePermission, isSuperAdmin } from '@/lib/auth
 import { ProductionRequestSchema, formatValidationError } from '@/lib/validation/schemas';
 import { errorResponse } from '@/lib/api/response';
 import { logAction } from '@/lib/auditLog';
+import { revalidateTag } from 'next/cache';
 import { isMonthLocked } from '@/lib/monthUtils';
 
 export async function POST(request: NextRequest) {
@@ -123,6 +124,8 @@ export async function POST(request: NextRequest) {
         : `Talep oluşturuldu: ${iwasku} — ${productName} (${quantity} adet, ${productionMonth})`,
       metadata: { iwasku, productName, productCategory, quantity, productionMonth, priority, marketplaceId, updated: wasUpdated },
     });
+
+    revalidateTag('dashboard-stats', 'default');
 
     return NextResponse.json({
       success: true,

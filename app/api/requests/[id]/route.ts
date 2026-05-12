@@ -8,6 +8,7 @@ import { prisma } from '@/lib/db/prisma';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { requireSuperAdmin } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
+import { revalidateTag } from 'next/cache';
 import { errorResponse } from '@/lib/api/response';
 
 export async function DELETE(
@@ -62,6 +63,8 @@ export async function DELETE(
         : `Talep silindi: ${id}`,
       metadata: existingRequest ? { ...existingRequest, id } : { id },
     });
+
+    revalidateTag('dashboard-stats', 'default');
 
     return NextResponse.json({
       success: true,

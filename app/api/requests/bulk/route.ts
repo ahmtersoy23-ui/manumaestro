@@ -10,6 +10,7 @@ import { BulkRequestSchema, formatValidationError } from '@/lib/validation/schem
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { verifyAuth, checkMarketplacePermission, isSuperAdmin } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
+import { revalidateTag } from 'next/cache';
 import { errorResponse } from '@/lib/api/response';
 import { isMonthLocked } from '@/lib/monthUtils';
 
@@ -169,6 +170,8 @@ export async function POST(request: NextRequest) {
       description: `Toplu yükleme: ${createdCount} yeni, ${updatedCount} güncellendi, ${errors.length} hata (${productionMonth}, pazaryeri: ${marketplaceId})`,
       metadata: { created: createdCount, updated: updatedCount, errors, warnings, marketplaceId, productionMonth },
     });
+
+    if (createdCount > 0 || updatedCount > 0) revalidateTag('dashboard-stats', 'default');
 
     return NextResponse.json({
       success: true,
