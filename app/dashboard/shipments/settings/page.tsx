@@ -1,60 +1,22 @@
 /**
- * Shipping Settings — Routing Table
- * Maps marketplaces to destination tabs + shipping method + lead time
- * Admin only
+ * Shipping Settings — Routing Table (Server Component).
+ *
+ * Marketplace → destination tab + shipping method + lead time eşleştirmesi.
+ * Admin only. Server'da header'dan role kontrolü + Prisma'dan routes &
+ * marketplaces. Tablo state + save action client component'te.
  */
 
-'use client';
-
-import { useState, useEffect } from 'react';
-import { notify } from '@/lib/ui/notify';
-import { useAuth } from '@/contexts/AuthContext';
-import { Settings, Save, AlertCircle, Loader2, ArrowLeft } from 'lucide-react';
+import { headers } from 'next/headers';
 import Link from 'next/link';
+import { Settings, AlertCircle, ArrowLeft } from 'lucide-react';
+import { prisma } from '@/lib/db/prisma';
+import { SettingsClient, type RouteDTO, type MarketplaceDTO } from './SettingsClient';
 
-interface Marketplace {
-  id: string;
-  name: string;
-  code: string;
-  region: string;
-}
+export default async function ShipmentSettingsPage() {
+  const h = await headers();
+  const userRole = h.get('x-user-role');
 
-interface Route {
-  id: string;
-  marketplaceId: string;
-  destinationTab: string;
-  shippingMethod: string;
-  leadTimeDays: number | null;
-  marketplace: Marketplace;
-}
-
-const TABS = ['US', 'UK', 'EU', 'NL', 'AU', 'ZA'];
-const METHODS = ['sea', 'road', 'air'];
-const methodLabels: Record<string, string> = { sea: '🚢 Deniz', road: '🚛 Karayolu', air: '✈️ Hava' };
-
-export default function ShipmentSettingsPage() {
-  const { role } = useAuth();
-  const [routes, setRoutes] = useState<Route[]>([]);
-  const [marketplaces, setMarketplaces] = useState<Marketplace[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function load() {
-      const [routesRes, mpRes] = await Promise.all([
-        fetch('/api/shipments/routes'),
-        fetch('/api/marketplaces'),
-      ]);
-      const routesData = await routesRes.json();
-      const mpData = await mpRes.json();
-      if (routesData.success) setRoutes(routesData.data);
-      if (mpData.success) setMarketplaces(mpData.data.filter((m: Marketplace & { isActive: boolean }) => m.isActive));
-      setLoading(false);
-    }
-    load();
-  }, []);
-
-  if (role !== 'admin') {
+  if (userRole !== 'admin') {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <AlertCircle className="w-12 h-12 text-red-400" />
@@ -62,31 +24,29 @@ export default function ShipmentSettingsPage() {
     );
   }
 
-  const routeMap = new Map(routes.map(r => [r.marketplaceId, r]));
+  const [routes, marketplaces] = await Promise.all([
+    prisma.shippingRoute.findMany({
+      include: { marketplace: { select: { id: true, name: true, code: true, region: true } } },
+      orderBy: { destinationTab: 'asc' },
+    }),
+    prisma.marketplace.findMany({
+      where: { isActive: true },
+      orderBy: { name: 'asc' },
+    }),
+  ]);
 
-  const handleSave = async (mp: Marketplace, destinationTab: string, shippingMethod: string, leadTimeDays: string) => {
-    setSaving(mp.id);
-    try {
-      await fetch('/api/shipments/routes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          marketplaceId: mp.id,
-          destinationTab,
-          shippingMethod,
-          leadTimeDays: leadTimeDays ? parseInt(leadTimeDays) : undefined,
-        }),
-      });
-      // Refresh
-      const res = await fetch('/api/shipments/routes');
-      const data = await res.json();
-      if (data.success) setRoutes(data.data);
-    } catch {
-      notify.error('Kayıt hatası');
-    } finally {
-      setSaving(null);
-    }
-  };
+  const initialRoutes: RouteDTO[] = routes.map(r => ({
+    id: r.id,
+    marketplaceId: r.marketplaceId,
+    destinationTab: r.destinationTab,
+    shippingMethod: r.shippingMethod,
+    leadTimeDays: r.leadTimeDays,
+    marketplace: r.marketplace,
+  }));
+
+  const initialMarketplaces: MarketplaceDTO[] = marketplaces.map(m => ({
+    id: m.id, name: m.name, code: m.code, region: m.region,
+  }));
 
   return (
     <div className="space-y-6">
@@ -103,84 +63,7 @@ export default function ShipmentSettingsPage() {
         </div>
       </div>
 
-      {loading ? (
-        <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-gray-400" /></div>
-      ) : (
-        <div className="bg-white border rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Pazaryeri</th>
-                <th className="text-left px-3 py-3 font-medium text-gray-500">Region</th>
-                <th className="text-center px-3 py-3 font-medium text-gray-500">Hat</th>
-                <th className="text-center px-3 py-3 font-medium text-gray-500">Yöntem</th>
-                <th className="text-center px-3 py-3 font-medium text-gray-500">Lead Time (gün)</th>
-                <th className="text-center px-3 py-3 font-medium text-gray-500"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {marketplaces.map(mp => {
-                const route = routeMap.get(mp.id);
-                return (
-                  <RouteRow
-                    key={mp.id}
-                    marketplace={mp}
-                    route={route}
-                    saving={saving === mp.id}
-                    onSave={handleSave}
-                  />
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <SettingsClient initialRoutes={initialRoutes} marketplaces={initialMarketplaces} />
     </div>
-  );
-}
-
-function RouteRow({
-  marketplace, route, saving, onSave,
-}: {
-  marketplace: Marketplace;
-  route: Route | undefined;
-  saving: boolean;
-  onSave: (mp: Marketplace, tab: string, method: string, lead: string) => void;
-}) {
-  const [tab, setTab] = useState(route?.destinationTab ?? '');
-  const [method, setMethod] = useState(route?.shippingMethod ?? 'sea');
-  const [lead, setLead] = useState(route?.leadTimeDays?.toString() ?? '');
-  const changed = tab !== (route?.destinationTab ?? '') || method !== (route?.shippingMethod ?? 'sea') || lead !== (route?.leadTimeDays?.toString() ?? '');
-
-  return (
-    <tr className="hover:bg-gray-50">
-      <td className="px-4 py-3 font-medium text-gray-900">{marketplace.name}</td>
-      <td className="px-3 py-3 text-gray-500 text-xs">{marketplace.region}</td>
-      <td className="px-3 py-3">
-        <select value={tab} onChange={e => setTab(e.target.value)}
-          className="w-full px-2 py-1 border rounded text-sm text-center">
-          <option value="">—</option>
-          {TABS.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
-      </td>
-      <td className="px-3 py-3">
-        <select value={method} onChange={e => setMethod(e.target.value)}
-          className="w-full px-2 py-1 border rounded text-sm text-center">
-          {METHODS.map(m => <option key={m} value={m}>{methodLabels[m]}</option>)}
-        </select>
-      </td>
-      <td className="px-3 py-3">
-        <input type="number" value={lead} onChange={e => setLead(e.target.value)}
-          className="w-20 px-2 py-1 border rounded text-sm text-center mx-auto block" placeholder="—" />
-      </td>
-      <td className="px-3 py-3 text-center">
-        {tab && changed && (
-          <button onClick={() => onSave(marketplace, tab, method, lead)} disabled={saving}
-            className="p-1.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 disabled:opacity-50">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          </button>
-        )}
-      </td>
-    </tr>
   );
 }
