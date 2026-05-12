@@ -18,6 +18,8 @@ import { MissingFnskuWarning } from '@/components/shipments/MissingFnskuWarning'
 import { PendingItemsTable } from '@/components/shipments/PendingItemsTable';
 import { SentItemsTab } from '@/components/shipments/SentItemsTab';
 import { BoxesTab } from '@/components/shipments/BoxesTab';
+import { useShipmentFilters } from '@/lib/shipments/useShipmentFilters';
+import { useModalToggles } from '@/lib/shipments/useModalToggles';
 import type { BoxFormData, ShipmentItem, ShipmentBox } from '@/lib/shipments/types';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -52,7 +54,6 @@ export default function ShipmentDetailPage() {
   const [boxes, setBoxes] = useState<ShipmentBox[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'pending' | 'sent' | 'boxes'>('pending');
-  const [showAddItem, setShowAddItem] = useState(false);
   const [addForm, setAddForm] = useState({ iwasku: '', quantity: '', marketplaceId: '' });
   const [allMarketplaces, setAllMarketplaces] = useState<{ id: string; name: string; code: string }[]>([]);
   const [adding, setAdding] = useState(false);
@@ -62,39 +63,48 @@ export default function ShipmentDetailPage() {
   const [selectedSentIds, setSelectedSentIds] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState(false);
   const [unsending, setUnsending] = useState(false);
-  const [showExtraBox, setShowExtraBox] = useState(false);
   const [selectedBoxIds, setSelectedBoxIds] = useState<Set<string>>(new Set());
   const [settingDest, setSettingDest] = useState(false);
-  const [showBulkFba, setShowBulkFba] = useState(false);
   const [bulkFbaText, setBulkFbaText] = useState('');
   const [bulkFbaResult, setBulkFbaResult] = useState<{ updated: number; notFound?: string[] } | null>(null);
 
-  // Search & filter states
-  const [itemSearch, setItemSearch] = useState('');
-  const [boxSearch, setBoxSearch] = useState('');
-  const [itemCategoryFilter, setItemCategoryFilter] = useState('');
-  const [itemMarketFilter, setItemMarketFilter] = useState('');
-  const [boxCategoryFilter, setBoxCategoryFilter] = useState('');
-  const [boxDestFilter, setBoxDestFilter] = useState('');
-  const [boxMarketFilter, setBoxMarketFilter] = useState('');
-  const [sentSearch, setSentSearch] = useState('');
-  const [sentCategoryFilter, setSentCategoryFilter] = useState('');
-  const [sentMarketFilter, setSentMarketFilter] = useState('');
+  // Search & filter states (custom hook — 10 state)
+  const {
+    itemSearch, setItemSearch,
+    itemCategoryFilter, setItemCategoryFilter,
+    itemMarketFilter, setItemMarketFilter,
+    boxSearch, setBoxSearch,
+    boxCategoryFilter, setBoxCategoryFilter,
+    boxDestFilter, setBoxDestFilter,
+    boxMarketFilter, setBoxMarketFilter,
+    sentSearch, setSentSearch,
+    sentCategoryFilter, setSentCategoryFilter,
+    sentMarketFilter, setSentMarketFilter,
+  } = useShipmentFilters();
+
+  // Modal/panel toggles (custom hook — 6 state)
+  const {
+    showAddItem, setShowAddItem,
+    showExtraBox, setShowExtraBox,
+    showBulkFba, setShowBulkFba,
+    showExitModal, setShowExitModal,
+    showSPExport, setShowSPExport,
+    editing, setEditing,
+  } = useModalToggles();
+
   // Track printed box IDs (DB'den başlat)
   const printedBoxIds = useMemo(() => new Set(boxes.filter(b => b.labelPrinted).map(b => b.id)), [boxes]);
   // Editable cell tab navigation
   const [editingCell, setEditingCell] = useState<{ boxId: string; field: 'width' | 'depth' | 'height' | 'weight' } | null>(null);
 
-  // Depo çıkış onay modalı
-  const [showExitModal, setShowExitModal] = useState(false);
+  // Depo çıkış onay modalı (showExitModal hook'tan geliyor)
   const [exitItems, setExitItems] = useState<{ iwasku: string; name: string; quantity: number }[]>([]);
   const [exitWeek, setExitWeek] = useState('');
   const [exitSaving, setExitSaving] = useState(false);
   const [exitPage, setExitPage] = useState(0);
   // Karayolu/hava: Bekleyen tabında gönderilecek miktar override
   const [sendQtyOverrides, setSendQtyOverrides] = useState<Record<string, number>>({});
-  // StockPulse export modalı
-  const [showSPExport, setShowSPExport] = useState(false);
+  // StockPulse export (showSPExport hook'tan geliyor)
   const [spCopied, setSpCopied] = useState<'fba' | 'depo' | null>(null);
 
   // Permissions from API
@@ -103,8 +113,7 @@ export default function ShipmentDetailPage() {
   // FNSKU sync state
   const [syncingFnskuBoxId, setSyncingFnskuBoxId] = useState<string | null>(null);
 
-  // Edit mode
-  const [editing, setEditing] = useState(false);
+  // Edit mode (editing hook'tan geliyor)
   const [editForm, setEditForm] = useState({ name: '', plannedDate: '', etaDate: '', notes: '' });
   const [saving, setSaving] = useState(false);
 
