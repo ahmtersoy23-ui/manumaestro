@@ -7,6 +7,10 @@ const nextConfig: NextConfig = {
   generateBuildId: async () => {
     return `build-${Date.now()}`;
   },
+  // Tree-shake lucide-react: 560+ icon'dan sadece import edilenler bundle'a girer.
+  experimental: {
+    optimizePackageImports: ['lucide-react'],
+  },
   async headers() {
     return [
       {
