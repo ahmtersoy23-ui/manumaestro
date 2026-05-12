@@ -55,38 +55,32 @@ export async function POST(request: NextRequest, { params }: Params) {
   const { items, weekStart } = validation.data;
   const weekDate = new Date(weekStart + 'T00:00:00.000Z');
 
-  // WarehouseWeekly SHIPMENT upsert — her iwasku için
-  let totalUpdated = 0;
-  for (const item of items) {
-    // Önce mevcut entry var mı kontrol et
-    const existing = await prisma.warehouseWeekly.findUnique({
-      where: { iwasku_weekStart_type: { iwasku: item.iwasku, weekStart: weekDate, type: 'SHIPMENT' } },
-    });
-
-    if (existing) {
-      await prisma.warehouseWeekly.update({
-        where: { id: existing.id },
-        data: { quantity: { increment: item.quantity } },
-      });
-    } else {
-      // WarehouseProduct yoksa oluştur (depoda stoklanmayan ürün olabilir)
-      await prisma.warehouseProduct.upsert({
+  // Tek transaction altında atomik upsert — iki paralel istek aynı
+  // (iwasku, weekStart, type) için duplicate yaratamaz. Mevcut entry'de
+  // enteredById korunur (sadece quantity increment), yeni entry'de user'a atanır.
+  const totalUpdated = await prisma.$transaction(async (tx) => {
+    let count = 0;
+    for (const item of items) {
+      await tx.warehouseProduct.upsert({
         where: { iwasku: item.iwasku },
         create: { iwasku: item.iwasku },
         update: {},
       });
-      await prisma.warehouseWeekly.create({
-        data: {
+      await tx.warehouseWeekly.upsert({
+        where: { iwasku_weekStart_type: { iwasku: item.iwasku, weekStart: weekDate, type: 'SHIPMENT' } },
+        create: {
           iwasku: item.iwasku,
           weekStart: weekDate,
           type: 'SHIPMENT',
           quantity: item.quantity,
           enteredById: user.id,
         },
+        update: { quantity: { increment: item.quantity } },
       });
+      count++;
     }
-    totalUpdated++;
-  }
+    return count;
+  });
 
   await logAction({
     userId: user.id, userName: user.name, userEmail: user.email,
