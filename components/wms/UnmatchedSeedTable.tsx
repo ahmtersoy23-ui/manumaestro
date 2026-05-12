@@ -8,6 +8,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { notify } from '@/lib/ui/notify';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { AlertCircle, Search, Check, SkipForward, ChevronRight, ChevronDown } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { ResolveUnmatchedDialog, type UnmatchedSource } from './ResolveUnmatchedDialog';
@@ -40,6 +41,7 @@ interface Props {
 }
 
 export function UnmatchedSeedTable({ warehouseCode, canResolve, refreshTick, onChange }: Props) {
+  const confirm = useConfirm();
   const [rows, setRows] = useState<Row[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,7 +102,12 @@ export function UnmatchedSeedTable({ warehouseCode, canResolve, refreshTick, onC
   }
 
   async function skipGroup(group: Group) {
-    if (!confirm(`"${group.rawLookup}" için ${group.count} satır (toplam ${group.totalQty} adet) atlanacak. Onaylıyor musun?`)) return;
+    const ok = await confirm({
+      title: `"${group.rawLookup}" atlansın mı?`,
+      message: `${group.count} satır (toplam ${group.totalQty} adet) işlenmeyecek.`,
+      confirmLabel: 'Atla',
+    });
+    if (!ok) return;
     // İlk satırın id'si yeterli; applyToAllSameLookup=true backend tarafında kalanları siler
     const firstRow = rowsByLookup.get(group.rawLookup)?.[0];
     if (!firstRow) return;
@@ -127,7 +134,8 @@ export function UnmatchedSeedTable({ warehouseCode, canResolve, refreshTick, onC
   }
 
   async function skipSingleRow(row: Row) {
-    if (!confirm('Sadece bu satırı atla?')) return;
+    const ok = await confirm({ title: 'Sadece bu satırı atla?', confirmLabel: 'Atla' });
+    if (!ok) return;
     try {
       const res = await fetch(`/api/depolar/${warehouseCode}/unmatched/${row.id}/skip`, {
         method: 'POST',

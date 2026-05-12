@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback, Fragment } from 'react';
 import { notify } from '@/lib/ui/notify';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
@@ -102,6 +103,7 @@ const MONTH_LABELS: Record<string, string> = {
 
 export default function PoolDetailPage() {
   const { role, isSuperAdmin, marketplacePermissions } = useAuth();
+  const confirm = useConfirm();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [pool, setPool] = useState<PoolDetail | null>(null);
@@ -435,7 +437,7 @@ export default function PoolDetailPage() {
 
   // Approve and save allocation
   const handleApprove = async () => {
-    if (!confirm('Aylık dağılım onaylansın mı? Mevcut dağılım varsa üzerine yazılacak.')) return;
+    if (!(await confirm({ title: 'Aylık dağılım onaylansın mı?', message: 'Mevcut dağılım varsa üzerine yazılacak.', confirmLabel: 'Onayla' }))) return;
     setApproving(true);
     try {
       const res = await fetch(`/api/stock-pools/${id}/allocate`, {
@@ -459,7 +461,7 @@ export default function PoolDetailPage() {
   };
 
   const handleStatusChange = async (newStatus: string) => {
-    if (!confirm(`Havuz durumu "${newStatus}" olarak değiştirilsin mi?`)) return;
+    if (!(await confirm({ title: `Havuz durumu "${newStatus}" olarak değiştirilsin mi?`, confirmLabel: 'Değiştir' }))) return;
     const res = await fetch(`/api/stock-pools/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -471,7 +473,7 @@ export default function PoolDetailPage() {
   };
 
   const handleDeleteAndRestart = async () => {
-    if (!confirm('Havuz silinip yeni boş havuz oluşturulacak. Emin misiniz?')) return;
+    if (!(await confirm({ title: 'Havuz silinip yeniden oluşturulsun mu?', message: 'Yeni boş havuz oluşturulacak.', variant: 'danger', confirmLabel: 'Sıfırla' }))) return;
     try {
       const delRes = await fetch(`/api/stock-pools/${id}`, { method: 'DELETE' });
       const delData = await delRes.json();
@@ -487,7 +489,7 @@ export default function PoolDetailPage() {
   };
 
   const handleRelease = async () => {
-    if (!confirm('Onaylı dağılım ay planına aktarılsın mı? Kilitli aylar korunur, açık aylar yeniden oluşturulur.')) return;
+    if (!(await confirm({ title: 'Onaylı dağılım ay planına aktarılsın mı?', message: 'Kilitli aylar korunur, açık aylar yeniden oluşturulur.', confirmLabel: 'Aktar' }))) return;
     setReleasing(true);
     try {
       const res = await fetch(`/api/stock-pools/${id}/release`, { method: 'POST' });
@@ -530,7 +532,7 @@ export default function PoolDetailPage() {
   };
 
   const handleDeleteReserve = async (reserveId: string, iwasku: string) => {
-    if (!confirm(`"${iwasku}" rezervini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`)) return;
+    if (!(await confirm({ title: `"${iwasku}" rezervini sil?`, message: 'Bu işlem geri alınamaz.', variant: 'danger', confirmLabel: 'Sil' }))) return;
     setDeletingReserveId(reserveId);
     try {
       const res = await fetch(`/api/stock-pools/${id}/reserves/${reserveId}`, { method: 'DELETE' });

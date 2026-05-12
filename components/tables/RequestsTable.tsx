@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { notify } from '@/lib/ui/notify';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import {
   Calendar, Package, Trash2, CheckSquare, Square, Check, Loader2,
   Anchor, Truck, Plane, Filter,
@@ -94,6 +95,7 @@ const PAGE_SIZE = 30;
 
 export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, archiveMode = false, onSummary }: RequestsTableProps) {
   const { hasRole, isSuperAdmin } = useAuth();
+  const confirm = useConfirm();
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -276,7 +278,13 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
   // Delete handlers
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(`${selectedIds.size} talebi silmek istediginize emin misiniz?`)) return;
+    const ok = await confirm({
+      title: `${selectedIds.size} talebi sil?`,
+      message: 'Bu işlem geri alınamaz.',
+      confirmLabel: 'Sil',
+      variant: 'danger',
+    });
+    if (!ok) return;
     setBulkDeleting(true);
     try {
       const failedIds: string[] = [];
@@ -298,7 +306,13 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
   };
 
   const handleDelete = async (requestId: string) => {
-    if (!confirm('Bu talebi silmek istediginize emin misiniz?')) return;
+    const ok = await confirm({
+      title: 'Bu talebi sil?',
+      message: 'Bu işlem geri alınamaz.',
+      confirmLabel: 'Sil',
+      variant: 'danger',
+    });
+    if (!ok) return;
     setDeleting(requestId);
     try {
       const res = await fetch(`/api/requests/${requestId}`, { method: 'DELETE' });

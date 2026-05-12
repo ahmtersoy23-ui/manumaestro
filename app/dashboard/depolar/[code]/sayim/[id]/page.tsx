@@ -6,6 +6,7 @@
 
 import { useEffect, useState, use } from 'react';
 import { notify } from '@/lib/ui/notify';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import Link from 'next/link';
 import { ChevronLeft, AlertCircle, Play, CheckCircle2, Loader2, Box as BoxIcon, Package, Eye, EyeOff } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
@@ -59,6 +60,7 @@ export default function SayimDetayPage({
 }) {
   const { code: rawCode, id } = use(params);
   const code = slugToCode(rawCode) ?? rawCode.toUpperCase();
+  const confirm = useConfirm();
 
   const [data, setData] = useState<TaskData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -89,7 +91,7 @@ export default function SayimDetayPage({
   }, [code, id, refreshKey]);
 
   async function startCount() {
-    if (!confirm('Sayım başlatılacak — şu an raftaki içerik snapshot alınacak. Onaylıyor musun?')) return;
+    if (!(await confirm({ title: 'Sayım başlatılsın mı?', message: 'Şu an raftaki içerik snapshot olarak alınacak.', confirmLabel: 'Başlat' }))) return;
     setSubmitting(true);
     try {
       const res = await fetch(`/api/depolar/${code}/sayim/${id}/start`, {
@@ -133,7 +135,7 @@ export default function SayimDetayPage({
   }
 
   async function complete() {
-    if (!confirm('Tüm kalemler sayıldı mı? Tamamla aksiyonu sayım durumunu kilitler.')) return;
+    if (!(await confirm({ title: 'Sayım tamamlansın mı?', message: 'Tüm kalemler sayıldı mı? Tamamla aksiyonu sayım durumunu kilitler.', confirmLabel: 'Tamamla' }))) return;
     setSubmitting(true);
     try {
       const res = await fetch(`/api/depolar/${code}/sayim/${id}/complete`, {
@@ -161,7 +163,7 @@ export default function SayimDetayPage({
         : resolution === 'INVESTIGATE'
         ? 'İnceleme moduna alınacak (sistem quantity değişmez).'
         : 'Yok say — adjust yapılmayacak.';
-    if (!confirm(label)) return;
+    if (!(await confirm({ title: 'Sayım kararı', message: label, confirmLabel: 'Onayla' }))) return;
     try {
       const res = await fetch(`/api/depolar/${code}/sayim/${id}/items/${itemId}`, {
         method: 'PATCH',

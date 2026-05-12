@@ -7,6 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import { notify } from '@/lib/ui/notify';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Calendar, Package, ShoppingCart, Factory, Plus, ChevronDown, ChevronUp, Warehouse, Pencil, Hammer, Sofa, ShoppingBag, Camera } from 'lucide-react';
@@ -88,6 +89,7 @@ export default function MonthDetailPage() {
   const params = useParams();
   const month = params.month as string;
   const { role } = useAuth();
+  const confirm = useConfirm();
 
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<CategorySummary[]>([]);
@@ -271,7 +273,11 @@ export default function MonthDetailPage() {
   }, [month]);
 
   const handleGenerateSnapshot = async () => {
-    if (!confirm(`${month} ayı için depo snapshot'ı alınsın mı? Mevcut snapshot varsa güncellenecek.`)) return;
+    const ok = await confirm({
+      title: `${month} ayı için snapshot alınsın mı?`,
+      message: 'Mevcut snapshot varsa güncellenecek.',
+    });
+    if (!ok) return;
     setSnapshotGenerating(true);
     try {
       const res = await fetch('/api/month-snapshot', {

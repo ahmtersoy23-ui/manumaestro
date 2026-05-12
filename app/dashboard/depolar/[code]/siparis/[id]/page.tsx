@@ -6,6 +6,7 @@
 
 import { useEffect, useState, use } from 'react';
 import { notify } from '@/lib/ui/notify';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import Link from 'next/link';
 import { ChevronLeft, AlertCircle, Truck, X, PackageOpen, Box as BoxIcon } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
@@ -57,6 +58,7 @@ export default function SiparisDetayPage({
 }) {
   const { code: rawCode, id } = use(params);
   const code = slugToCode(rawCode) ?? rawCode.toUpperCase();
+  const confirm = useConfirm();
 
   const [data, setData] = useState<OrderData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,7 +89,7 @@ export default function SiparisDetayPage({
   // SINGLE: ShipModal ile raf seçimi.
   async function shipFbaLegacy() {
     if (!data) return;
-    if (!confirm(`${data.items.length} ürünlü sipariş gönderilecek. Onaylıyor musun?`)) return;
+    if (!(await confirm({ title: `Sipariş gönderilsin mi?`, message: `${data.items.length} ürün.`, confirmLabel: 'Gönder' }))) return;
     setSubmitting(true);
     try {
       const res = await fetch(`/api/depolar/${code}/siparis/${id}/ship`, {
@@ -109,7 +111,7 @@ export default function SiparisDetayPage({
   }
 
   async function cancel() {
-    if (!confirm('Sipariş iptal edilecek, rezerveler serbest bırakılacak. Onaylıyor musun?')) return;
+    if (!(await confirm({ title: 'Sipariş iptal edilsin mi?', message: 'Rezerveler serbest bırakılacak.', variant: 'danger', confirmLabel: 'İptal Et' }))) return;
     setSubmitting(true);
     try {
       const res = await fetch(`/api/depolar/${code}/siparis/${id}/cancel`, {
@@ -131,7 +133,7 @@ export default function SiparisDetayPage({
   }
 
   async function revertShip() {
-    if (!confirm('Sevkiyat geri alınacak — stok geri yüklenir, sipariş DRAFT olur. Onaylıyor musun?'))
+    if (!(await confirm({ title: 'Sevkiyat geri alınsın mı?', message: 'Stok geri yüklenir, sipariş DRAFT olur.', variant: 'danger', confirmLabel: 'Geri Al' })))
       return;
     setSubmitting(true);
     try {
@@ -154,7 +156,7 @@ export default function SiparisDetayPage({
   }
 
   async function removeItem(itemId: string) {
-    if (!confirm('Bu ürün silinecek (rezerve serbest). Onaylıyor musun?')) return;
+    if (!(await confirm({ title: 'Bu ürün silinsin mi?', message: 'Rezerve serbest bırakılacak.', variant: 'danger', confirmLabel: 'Sil' }))) return;
     try {
       const res = await fetch(`/api/depolar/${code}/siparis/${id}/items?itemId=${itemId}`, {
         method: 'DELETE',

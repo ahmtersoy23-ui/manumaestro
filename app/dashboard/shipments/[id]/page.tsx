@@ -9,6 +9,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { notify } from '@/lib/ui/notify';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
@@ -59,6 +60,7 @@ const GPSR_SYMBOLS_B64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALoAAAAw
 
 export default function ShipmentDetailPage() {
   const { role } = useAuth(); // Session check
+  const confirm = useConfirm();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [shipment, setShipment] = useState<ShipmentDetail | null>(null);
@@ -321,7 +323,7 @@ export default function ShipmentDetailPage() {
   };
 
   const handleDeleteItem = async (itemId: string) => {
-    if (!confirm('Bu ürün sevkiyattan çıkarılsın mı?')) return;
+    if (!(await confirm({ title: 'Bu ürün sevkiyattan çıkarılsın mı?', variant: 'danger', confirmLabel: 'Çıkar' }))) return;
     const res = await fetch(`/api/shipments/${id}/items/${itemId}`, { method: 'DELETE' });
     if ((await res.json()).success) await Promise.all([fetchShipment(), fetchBoxes()]);
   };
@@ -395,7 +397,7 @@ export default function ShipmentDetailPage() {
       quantity: sendQtyOverrides[item.id],
     }));
     const totalQtySend = sendItems.reduce((s, i) => s + i.quantity, 0);
-    if (!confirm(`${toSend.length} ürün, toplam ${totalQtySend} adet gönderilsin mi?`)) return;
+    if (!(await confirm({ title: `${toSend.length} ürün gönderilsin mi?`, message: `Toplam ${totalQtySend} adet.`, confirmLabel: 'Gönder' }))) return;
     setSending(true);
     try {
       const res = await fetch(`/api/shipments/${id}/send`, {
@@ -426,7 +428,7 @@ export default function ShipmentDetailPage() {
   const handleUnsendSelected = async () => {
     const toUnsend = [...selectedSentIds];
     if (toUnsend.length === 0) return;
-    if (!confirm(`${toUnsend.length} ürünün gönderimi geri alınsın mı?`)) return;
+    if (!(await confirm({ title: `${toUnsend.length} ürünün gönderimi geri alınsın mı?`, variant: 'danger', confirmLabel: 'Geri Al' }))) return;
     setUnsending(true);
     try {
       const res = await fetch(`/api/shipments/${id}/unsend`, {
@@ -451,7 +453,7 @@ export default function ShipmentDetailPage() {
 
   // Deniz: sevkiyatı kapat
   const handleCloseShipment = async () => {
-    if (!confirm('Sevkiyat kapatılsın mı? Tüm ürünler gönderilmiş olarak işaretlenecek.')) return;
+    if (!(await confirm({ title: 'Sevkiyat kapatılsın mı?', message: 'Tüm ürünler gönderilmiş olarak işaretlenecek.', confirmLabel: 'Kapat' }))) return;
     setSending(true);
     try {
       const res = await fetch(`/api/shipments/${id}/send`, {
@@ -514,7 +516,7 @@ export default function ShipmentDetailPage() {
   };
 
   const handleDeleteBox = async (boxId: string) => {
-    if (!confirm('Bu koli silinsin mi?')) return;
+    if (!(await confirm({ title: 'Bu koli silinsin mi?', variant: 'danger', confirmLabel: 'Sil' }))) return;
     const res = await fetch(`/api/shipments/${id}/boxes?boxId=${boxId}`, { method: 'DELETE' });
     if ((await res.json()).success) await Promise.all([fetchBoxes(), fetchShipment()]);
   };
@@ -979,7 +981,7 @@ export default function ShipmentDetailPage() {
           )}
           {!isActive && shipment.status === 'IN_TRANSIT' && (
             <button onClick={async () => {
-              if (!confirm('Teslim edildi?')) return;
+              if (!(await confirm({ title: 'Teslim edildi?', message: 'Sevkiyat DELIVERED durumuna geçecek.', confirmLabel: 'Teslim Edildi' }))) return;
               const res = await fetch(`/api/shipments/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'DELIVERED' }) });
               if ((await res.json()).success) fetchShipment();
             }} className="px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 flex items-center gap-2">Teslim Edildi</button>

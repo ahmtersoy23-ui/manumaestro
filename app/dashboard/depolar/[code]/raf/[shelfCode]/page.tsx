@@ -7,6 +7,7 @@
 
 import { useEffect, useState, use } from 'react';
 import { notify } from '@/lib/ui/notify';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import Link from 'next/link';
 import { ChevronLeft, Package, Box, History, AlertCircle, ArrowRightLeft, PackageOpen, Scissors, Trash2, Settings, Printer, PackagePlus, Plus } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
@@ -89,6 +90,7 @@ export default function RafDetayPage({
   const { code: rawCode, shelfCode: rawShelfCode } = use(params);
   const code = slugToCode(rawCode) ?? rawCode.toUpperCase();
   const shelfCode = decodeURIComponent(rawShelfCode);
+  const confirm = useConfirm();
 
   const [data, setData] = useState<RafData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -152,7 +154,7 @@ export default function RafDetayPage({
   const handleSuccess = () => setRefreshKey((k) => k + 1);
 
   async function openBox(boxId: string, boxNumber: string) {
-    if (!confirm(`Koli ${boxNumber} tamamen açılacak. Onaylıyor musun?`)) return;
+    if (!(await confirm({ title: `Koli ${boxNumber} açılsın mı?`, message: 'Tüm içeriği rafa dökülecek.', confirmLabel: 'Aç' }))) return;
     setOpeningBoxId(boxId);
     try {
       const res = await fetch(`/api/depolar/${code}/koli/${boxId}/open`, {
@@ -175,7 +177,7 @@ export default function RafDetayPage({
 
   const [undoingId, setUndoingId] = useState<string | null>(null);
   async function undoMovement(movementId: string, type: string) {
-    if (!confirm(`${type} hareketi geri alınacak. Onaylıyor musun?`)) return;
+    if (!(await confirm({ title: `${type} hareketi geri alınsın mı?`, variant: 'danger', confirmLabel: 'Geri Al' }))) return;
     setUndoingId(movementId);
     try {
       const res = await fetch(`/api/depolar/${code}/hareketler/${movementId}/undo`, {

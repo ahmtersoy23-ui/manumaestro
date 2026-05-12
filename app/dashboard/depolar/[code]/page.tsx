@@ -9,6 +9,7 @@
 
 import { useEffect, useState, useMemo, use } from 'react';
 import { notify } from '@/lib/ui/notify';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import Link from 'next/link';
 import { Search, Layers, Package, Box, AlertTriangle, History, Download } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
@@ -79,6 +80,7 @@ interface DepoData {
 export default function DepoDashboardPage({ params }: { params: Promise<{ code: string }> }) {
   const { code: rawCode } = use(params);
   const code = slugToCode(rawCode) ?? rawCode.toUpperCase();
+  const confirm = useConfirm();
 
   const [data, setData] = useState<DepoData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -123,7 +125,7 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
   }, [code, refreshKey]);
 
   async function undoMovement(movementId: string, type: string) {
-    if (!confirm(`${type} hareketi geri alınacak. Onaylıyor musun?`)) return;
+    if (!(await confirm({ title: `${type} hareketi geri alınsın mı?`, variant: 'danger', confirmLabel: 'Geri Al' }))) return;
     setUndoingId(movementId);
     try {
       const res = await fetch(`/api/depolar/${code}/hareketler/${movementId}/undo`, {
