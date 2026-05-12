@@ -20,6 +20,7 @@ import { EditShipmentForm } from '@/components/shipments/EditShipmentForm';
 import { AddItemForm } from '@/components/shipments/AddItemForm';
 import { MissingFnskuWarning } from '@/components/shipments/MissingFnskuWarning';
 import { PendingItemsTable } from '@/components/shipments/PendingItemsTable';
+import { SentItemsTab } from '@/components/shipments/SentItemsTab';
 import type { BoxFormData, ShipmentItem, ShipmentBox } from '@/lib/shipments/types';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -1139,109 +1140,27 @@ export default function ShipmentDetailPage() {
         </div>
       )}
 
-      {/* === SENT TAB === */}
       {activeTab === 'sent' && (
-        <div className="space-y-4">
-          {/* Sent tab search/filter + action buttons */}
-          {sentItems.length > 0 && (
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="relative">
-                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input type="text" value={sentSearch} onChange={e => setSentSearch(e.target.value)}
-                  placeholder="SKU, ürün adı..."
-                  className="pl-9 pr-3 py-2 border rounded-lg text-sm w-48 focus:outline-none focus:ring-1 focus:ring-blue-400" />
-                {sentSearch && (
-                  <button onClick={() => setSentSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-              {sentCategories.length > 1 && (
-                <select value={sentCategoryFilter} onChange={e => setSentCategoryFilter(e.target.value)}
-                  className="px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white">
-                  <option value="">Tüm Kategoriler</option>
-                  {sentCategories.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              )}
-              {sentMarkets.length > 1 && (
-                <select value={sentMarketFilter} onChange={e => setSentMarketFilter(e.target.value)}
-                  className="px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white">
-                  <option value="">Tüm Pazarlar</option>
-                  {sentMarkets.map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
-              )}
-              {canSend && selectedSentIds.size > 0 && (
-                <button onClick={handleExitForSent}
-                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700">
-                  <Package className="w-4 h-4" />
-                  {selectedSentIds.size} ürün — Depo Çıkışı Kaydet
-                </button>
-              )}
-              {canUnsend && selectedSentIds.size > 0 && (
-                <button onClick={handleUnsendSelected} disabled={unsending}
-                  className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700 disabled:opacity-50">
-                  {unsending ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-                  {selectedSentIds.size} ürün — Gönderimi Geri Al
-                </button>
-              )}
-            </div>
-          )}
-          <div className="bg-white border rounded-xl overflow-hidden">
-            {sentItems.length > 0 ? (
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    {(canSend || canUnsend) && (
-                      <th className="w-12 px-3 py-3">
-                        <button onClick={() => {
-                          if (selectedSentIds.size === sentItems.length) setSelectedSentIds(new Set());
-                          else setSelectedSentIds(new Set(sentItems.map(i => i.id)));
-                        }} className="text-gray-600 hover:text-purple-600" title="Tümünü seç">
-                          {selectedSentIds.size === sentItems.length && sentItems.length > 0 ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
-                        </button>
-                      </th>
-                    )}
-                    <th className="text-left px-4 py-3 font-semibold text-gray-700 text-xs uppercase">IWASKU</th>
-                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">FNSKU</th>
-                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Ürün Adı</th>
-                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Kategori</th>
-                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Pazar Yeri</th>
-                    <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Miktar</th>
-                    <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Gönderim</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filteredSentItems.map(item => (
-                    <tr key={item.id} className={`${selectedSentIds.has(item.id) ? 'bg-blue-50/50' : 'bg-green-50/30'}`}>
-                      {(canSend || canUnsend) && (
-                        <td className="px-3 py-3">
-                          <button onClick={() => {
-                            const next = new Set(selectedSentIds);
-                            if (next.has(item.id)) next.delete(item.id); else next.add(item.id);
-                            setSelectedSentIds(next);
-                          }} className="text-gray-500 hover:text-purple-600">
-                            {selectedSentIds.has(item.id) ? <CheckSquare className="w-5 h-5 text-purple-600" /> : <Square className="w-5 h-5" />}
-                          </button>
-                        </td>
-                      )}
-                      <td className="px-4 py-3 font-mono text-sm text-gray-900">{item.iwasku}</td>
-                      <td className="px-3 py-3 font-mono text-sm text-gray-600">{item.fnsku || '—'}</td>
-                      <td className="px-3 py-3 text-xs text-gray-700 line-clamp-1">{item.productName || '—'}</td>
-                      <td className="px-3 py-3 text-sm text-gray-600">{item.productCategory || '—'}</td>
-                      <td className="px-3 py-3 text-sm text-gray-600">{item.marketplace?.name ?? '—'}</td>
-                      <td className="text-center px-3 py-3 font-semibold text-gray-900">{item.quantity}</td>
-                      <td className="text-center px-3 py-3 text-xs text-green-700">
-                        {item.sentAt ? new Date(item.sentAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }) : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div className="text-center py-12"><Ship className="w-10 h-10 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">Henüz gönderilen ürün yok</p></div>
-            )}
-          </div>
-        </div>
+        <SentItemsTab
+          items={filteredSentItems}
+          hasAnySent={sentItems.length > 0}
+          totalSentCount={sentItems.length}
+          search={sentSearch}
+          categoryFilter={sentCategoryFilter}
+          marketFilter={sentMarketFilter}
+          categories={sentCategories}
+          markets={sentMarkets}
+          selectedSentIds={selectedSentIds}
+          canSend={canSend}
+          canUnsend={canUnsend}
+          unsending={unsending}
+          onSearchChange={setSentSearch}
+          onCategoryFilterChange={setSentCategoryFilter}
+          onMarketFilterChange={setSentMarketFilter}
+          onSelectionChange={setSelectedSentIds}
+          onExitForSent={handleExitForSent}
+          onUnsendSelected={handleUnsendSelected}
+        />
       )}
 
       {/* === BOXES TAB === */}
