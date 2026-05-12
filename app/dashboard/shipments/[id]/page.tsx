@@ -14,6 +14,9 @@ import { GPSR_LOGO_B64, GPSR_EURP_B64, GPSR_SYMBOLS_B64 } from '@/lib/labels/gps
 import { ExtraBoxForm } from '@/components/shipments/ExtraBoxForm';
 import { EditableBoxCell } from '@/components/shipments/EditableBoxCell';
 import { PendingItemRow } from '@/components/shipments/PendingItemRow';
+import { ExitItemsModal } from '@/components/shipments/ExitItemsModal';
+import { SPExportModal } from '@/components/shipments/SPExportModal';
+import { BulkFbaPanel } from '@/components/shipments/BulkFbaPanel';
 import type { BoxFormData, ShipmentItem, ShipmentBox } from '@/lib/shipments/types';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -1395,42 +1398,14 @@ export default function ShipmentDetailPage() {
             <ExtraBoxForm onSubmit={async (form) => { const r = await handleCreateBox(form, null); if (r) setShowExtraBox(false); }} onCancel={() => setShowExtraBox(false)} />
           )}
           {showBulkFba && (
-            <div className="bg-white border border-orange-200 rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-gray-900">Toplu FBA / Depo İşaretleme</h3>
-                <button onClick={() => { setShowBulkFba(false); setBulkFbaResult(null); }} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
-              </div>
-              <p className="text-xs text-gray-500">Koli numaralarını alt alta, virgül veya tab ile ayırarak girin:</p>
-              <textarea
-                value={bulkFbaText}
-                onChange={e => setBulkFbaText(e.target.value)}
-                placeholder={"69-0001\n69-0002\n69-0003"}
-                rows={6}
-                className="w-full px-3 py-2 border rounded-lg text-sm font-mono resize-y"
-              />
-              <div className="flex items-center gap-3">
-                <button onClick={() => handleBulkFbaSubmit('FBA')} disabled={settingDest || !bulkFbaText.trim()}
-                  className="px-4 py-2 bg-orange-500 text-white text-sm rounded-lg hover:bg-orange-600 disabled:opacity-50 flex items-center gap-2">
-                  {settingDest && <Loader2 className="w-4 h-4 animate-spin" />} FBA Olarak İşaretle
-                </button>
-                <button onClick={() => handleBulkFbaSubmit('DEPO')} disabled={settingDest || !bulkFbaText.trim()}
-                  className="px-4 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 disabled:opacity-50 flex items-center gap-2">
-                  Depo Olarak İşaretle
-                </button>
-                <button onClick={() => handleBulkFbaSubmit('SHOWROOM')} disabled={settingDest || !bulkFbaText.trim()}
-                  className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2">
-                  Fairfield Olarak İşaretle
-                </button>
-              </div>
-              {bulkFbaResult && (
-                <div className="text-sm">
-                  <p className="text-green-700">{bulkFbaResult.updated} koli güncellendi.</p>
-                  {bulkFbaResult.notFound && bulkFbaResult.notFound.length > 0 && (
-                    <p className="text-red-600 mt-1">Bulunamayan: {bulkFbaResult.notFound.join(', ')}</p>
-                  )}
-                </div>
-              )}
-            </div>
+            <BulkFbaPanel
+              text={bulkFbaText}
+              saving={settingDest}
+              result={bulkFbaResult}
+              onTextChange={setBulkFbaText}
+              onSubmit={handleBulkFbaSubmit}
+              onClose={() => { setShowBulkFba(false); setBulkFbaResult(null); }}
+            />
           )}
           <div className="bg-white border rounded-xl overflow-hidden">
             {boxes.length > 0 ? (
@@ -1541,125 +1516,28 @@ export default function ShipmentDetailPage() {
 
       {/* === DEPO ÇIKIŞ ONAY MODALI === */}
       {showExitModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
-            <div className="flex items-center justify-between px-6 py-4 border-b">
-              <h3 className="text-lg font-bold text-gray-900">Depo Çıkışı</h3>
-              <button onClick={() => setShowExitModal(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
-            </div>
-            <div className="px-6 py-4 space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Hafta (Pazartesi)</label>
-                <input type="date" value={exitWeek} onChange={e => setExitWeek(e.target.value)}
-                  className="px-3 py-2 border rounded-lg text-sm w-44" />
-              </div>
-              <div className="border rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b">
-                    <tr>
-                      <th className="text-left px-4 py-2 text-xs font-semibold text-gray-600">IWASKU</th>
-                      <th className="text-left px-4 py-2 text-xs font-semibold text-gray-600">Ürün Adı</th>
-                      <th className="text-right px-4 py-2 text-xs font-semibold text-gray-600">Adet</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {exitItems.slice(exitPage * 10, (exitPage + 1) * 10).map(item => (
-                      <tr key={item.iwasku}>
-                        <td className="px-4 py-2 font-mono text-sm">{item.iwasku}</td>
-                        <td className="px-4 py-2 text-sm text-gray-700 truncate max-w-[200px]">{item.name}</td>
-                        <td className="px-4 py-2 text-sm font-semibold text-right">{item.quantity}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {exitItems.length > 10 && (
-                <div className="flex items-center justify-between">
-                  <button onClick={() => setExitPage(p => Math.max(0, p - 1))} disabled={exitPage === 0}
-                    className="px-3 py-1 text-xs border rounded disabled:opacity-30">Önceki</button>
-                  <span className="text-xs text-gray-500">{exitPage + 1} / {Math.ceil(exitItems.length / 10)}</span>
-                  <button onClick={() => setExitPage(p => Math.min(Math.ceil(exitItems.length / 10) - 1, p + 1))} disabled={exitPage >= Math.ceil(exitItems.length / 10) - 1}
-                    className="px-3 py-1 text-xs border rounded disabled:opacity-30">Sonraki</button>
-                </div>
-              )}
-              <p className="text-sm text-gray-500">
-                Toplam: <span className="font-semibold text-gray-900">{exitItems.reduce((s, i) => s + i.quantity, 0)}</span> adet
-                ({exitItems.length} ürün)
-              </p>
-            </div>
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t bg-gray-50 rounded-b-2xl">
-              <button onClick={() => setShowExitModal(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
-                Atla
-              </button>
-              <button onClick={handleConfirmExit} disabled={exitSaving || !exitWeek}
-                className="flex items-center gap-2 px-5 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700 disabled:opacity-50">
-                {exitSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                Onayla
-              </button>
-            </div>
-          </div>
-        </div>
+        <ExitItemsModal
+          items={exitItems}
+          week={exitWeek}
+          saving={exitSaving}
+          page={exitPage}
+          onWeekChange={setExitWeek}
+          onPageChange={setExitPage}
+          onClose={() => setShowExitModal(false)}
+          onConfirm={handleConfirmExit}
+        />
       )}
 
       {/* === STOCKPULSE EXPORT MODALI === */}
       {showSPExport && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
-            <div className="flex items-center justify-between px-6 py-4 border-b">
-              <h3 className="text-lg font-bold text-gray-900">StockPulse Aktarımı</h3>
-              <button onClick={() => setShowSPExport(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
-            </div>
-            <div className="px-6 py-4 space-y-5">
-              <p className="text-xs text-gray-500">
-                Sevkiyat: <span className="font-semibold text-gray-800">{shipment.name}</span> — Koli verilerinden FBA ve Depo olarak ayrıştırıldı.
-                StockPulse → In Transit → Yeni Sevkiyat → Yapıştır
-              </p>
-
-              {/* FBA Section */}
-              {spExportData.fba.items.size > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 bg-cyan-100 text-cyan-800 text-xs font-semibold rounded">FBA-US</span>
-                      <span className="text-xs text-gray-500">{spExportData.fba.items.size} SKU · {spExportData.fba.total.toLocaleString('tr-TR')} adet</span>
-                    </div>
-                    <button onClick={() => handleSPCopy('fba')}
-                      className="flex items-center gap-1 px-3 py-1 text-xs border rounded-lg hover:bg-gray-50 transition-colors">
-                      {spCopied === 'fba' ? <><Check className="w-3 h-3 text-green-600" /> Kopyalandı</> : <><Copy className="w-3 h-3" /> Kopyala</>}
-                    </button>
-                  </div>
-                  <textarea readOnly value={spExportData.fba.tsv} rows={Math.min(6, spExportData.fba.items.size)}
-                    className="w-full px-3 py-2 border rounded-lg text-xs font-mono bg-gray-50 resize-none focus:outline-none" />
-                </div>
-              )}
-
-              {/* DEPO Section */}
-              {spExportData.depo.items.size > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-xs font-semibold rounded">NJ</span>
-                      <span className="text-xs text-gray-500">{spExportData.depo.items.size} SKU · {spExportData.depo.total.toLocaleString('tr-TR')} adet</span>
-                    </div>
-                    <button onClick={() => handleSPCopy('depo')}
-                      className="flex items-center gap-1 px-3 py-1 text-xs border rounded-lg hover:bg-gray-50 transition-colors">
-                      {spCopied === 'depo' ? <><Check className="w-3 h-3 text-green-600" /> Kopyalandı</> : <><Copy className="w-3 h-3" /> Kopyala</>}
-                    </button>
-                  </div>
-                  <textarea readOnly value={spExportData.depo.tsv} rows={Math.min(6, spExportData.depo.items.size)}
-                    className="w-full px-3 py-2 border rounded-lg text-xs font-mono bg-gray-50 resize-none focus:outline-none" />
-                </div>
-              )}
-
-              {spExportData.fba.items.size === 0 && spExportData.depo.items.size === 0 && (
-                <p className="text-sm text-gray-500 text-center py-4">Koli verisi bulunamadı</p>
-              )}
-            </div>
-            <div className="flex items-center justify-end px-6 py-4 border-t bg-gray-50 rounded-b-2xl">
-              <button onClick={() => setShowSPExport(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Kapat</button>
-            </div>
-          </div>
-        </div>
+        <SPExportModal
+          shipmentName={shipment.name}
+          fba={{ count: spExportData.fba.items.size, total: spExportData.fba.total, tsv: spExportData.fba.tsv }}
+          depo={{ count: spExportData.depo.items.size, total: spExportData.depo.total, tsv: spExportData.depo.tsv }}
+          copied={spCopied}
+          onClose={() => setShowSPExport(false)}
+          onCopy={handleSPCopy}
+        />
       )}
     </div>
   );
