@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-import { verifyAuth } from '@/lib/auth/verify';
+import { verifyAuth, isSuperAdmin } from '@/lib/auth/verify';
 import { errorResponse } from '@/lib/api/response';
 
 /**
@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
         name: auth.user.name,
       },
       role: auth.user.role,
+      isSuperAdmin: isSuperAdmin(auth.user.email),
       permissions: { canViewStock, marketplaces: marketplacePermissions },
     });
   } catch (error) {

@@ -38,22 +38,12 @@ interface AuthContextType {
   hasRole: (roles: string[]) => boolean;
 }
 
-// Süper-admin email allowlist (server'la eşit tutulmalı — env'den okumak için
-// NEXT_PUBLIC_ prefix gerek; default: ersoy@iwaconcept.com.tr)
-const SUPER_ADMIN_EMAILS = (process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAILS ?? 'ersoy@iwaconcept.com.tr')
-  .split(',')
-  .map(e => e.trim().toLowerCase())
-  .filter(Boolean);
-
-function checkSuperAdmin(email?: string | null): boolean {
-  return !!email && SUPER_ADMIN_EMAILS.includes(email.toLowerCase());
-}
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SSOUser | null>(null);
   const [role, setRole] = useState<'admin' | 'editor' | 'viewer' | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [canViewStock, setCanViewStock] = useState(false);
   const [marketplacePermissions, setMarketplacePermissions] = useState<MarketplacePerm[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const data = await response.json();
           setUser(data.user);
           setRole(data.role);
+          setIsSuperAdmin(data.isSuperAdmin === true);
           setCanViewStock(data.permissions?.canViewStock ?? false);
           setMarketplacePermissions(data.permissions?.marketplaces ?? []);
         } else {
@@ -108,7 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     role,
     loading,
     isAuthenticated: !!user,
-    isSuperAdmin: checkSuperAdmin(user?.email),
+    isSuperAdmin,
     canViewStock,
     marketplacePermissions,
     logout: handleLogout,
