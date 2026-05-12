@@ -10,7 +10,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { notify } from '@/lib/ui/notify';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
-import { GPSR_LOGO_B64, GPSR_EURP_B64, GPSR_SYMBOLS_B64 } from '@/lib/labels/gpsr-assets';
 import { ExitItemsModal } from '@/components/shipments/ExitItemsModal';
 import { SPExportModal } from '@/components/shipments/SPExportModal';
 import { EditShipmentForm } from '@/components/shipments/EditShipmentForm';
@@ -680,9 +679,13 @@ export default function ShipmentDetailPage() {
       const bcCanvas = document.createElement('canvas');
       JsBarcode(bcCanvas, code, { format: 'CODE128', width: 2, height: 50, displayValue: false, margin: 0 });
 
-      // EU asset'leri preload
+      // EU asset'leri yalnızca EU print akışında dynamic load — ~24KB base64
+      // page bundle'a girmesin
       const [gpsrLogo, gpsrEurp, gpsrSymbols] = isEU
-        ? await Promise.all([preloadImage(GPSR_LOGO_B64), preloadImage(GPSR_EURP_B64), preloadImage(GPSR_SYMBOLS_B64)])
+        ? await (async () => {
+            const { GPSR_LOGO_B64, GPSR_EURP_B64, GPSR_SYMBOLS_B64 } = await import('@/lib/labels/gpsr-assets');
+            return Promise.all([preloadImage(GPSR_LOGO_B64), preloadImage(GPSR_EURP_B64), preloadImage(GPSR_SYMBOLS_B64)]);
+          })()
         : [null, null, null];
 
       for (let i = 0; i < box.quantity; i++) {
@@ -848,9 +851,12 @@ export default function ShipmentDetailPage() {
     const bcCanvas = document.createElement('canvas');
     JsBarcode(bcCanvas, code, { format: 'CODE128', width: 2, height: 50, displayValue: false, margin: 0 });
 
-    // EU asset'leri preload
+    // EU asset'leri yalnızca EU print akışında dynamic load
     const [gpsrLogo, gpsrEurp, gpsrSymbols] = isEU
-      ? await Promise.all([preloadImage(GPSR_LOGO_B64), preloadImage(GPSR_EURP_B64), preloadImage(GPSR_SYMBOLS_B64)])
+      ? await (async () => {
+          const { GPSR_LOGO_B64, GPSR_EURP_B64, GPSR_SYMBOLS_B64 } = await import('@/lib/labels/gpsr-assets');
+          return Promise.all([preloadImage(GPSR_LOGO_B64), preloadImage(GPSR_EURP_B64), preloadImage(GPSR_SYMBOLS_B64)]);
+        })()
       : [null, null, null];
 
     const doc = new jsPDF({ unit: 'mm', format: [W_MM, H_MM], orientation: 'landscape' });
