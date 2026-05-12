@@ -12,7 +12,10 @@ import { notify } from '@/lib/ui/notify';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { GPSR_LOGO_B64, GPSR_EURP_B64, GPSR_SYMBOLS_B64 } from '@/lib/labels/gpsr-assets';
 import { ExtraBoxForm } from '@/components/shipments/ExtraBoxForm';
-import type { BoxFormData } from '@/lib/shipments/types';
+import { InlineFnskuInput } from '@/components/shipments/InlineFnskuInput';
+import { BoxEntryPanel } from '@/components/shipments/BoxEntryPanel';
+import { EditableBoxCell } from '@/components/shipments/EditableBoxCell';
+import { MKT_CODE_TO_COUNTRY, type BoxFormData, type ShipmentItem, type ShipmentBox } from '@/lib/shipments/types';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,21 +26,7 @@ import {
 } from 'lucide-react';
 
 // --- Types ---
-interface ShipmentItem {
-  id: string; iwasku: string; quantity: number; desi: number | null;
-  marketplaceId: string | null;
-  marketplace: { id: string; name: string; code: string } | null;
-  productName: string; productCategory: string; fnsku: string | null;
-  reserveId: string | null; packed: boolean; sentAt: string | null; createdAt: string;
-}
-interface ShipmentBox {
-  id: string; shipmentItemId: string | null; boxNumber: string;
-  iwasku: string | null; fnsku: string | null;
-  productName: string | null; productCategory: string | null;
-  marketplaceCode: string | null; destination: string;
-  quantity: number; width: number | null; height: number | null;
-  depth: number | null; weight: number | null; labelPrinted: boolean; createdAt: string;
-}
+// ShipmentItem + ShipmentBox interface'leri lib/shipments/types.ts'e taşındı
 interface ShipmentDetail {
   id: string; name: string; destinationTab: string; shippingMethod: string;
   plannedDate: string; actualDate: string | null; etaDate: string | null;
@@ -1677,171 +1666,6 @@ export default function ShipmentDetailPage() {
   );
 }
 
-// --- Editable Box Cell (dimensions/weight) with Tab navigation ---
-const FIELD_ORDER: ('width' | 'depth' | 'height' | 'weight')[] = ['width', 'depth', 'height', 'weight'];
-
-function EditableBoxCell({ boxId, shipmentId, field, value, canEdit, onUpdated, editingCell, setEditingCell, visibleBoxes }: {
-  boxId: string; shipmentId: string; field: 'width' | 'height' | 'depth' | 'weight';
-  value: number | null; canEdit: boolean; onUpdated: () => void;
-  editingCell: { boxId: string; field: 'width' | 'depth' | 'height' | 'weight' } | null;
-  setEditingCell: (cell: { boxId: string; field: 'width' | 'depth' | 'height' | 'weight' } | null) => void;
-  visibleBoxes: ShipmentBox[];
-}) {
-  const [inputVal, setInputVal] = useState('');
-  const [saving, setSaving] = useState(false);
-  const tabNavigating = useRef(false);
-  const isEditing = editingCell?.boxId === boxId && editingCell?.field === field;
-
-  // Tab navigation ile açıldığında inputVal'ı set et
-  useEffect(() => {
-    if (isEditing) setInputVal(value?.toString() ?? '');
-  }, [isEditing, value]);
-
-  const navigateCell = (direction: 1 | -1) => {
-    const fieldIdx = FIELD_ORDER.indexOf(field);
-    const boxIdx = visibleBoxes.findIndex(b => b.id === boxId);
-    let nextField = fieldIdx + direction;
-    let nextBoxIdx = boxIdx;
-    if (nextField >= FIELD_ORDER.length) { nextField = 0; nextBoxIdx++; }
-    else if (nextField < 0) { nextField = FIELD_ORDER.length - 1; nextBoxIdx--; }
-    if (nextBoxIdx >= 0 && nextBoxIdx < visibleBoxes.length) {
-      setEditingCell({ boxId: visibleBoxes[nextBoxIdx].id, field: FIELD_ORDER[nextField] });
-    } else {
-      setEditingCell(null);
-    }
-  };
-
-  const handleSave = async (andNavigate?: 1 | -1) => {
-    const num = inputVal.trim() ? parseFloat(inputVal) : null;
-    if (num !== null && (isNaN(num) || num <= 0)) {
-      if (andNavigate) navigateCell(andNavigate); else setEditingCell(null);
-      return;
-    }
-    if (num === value) {
-      if (andNavigate) navigateCell(andNavigate); else setEditingCell(null);
-      return;
-    }
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/shipments/${shipmentId}/boxes`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ boxId, [field]: num }),
-      });
-      if ((await res.json()).success) onUpdated();
-    } catch { /* */ }
-    finally {
-      setSaving(false);
-      if (andNavigate) navigateCell(andNavigate); else setEditingCell(null);
-    }
-  };
-
-  if (!canEdit) {
-    return <td className="text-center px-3 py-3 text-gray-600">{value ?? '—'}</td>;
-  }
-
-  if (isEditing) {
-    return (
-      <td className="text-center px-1 py-1">
-        <input
-          type="number" step="0.1" autoFocus
-          value={inputVal}
-          onChange={e => setInputVal(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Tab') { e.preventDefault(); tabNavigating.current = true; handleSave(e.shiftKey ? -1 : 1); }
-            else if (e.key === 'Enter') { tabNavigating.current = true; handleSave(1); }
-            else if (e.key === 'Escape') setEditingCell(null);
-          }}
-          onBlur={() => { if (!saving && !tabNavigating.current) handleSave(); tabNavigating.current = false; }}
-          disabled={saving}
-          className="w-14 px-1 py-0.5 border border-blue-300 rounded text-center text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-        />
-      </td>
-    );
-  }
-
-  return (
-    <td
-      className="text-center px-3 py-3 text-gray-600 cursor-pointer hover:bg-blue-50 hover:text-blue-700 transition-colors"
-      onClick={() => setEditingCell({ boxId, field })}
-      title="Düzenlemek için tıkla"
-    >
-      {value ?? '—'}
-    </td>
-  );
-}
-
-// --- Inline FNSKU Input ---
-const MKT_CODE_TO_COUNTRY: Record<string, string> = {
-  AMZN_US: 'US', AMZN_CA: 'CA', AMZN_UK: 'UK', AMZN_AU: 'AU', AMZN_EU: 'FR',
-};
-
-function InlineFnskuInput({ item, onSaved }: { item: ShipmentItem; onSaved: (itemId: string, fnsku: string) => void }) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleSave = async () => {
-    const fnsku = value.trim();
-    if (!fnsku) { setEditing(false); return; }
-    const countryCode = item.marketplace?.code ? MKT_CODE_TO_COUNTRY[item.marketplace.code] : null;
-    if (!countryCode) { setError('Marketplace eşleştirilemedi'); return; }
-
-    setSaving(true); setError('');
-    try {
-      const res = await fetch('/api/sku-master/fnsku', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shipmentItemId: item.id, iwasku: item.iwasku, countryCode, fnsku }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        onSaved(item.id, data.data.fnsku ?? fnsku);
-        setEditing(false);
-      } else {
-        setError(data.error || 'Hata');
-      }
-    } catch { setError('Bağlantı hatası'); } finally { setSaving(false); }
-  };
-
-  if (!editing) {
-    return (
-      <button
-        onClick={() => { setEditing(true); setValue(''); setError(''); }}
-        className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-xs font-medium hover:bg-amber-200 transition-colors cursor-pointer"
-        title="FNSKU girmek için tıkla"
-      >
-        Eksik
-      </button>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-0.5">
-      <div className="flex items-center gap-1">
-        <input
-          type="text"
-          value={value}
-          onChange={e => setValue(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditing(false); }}
-          autoFocus
-          placeholder="FNSKU"
-          disabled={saving}
-          className="px-1.5 py-0.5 border border-amber-300 rounded text-xs font-mono w-28 focus:outline-none focus:ring-1 focus:ring-amber-400"
-        />
-        {saving ? (
-          <Loader2 className="w-3.5 h-3.5 text-amber-500 animate-spin" />
-        ) : (
-          <>
-            <button onClick={handleSave} className="text-green-600 hover:text-green-800"><Check className="w-3.5 h-3.5" /></button>
-            <button onClick={() => setEditing(false)} className="text-gray-400 hover:text-gray-600"><X className="w-3.5 h-3.5" /></button>
-          </>
-        )}
-      </div>
-      {error && <span className="text-[10px] text-red-500">{error}</span>}
-    </div>
-  );
-}
 
 // --- Pending Item Row ---
 function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded, isSelected, togglingId,
@@ -1946,52 +1770,3 @@ function PendingItemRow({ item, itemDesi, itemBoxes, isSea, isActive, isExpanded
   );
 }
 
-// --- Box Entry Panel ---
-function BoxEntryPanel({ item, existingBoxes, onCreateBox, onDeleteBox }: {
-  item: ShipmentItem; existingBoxes: ShipmentBox[];
-  onCreateBox: (form: BoxFormData) => Promise<ShipmentBox | null>; onDeleteBox: (boxId: string) => void;
-}) {
-  const [quantity, setQuantity] = useState(String(item.quantity));
-  const [width, setWidth] = useState(''); const [height, setHeight] = useState('');
-  const [depth, setDepth] = useState(''); const [weight, setWeight] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setSaving(true);
-    try {
-      await onCreateBox({ iwasku: item.iwasku, fnsku: item.fnsku, productName: item.productName, productCategory: item.productCategory,
-        marketplaceCode: item.marketplace?.code ?? null, quantity: parseInt(quantity) || 1,
-        width: width ? parseFloat(width) : null, height: height ? parseFloat(height) : null,
-        depth: depth ? parseFloat(depth) : null, weight: weight ? parseFloat(weight) : null });
-      setQuantity(String(item.quantity)); setWidth(''); setHeight(''); setDepth(''); setWeight('');
-    } finally { setSaving(false); }
-  };
-
-  return (
-    <div className="space-y-3">
-      {existingBoxes.length > 0 && (
-        <div className="space-y-1">
-          <p className="text-xs font-medium text-gray-500 mb-1">Mevcut koliler:</p>
-          {existingBoxes.map(box => (
-            <div key={box.id} className="flex items-center gap-3 text-xs bg-white rounded px-3 py-1.5 border">
-              <span className="font-mono font-semibold text-gray-900">{box.boxNumber}</span>
-              <span className="text-gray-500">{box.quantity} adet</span>
-              {box.width && <span className="text-gray-500">{box.width}x{box.depth}x{box.height}cm</span>}
-              {box.weight && <span className="text-gray-500">{box.weight}kg</span>}
-              <button onClick={() => onDeleteBox(box.id)} className="ml-auto text-red-400 hover:text-red-600"><X className="w-3.5 h-3.5" /></button>
-            </div>
-          ))}
-        </div>
-      )}
-      <form onSubmit={handleSubmit} className="flex flex-wrap gap-2 items-end">
-        <div><label className="block text-xs text-gray-500 mb-0.5">Adet</label><input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-16" required /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">En</label><input type="number" step="0.1" value={width} onChange={e => setWidth(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Boy</label><input type="number" step="0.1" value={depth} onChange={e => setDepth(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Yükseklik</label><input type="number" step="0.1" value={height} onChange={e => setHeight(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
-        <div><label className="block text-xs text-gray-500 mb-0.5">Ağırlık</label><input type="number" step="0.01" value={weight} onChange={e => setWeight(e.target.value)} className="px-2 py-1.5 border rounded text-sm w-20" /></div>
-        <button type="submit" disabled={saving} className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5">
-          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />} Koli Ekle</button>
-      </form>
-    </div>
-  );
-}
