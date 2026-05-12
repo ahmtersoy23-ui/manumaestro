@@ -1,78 +1,47 @@
 /**
- * Seasonal Planning — Auto-redirect
- * Finds the active seasonal pool (or creates one) and redirects to its detail page.
- * There is always exactly one active seasonal pool.
+ * Seasonal Planning — Auto-redirect (Server Component).
+ *
+ * Aktif sezon havuzunu DB'den DİREKT çeker (cross-network fetch gerekmez) ve
+ * Next.js redirect() ile yönlendirir. Boş ise super-admin için create UI'ını
+ * Client Component'e devreder.
+ *
+ * Önceki client implementasyonu: fetch /api/stock-pools → JSON parse → router.replace
+ * Yeni: prisma sorgu (server-side) → redirect (HTTP 307, hızlı + JS gerekmez)
  */
 
-'use client';
+import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { AlertCircle } from 'lucide-react';
+import { prisma } from '@/lib/db/prisma';
+import { isSuperAdmin } from '@/lib/auth/verify';
+import { CreatePoolFallback } from './CreatePoolFallback';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
-import { AlertCircle, Loader2 } from 'lucide-react';
+export default async function SeasonalPage() {
+  const activePool = await prisma.stockPool.findFirst({
+    where: { status: { in: ['ACTIVE', 'RELEASING'] } },
+    select: { id: true },
+    orderBy: { createdAt: 'desc' },
+  });
 
-export default function SeasonalPage() {
-  const { role, isSuperAdmin } = useAuth();
-  const router = useRouter();
-  const [error, setError] = useState('');
+  if (activePool) {
+    redirect(`/dashboard/seasonal/${activePool.id}`);
+  }
 
-  useEffect(() => {
-    if (!role) return;
+  // Aktif havuz yok — yetki kontrolü
+  const h = await headers();
+  const email = h.get('x-user-email');
+  const superAdmin = isSuperAdmin(email);
 
-    (async () => {
-      try {
-        // Check for existing active/releasing seasonal pool
-        const res = await fetch('/api/stock-pools');
-        const data = await res.json();
-        if (!data.success) { setError('Havuz verileri alınamadı'); return; }
-
-        const activePool = data.data.find(
-          (p: { status: string }) => p.status === 'ACTIVE' || p.status === 'RELEASING'
-        );
-
-        if (activePool) {
-          router.replace(`/dashboard/seasonal/${activePool.id}`);
-          return;
-        }
-
-        // No active pool — only super-admin can create one
-        if (!isSuperAdmin) { setError('Aktif sezon havuzu yok'); return; }
-        const createRes = await fetch('/api/stock-pools', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: 'Sezon',
-            code: 'SEZON',
-            poolType: 'SEASONAL',
-          }),
-        });
-        const createData = await createRes.json();
-        if (createData.success) {
-          router.replace(`/dashboard/seasonal/${createData.data.id}`);
-        } else {
-          setError(createData.error || 'Havuz oluşturulamadı');
-        }
-      } catch {
-        setError('Bağlantı hatası');
-      }
-    })();
-  }, [role, router, isSuperAdmin]);
-
-
-  if (error) {
+  if (!superAdmin) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-3" />
-          <p className="text-gray-600">{error}</p>
+          <p className="text-gray-600">Aktif sezon havuzu yok</p>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
-    </div>
-  );
+  return <CreatePoolFallback />;
 }
