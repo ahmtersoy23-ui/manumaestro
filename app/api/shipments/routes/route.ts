@@ -14,8 +14,8 @@ const RouteSchema = z.object({
   marketplaceId: z.string().uuid(),
   destinationTab: z.enum(['US', 'UK', 'EU', 'NL', 'AU', 'ZA']),
   shippingMethod: z.enum(['sea', 'road', 'air']),
-  leadTimeDays: z.number().int().optional(),
-  notes: z.string().optional(),
+  leadTimeDays: z.number().int().min(0).max(365).optional(),
+  notes: z.string().max(1000).optional(),
 });
 
 export const GET = withRoute({ rateLimit: 'read', roles: ['admin'] }, async () => {

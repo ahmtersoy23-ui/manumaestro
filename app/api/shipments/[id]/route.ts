@@ -140,7 +140,7 @@ const UpdateShipmentSchema = z.object({
   plannedDate: z.string().datetime().optional(),
   actualDate: z.string().datetime().optional(),
   etaDate: z.string().datetime().optional(),
-  notes: z.string().optional(),
+  notes: z.string().max(1000).optional(),
 });
 
 export async function PATCH(request: NextRequest, { params }: Params) {
@@ -227,12 +227,12 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 // --- POST: Add items to shipment ---
 const AddItemSchema = z.object({
   items: z.array(z.object({
-    iwasku: z.string(),
+    iwasku: z.string().min(1).max(50),
     quantity: z.number().int().positive(),
     desi: z.number().optional(),
-    marketplaceId: z.string().optional(),
-    reserveId: z.string().optional(),
-  })).min(1),
+    marketplaceId: z.string().max(50).optional(),
+    reserveId: z.string().max(50).optional(),
+  })).min(1).max(500),
 });
 
 export async function POST(request: NextRequest, { params }: Params) {

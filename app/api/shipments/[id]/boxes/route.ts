@@ -71,11 +71,11 @@ export async function GET(request: NextRequest, { params }: Params) {
 // --- POST: Create box ---
 const CreateBoxSchema = z.object({
   shipmentItemId: z.string().uuid().optional().nullable(),
-  iwasku: z.string().optional().nullable(),
-  fnsku: z.string().optional().nullable(),
-  productName: z.string().optional().nullable(),
-  productCategory: z.string().optional().nullable(),
-  marketplaceCode: z.string().optional().nullable(),
+  iwasku: z.string().max(50).optional().nullable(),
+  fnsku: z.string().max(50).optional().nullable(),
+  productName: z.string().max(500).optional().nullable(),
+  productCategory: z.string().max(100).optional().nullable(),
+  marketplaceCode: z.string().max(50).optional().nullable(),
   destination: z.enum(['FBA', 'DEPO', 'SHOWROOM']).optional().default('DEPO'),
   quantity: z.number().int().positive().default(1),
   width: z.number().positive().optional().nullable(),
@@ -205,8 +205,8 @@ export async function DELETE(request: NextRequest, { params }: Params) {
 
 // --- PATCH: Set destination by box IDs or box numbers ---
 const SetDestinationSchema = z.object({
-  boxIds: z.array(z.string().uuid()).optional(),
-  boxNumbers: z.array(z.string()).optional(), // Koli no listesi ile toplu islem
+  boxIds: z.array(z.string().uuid()).max(1000).optional(),
+  boxNumbers: z.array(z.string().max(20)).max(1000).optional(), // Koli no listesi ile toplu islem
   destination: z.enum(['FBA', 'DEPO', 'SHOWROOM']),
 });
 

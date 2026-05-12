@@ -16,7 +16,7 @@ const CreateShipmentSchema = z.object({
   shippingMethod: z.enum(['sea', 'road', 'air']),
   plannedDate: z.string().datetime().optional(),
   etaDate: z.string().datetime().optional(),
-  notes: z.string().optional(),
+  notes: z.string().max(1000).optional(),
 });
 
 export async function GET(request: NextRequest) {
