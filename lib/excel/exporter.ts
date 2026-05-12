@@ -1,9 +1,13 @@
 /**
  * Excel Export Utility
- * Memory-efficient Excel export using streaming with ExcelJS
+ * Memory-efficient Excel export using streaming with ExcelJS.
+ *
+ * ExcelJS (~22MB unminified) yalnızca tipler için statik import edilir;
+ * runtime'da dynamic import ile lazy load — sadece export çağrıldığında
+ * memory'ye girer.
  */
 
-import ExcelJS from 'exceljs';
+import type ExcelJS from 'exceljs';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('Excel Exporter');
@@ -32,7 +36,8 @@ export async function createExcelWorkbook<T extends Record<string, any>>(
   data: T[],
   options: ExportOptions
 ): Promise<ExcelJS.Workbook> {
-  const workbook = new ExcelJS.Workbook();
+  const ExcelJSModule = (await import('exceljs')).default;
+  const workbook = new ExcelJSModule.Workbook();
 
   // Set workbook metadata
   workbook.creator = options.author || 'ManuMaestro';
