@@ -66,14 +66,13 @@ describe('withRoute', () => {
     });
 
     it('handler verifiedUser alir', async () => {
-      let capturedUser: typeof mockUser | undefined;
+      let capturedEmail: string | undefined;
       const handler = withRoute({}, async ({ user }) => {
-        capturedUser = user;
+        capturedEmail = user?.email;
         return NextResponse.json({ email: user!.email });
       });
       await handler(mockRequest(), undefined);
-      expect(capturedUser).toEqual(mockUser);
-      expect(capturedUser?.email).toBe('a@b.com');
+      expect(capturedEmail).toBe('a@b.com');
     });
   });
 

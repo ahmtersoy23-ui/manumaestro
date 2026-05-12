@@ -10,6 +10,7 @@ import { Search, Plus, Check, Calendar, AlertCircle } from 'lucide-react';
 import { getAvailableMonthsForEntry, formatMonthDisplay, getCurrentMonth, getDefaultEntryMonth, isMonthLocked } from '@/lib/monthUtils';
 import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
+import { notify } from '@/lib/ui/notify';
 
 const logger = createLogger('ManualEntryForm');
 
@@ -91,7 +92,7 @@ export function ManualEntryForm({ marketplaceId, onSuccess }: ManualEntryFormPro
     e.preventDefault();
 
     if (!productName) {
-      alert('Lütfen geçerli bir ürün seçin');
+      notify.warn('Lütfen geçerli bir ürün seçin');
       return;
     }
 
@@ -144,11 +145,11 @@ export function ManualEntryForm({ marketplaceId, onSuccess }: ManualEntryFormPro
           onSuccess();
         }
       } else {
-        alert(data.error || 'Talep oluşturulamadı');
+        notify.error(data.error || 'Talep oluşturulamadı');
       }
     } catch (error) {
       logger.error('Submit error:', error);
-      alert('Talep gönderilemedi');
+      notify.error('Talep gönderilemedi', error);
     } finally {
       setSubmitting(false);
     }

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ToastProvider } from "@/components/providers/ToastProvider";
+import { ConfirmProvider } from "@/components/ui/ConfirmDialog";
 import { PWARegister } from "@/components/PWARegister";
 import "./globals.css";
 
@@ -55,7 +56,9 @@ export default function RootLayout({
         </a>
         <ErrorBoundary>
           <AuthProvider>
-            {children}
+            <ConfirmProvider>
+              {children}
+            </ConfirmProvider>
           </AuthProvider>
           <ToastProvider />
           <PWARegister />

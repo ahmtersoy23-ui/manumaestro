@@ -8,6 +8,8 @@
 import { useEffect, useState } from 'react';
 import { Upload, FileText, Trash2, Printer, Download, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { notify } from '@/lib/ui/notify';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 
 const logger = createLogger('LabelUploader');
 
@@ -55,6 +57,7 @@ function formatBytes(b: number): string {
 }
 
 export function LabelUploader({ warehouseCode, orderId, role }: Props) {
+  const confirm = useConfirm();
   const [labels, setLabels] = useState<LabelDto[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -141,7 +144,7 @@ export function LabelUploader({ warehouseCode, orderId, role }: Props) {
       );
       const d = await res.json();
       if (!res.ok || !d.success) {
-        alert(d.error || 'Tracking güncellenemedi');
+        notify.error(d.error || 'Tracking güncellenemedi');
         return;
       }
       setEditingTrackingId(null);
@@ -149,12 +152,18 @@ export function LabelUploader({ warehouseCode, orderId, role }: Props) {
       setRefreshKey((k) => k + 1);
     } catch (e) {
       logger.error('Update tracking', e);
-      alert('Sunucu hatası');
+      notify.error('Sunucu hatası', e);
     }
   }
 
   async function handleDelete(labelId: string) {
-    if (!confirm('Etiket silinecek. Onaylıyor musun?')) return;
+    const ok = await confirm({
+      title: 'Etiketi sil?',
+      message: 'Bu işlem geri alınamaz.',
+      confirmLabel: 'Sil',
+      variant: 'danger',
+    });
+    if (!ok) return;
     try {
       const res = await fetch(
         `/api/depolar/${warehouseCode}/siparis/${orderId}/labels/${labelId}`,
@@ -162,13 +171,14 @@ export function LabelUploader({ warehouseCode, orderId, role }: Props) {
       );
       const d = await res.json();
       if (!res.ok || !d.success) {
-        alert(d.error || 'Silinemedi');
+        notify.error(d.error || 'Silinemedi');
         return;
       }
+      notify.success('Etiket silindi');
       setRefreshKey((k) => k + 1);
     } catch (e) {
       logger.error('Label delete', e);
-      alert('Sunucu hatası');
+      notify.error('Sunucu hatası', e);
     }
   }
 

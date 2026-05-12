@@ -24,6 +24,9 @@ const eslintConfig = defineConfig([
           destructuredArrayIgnorePattern: "^_",
         },
       ],
+      // alert/confirm/prompt native dialog yasak — toast/useConfirm kullan
+      // (lib/ui/notify.ts + components/ui/ConfirmDialog.tsx)
+      "no-alert": "warn",
     },
   },
 ]);

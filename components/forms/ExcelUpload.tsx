@@ -11,6 +11,7 @@ import * as XLSX from 'xlsx';
 import { getAvailableMonthsForEntry } from '@/lib/monthUtils';
 import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
+import { notify } from '@/lib/ui/notify';
 
 const logger = createLogger('ExcelUpload');
 
@@ -106,7 +107,7 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
       const rows = await parseExcel(file);
 
       if (rows.length === 0) {
-        alert('Excel dosyasında geçerli veri bulunamadı');
+        notify.warn('Excel dosyasında geçerli veri bulunamadı');
         setUploading(false);
         return;
       }
@@ -133,11 +134,11 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
         // Hide success message after 3 seconds
         setTimeout(() => setSuccess(false), 3000);
       } else {
-        alert(data.error || 'Talepler yüklenemedi');
+        notify.error(data.error || 'Talepler yüklenemedi');
       }
     } catch (error) {
       logger.error('Upload error:', error);
-      alert('Excel dosyası işlenemedi');
+      notify.error('Excel dosyası işlenemedi', error);
     } finally {
       setUploading(false);
     }
