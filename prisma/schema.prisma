@@ -691,6 +691,9 @@ model ShelfMovement {
   @@index([warehouseCode, createdAt])
   @@index([type])
   @@index([reverseOfId])
+  @@index([userId])
+  @@index([fromShelfId])
+  @@index([toShelfId])
   @@map("shelf_movements")
 }
 
@@ -727,6 +730,8 @@ model OutboundOrder {
 
   @@unique([warehouseCode, marketplaceCode, orderNumber])
   @@index([warehouseCode, status])
+  @@index([createdById])
+  @@index([shippedById])
   @@map("outbound_orders")
 }
 
@@ -860,6 +865,8 @@ model OrderLabel {
   @@index([outboundOrderId, type])
   @@index([shipmentBoxId])
   @@index([archivedAt])
+  @@index([uploadedById])
+  @@index([printedById])
   @@map("order_labels")
 }
 
@@ -893,6 +900,8 @@ model CycleCountTask {
 
   @@index([warehouseCode, status])
   @@index([shelfId])
+  @@index([assignedToId])
+  @@index([completedById])
   @@map("cycle_count_tasks")
 }
 
