@@ -13,13 +13,13 @@ import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { GPSR_LOGO_B64, GPSR_EURP_B64, GPSR_SYMBOLS_B64 } from '@/lib/labels/gpsr-assets';
 import { ExtraBoxForm } from '@/components/shipments/ExtraBoxForm';
 import { EditableBoxCell } from '@/components/shipments/EditableBoxCell';
-import { PendingItemRow } from '@/components/shipments/PendingItemRow';
 import { ExitItemsModal } from '@/components/shipments/ExitItemsModal';
 import { SPExportModal } from '@/components/shipments/SPExportModal';
 import { BulkFbaPanel } from '@/components/shipments/BulkFbaPanel';
 import { EditShipmentForm } from '@/components/shipments/EditShipmentForm';
 import { AddItemForm } from '@/components/shipments/AddItemForm';
 import { MissingFnskuWarning } from '@/components/shipments/MissingFnskuWarning';
+import { PendingItemsTable } from '@/components/shipments/PendingItemsTable';
 import type { BoxFormData, ShipmentItem, ShipmentBox } from '@/lib/shipments/types';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -27,7 +27,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   ArrowLeft, Plus, Send, Loader2, AlertCircle, Pencil,
   Package, Calendar, Anchor, Truck as TruckIcon, Plane,
-  Check, Square, CheckSquare, Download, Ship, X, Printer, Search, Copy, RefreshCw,
+  Square, CheckSquare, Download, Ship, X, Printer, Search, Copy, RefreshCw,
 } from 'lucide-react';
 
 // --- Types ---
@@ -792,6 +792,17 @@ export default function ShipmentDetailPage() {
     } catch { /* */ }
   };
 
+  const handleFnskuSaved = (itemId: string, fnsku: string) => {
+    setShipment(prev => prev ? {
+      ...prev,
+      items: prev.items.map(i => i.id === itemId ? { ...i, fnsku } : i),
+    } : prev);
+  };
+
+  const handleSendQtyChange = (itemId: string, qty: number) => {
+    setSendQtyOverrides(prev => ({ ...prev, [itemId]: qty }));
+  };
+
   // Karayolu/hava: ürün satırından GPSR'lı FNSKU etiket bas
   const handlePrintItemLabel = async (item: ShipmentItem, labelCount: number) => {
     const code = item.fnsku || item.iwasku;
@@ -1099,69 +1110,32 @@ export default function ShipmentDetailPage() {
             />
           )}
 
-          {/* Pending items table */}
-          <div className="bg-white border rounded-xl overflow-hidden">
-            {pendingItems.length > 0 ? (
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="w-12 px-3 py-3">
-                      {isActive && !isSea && canSend && packedPendingCount > 0 && (
-                        <button onClick={handleSelectAllPacked} className="text-gray-600 hover:text-purple-600" title="Hazırları seç">
-                          {packedPendingCount > 0 && [...selectedIds].length >= packedPendingCount ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
-                        </button>
-                      )}
-                    </th>
-                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">IWASKU</th>
-                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">FNSKU</th>
-                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Ürün Adı</th>
-                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Kategori</th>
-                    <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Pazar Yeri</th>
-                    {!isSea ? (
-                      <>
-                        <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Talep</th>
-                        <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Gönderilen</th>
-                      </>
-                    ) : (
-                      <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Miktar</th>
-                    )}
-                    <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">T. Desi</th>
-                    {isActive && <th className="w-10"></th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filteredPendingItems.map(item => {
-                    const itemDesi = (item.desi ?? 0) * item.quantity;
-                    const isExpanded = expandedItemId === item.id;
-                    const itemBoxes = boxes.filter(b => b.shipmentItemId === item.id);
-                    return (
-                      <PendingItemRow key={item.id} item={item} itemDesi={itemDesi} itemBoxes={itemBoxes}
-                        isSea={isSea} isActive={isActive} isExpanded={isExpanded}
-                        isSelected={selectedIds.has(item.id)} togglingId={togglingId}
-                        canBoxes={canBoxes} canPack={canPack} canSend={canSend} canDelete={canDelete}
-                        onTogglePacked={() => handleTogglePacked(item.id)}
-                        onToggleSelect={() => handleToggleSelect(item.id)}
-                        onToggleExpand={() => setExpandedItemId(isExpanded ? null : item.id)}
-                        onCreateBox={(form) => handleCreateBox(form, item.id)}
-                        onDeleteBox={handleDeleteBox}
-                        onDeleteItem={() => handleDeleteItem(item.id)}
-                        onFnskuSaved={(itemId, fnsku) => {
-                          setShipment(prev => prev ? {
-                            ...prev,
-                            items: prev.items.map(i => i.id === itemId ? { ...i, fnsku } : i),
-                          } : prev);
-                        }}
-                        onPrintLabel={handlePrintItemLabel}
-                        sendQty={!isSea ? sendQtyOverrides[item.id] : undefined}
-                        onSendQtyChange={!isSea ? (qty) => setSendQtyOverrides(prev => ({ ...prev, [item.id]: qty })) : undefined} />
-                    );
-                  })}
-                </tbody>
-              </table>
-            ) : (
-              <div className="text-center py-12"><Check className="w-10 h-10 text-green-300 mx-auto mb-3" /><p className="text-gray-500">Bekleyen ürün yok</p></div>
-            )}
-          </div>
+          <PendingItemsTable
+            items={filteredPendingItems}
+            boxes={boxes}
+            hasAnyPending={pendingItems.length > 0}
+            isSea={isSea}
+            isActive={isActive}
+            canBoxes={canBoxes}
+            canPack={canPack}
+            canSend={canSend}
+            canDelete={canDelete}
+            expandedItemId={expandedItemId}
+            selectedIds={selectedIds}
+            togglingId={togglingId}
+            packedPendingCount={packedPendingCount}
+            sendQtyOverrides={sendQtyOverrides}
+            onSelectAllPacked={handleSelectAllPacked}
+            onTogglePacked={handleTogglePacked}
+            onToggleSelect={handleToggleSelect}
+            onSetExpandedItemId={setExpandedItemId}
+            onCreateBox={handleCreateBox}
+            onDeleteBox={handleDeleteBox}
+            onDeleteItem={handleDeleteItem}
+            onFnskuSaved={handleFnskuSaved}
+            onPrintLabel={handlePrintItemLabel}
+            onSendQtyChange={handleSendQtyChange}
+          />
         </div>
       )}
 
