@@ -4,6 +4,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ToastProvider } from "@/components/providers/ToastProvider";
 import { ConfirmProvider } from "@/components/ui/ConfirmDialog";
+import { InputProvider } from "@/components/ui/InputDialog";
 import { PWARegister } from "@/components/PWARegister";
 import "./globals.css";
 
@@ -57,7 +58,9 @@ export default function RootLayout({
         <ErrorBoundary>
           <AuthProvider>
             <ConfirmProvider>
-              {children}
+              <InputProvider>
+                {children}
+              </InputProvider>
             </ConfirmProvider>
           </AuthProvider>
           <ToastProvider />

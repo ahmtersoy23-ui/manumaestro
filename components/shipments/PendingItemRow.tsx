@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { InlineFnskuInput } from './InlineFnskuInput';
 import { BoxEntryPanel } from './BoxEntryPanel';
+import { useInputDialog } from '@/components/ui/InputDialog';
 import type { BoxFormData, ShipmentItem, ShipmentBox } from '@/lib/shipments/types';
 
 interface Props {
@@ -43,6 +44,7 @@ export function PendingItemRow({
   onTogglePacked, onToggleSelect, onToggleExpand, onCreateBox, onDeleteBox, onDeleteItem, onFnskuSaved,
   onPrintLabel, sendQty, onSendQtyChange,
 }: Props) {
+  const inputDialog = useInputDialog();
   // Deniz renk kodlama: kolilerdeki toplam adet vs item miktar
   const boxQtyTotal = itemBoxes.reduce((s, b) => s + b.quantity, 0);
   const rowBg = isSea
@@ -108,8 +110,15 @@ export function PendingItemRow({
           <td className="px-2 py-3 text-center">
             <div className="flex items-center gap-1 justify-center">
               {!isSea && (item.fnsku || item.iwasku) && (
-                <button onClick={() => {
-                  const input = prompt(`${item.iwasku} — Kaç etiket basılsın?`, String(item.quantity));
+                <button onClick={async () => {
+                  const input = await inputDialog({
+                    title: 'Etiket yazdır',
+                    message: `${item.iwasku} — Kaç etiket basılsın?`,
+                    defaultValue: String(item.quantity),
+                    inputType: 'number',
+                    min: 1,
+                    confirmLabel: 'Yazdır',
+                  });
                   if (input) { const n = parseInt(input); if (n > 0) onPrintLabel(item, n); }
                 }} className="text-gray-300 hover:text-blue-600 transition-colors" title="Etiket yazdır">
                   <Printer className="w-4 h-4" />
