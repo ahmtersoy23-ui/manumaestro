@@ -112,19 +112,21 @@ export async function middleware(request: NextRequest) {
         { status: 401 }
       );
     }
-    return NextResponse.redirect(new URL(SSO_URL, request.url));
+    return NextResponse.redirect(new URL(SSO_URL));
   }
 
   try {
     logger.debug('Verifying token with SSO backend...');
-    // Verify token with SSO
+    // SSO down/hung olursa middleware sonsuz beklemesin → request pile-up + DoS.
+    // 5sn timeout; üstte try/catch zaten 503 dönüyor.
     const ssoResponse = await fetch(`${SSO_URL}/api/auth/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         token,
         app_code: SSO_APP_CODE
-      })
+      }),
+      signal: AbortSignal.timeout(5000),
     });
 
     logger.debug('SSO response status:', ssoResponse.status);
@@ -134,7 +136,7 @@ export async function middleware(request: NextRequest) {
     if (!data.success) {
       logger.debug('Token invalid, redirecting to SSO');
       // Invalid token - clear cookie and redirect to SSO
-      const redirectResponse = NextResponse.redirect(new URL(SSO_URL, request.url));
+      const redirectResponse = NextResponse.redirect(new URL(SSO_URL));
       redirectResponse.cookies.delete('sso_access_token');
       return redirectResponse;
     }
@@ -179,7 +181,7 @@ export async function middleware(request: NextRequest) {
         { status: 503 }
       );
     }
-    const redirectResponse = NextResponse.redirect(new URL(SSO_URL, request.url));
+    const redirectResponse = NextResponse.redirect(new URL(SSO_URL));
     redirectResponse.cookies.delete('sso_access_token');
     return redirectResponse;
   }

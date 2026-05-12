@@ -78,11 +78,13 @@ export async function verifyAuth(request: NextRequest): Promise<AuthResult> {
       return cached.result;
     }
 
-    // Verify token with SSO backend
+    // Verify token with SSO backend. 5sn timeout — SSO down/hung olursa
+    // bütün API request'leri kilitlenmesin.
     const response = await fetch(SSO_VERIFY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token, app_code: APP_CODE }),
+      signal: AbortSignal.timeout(5000),
     });
 
     if (!response.ok) {
