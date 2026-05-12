@@ -4,39 +4,22 @@
  * GET: List requests with filters
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { Prisma, EntryType, RequestStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { enrichProductSize } from '@/lib/db/enrichProductSize';
-import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-import { verifyAuth, checkMarketplacePermission, isSuperAdmin } from '@/lib/auth/verify';
+import { checkMarketplacePermission, isSuperAdmin } from '@/lib/auth/verify';
 import { ProductionRequestSchema, formatValidationError } from '@/lib/validation/schemas';
-import { errorResponse } from '@/lib/api/response';
 import { logAction } from '@/lib/auditLog';
 import { revalidateTag } from 'next/cache';
 import { isMonthLocked } from '@/lib/monthUtils';
+import { withRoute } from '@/lib/api/withRoute';
 
-export async function POST(request: NextRequest) {
-  try {
-    // Rate limiting: 100 requests per minute for write operations
-    const rateLimitResult = await rateLimiters.write.check(request, 'create-request');
-    if (!rateLimitResult.success) {
-      return rateLimitExceededResponse(rateLimitResult);
-    }
-
-    // Authentication
-    const authResult = await verifyAuth(request);
-    if (!authResult.success || !authResult.user) {
-      return NextResponse.json(
-        { success: false, error: authResult.error || 'Yetkisiz erişim' },
-        { status: 401 }
-      );
-    }
-    const user = authResult.user;
-
+export const POST = withRoute(
+  { rateLimit: 'write', fallbackMessage: 'Talep oluşturulamadı' },
+  async ({ request, user }) => {
     const body = await request.json();
 
-    // Zod validation
     const validation = ProductionRequestSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json(
@@ -52,7 +35,7 @@ export async function POST(request: NextRequest) {
     const { iwasku, productName, productCategory, productSize, marketplaceId, quantity, productionMonth, notes, priority } = validation.data;
 
     // Yetkilendirme: süper-admin değilse, kilitli ay yasak + marketplace edit izni gerekli
-    const userIsSuperAdmin = isSuperAdmin(user.email);
+    const userIsSuperAdmin = isSuperAdmin(user!.email);
     if (!userIsSuperAdmin) {
       if (isMonthLocked(productionMonth)) {
         return NextResponse.json(
@@ -60,7 +43,7 @@ export async function POST(request: NextRequest) {
           { status: 403 }
         );
       }
-      const permCheck = await checkMarketplacePermission(user.id, user.role, marketplaceId, 'edit');
+      const permCheck = await checkMarketplacePermission(user!.id, user!.role, marketplaceId, 'edit');
       if (!permCheck.allowed) {
         return NextResponse.json(
           { success: false, error: permCheck.reason || 'Bu pazar yerine talep oluşturamazsınız' },
@@ -106,16 +89,16 @@ export async function POST(request: NextRequest) {
           priority: priority ?? 'MEDIUM',
           entryType: EntryType.MANUAL,
           status: RequestStatus.REQUESTED,
-          enteredById: user.id,
+          enteredById: user!.id,
         },
         include: { marketplace: true },
       });
     }
 
     await logAction({
-      userId: user.id,
-      userName: user.name,
-      userEmail: user.email,
+      userId: user!.id,
+      userName: user!.name,
+      userEmail: user!.email,
       action: wasUpdated ? 'UPDATE_REQUEST' : 'CREATE_REQUEST',
       entityType: 'ProductionRequest',
       entityId: productionRequest.id,
@@ -133,28 +116,12 @@ export async function POST(request: NextRequest) {
       updated: wasUpdated,
       warning: !productSize ? `${iwasku} ürününde desi verisi eksik. Lütfen PriceLab'den güncelleyin.` : undefined,
     });
-  } catch (error) {
-    return errorResponse(error, 'Talep oluşturulamadı');
   }
-}
+);
 
-export async function GET(request: NextRequest) {
-  try {
-    // Rate limiting: 200 requests per minute for read operations
-    const rateLimitResult = await rateLimiters.read.check(request, 'list-requests');
-    if (!rateLimitResult.success) {
-      return rateLimitExceededResponse(rateLimitResult);
-    }
-
-    // Authentication: Require any authenticated user (viewer, editor, or admin)
-    const auth = await verifyAuth(request);
-    if (!auth.success || !auth.user) {
-      return NextResponse.json(
-        { success: false, error: auth.error || 'Yetkisiz erişim' },
-        { status: 401 }
-      );
-    }
-
+export const GET = withRoute(
+  { rateLimit: 'read', fallbackMessage: 'Talepler getirilemedi' },
+  async ({ request }) => {
     const searchParams = request.nextUrl.searchParams;
     const marketplaceId = searchParams.get('marketplaceId');
     const status = searchParams.get('status');
@@ -199,9 +166,6 @@ export async function GET(request: NextRequest) {
       where.productionMonth = {
         lt: oldestActiveMonth,
       };
-    } else {
-      // No filter - show all (will be handled by frontend month tabs)
-      // This case shouldn't happen in normal usage
     }
 
     const [requests, total] = await Promise.all([
@@ -265,7 +229,5 @@ export async function GET(request: NextRequest) {
         totalPages,
       },
     });
-  } catch (error) {
-    return errorResponse(error, 'Talepler getirilemedi');
   }
-}
+);

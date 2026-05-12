@@ -3,42 +3,32 @@
  * GET: Returns total requests and quantities for a specific production month
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { enrichProductSize } from '@/lib/db/enrichProductSize';
-import { successResponse, errorResponse } from '@/lib/api/response';
-import { ValidationError } from '@/lib/api/errors';
-import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-import { verifyAuth } from '@/lib/auth/verify';
+import { successResponse } from '@/lib/api/response';
+import { withRoute } from '@/lib/api/withRoute';
 
-export async function GET(request: NextRequest) {
-  try {
-    // Rate limiting: 200 requests per minute for read operations
-    const rateLimitResult = await rateLimiters.read.check(request, 'monthly-stats');
-    if (!rateLimitResult.success) {
-      return rateLimitExceededResponse(rateLimitResult);
-    }
-
-    // Authentication: Require any authenticated user
-    const auth = await verifyAuth(request);
-    if (!auth.success || !auth.user) {
-      return NextResponse.json(
-        { success: false, error: auth.error || 'Yetkisiz erişim' },
-        { status: 401 }
-      );
-    }
-
+export const GET = withRoute(
+  { rateLimit: 'read', fallbackMessage: 'Aylık istatistikler getirilemedi' },
+  async ({ request }) => {
     const { searchParams } = new URL(request.url);
     const month = searchParams.get('month');
 
     if (!month) {
-      throw new ValidationError('Ay parametresi gereklidir');
+      return NextResponse.json(
+        { success: false, error: 'Ay parametresi gereklidir' },
+        { status: 400 }
+      );
     }
 
     // Validate month format (YYYY-MM)
     const monthRegex = /^\d{4}-\d{2}$/;
     if (!monthRegex.test(month)) {
-      throw new ValidationError('Geçersiz ay formatı. Beklenen: YYYY-MM');
+      return NextResponse.json(
+        { success: false, error: 'Geçersiz ay formatı. Beklenen: YYYY-MM' },
+        { status: 400 }
+      );
     }
 
     // Optional status filter (comma-separated)
@@ -211,8 +201,6 @@ export async function GET(request: NextRequest) {
       0
     );
 
-    // Debug info now in response meta
-
     const itemsWithoutSize = requests.filter(r => !r.productSize).length;
 
     // Get details of items without size
@@ -253,7 +241,5 @@ export async function GET(request: NextRequest) {
         },
       }
     );
-  } catch (error) {
-    return errorResponse(error, 'Aylık istatistikler getirilemedi');
   }
-}
+);

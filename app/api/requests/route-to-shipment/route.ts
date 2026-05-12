@@ -3,16 +3,19 @@
  * POST: Route completed production requests to a shipment
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { enrichProductSize } from '@/lib/db/enrichProductSize';
 import { requireShipmentAction } from '@/lib/auth/requireShipmentRole';
 import { RouteToShipmentSchema, formatValidationError } from '@/lib/validation/schemas';
-import { errorResponse } from '@/lib/api/response';
 import { logAction } from '@/lib/auditLog';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
-export async function POST(request: NextRequest) {
-  try {
+// requireShipmentAction destinasyon-bazlı özel yetki — handler içinde tutuluyor.
+export const POST = withRoute(
+  { skipAuth: true, rateLimit: 'write', fallbackMessage: 'Sevkiyata yönlendirme başarısız' },
+  async ({ request }) => {
     const body = await request.json();
     const validation = RouteToShipmentSchema.safeParse(body);
     if (!validation.success) {
@@ -131,11 +134,6 @@ export async function POST(request: NextRequest) {
       metadata: { requestIds, shipmentName: shipment.name, itemCount: items.length },
     });
 
-    return NextResponse.json({
-      success: true,
-      data: { routed: items.length, shipmentName: shipment.name },
-    });
-  } catch (error) {
-    return errorResponse(error, 'Sevkiyata yönlendirme başarısız');
+    return successResponse({ routed: items.length, shipmentName: shipment.name });
   }
-}
+);

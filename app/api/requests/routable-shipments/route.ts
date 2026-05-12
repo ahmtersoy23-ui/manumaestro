@@ -3,13 +3,16 @@
  * GET: Find available shipments for a marketplace's destination
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireShipmentView } from '@/lib/auth/requireShipmentRole';
-import { errorResponse } from '@/lib/api/response';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
-export async function GET(request: NextRequest) {
-  try {
+// requireShipmentView destinasyon-bazlı özel yetki — handler içinde tutuluyor.
+export const GET = withRoute(
+  { skipAuth: true, rateLimit: 'read', fallbackMessage: 'Uygun sevkiyatlar getirilemedi' },
+  async ({ request }) => {
     const authResult = await requireShipmentView(request);
     if (authResult instanceof NextResponse) return authResult;
 
@@ -27,10 +30,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (!route) {
-      return NextResponse.json({
-        success: true,
-        data: { shipments: [], destinationTab: null },
-      });
+      return successResponse({ shipments: [], destinationTab: null });
     }
 
     // O destinasyondaki aktif sevkiyatları getir (PLANNING veya LOADING)
@@ -49,11 +49,6 @@ export async function GET(request: NextRequest) {
       orderBy: { plannedDate: 'asc' },
     });
 
-    return NextResponse.json({
-      success: true,
-      data: { shipments, destinationTab: route.destinationTab },
-    });
-  } catch (error) {
-    return errorResponse(error, 'Uygun sevkiyatlar getirilemedi');
+    return successResponse({ shipments, destinationTab: route.destinationTab });
   }
-}
+);

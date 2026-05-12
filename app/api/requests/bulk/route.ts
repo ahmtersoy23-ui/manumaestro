@@ -3,35 +3,20 @@
  * POST: Create multiple production requests from Excel upload
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { Prisma, EntryType, RequestStatus } from '@prisma/client';
 import { prisma, queryProductDb } from '@/lib/db/prisma';
 import { BulkRequestSchema, formatValidationError } from '@/lib/validation/schemas';
-import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-import { verifyAuth, checkMarketplacePermission, isSuperAdmin } from '@/lib/auth/verify';
+import { checkMarketplacePermission, isSuperAdmin } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
 import { revalidateTag } from 'next/cache';
-import { errorResponse } from '@/lib/api/response';
 import { isMonthLocked } from '@/lib/monthUtils';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
-export async function POST(request: NextRequest) {
-  try {
-    // Rate limiting: 10 requests per minute for bulk operations
-    const rateLimitResult = await rateLimiters.bulk.check(request, 'bulk-upload');
-    if (!rateLimitResult.success) {
-      return rateLimitExceededResponse(rateLimitResult);
-    }
-
-    // Authentication
-    const authResult = await verifyAuth(request);
-    if (!authResult.success || !authResult.user) {
-      return NextResponse.json(
-        { success: false, error: authResult.error || 'Yetkisiz erişim' },
-        { status: 401 }
-      );
-    }
-    const user = authResult.user;
-
+export const POST = withRoute(
+  { rateLimit: 'bulk', fallbackMessage: 'Toplu talepler oluşturulamadı' },
+  async ({ request, user }) => {
     const body = await request.json();
 
     // Validate input with Zod
@@ -51,7 +36,7 @@ export async function POST(request: NextRequest) {
     const { marketplaceId, productionMonth, requests } = validation.data;
 
     // Yetkilendirme: süper-admin değilse, kilitli ay yasak + marketplace edit izni gerekli
-    const userIsSuperAdmin = isSuperAdmin(user.email);
+    const userIsSuperAdmin = isSuperAdmin(user!.email);
     if (!userIsSuperAdmin) {
       if (isMonthLocked(productionMonth)) {
         return NextResponse.json(
@@ -59,7 +44,7 @@ export async function POST(request: NextRequest) {
           { status: 403 }
         );
       }
-      const permCheck = await checkMarketplacePermission(user.id, user.role, marketplaceId, 'edit');
+      const permCheck = await checkMarketplacePermission(user!.id, user!.role, marketplaceId, 'edit');
       if (!permCheck.allowed) {
         return NextResponse.json(
           { success: false, error: permCheck.reason || 'Bu pazar yerine talep oluşturamazsınız' },
@@ -138,7 +123,7 @@ export async function POST(request: NextRequest) {
           priority: item.priority ?? 'MEDIUM',
           entryType: EntryType.EXCEL,
           status: RequestStatus.REQUESTED,
-          enteredById: user.id,
+          enteredById: user!.id,
         });
       }
     }
@@ -162,9 +147,9 @@ export async function POST(request: NextRequest) {
     const updatedCount = toUpdate.length;
 
     await logAction({
-      userId: user.id,
-      userName: user.name,
-      userEmail: user.email,
+      userId: user!.id,
+      userName: user!.name,
+      userEmail: user!.email,
       action: 'BULK_UPLOAD',
       entityType: 'ProductionRequest',
       description: `Toplu yükleme: ${createdCount} yeni, ${updatedCount} güncellendi, ${errors.length} hata (${productionMonth}, pazaryeri: ${marketplaceId})`,
@@ -173,16 +158,11 @@ export async function POST(request: NextRequest) {
 
     if (createdCount > 0 || updatedCount > 0) revalidateTag('dashboard-stats', 'default');
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        created: createdCount,
-        updated: updatedCount,
-        errors: errors.length > 0 ? errors : undefined,
-        warnings: warnings.length > 0 ? warnings : undefined,
-      },
+    return successResponse({
+      created: createdCount,
+      updated: updatedCount,
+      errors: errors.length > 0 ? errors : undefined,
+      warnings: warnings.length > 0 ? warnings : undefined,
     });
-  } catch (error) {
-    return errorResponse(error, 'Toplu talepler oluşturulamadı');
   }
-}
+);

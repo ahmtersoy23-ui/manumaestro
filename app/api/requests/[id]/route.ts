@@ -3,32 +3,21 @@
  * DELETE: Delete a specific request
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { requireSuperAdmin } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
 import { revalidateTag } from 'next/cache';
-import { errorResponse } from '@/lib/api/response';
+import { withRoute } from '@/lib/api/withRoute';
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const rateLimitResult = await rateLimiters.write.check(request, 'delete-request');
-    if (!rateLimitResult.success) {
-      return rateLimitExceededResponse(rateLimitResult);
-    }
-
-    // Authorization: Süper-admin gerekli (talep silme kritik aksiyon)
+// requireSuperAdmin audit-log'lu kritik aksiyon — handler içinde tutuluyor.
+export const DELETE = withRoute<{ id: string }>(
+  { skipAuth: true, rateLimit: 'write', fallbackMessage: 'Talep silinemedi' },
+  async ({ request, params }) => {
     const authResult = await requireSuperAdmin(request);
-    if (authResult instanceof NextResponse) {
-      return authResult;
-    }
+    if (authResult instanceof NextResponse) return authResult;
     const { user } = authResult;
-
-    const { id } = await params;
+    const { id } = params;
 
     if (!id) {
       return NextResponse.json(
@@ -70,7 +59,5 @@ export async function DELETE(
       success: true,
       message: 'Talep başarıyla silindi',
     });
-  } catch (error) {
-    return errorResponse(error, 'Talep silinemedi');
   }
-}
+);
