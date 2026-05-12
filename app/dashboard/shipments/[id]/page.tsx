@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { notify } from '@/lib/ui/notify';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { GPSR_LOGO_B64, GPSR_EURP_B64, GPSR_SYMBOLS_B64 } from '@/lib/labels/gpsr-assets';
@@ -15,7 +15,7 @@ import { ExtraBoxForm } from '@/components/shipments/ExtraBoxForm';
 import { InlineFnskuInput } from '@/components/shipments/InlineFnskuInput';
 import { BoxEntryPanel } from '@/components/shipments/BoxEntryPanel';
 import { EditableBoxCell } from '@/components/shipments/EditableBoxCell';
-import { MKT_CODE_TO_COUNTRY, type BoxFormData, type ShipmentItem, type ShipmentBox } from '@/lib/shipments/types';
+import type { BoxFormData, ShipmentItem, ShipmentBox } from '@/lib/shipments/types';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
