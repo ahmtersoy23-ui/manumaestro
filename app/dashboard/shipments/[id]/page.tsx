@@ -17,6 +17,9 @@ import { PendingItemRow } from '@/components/shipments/PendingItemRow';
 import { ExitItemsModal } from '@/components/shipments/ExitItemsModal';
 import { SPExportModal } from '@/components/shipments/SPExportModal';
 import { BulkFbaPanel } from '@/components/shipments/BulkFbaPanel';
+import { EditShipmentForm } from '@/components/shipments/EditShipmentForm';
+import { AddItemForm } from '@/components/shipments/AddItemForm';
+import { MissingFnskuWarning } from '@/components/shipments/MissingFnskuWarning';
 import type { BoxFormData, ShipmentItem, ShipmentBox } from '@/lib/shipments/types';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -979,39 +982,14 @@ export default function ShipmentDetailPage() {
         </div>
       </div>
 
-      {/* Edit Panel */}
       {editing && (
-        <div className="bg-white border border-blue-200 rounded-xl p-5 space-y-4">
-          <h3 className="font-semibold text-gray-900">Sevkiyat Bilgilerini Düzenle</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">İsim</label>
-              <input type="text" value={editForm.name} disabled className="w-full px-3 py-2 border rounded-lg text-sm bg-gray-50 text-gray-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Planlanan Tarih</label>
-              <input type="date" value={editForm.plannedDate} onChange={e => setEditForm(f => ({ ...f, plannedDate: e.target.value }))}
-                className="w-full px-3 py-2 border rounded-lg text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tahmini Varış (ETA)</label>
-              <input type="date" value={editForm.etaDate} onChange={e => setEditForm(f => ({ ...f, etaDate: e.target.value }))}
-                className="w-full px-3 py-2 border rounded-lg text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Not</label>
-              <input type="text" value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
-                className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Sevkiyat notu..." />
-            </div>
-          </div>
-          <div className="flex gap-3">
-            <button onClick={handleSaveEdit} disabled={saving}
-              className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
-              {saving && <Loader2 className="w-4 h-4 animate-spin" />} Kaydet
-            </button>
-            <button onClick={() => setEditing(false)} className="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">İptal</button>
-          </div>
-        </div>
+        <EditShipmentForm
+          form={editForm}
+          saving={saving}
+          onChange={setEditForm}
+          onSave={handleSaveEdit}
+          onCancel={() => setEditing(false)}
+        />
       )}
 
       {/* Summary */}
@@ -1035,27 +1013,10 @@ export default function ShipmentDetailPage() {
         </div>
       </div>
 
-      {/* FNSKU Eksik Uyarisi */}
-      {(() => {
-        const missingFnsku = pendingItems.filter(i => !i.fnsku && i.marketplace?.code?.startsWith('AMZN'));
-        if (missingFnsku.length === 0) return null;
-        return (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-semibold text-amber-800">{missingFnsku.length} üründe FNSKU eksik</p>
-                <p className="text-xs text-amber-600 mt-1">Tabloda &quot;Eksik&quot; yazan hücreye tıklayarak FNSKU girebilirsiniz.</p>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {missingFnsku.map(i => (
-                    <span key={i.id} className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded text-xs font-mono">{i.iwasku}</span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      <MissingFnskuWarning
+        items={pendingItems.filter(i => !i.fnsku && i.marketplace?.code?.startsWith('AMZN'))}
+      />
+
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b">
@@ -1129,20 +1090,13 @@ export default function ShipmentDetailPage() {
           </div>
 
           {showAddItem && (
-            <form onSubmit={handleAddItem} className="bg-white border border-blue-200 rounded-xl p-4 flex flex-wrap gap-3 items-end">
-              <div><label className="block text-xs font-medium text-gray-600 mb-1">IWASKU</label>
-                <input type="text" required value={addForm.iwasku} onChange={e => setAddForm(f => ({ ...f, iwasku: e.target.value }))} className="px-3 py-2 border rounded-lg text-sm w-48" /></div>
-              <div><label className="block text-xs font-medium text-gray-600 mb-1">Miktar</label>
-                <input type="number" required value={addForm.quantity} onChange={e => setAddForm(f => ({ ...f, quantity: e.target.value }))} className="px-3 py-2 border rounded-lg text-sm w-24" /></div>
-              <div><label className="block text-xs font-medium text-gray-600 mb-1">Pazaryeri</label>
-                <select required value={addForm.marketplaceId} onChange={e => setAddForm(f => ({ ...f, marketplaceId: e.target.value }))}
-                  className="px-3 py-2 border rounded-lg text-sm w-48">
-                  <option value="">Seçiniz</option>
-                  {allMarketplaces.map(mp => <option key={mp.id} value={mp.id}>{mp.name}</option>)}
-                </select></div>
-              <button type="submit" disabled={adding} className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
-                {adding && <Loader2 className="w-4 h-4 animate-spin" />} Ekle</button>
-            </form>
+            <AddItemForm
+              form={addForm}
+              marketplaces={allMarketplaces}
+              adding={adding}
+              onChange={setAddForm}
+              onSubmit={handleAddItem}
+            />
           )}
 
           {/* Pending items table */}
