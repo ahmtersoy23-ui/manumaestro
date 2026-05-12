@@ -12,20 +12,22 @@
  * Allocator input: region keyli split (AMZN_US + WAYFAIR_US → US) — Marketplace.code → region map ile türetilir
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { queryProductDb } from '@/lib/db/prisma';
-import { requireRole } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
 import {
   allocateReserves,
   loadCodeToRegionMap,
   marketplaceSplitToRegionSplit,
   isSeasonalEligibleCategory,
+  summarizeByMonth,
   type ReserveInput,
   type MonthCapacity,
 } from '@/lib/seasonal';
 import { z } from 'zod';
+import { withRoute } from '@/lib/api/withRoute';
+import { createdResponse } from '@/lib/api/response';
 
 const ImportItemSchema = z.object({
   iwasku: z.string().min(1),
@@ -45,286 +47,281 @@ const ImportSchema = z.object({
   autoAllocate: z.boolean().default(true),
 });
 
-type Params = { params: Promise<{ id: string }> };
+export const POST = withRoute<{ id: string }>(
+  { roles: ['admin', 'editor'], rateLimit: 'bulk', fallbackMessage: 'Sezon planı aktarılamadı' },
+  async ({ request, user, params }) => {
+    const { id } = params;
 
-export async function POST(request: NextRequest, { params }: Params) {
-  const authResult = await requireRole(request, ['admin', 'editor']);
-  if (authResult instanceof NextResponse) return authResult;
-  const { user } = authResult;
-  const { id } = await params;
-
-  // Verify pool exists and is active
-  const pool = await prisma.stockPool.findUnique({ where: { id } });
-  if (!pool) {
-    return NextResponse.json({ success: false, error: 'Havuz bulunamadı' }, { status: 404 });
-  }
-  if (pool.status !== 'ACTIVE') {
-    return NextResponse.json({ success: false, error: 'Sadece aktif havuzlara aktarım yapılabilir' }, { status: 400 });
-  }
-
-  const body = await request.json();
-  const validation = ImportSchema.safeParse(body);
-  if (!validation.success) {
-    return NextResponse.json(
-      { success: false, error: 'Doğrulama hatası', details: validation.error.flatten().fieldErrors },
-      { status: 400 }
-    );
-  }
-
-  const { items, months, autoAllocate } = validation.data;
-
-  // Editor: sadece canEdit=true olan pazar yerlerine veri girebilir
-  if (user.role !== 'admin') {
-    const editableCodes = new Set(
-      (await prisma.userMarketplacePermission.findMany({
-        where: { userId: user.id, canEdit: true },
-        select: { marketplace: { select: { code: true } } },
-      })).map(r => r.marketplace.code)
-    );
-    const itemsMpCodes = new Set(items.map(i => i.marketplace).filter((c): c is string => !!c));
-    const forbidden = [...itemsMpCodes].filter(c => !editableCodes.has(c));
-    if (forbidden.length > 0) {
-      return NextResponse.json({
-        success: false,
-        error: `Şu pazar yerlerine düzenleme yetkiniz yok: ${forbidden.join(', ')}`,
-      }, { status: 403 });
+    // Verify pool exists and is active
+    const pool = await prisma.stockPool.findUnique({ where: { id } });
+    if (!pool) {
+      return NextResponse.json({ success: false, error: 'Havuz bulunamadı' }, { status: 404 });
     }
-    // Marketplace belirtilmemiş satır (generic quantity) editor için kabul edilmez
-    if (items.some(i => !i.marketplace)) {
-      return NextResponse.json({
-        success: false,
-        error: 'Her satır için pazar yeri belirtilmelidir (editor rolü generic talep giremez)',
-      }, { status: 403 });
+    if (pool.status !== 'ACTIVE') {
+      return NextResponse.json({ success: false, error: 'Sadece aktif havuzlara aktarım yapılabilir' }, { status: 400 });
     }
-  }
 
-  // Enrich items with product data from pricelab_db.
-  // Desi VEYA category eksikse enrich edilir; size=NULL olsa bile category gelsin diye
-  // size filtresi YOK (downstream 0 desi kontrolü ayrı yapılıyor).
-  const iwaskusNeedingEnrichment = items
-    .filter(i => !i.desi || !i.category)
-    .map(i => i.iwasku);
-  const productDataMap = new Map<string, { desi: number; category: string }>();
-
-  if (iwaskusNeedingEnrichment.length > 0) {
-    try {
-      const placeholders = iwaskusNeedingEnrichment.map((_, i) => `$${i + 1}`).join(',');
-      const rows = await queryProductDb(
-        `SELECT product_sku AS iwasku, COALESCE(manual_size, size) AS desi, category
-         FROM products WHERE product_sku IN (${placeholders})`,
-        iwaskusNeedingEnrichment
+    const body = await request.json();
+    const validation = ImportSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json(
+        { success: false, error: 'Doğrulama hatası', details: validation.error.flatten().fieldErrors },
+        { status: 400 }
       );
-      for (const row of rows) {
-        productDataMap.set(row.iwasku, {
-          desi: parseFloat(row.desi) || 0,
-          category: row.category || '',
+    }
+
+    const { items, months, autoAllocate } = validation.data;
+
+    // Editor: sadece canEdit=true olan pazar yerlerine veri girebilir
+    if (user!.role !== 'admin') {
+      const editableCodes = new Set(
+        (await prisma.userMarketplacePermission.findMany({
+          where: { userId: user!.id, canEdit: true },
+          select: { marketplace: { select: { code: true } } },
+        })).map(r => r.marketplace.code)
+      );
+      const itemsMpCodes = new Set(items.map(i => i.marketplace).filter((c): c is string => !!c));
+      const forbidden = [...itemsMpCodes].filter(c => !editableCodes.has(c));
+      if (forbidden.length > 0) {
+        return NextResponse.json({
+          success: false,
+          error: `Şu pazar yerlerine düzenleme yetkiniz yok: ${forbidden.join(', ')}`,
+        }, { status: 403 });
+      }
+      // Marketplace belirtilmemiş satır (generic quantity) editor için kabul edilmez
+      if (items.some(i => !i.marketplace)) {
+        return NextResponse.json({
+          success: false,
+          error: 'Her satır için pazar yeri belirtilmelidir (editor rolü generic talep giremez)',
+        }, { status: 403 });
+      }
+    }
+
+    // Enrich items with product data from pricelab_db.
+    // Desi VEYA category eksikse enrich edilir; size=NULL olsa bile category gelsin diye
+    // size filtresi YOK (downstream 0 desi kontrolü ayrı yapılıyor).
+    const iwaskusNeedingEnrichment = items
+      .filter(i => !i.desi || !i.category)
+      .map(i => i.iwasku);
+    const productDataMap = new Map<string, { desi: number; category: string }>();
+
+    if (iwaskusNeedingEnrichment.length > 0) {
+      try {
+        const placeholders = iwaskusNeedingEnrichment.map((_, i) => `$${i + 1}`).join(',');
+        const rows = await queryProductDb(
+          `SELECT product_sku AS iwasku, COALESCE(manual_size, size) AS desi, category
+           FROM products WHERE product_sku IN (${placeholders})`,
+          iwaskusNeedingEnrichment
+        );
+        for (const row of rows) {
+          productDataMap.set(row.iwasku, {
+            desi: parseFloat(row.desi) || 0,
+            category: row.category || '',
+          });
+        }
+      } catch {
+        // Continue without enrichment — desi/category will fall back to existing or empty
+      }
+    }
+
+    // Merge items by iwasku (same product from different marketplace sheets)
+    const mergedMap = new Map<string, {
+      quantity: number; desi: number; category: string;
+      marketplaceSplit: Record<string, number>;
+    }>();
+    const skippedNonEligible: { iwasku: string; category: string }[] = [];
+
+    for (const item of items) {
+      const enriched = productDataMap.get(item.iwasku);
+      const effectiveCategory = item.category || enriched?.category || '';
+
+      // Sezon planına uygun olmayan kategorileri (Alsat/Mobilya/Tekstil) atla
+      if (!isSeasonalEligibleCategory(effectiveCategory)) {
+        if (!skippedNonEligible.some(s => s.iwasku === item.iwasku)) {
+          skippedNonEligible.push({ iwasku: item.iwasku, category: effectiveCategory });
+        }
+        continue;
+      }
+
+      const existing = mergedMap.get(item.iwasku);
+      if (existing) {
+        existing.quantity += item.quantity;
+        if (item.marketplace) {
+          existing.marketplaceSplit[item.marketplace] =
+            (existing.marketplaceSplit[item.marketplace] ?? 0) + item.quantity;
+        }
+      } else {
+        const split: Record<string, number> = {};
+        if (item.marketplace) {
+          split[item.marketplace] = item.quantity;
+        }
+        mergedMap.set(item.iwasku, {
+          quantity: item.quantity,
+          // `||` kullanılır çünkü parse 0/"" değerleri gönderebiliyor; `??` onları "dolu" sayar.
+          desi: item.desi || enriched?.desi || 0,
+          category: effectiveCategory,
+          marketplaceSplit: split,
         });
       }
-    } catch {
-      // Continue without enrichment — desi/category will fall back to existing or empty
-    }
-  }
-
-  // Merge items by iwasku (same product from different marketplace sheets)
-  const mergedMap = new Map<string, {
-    quantity: number; desi: number; category: string;
-    marketplaceSplit: Record<string, number>;
-  }>();
-  const skippedNonEligible: { iwasku: string; category: string }[] = [];
-
-  for (const item of items) {
-    const enriched = productDataMap.get(item.iwasku);
-    const effectiveCategory = item.category || enriched?.category || '';
-
-    // Sezon planına uygun olmayan kategorileri (Alsat/Mobilya/Tekstil) atla
-    if (!isSeasonalEligibleCategory(effectiveCategory)) {
-      if (!skippedNonEligible.some(s => s.iwasku === item.iwasku)) {
-        skippedNonEligible.push({ iwasku: item.iwasku, category: effectiveCategory });
-      }
-      continue;
     }
 
-    const existing = mergedMap.get(item.iwasku);
-    if (existing) {
-      existing.quantity += item.quantity;
-      if (item.marketplace) {
-        existing.marketplaceSplit[item.marketplace] =
-          (existing.marketplaceSplit[item.marketplace] ?? 0) + item.quantity;
-      }
-    } else {
-      const split: Record<string, number> = {};
-      if (item.marketplace) {
-        split[item.marketplace] = item.quantity;
-      }
-      mergedMap.set(item.iwasku, {
-        quantity: item.quantity,
-        // `||` kullanılır çünkü parse 0/"" değerleri gönderebiliyor; `??` onları "dolu" sayar.
-        desi: item.desi || enriched?.desi || 0,
-        category: effectiveCategory,
-        marketplaceSplit: split,
-      });
+    // Marketplace.code → region lookup (allocator region keyli split bekler)
+    const codeToRegion = await loadCodeToRegionMap();
+
+    // Mevcut reserve'ler: çakışma tespiti + desi/category fallback
+    const existingReserves = await prisma.stockReserve.findMany({
+      where: { poolId: id, iwasku: { in: [...mergedMap.keys()] } },
+      select: { iwasku: true, marketplaceSplit: true, desiPerUnit: true, category: true },
+    });
+    const existingSplitByIwasku = new Map<string, Record<string, number>>();
+    const existingDesiByIwasku = new Map<string, number>();
+    const existingCategoryByIwasku = new Map<string, string>();
+    for (const r of existingReserves) {
+      existingSplitByIwasku.set(r.iwasku, (r.marketplaceSplit as Record<string, number>) ?? {});
+      if (r.desiPerUnit) existingDesiByIwasku.set(r.iwasku, r.desiPerUnit);
+      if (r.category) existingCategoryByIwasku.set(r.iwasku, r.category);
     }
-  }
 
-  // Marketplace.code → region lookup (allocator region keyli split bekler)
-  const codeToRegion = await loadCodeToRegionMap();
-
-  // Mevcut reserve'ler: çakışma tespiti + desi/category fallback
-  const existingReserves = await prisma.stockReserve.findMany({
-    where: { poolId: id, iwasku: { in: [...mergedMap.keys()] } },
-    select: { iwasku: true, marketplaceSplit: true, desiPerUnit: true, category: true },
-  });
-  const existingSplitByIwasku = new Map<string, Record<string, number>>();
-  const existingDesiByIwasku = new Map<string, number>();
-  const existingCategoryByIwasku = new Map<string, string>();
-  for (const r of existingReserves) {
-    existingSplitByIwasku.set(r.iwasku, (r.marketplaceSplit as Record<string, number>) ?? {});
-    if (r.desiPerUnit) existingDesiByIwasku.set(r.iwasku, r.desiPerUnit);
-    if (r.category) existingCategoryByIwasku.set(r.iwasku, r.category);
-  }
-
-  // Çakışma tespiti: aynı (iwasku, marketplace) zaten mevcutsa reddet.
-  // Toplama/üzerine yazma yok — hatalı girişleri admin silmeli, sonra tekrar yüklenmeli.
-  const conflicts: { iwasku: string; marketplace: string; existingQty: number }[] = [];
-  for (const [iwasku, data] of mergedMap) {
-    const existing = existingSplitByIwasku.get(iwasku) ?? {};
-    for (const mpCode of Object.keys(data.marketplaceSplit)) {
-      if ((existing[mpCode] ?? 0) > 0) {
-        conflicts.push({ iwasku, marketplace: mpCode, existingQty: existing[mpCode]! });
-      }
-    }
-  }
-  if (conflicts.length > 0) {
-    const sample = conflicts.slice(0, 10)
-      .map(c => `${c.iwasku} / ${c.marketplace} (mevcut: ${c.existingQty})`)
-      .join('\n');
-    const extraLine = conflicts.length > 10 ? `\n...ve ${conflicts.length - 10} satır daha` : '';
-    return NextResponse.json({
-      success: false,
-      error: `${conflicts.length} satır zaten girilmiş. Düzeltmek için admin ile iletişime geçin.\n\n${sample}${extraLine}`,
-      conflicts,
-    }, { status: 409 });
-  }
-
-  // Create reserves in transaction
-  const reserveInputs: ReserveInput[] = [];
-  const createdReserves = await prisma.$transaction(async (tx) => {
-    const results = [];
-
+    // Çakışma tespiti: aynı (iwasku, marketplace) zaten mevcutsa reddet.
+    // Toplama/üzerine yazma yok — hatalı girişleri admin silmeli, sonra tekrar yüklenmeli.
+    const conflicts: { iwasku: string; marketplace: string; existingQty: number }[] = [];
     for (const [iwasku, data] of mergedMap) {
-      const existingSplit = existingSplitByIwasku.get(iwasku) ?? {};
-      const mergedSplit = { ...existingSplit, ...data.marketplaceSplit };
-      const mergedQty = Object.values(mergedSplit).reduce((s, v) => s + v, 0);
-      // desi/category öncelik sırası: yeni import > DB'deki mevcut > katalog > boş
-      const effectiveDesi = data.desi || existingDesiByIwasku.get(iwasku) || 0;
-      const effectiveCategory = data.category || existingCategoryByIwasku.get(iwasku) || null;
-
-      const reserve = await tx.stockReserve.upsert({
-        where: { poolId_iwasku: { poolId: id, iwasku } },
-        create: {
-          poolId: id,
-          iwasku,
-          targetQuantity: mergedQty,
-          targetDesi: mergedQty * effectiveDesi,
-          desiPerUnit: effectiveDesi || null,
-          category: effectiveCategory,
-          marketplaceSplit: Object.keys(mergedSplit).length > 0 ? mergedSplit : undefined,
-        },
-        update: {
-          targetQuantity: mergedQty,
-          targetDesi: mergedQty * effectiveDesi,
-          desiPerUnit: effectiveDesi || null,
-          category: effectiveCategory,
-          marketplaceSplit: Object.keys(mergedSplit).length > 0 ? mergedSplit : undefined,
-        },
-      });
-
-      results.push(reserve);
-      reserveInputs.push({
-        iwasku,
-        targetQuantity: mergedQty,
-        desiPerUnit: effectiveDesi,
-        category: data.category,
-        marketplaceSplit: marketplaceSplitToRegionSplit(mergedSplit, codeToRegion),
-      });
+      const existing = existingSplitByIwasku.get(iwasku) ?? {};
+      for (const mpCode of Object.keys(data.marketplaceSplit)) {
+        if ((existing[mpCode] ?? 0) > 0) {
+          conflicts.push({ iwasku, marketplace: mpCode, existingQty: existing[mpCode]! });
+        }
+      }
+    }
+    if (conflicts.length > 0) {
+      const sample = conflicts.slice(0, 10)
+        .map(c => `${c.iwasku} / ${c.marketplace} (mevcut: ${c.existingQty})`)
+        .join('\n');
+      const extraLine = conflicts.length > 10 ? `\n...ve ${conflicts.length - 10} satır daha` : '';
+      return NextResponse.json({
+        success: false,
+        error: `${conflicts.length} satır zaten girilmiş. Düzeltmek için admin ile iletişime geçin.\n\n${sample}${extraLine}`,
+        conflicts,
+      }, { status: 409 });
     }
 
-    return results;
-  });
+    // Create reserves in transaction
+    const reserveInputs: ReserveInput[] = [];
+    const createdReserves = await prisma.$transaction(async (tx) => {
+      const results = [];
 
-  // Auto-allocate to months
-  let allocations: { iwasku: string; month: string; plannedQty: number; plannedDesi: number }[] = [];
+      for (const [iwasku, data] of mergedMap) {
+        const existingSplit = existingSplitByIwasku.get(iwasku) ?? {};
+        const mergedSplit = { ...existingSplit, ...data.marketplaceSplit };
+        const mergedQty = Object.values(mergedSplit).reduce((s, v) => s + v, 0);
+        // desi/category öncelik sırası: yeni import > DB'deki mevcut > katalog > boş
+        const effectiveDesi = data.desi || existingDesiByIwasku.get(iwasku) || 0;
+        const effectiveCategory = data.category || existingCategoryByIwasku.get(iwasku) || null;
 
-  if (autoAllocate && months.length > 0) {
-    const monthCapacities: MonthCapacity[] = months.map(m => ({
-      month: m.month,
-      workingDays: m.workingDays,
-      desiPerDay: m.desiPerDay,
-      totalDesi: m.workingDays * m.desiPerDay,
-      weight: 0, // Will be calculated
-    }));
-
-    allocations = allocateReserves(reserveInputs, monthCapacities);
-
-    // Save allocations
-    const reserveMap = new Map(createdReserves.map(r => [r.iwasku, r.id]));
-
-    await prisma.$transaction(async (tx) => {
-      // Delete existing allocations for this pool
-      const reserveIds = createdReserves.map(r => r.id);
-      await tx.monthlyAllocation.deleteMany({
-        where: { reserveId: { in: reserveIds } },
-      });
-
-      // Create new allocations
-      for (const alloc of allocations) {
-        const reserveId = reserveMap.get(alloc.iwasku);
-        if (!reserveId) continue;
-
-        await tx.monthlyAllocation.create({
-          data: {
-            reserveId,
-            month: alloc.month,
-            plannedQty: alloc.plannedQty,
-            plannedDesi: alloc.plannedDesi,
+        const reserve = await tx.stockReserve.upsert({
+          where: { poolId_iwasku: { poolId: id, iwasku } },
+          create: {
+            poolId: id,
+            iwasku,
+            targetQuantity: mergedQty,
+            targetDesi: mergedQty * effectiveDesi,
+            desiPerUnit: effectiveDesi || null,
+            category: effectiveCategory,
+            marketplaceSplit: Object.keys(mergedSplit).length > 0 ? mergedSplit : undefined,
+          },
+          update: {
+            targetQuantity: mergedQty,
+            targetDesi: mergedQty * effectiveDesi,
+            desiPerUnit: effectiveDesi || null,
+            category: effectiveCategory,
+            marketplaceSplit: Object.keys(mergedSplit).length > 0 ? mergedSplit : undefined,
           },
         });
+
+        results.push(reserve);
+        reserveInputs.push({
+          iwasku,
+          targetQuantity: mergedQty,
+          desiPerUnit: effectiveDesi,
+          category: data.category,
+          marketplaceSplit: marketplaceSplitToRegionSplit(mergedSplit, codeToRegion),
+        });
       }
+
+      return results;
     });
-  }
 
-  // Update pool totals — merge sonrası tüm reserve'ler üzerinden
-  const allPoolReserves = await prisma.stockReserve.findMany({
-    where: { poolId: id },
-    select: { targetQuantity: true, targetDesi: true },
-  });
-  const totalUnits = allPoolReserves.reduce((s, r) => s + r.targetQuantity, 0);
-  const totalDesi = allPoolReserves.reduce((s, r) => s + (r.targetDesi ?? 0), 0);
+    // Auto-allocate to months
+    let allocations: { iwasku: string; month: string; plannedQty: number; plannedDesi: number }[] = [];
 
-  await prisma.stockPool.update({
-    where: { id },
-    data: {
-      totalTargetUnits: totalUnits,
-      totalTargetDesi: Math.round(totalDesi),
-    },
-  });
+    if (autoAllocate && months.length > 0) {
+      const monthCapacities: MonthCapacity[] = months.map(m => ({
+        month: m.month,
+        workingDays: m.workingDays,
+        desiPerDay: m.desiPerDay,
+        totalDesi: m.workingDays * m.desiPerDay,
+        weight: 0, // Will be calculated
+      }));
 
-  await logAction({
-    userId: user.id, userName: user.name, userEmail: user.email,
-    action: 'BULK_UPLOAD', entityType: 'StockPool', entityId: id,
-    description: `Sezon planı aktarıldı: ${mergedMap.size} ürün, ${totalUnits} ünite, ${Math.round(totalDesi)} desi`,
-    metadata: { productCount: mergedMap.size, totalUnits, totalDesi: Math.round(totalDesi) },
-  });
+      allocations = allocateReserves(reserveInputs, monthCapacities);
 
-  return NextResponse.json({
-    success: true,
-    data: {
+      // Save allocations
+      const reserveMap = new Map(createdReserves.map(r => [r.iwasku, r.id]));
+
+      await prisma.$transaction(async (tx) => {
+        // Delete existing allocations for this pool
+        const reserveIds = createdReserves.map(r => r.id);
+        await tx.monthlyAllocation.deleteMany({
+          where: { reserveId: { in: reserveIds } },
+        });
+
+        // Create new allocations
+        for (const alloc of allocations) {
+          const reserveId = reserveMap.get(alloc.iwasku);
+          if (!reserveId) continue;
+
+          await tx.monthlyAllocation.create({
+            data: {
+              reserveId,
+              month: alloc.month,
+              plannedQty: alloc.plannedQty,
+              plannedDesi: alloc.plannedDesi,
+            },
+          });
+        }
+      });
+    }
+
+    // Update pool totals — merge sonrası tüm reserve'ler üzerinden
+    const allPoolReserves = await prisma.stockReserve.findMany({
+      where: { poolId: id },
+      select: { targetQuantity: true, targetDesi: true },
+    });
+    const totalUnits = allPoolReserves.reduce((s, r) => s + r.targetQuantity, 0);
+    const totalDesi = allPoolReserves.reduce((s, r) => s + (r.targetDesi ?? 0), 0);
+
+    await prisma.stockPool.update({
+      where: { id },
+      data: {
+        totalTargetUnits: totalUnits,
+        totalTargetDesi: Math.round(totalDesi),
+      },
+    });
+
+    await logAction({
+      userId: user!.id, userName: user!.name, userEmail: user!.email,
+      action: 'BULK_UPLOAD', entityType: 'StockPool', entityId: id,
+      description: `Sezon planı aktarıldı: ${mergedMap.size} ürün, ${totalUnits} ünite, ${Math.round(totalDesi)} desi`,
+      metadata: { productCount: mergedMap.size, totalUnits, totalDesi: Math.round(totalDesi) },
+    });
+
+    return createdResponse({
       reservesCreated: createdReserves.length,
       totalUnits,
       totalDesi: Math.round(totalDesi),
       allocationsCreated: allocations.length,
-      monthSummary: autoAllocate ? (await import('@/lib/seasonal')).summarizeByMonth(allocations) : [],
+      monthSummary: autoAllocate ? summarizeByMonth(allocations) : [],
       skippedNonEligible,
-    },
-  }, { status: 201 });
-}
+    });
+  }
+);

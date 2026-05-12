@@ -4,12 +4,13 @@
  * GET: List all pools
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { requireRole, requireSuperAdmin } from '@/lib/auth/verify';
+import { requireSuperAdmin } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
-import { errorResponse } from '@/lib/api/response';
 import { z } from 'zod';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse, createdResponse } from '@/lib/api/response';
 
 const CreatePoolSchema = z.object({
   name: z.string().min(1).max(100),
@@ -23,9 +24,10 @@ const CreatePoolSchema = z.object({
   notes: z.string().optional(),
 });
 
-export async function POST(request: NextRequest) {
-  try {
-    // Süper-admin gerekli (yeni sezon havuzu oluşturma kritik aksiyon)
+// requireSuperAdmin audit-log'lu kritik aksiyon — handler içinde tutuluyor.
+export const POST = withRoute(
+  { skipAuth: true, rateLimit: 'write', fallbackMessage: 'Sezon havuzu oluşturulamadı' },
+  async ({ request }) => {
     const authResult = await requireSuperAdmin(request);
     if (authResult instanceof NextResponse) return authResult;
     const { user } = authResult;
@@ -71,66 +73,60 @@ export async function POST(request: NextRequest) {
       metadata: { code: pool.code, poolType: pool.poolType },
     });
 
-    return NextResponse.json({ success: true, data: pool }, { status: 201 });
-  } catch (error) {
-    return errorResponse(error, 'Sezon havuzu oluşturulamadı');
+    return createdResponse(pool);
   }
-}
+);
 
-export async function GET(request: NextRequest) {
-  try {
-    const authResult = await requireRole(request, ['admin', 'editor', 'viewer']);
-    if (authResult instanceof NextResponse) return authResult;
-
+export const GET = withRoute(
+  { roles: ['admin', 'editor', 'viewer'], rateLimit: 'read', fallbackMessage: 'Sezon havuzları yüklenemedi' },
+  async ({ request }) => {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const poolType = searchParams.get('poolType');
 
     const pools = await prisma.stockPool.findMany({
-    where: {
-      ...(status ? { status: status as 'ACTIVE' | 'RELEASING' | 'COMPLETED' | 'CANCELLED' } : {}),
-      ...(poolType ? { poolType: poolType as 'SEASONAL' | 'ROUTINE' } : {}),
-    },
-    include: {
-      _count: { select: { reserves: true } },
-      reserves: {
-        select: {
-          targetQuantity: true,
-          targetDesi: true,
-          producedQuantity: true,
-          shippedQuantity: true,
-          status: true,
+      where: {
+        ...(status ? { status: status as 'ACTIVE' | 'RELEASING' | 'COMPLETED' | 'CANCELLED' } : {}),
+        ...(poolType ? { poolType: poolType as 'SEASONAL' | 'ROUTINE' } : {}),
+      },
+      include: {
+        _count: { select: { reserves: true } },
+        reserves: {
+          select: {
+            targetQuantity: true,
+            targetDesi: true,
+            producedQuantity: true,
+            shippedQuantity: true,
+            status: true,
+          },
         },
       },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+      orderBy: { createdAt: 'desc' },
+    });
 
-  // Calculate summary stats per pool
-  const poolsWithStats = pools.map(pool => {
-    const totalTarget = pool.reserves.reduce((s, r) => s + r.targetQuantity, 0);
-    const totalTargetDesi = pool.reserves.reduce((s, r) => s + (r.targetDesi ?? 0), 0);
-    const totalProduced = pool.reserves.reduce((s, r) => s + r.producedQuantity, 0);
-    const totalShipped = pool.reserves.reduce((s, r) => s + r.shippedQuantity, 0);
+    // Calculate summary stats per pool
+    const poolsWithStats = pools.map(pool => {
+      const totalTarget = pool.reserves.reduce((s, r) => s + r.targetQuantity, 0);
+      const totalTargetDesi = pool.reserves.reduce((s, r) => s + (r.targetDesi ?? 0), 0);
+      const totalProduced = pool.reserves.reduce((s, r) => s + r.producedQuantity, 0);
+      const totalShipped = pool.reserves.reduce((s, r) => s + r.shippedQuantity, 0);
 
-    const { reserves: _reserves, ...poolData } = pool;
+      const { reserves: _reserves, ...poolData } = pool;
 
-    return {
-      ...poolData,
-      stats: {
-        reserveCount: pool._count.reserves,
-        totalTargetUnits: totalTarget,
-        totalTargetDesi: Math.round(totalTargetDesi),
-        totalProduced,
-        totalShipped,
-        productionProgress: totalTarget > 0 ? Math.round(totalProduced / totalTarget * 100) : 0,
-        shippingProgress: totalTarget > 0 ? Math.round(totalShipped / totalTarget * 100) : 0,
-      },
-    };
-  });
+      return {
+        ...poolData,
+        stats: {
+          reserveCount: pool._count.reserves,
+          totalTargetUnits: totalTarget,
+          totalTargetDesi: Math.round(totalTargetDesi),
+          totalProduced,
+          totalShipped,
+          productionProgress: totalTarget > 0 ? Math.round(totalProduced / totalTarget * 100) : 0,
+          shippingProgress: totalTarget > 0 ? Math.round(totalShipped / totalTarget * 100) : 0,
+        },
+      };
+    });
 
-    return NextResponse.json({ success: true, data: poolsWithStats });
-  } catch (error) {
-    return errorResponse(error, 'Sezon havuzları yüklenemedi');
+    return successResponse(poolsWithStats);
   }
-}
+);

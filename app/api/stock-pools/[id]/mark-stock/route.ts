@@ -9,11 +9,12 @@
  *   - StockReserve.status → STOCKED (if fully covered) or remains PLANNED
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { requireRole } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
 import { z } from 'zod';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
 const MarkStockSchema = z.object({
   items: z.array(z.object({
@@ -22,94 +23,89 @@ const MarkStockSchema = z.object({
   })).min(1),
 });
 
-type Params = { params: Promise<{ id: string }> };
+export const POST = withRoute<{ id: string }>(
+  { roles: ['admin'], rateLimit: 'write', fallbackMessage: 'Depo stok eşleştirilemedi' },
+  async ({ request, user, params }) => {
+    const { id } = params;
 
-export async function POST(request: NextRequest, { params }: Params) {
-  const authResult = await requireRole(request, ['admin']);
-  if (authResult instanceof NextResponse) return authResult;
-  const { user } = authResult;
-  const { id } = await params;
-
-  const pool = await prisma.stockPool.findUnique({
-    where: { id },
-    include: {
-      reserves: {
-        where: { status: { notIn: ['CANCELLED', 'SHIPPED'] } },
-      },
-    },
-  });
-
-  if (!pool) {
-    return NextResponse.json({ success: false, error: 'Havuz bulunamadı' }, { status: 404 });
-  }
-
-  const body = await request.json();
-  const validation = MarkStockSchema.safeParse(body);
-  if (!validation.success) {
-    return NextResponse.json(
-      { success: false, error: 'Doğrulama hatası', details: validation.error.flatten().fieldErrors },
-      { status: 400 }
-    );
-  }
-
-  const { items } = validation.data;
-  const reserveMap = new Map(pool.reserves.map(r => [r.iwasku, r]));
-
-  const results: { iwasku: string; applied: number; skipped: boolean; reason?: string }[] = [];
-
-  await prisma.$transaction(async (tx) => {
-    for (const item of items) {
-      const reserve = reserveMap.get(item.iwasku);
-      if (!reserve) {
-        results.push({ iwasku: item.iwasku, applied: 0, skipped: true, reason: 'Havuzda bulunamadı' });
-        continue;
-      }
-
-      // Can't apply more stock than remaining demand + existing initial
-      const maxApplicable = Math.max(0, reserve.targetQuantity);
-      const applyQty = Math.min(item.quantity, maxApplicable);
-
-      if (applyQty <= 0) {
-        results.push({ iwasku: item.iwasku, applied: 0, skipped: true, reason: 'Talep zaten karşılanmış' });
-        continue;
-      }
-
-      const newInitial = reserve.initialStock + applyQty;
-      const newTarget = reserve.targetQuantity - applyQty;
-      const newStatus = newTarget <= 0 ? 'STOCKED' : reserve.status;
-
-      // Keep desiPerUnit constant — recalculate targetDesi from new targetQuantity
-      const desiPerUnit = reserve.targetDesi && reserve.targetQuantity > 0
-        ? reserve.targetDesi / reserve.targetQuantity
-        : null;
-      const newTargetDesi = desiPerUnit !== null ? newTarget * desiPerUnit : undefined;
-
-      await tx.stockReserve.update({
-        where: { id: reserve.id },
-        data: {
-          initialStock: newInitial,
-          targetQuantity: newTarget,
-          status: newStatus as 'STOCKED' | 'PLANNED',
-          ...(newTargetDesi !== undefined ? { targetDesi: newTargetDesi } : {}),
+    const pool = await prisma.stockPool.findUnique({
+      where: { id },
+      include: {
+        reserves: {
+          where: { status: { notIn: ['CANCELLED', 'SHIPPED'] } },
         },
-      });
+      },
+    });
 
-      results.push({ iwasku: item.iwasku, applied: applyQty, skipped: false });
+    if (!pool) {
+      return NextResponse.json({ success: false, error: 'Havuz bulunamadı' }, { status: 404 });
     }
-  });
 
-  const applied = results.filter(r => !r.skipped).reduce((s, r) => s + r.applied, 0);
-  const skipped = results.filter(r => r.skipped).length;
+    const body = await request.json();
+    const validation = MarkStockSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json(
+        { success: false, error: 'Doğrulama hatası', details: validation.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
 
-  await logAction({
-    userId: user.id, userName: user.name, userEmail: user.email,
-    action: 'UPDATE_REQUEST', entityType: 'StockPool', entityId: id,
-    description: `Depo stok eşleştirildi: ${results.filter(r => !r.skipped).length} ürün, ${applied} adet`,
-    metadata: { results, applied, skipped },
-  });
+    const { items } = validation.data;
+    const reserveMap = new Map(pool.reserves.map(r => [r.iwasku, r]));
 
-  return NextResponse.json({
-    success: true,
-    data: { results, applied, skipped },
-  });
-}
+    const results: { iwasku: string; applied: number; skipped: boolean; reason?: string }[] = [];
+
+    await prisma.$transaction(async (tx) => {
+      for (const item of items) {
+        const reserve = reserveMap.get(item.iwasku);
+        if (!reserve) {
+          results.push({ iwasku: item.iwasku, applied: 0, skipped: true, reason: 'Havuzda bulunamadı' });
+          continue;
+        }
+
+        // Can't apply more stock than remaining demand + existing initial
+        const maxApplicable = Math.max(0, reserve.targetQuantity);
+        const applyQty = Math.min(item.quantity, maxApplicable);
+
+        if (applyQty <= 0) {
+          results.push({ iwasku: item.iwasku, applied: 0, skipped: true, reason: 'Talep zaten karşılanmış' });
+          continue;
+        }
+
+        const newInitial = reserve.initialStock + applyQty;
+        const newTarget = reserve.targetQuantity - applyQty;
+        const newStatus = newTarget <= 0 ? 'STOCKED' : reserve.status;
+
+        // Keep desiPerUnit constant — recalculate targetDesi from new targetQuantity
+        const desiPerUnit = reserve.targetDesi && reserve.targetQuantity > 0
+          ? reserve.targetDesi / reserve.targetQuantity
+          : null;
+        const newTargetDesi = desiPerUnit !== null ? newTarget * desiPerUnit : undefined;
+
+        await tx.stockReserve.update({
+          where: { id: reserve.id },
+          data: {
+            initialStock: newInitial,
+            targetQuantity: newTarget,
+            status: newStatus as 'STOCKED' | 'PLANNED',
+            ...(newTargetDesi !== undefined ? { targetDesi: newTargetDesi } : {}),
+          },
+        });
+
+        results.push({ iwasku: item.iwasku, applied: applyQty, skipped: false });
+      }
+    });
+
+    const applied = results.filter(r => !r.skipped).reduce((s, r) => s + r.applied, 0);
+    const skipped = results.filter(r => r.skipped).length;
+
+    await logAction({
+      userId: user!.id, userName: user!.name, userEmail: user!.email,
+      action: 'UPDATE_REQUEST', entityType: 'StockPool', entityId: id,
+      description: `Depo stok eşleştirildi: ${results.filter(r => !r.skipped).length} ürün, ${applied} adet`,
+      metadata: { results, applied, skipped },
+    });
+
+    return successResponse({ results, applied, skipped });
+  }
+);

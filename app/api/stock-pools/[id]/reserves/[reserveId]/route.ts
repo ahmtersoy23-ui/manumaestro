@@ -4,11 +4,12 @@
  * DELETE: Remove reserve entirely (admin only, cascades allocations)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { requireRole } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
 import { z } from 'zod';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
 const UpdateReserveSchema = z.union([
   // Option A: explicit split → targetQuantity derived from sum
@@ -21,107 +22,103 @@ const UpdateReserveSchema = z.union([
   }),
 ]);
 
-type Params = { params: Promise<{ id: string; reserveId: string }> };
+export const PATCH = withRoute<{ id: string; reserveId: string }>(
+  { roles: ['admin'], rateLimit: 'write', fallbackMessage: 'Talep güncellenemedi' },
+  async ({ request, user, params }) => {
+    const { id, reserveId } = params;
 
-export async function PATCH(request: NextRequest, { params }: Params) {
-  // Reserve düzenleme admin-only: editor bir kez talep girdiğinde değiştiremez,
-  // düzeltme gerekiyorsa admin üzerinden yapılmalı.
-  const authResult = await requireRole(request, ['admin']);
-  if (authResult instanceof NextResponse) return authResult;
-  const { user } = authResult;
-  const { id, reserveId } = await params;
+    const reserve = await prisma.stockReserve.findFirst({
+      where: { id: reserveId, poolId: id },
+    });
 
-  const reserve = await prisma.stockReserve.findFirst({
-    where: { id: reserveId, poolId: id },
-  });
+    if (!reserve) {
+      return NextResponse.json({ success: false, error: 'Reserve bulunamadı' }, { status: 404 });
+    }
 
-  if (!reserve) {
-    return NextResponse.json({ success: false, error: 'Reserve bulunamadı' }, { status: 404 });
+    const body = await request.json();
+    const validation = UpdateReserveSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json(
+        { success: false, error: 'Doğrulama hatası', details: validation.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+
+    const parsed = validation.data;
+    // Invariant: marketplaceSplit toplam = initialStock + targetQuantity.
+    // Split değişirse: önce initial'ı yeni toplama kadar sınırla, kalanı target.
+    // Direct targetQuantity update (legacy) için initial'a dokunulmaz.
+    let targetQuantity: number;
+    let newInitialStock: number | undefined;
+    let newSplit: Record<string, number> | undefined;
+
+    if ('marketplaceSplit' in parsed) {
+      newSplit = parsed.marketplaceSplit;
+      const splitTotal = Object.values(newSplit).reduce((s, v) => s + v, 0);
+      newInitialStock = Math.min(reserve.initialStock, splitTotal);
+      targetQuantity = splitTotal - newInitialStock;
+    } else {
+      targetQuantity = parsed.targetQuantity;
+    }
+
+    if (targetQuantity < reserve.producedQuantity) {
+      return NextResponse.json(
+        { success: false, error: `Üretilmiş miktarın (${reserve.producedQuantity}) altına düşürülemez` },
+        { status: 400 }
+      );
+    }
+
+    // Keep desiPerUnit constant — recalculate targetDesi from new targetQuantity
+    const desiPerUnit = reserve.desiPerUnit
+      ?? (reserve.targetDesi && reserve.targetQuantity > 0
+        ? reserve.targetDesi / reserve.targetQuantity
+        : null);
+    const newTargetDesi = desiPerUnit !== null ? targetQuantity * desiPerUnit : undefined;
+
+    const updated = await prisma.stockReserve.update({
+      where: { id: reserveId },
+      data: {
+        targetQuantity,
+        ...(newInitialStock !== undefined ? { initialStock: newInitialStock } : {}),
+        ...(newSplit !== undefined ? { marketplaceSplit: newSplit } : {}),
+        ...(newTargetDesi !== undefined ? { targetDesi: newTargetDesi } : {}),
+      },
+    });
+
+    await logAction({
+      userId: user!.id, userName: user!.name, userEmail: user!.email,
+      action: 'UPDATE_REQUEST', entityType: 'StockReserve', entityId: reserveId,
+      description: `Talep güncellendi: ${reserve.iwasku} → ${reserve.targetQuantity} → ${targetQuantity}`,
+      metadata: { iwasku: reserve.iwasku, oldQty: reserve.targetQuantity, newQty: targetQuantity, split: newSplit },
+    });
+
+    return successResponse(updated);
   }
+);
 
-  const body = await request.json();
-  const validation = UpdateReserveSchema.safeParse(body);
-  if (!validation.success) {
-    return NextResponse.json(
-      { success: false, error: 'Doğrulama hatası', details: validation.error.flatten().fieldErrors },
-      { status: 400 }
-    );
+export const DELETE = withRoute<{ id: string; reserveId: string }>(
+  { roles: ['admin'], rateLimit: 'write', fallbackMessage: 'Reserve silinemedi' },
+  async ({ user, params }) => {
+    const { id, reserveId } = params;
+
+    const reserve = await prisma.stockReserve.findFirst({
+      where: { id: reserveId, poolId: id },
+    });
+
+    if (!reserve) {
+      return NextResponse.json({ success: false, error: 'Reserve bulunamadı' }, { status: 404 });
+    }
+
+    // Cascade: allocations deleted automatically by Prisma (onDelete: Cascade in schema)
+    await prisma.stockReserve.delete({ where: { id: reserveId } });
+
+    await logAction({
+      userId: user!.id, userName: user!.name, userEmail: user!.email,
+      action: 'DELETE_REQUEST', entityType: 'StockReserve', entityId: reserveId,
+      description: `Reserve silindi: ${reserve.iwasku} (havuz: ${id})`,
+      metadata: { iwasku: reserve.iwasku, targetQuantity: reserve.targetQuantity },
+    });
+
+    return NextResponse.json({ success: true });
   }
-
-  const parsed = validation.data;
-  // Invariant: marketplaceSplit toplam = initialStock + targetQuantity.
-  // Split değişirse: önce initial'ı yeni toplama kadar sınırla, kalanı target.
-  // Direct targetQuantity update (legacy) için initial'a dokunulmaz.
-  let targetQuantity: number;
-  let newInitialStock: number | undefined;
-  let newSplit: Record<string, number> | undefined;
-
-  if ('marketplaceSplit' in parsed) {
-    newSplit = parsed.marketplaceSplit;
-    const splitTotal = Object.values(newSplit).reduce((s, v) => s + v, 0);
-    newInitialStock = Math.min(reserve.initialStock, splitTotal);
-    targetQuantity = splitTotal - newInitialStock;
-  } else {
-    targetQuantity = parsed.targetQuantity;
-  }
-
-  if (targetQuantity < reserve.producedQuantity) {
-    return NextResponse.json(
-      { success: false, error: `Üretilmiş miktarın (${reserve.producedQuantity}) altına düşürülemez` },
-      { status: 400 }
-    );
-  }
-
-  // Keep desiPerUnit constant — recalculate targetDesi from new targetQuantity
-  const desiPerUnit = reserve.desiPerUnit
-    ?? (reserve.targetDesi && reserve.targetQuantity > 0
-      ? reserve.targetDesi / reserve.targetQuantity
-      : null);
-  const newTargetDesi = desiPerUnit !== null ? targetQuantity * desiPerUnit : undefined;
-
-  const updated = await prisma.stockReserve.update({
-    where: { id: reserveId },
-    data: {
-      targetQuantity,
-      ...(newInitialStock !== undefined ? { initialStock: newInitialStock } : {}),
-      ...(newSplit !== undefined ? { marketplaceSplit: newSplit } : {}),
-      ...(newTargetDesi !== undefined ? { targetDesi: newTargetDesi } : {}),
-    },
-  });
-
-  await logAction({
-    userId: user.id, userName: user.name, userEmail: user.email,
-    action: 'UPDATE_REQUEST', entityType: 'StockReserve', entityId: reserveId,
-    description: `Talep güncellendi: ${reserve.iwasku} → ${reserve.targetQuantity} → ${targetQuantity}`,
-    metadata: { iwasku: reserve.iwasku, oldQty: reserve.targetQuantity, newQty: targetQuantity, split: newSplit },
-  });
-
-  return NextResponse.json({ success: true, data: updated });
-}
-
-export async function DELETE(request: NextRequest, { params }: Params) {
-  const authResult = await requireRole(request, ['admin']);
-  if (authResult instanceof NextResponse) return authResult;
-  const { user } = authResult;
-  const { id, reserveId } = await params;
-
-  const reserve = await prisma.stockReserve.findFirst({
-    where: { id: reserveId, poolId: id },
-  });
-
-  if (!reserve) {
-    return NextResponse.json({ success: false, error: 'Reserve bulunamadı' }, { status: 404 });
-  }
-
-  // Cascade: allocations deleted automatically by Prisma (onDelete: Cascade in schema)
-  await prisma.stockReserve.delete({ where: { id: reserveId } });
-
-  await logAction({
-    userId: user.id, userName: user.name, userEmail: user.email,
-    action: 'DELETE_REQUEST', entityType: 'StockReserve', entityId: reserveId,
-    description: `Reserve silindi: ${reserve.iwasku} (havuz: ${id})`,
-    metadata: { iwasku: reserve.iwasku, targetQuantity: reserve.targetQuantity },
-  });
-
-  return NextResponse.json({ success: true });
-}
+);
