@@ -79,29 +79,9 @@ export async function middleware(request: NextRequest) {
   }
 
   // Get token from cookie or URL parameter
-  const tokenFromCookie = request.cookies.get('sso_access_token')?.value;
-  const tokenFromUrl = request.nextUrl.searchParams.get('token');
+  const token = request.cookies.get('sso_access_token')?.value;
 
-  logger.debug('Token from cookie:', tokenFromCookie ? 'exists' : 'none');
-  logger.debug('Token from URL:', tokenFromUrl ? 'exists' : 'none');
-
-  // DEPRECATED: token'ı query param'dan alma yolu — token URL'de görünür,
-  // server log + browser history + referer sızıntı riski var. Apps-SSO
-  // portal /auth/bootstrap#token=... fragment akışına geçtikten sonra bu
-  // dal silinecek. Geçiş döneminde geri uyumluluk için tutuluyor.
-  if (tokenFromUrl) {
-    logger.warn('DEPRECATED query-param token akışı: portal /auth/bootstrap#token= akışına geçirilmeli');
-    const response = NextResponse.redirect(new URL(request.nextUrl.pathname, request.url));
-    response.cookies.set('sso_access_token', tokenFromUrl, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      maxAge: 60 * 60 * 24 // 24 hours
-    });
-    return response;
-  }
-
-  const token = tokenFromCookie;
+  logger.debug('Token from cookie:', token ? 'exists' : 'none');
 
   // No token - redirect to SSO (or return JSON for API routes)
   if (!token) {
