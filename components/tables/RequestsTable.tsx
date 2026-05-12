@@ -7,6 +7,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { notify } from '@/lib/ui/notify';
 import {
   Calendar, Package, Trash2, CheckSquare, Square, Check, Loader2,
   Anchor, Truck, Plane, Filter,
@@ -231,11 +232,11 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
             : r
         ));
       } else {
-        alert(data.error || 'Yonlendirme basarisiz');
+        notify.error(data.error || 'Yonlendirme basarisiz');
       }
     } catch (error) {
       logger.error('Route to shipment error:', error);
-      alert('Sevkiyata yonlendirme basarisiz');
+      notify.error('Sevkiyata yonlendirme basarisiz');
     } finally {
       setRoutingId(null);
     }
@@ -262,11 +263,11 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
         ));
         setSelectedIds(new Set());
       } else {
-        alert(data.error || 'Toplu yonlendirme basarisiz');
+        notify.error(data.error || 'Toplu yonlendirme basarisiz');
       }
     } catch (error) {
       logger.error('Bulk route error:', error);
-      alert('Toplu yonlendirme basarisiz');
+      notify.error('Toplu yonlendirme basarisiz');
     } finally {
       setBulkRouting(false);
     }
@@ -282,9 +283,9 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
       for (const id of Array.from(selectedIds)) {
         try {
           const res = await fetch(`/api/requests/${id}`, { method: 'DELETE' });
-          if (res.status === 429) { alert('Rate limit asildi.'); break; }
+          if (res.status === 429) { notify.error('Rate limit asildi.'); break; }
           if (res.status === 401) { window.location.href = SSO_URL; return; }
-          if (res.status === 403) { alert('Yetkiniz yok.'); return; }
+          if (res.status === 403) { notify.error('Yetkiniz yok.'); return; }
           const data = await res.json();
           if (!data.success) failedIds.push(id);
         } catch { failedIds.push(id); }
@@ -306,7 +307,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
       if (data.success) {
         setRequests(prev => prev.filter(r => r.id !== requestId));
         if (onDelete) onDelete();
-      } else { alert(data.error || 'Talep silinemedi'); }
+      } else { notify.error(data.error || 'Talep silinemedi'); }
     } finally { setDeleting(null); }
   };
 

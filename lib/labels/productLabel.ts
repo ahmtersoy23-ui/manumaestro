@@ -9,6 +9,8 @@
  * etkilenmez, popup tamamen self-contained.
  */
 
+import { notify } from '@/lib/ui/notify';
+
 interface SerialEntry {
   fullBarcode: string;
   qrDataUrl: string; // data:image/png;base64,...
@@ -27,7 +29,7 @@ export function openProductLabelPopup({ productName, iwasku, meta, entries }: Op
 
   const printWindow = window.open('', '_blank', 'width=700,height=900');
   if (!printWindow) {
-    alert('Popup engellendi. Lütfen tarayıcıda popup\'a izin verin.');
+    notify.error('Popup engellendi. Lütfen tarayıcıda popup\'a izin verin.');
     return;
   }
 

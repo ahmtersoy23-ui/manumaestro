@@ -6,6 +6,7 @@
 'use client';
 
 import { useEffect, useState, use } from 'react';
+import { notify } from '@/lib/ui/notify';
 import Link from 'next/link';
 import { ChevronLeft, Package, Box, History, AlertCircle, ArrowRightLeft, PackageOpen, Scissors, Trash2, Settings, Printer, PackagePlus, Plus } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
@@ -117,7 +118,7 @@ export default function RafDetayPage({
       downloadPdf(blob, `raf-${data.shelf.code}.pdf`);
     } catch (e) {
       logger.error('Print label', e);
-      alert('Etiket oluşturulamadı');
+      notify.error('Etiket oluşturulamadı');
     } finally {
       setPrintingLabel(false);
     }
@@ -160,13 +161,13 @@ export default function RafDetayPage({
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        alert(data.error || 'Koli açılamadı');
+        notify.error(data.error || 'Koli açılamadı');
         return;
       }
       handleSuccess();
     } catch (e) {
       logger.error('Open box hatası', e);
-      alert('Sunucu hatası');
+      notify.error('Sunucu hatası');
     } finally {
       setOpeningBoxId(null);
     }
@@ -183,13 +184,13 @@ export default function RafDetayPage({
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        alert(data.error || 'Geri alınamadı');
+        notify.error(data.error || 'Geri alınamadı');
         return;
       }
       handleSuccess();
     } catch (e) {
       logger.error('Undo hatası', e);
-      alert('Sunucu hatası');
+      notify.error('Sunucu hatası');
     } finally {
       setUndoingId(null);
     }

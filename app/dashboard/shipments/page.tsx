@@ -7,6 +7,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { notify } from '@/lib/ui/notify';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -85,8 +86,8 @@ export default function ShipmentsPage() {
         setShowCreate(false);
         setForm({ name: '', shippingMethod: 'sea', plannedDate: '', notes: '' });
         fetchShipments();
-      } else { alert(data.error); }
-    } catch { alert('Bağlantı hatası'); } finally { setCreating(false); }
+      } else { notify.error(data.error); }
+    } catch { notify.error('Bağlantı hatası'); } finally { setCreating(false); }
   };
 
   const openShipments = shipments.filter(s => s.status === 'PLANNING' || s.status === 'LOADING');

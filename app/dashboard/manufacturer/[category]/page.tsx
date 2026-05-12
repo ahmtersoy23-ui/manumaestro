@@ -6,6 +6,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { notify } from '@/lib/ui/notify';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -303,11 +304,11 @@ export default function ManufacturerCategoryPage() {
           }
         }));
       } else {
-        alert('Bazı değişiklikler kaydedilemedi');
+        notify.error('Bazı değişiklikler kaydedilemedi');
       }
     } catch (error) {
       logger.error('Save error:', error);
-      alert('Değişiklikler kaydedilemedi');
+      notify.error('Değişiklikler kaydedilemedi');
     } finally {
       setSaving(null);
     }
@@ -318,7 +319,7 @@ export default function ManufacturerCategoryPage() {
     try {
       const res = await fetch(`/api/export/category?category=${encodeURIComponent(category)}&month=${month}`);
       if (!res.ok) {
-        alert('Dışa aktarılacak veri yok');
+        notify.error('Dışa aktarılacak veri yok');
         return;
       }
       const blob = await res.blob();
@@ -333,7 +334,7 @@ export default function ManufacturerCategoryPage() {
       URL.revokeObjectURL(url);
     } catch (error) {
       logger.error('Export error:', error);
-      alert('Dışa aktarma başarısız oldu');
+      notify.error('Dışa aktarma başarısız oldu');
     } finally {
       setExporting(false);
     }

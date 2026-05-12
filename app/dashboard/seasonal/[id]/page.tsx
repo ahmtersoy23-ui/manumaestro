@@ -7,6 +7,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, Fragment } from 'react';
+import { notify } from '@/lib/ui/notify';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
@@ -268,16 +269,16 @@ export default function PoolDetailPage() {
           const extra = skipped.length > 5 ? ` …ve ${skipped.length - 5} daha` : '';
           msg += `\n\n${skipped.length} ürün sezon planına dahil edilmedi (Alsat/Mobilya/Tekstil): ${sample}${extra}`;
         }
-        alert(msg);
+        notify.error(msg);
         setImportJson('');
         setPreview(null); // Clear any old preview
         fetchPool();
         setTab('allocations'); // Switch to allocations tab
       } else {
-        alert(data.error || 'Aktarım başarısız');
+        notify.error(data.error || 'Aktarım başarısız');
       }
     } catch {
-      alert('Aktarım hatası');
+      notify.error('Aktarım hatası');
     } finally {
       setImporting(false);
     }
@@ -288,7 +289,7 @@ export default function PoolDetailPage() {
     try {
       handleImport(JSON.parse(importJson));
     } catch {
-      alert('JSON formatı hatalı');
+      notify.error('JSON formatı hatalı');
     }
   };
 
@@ -322,7 +323,7 @@ export default function PoolDetailPage() {
   const generateTemplate = async () => {
     const selected = selectableMarketplaces.filter(m => selectedTemplateMps.has(m.code));
     if (selected.length === 0) {
-      alert('En az bir pazar yeri seçmelisiniz.');
+      notify.error('En az bir pazar yeri seçmelisiniz.');
       return;
     }
     const XLSX = await loadXLSX();
@@ -385,7 +386,7 @@ export default function PoolDetailPage() {
 
         if (items.length === 0) {
           const mpHint = marketplaces.slice(0, 5).map(m => m.name).join(', ');
-          alert(`Excel'de geçerli veri bulunamadı.\nSheet adı bir pazar yeri olmalı (örn. ${mpHint}...)\nKolonlar: iwasku, kategori, desi, q4 26, q1 27`);
+          notify.error(`Excel'de geçerli veri bulunamadı.\nSheet adı bir pazar yeri olmalı (örn. ${mpHint}...)\nKolonlar: iwasku, kategori, desi, q4 26, q1 27`);
           return;
         }
 
@@ -398,10 +399,10 @@ export default function PoolDetailPage() {
           msg += `\n\nEşleşmeyen sheet'ler atlandı: ${unmatchedSheets.join(', ')}`;
         }
         msg += '\n\nAktarılıyor...';
-        alert(msg);
+        notify.error(msg);
         handleImport({ items, months: DEFAULT_MONTHS });
       } catch {
-        alert('Excel dosyası okunamadı');
+        notify.error('Excel dosyası okunamadı');
       }
     };
     reader.readAsBinaryString(file);
@@ -423,10 +424,10 @@ export default function PoolDetailPage() {
         setPreviewQuotas(data.data.monthQuotas);
         setLockedMonths(data.data.lockedMonths ?? []);
       } else {
-        alert(data.error || 'Önizleme başarısız');
+        notify.error(data.error || 'Önizleme başarısız');
       }
     } catch {
-      alert('Bağlantı hatası');
+      notify.error('Bağlantı hatası');
     } finally {
       setPreviewing(false);
     }
@@ -444,14 +445,14 @@ export default function PoolDetailPage() {
       });
       const data = await res.json();
       if (data.success) {
-        alert('Dağılım onaylandı ve kaydedildi.');
+        notify.error('Dağılım onaylandı ve kaydedildi.');
         setPreview(null);
         fetchPool();
       } else {
-        alert(data.error || 'Onay başarısız');
+        notify.error(data.error || 'Onay başarısız');
       }
     } catch {
-      alert('Bağlantı hatası');
+      notify.error('Bağlantı hatası');
     } finally {
       setApproving(false);
     }
@@ -466,7 +467,7 @@ export default function PoolDetailPage() {
     });
     const data = await res.json();
     if (data.success) fetchPool();
-    else alert(data.error);
+    else notify.error(data.error);
   };
 
   const handleDeleteAndRestart = async () => {
@@ -478,10 +479,10 @@ export default function PoolDetailPage() {
         // Redirect to /dashboard/seasonal which will auto-create a new pool
         router.replace('/dashboard/seasonal');
       } else {
-        alert(delData.error || 'Silme başarısız');
+        notify.error(delData.error || 'Silme başarısız');
       }
     } catch {
-      alert('Bağlantı hatası');
+      notify.error('Bağlantı hatası');
     }
   };
 
@@ -492,19 +493,19 @@ export default function PoolDetailPage() {
       const res = await fetch(`/api/stock-pools/${id}/release`, { method: 'POST' });
       const data = await res.json();
       if (data.success) {
-        alert(`${data.data.created} üretim isteği oluşturuldu. Ay planında "Sezon" olarak görünür.`);
+        notify.error(`${data.data.created} üretim isteği oluşturuldu. Ay planında "Sezon" olarak görünür.`);
       } else {
-        alert(data.error || 'Aktarım başarısız');
+        notify.error(data.error || 'Aktarım başarısız');
       }
     } catch {
-      alert('Bağlantı hatası');
+      notify.error('Bağlantı hatası');
     } finally {
       setReleasing(false);
     }
   };
 
   const handleSaveEdit = async (reserveId: string) => {
-    if (Object.values(editSplit).some(v => isNaN(v) || v < 0)) { alert('Geçersiz miktar'); return; }
+    if (Object.values(editSplit).some(v => isNaN(v) || v < 0)) { notify.error('Geçersiz miktar'); return; }
     setSavingEdit(true);
     try {
       const res = await fetch(`/api/stock-pools/${id}/reserves/${reserveId}`, {
@@ -519,10 +520,10 @@ export default function PoolDetailPage() {
         setPreview(null);
         fetchPool();
       } else {
-        alert(data.error || 'Güncelleme başarısız');
+        notify.error(data.error || 'Güncelleme başarısız');
       }
     } catch {
-      alert('Bağlantı hatası');
+      notify.error('Bağlantı hatası');
     } finally {
       setSavingEdit(false);
     }
@@ -538,10 +539,10 @@ export default function PoolDetailPage() {
         setPreview(null);
         fetchPool();
       } else {
-        alert(data.error || 'Silme başarısız');
+        notify.error(data.error || 'Silme başarısız');
       }
     } catch {
-      alert('Bağlantı hatası');
+      notify.error('Bağlantı hatası');
     } finally {
       setDeletingReserveId(null);
     }
@@ -1286,8 +1287,8 @@ export default function PoolDetailPage() {
                                       });
                                       const d = await res.json();
                                       if (d.success) fetchPool();
-                                      else alert(d.error || 'İşlem başarısız');
-                                    } catch { alert('Bağlantı hatası'); }
+                                      else notify.error(d.error || 'İşlem başarısız');
+                                    } catch { notify.error('Bağlantı hatası'); }
                                   }}
                                   className={`p-0.5 rounded transition-colors ${data.locked ? 'text-orange-500 hover:text-orange-700' : 'text-gray-300 hover:text-gray-500'}`}
                                   title={data.locked ? 'Kilidi aç' : 'Kilitle'}

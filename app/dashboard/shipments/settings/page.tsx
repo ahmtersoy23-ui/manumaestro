@@ -7,6 +7,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { notify } from '@/lib/ui/notify';
 import { useAuth } from '@/contexts/AuthContext';
 import { Settings, Save, AlertCircle, Loader2, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
@@ -81,7 +82,7 @@ export default function ShipmentSettingsPage() {
       const data = await res.json();
       if (data.success) setRoutes(data.data);
     } catch {
-      alert('Kayıt hatası');
+      notify.error('Kayıt hatası');
     } finally {
       setSaving(null);
     }

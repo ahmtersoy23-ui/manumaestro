@@ -7,6 +7,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { notify } from '@/lib/ui/notify';
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -144,7 +145,7 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
       const res = await fetch(`/api/export/marketplace?marketplaceId=${marketplace.id}${monthParam}`);
 
       if (!res.ok) {
-        alert('Dışa aktarılacak veri yok');
+        notify.error('Dışa aktarılacak veri yok');
         return;
       }
 
@@ -160,7 +161,7 @@ export default function MarketplacePage({ params }: { params: Promise<{ slug: st
       URL.revokeObjectURL(url);
     } catch (error) {
       logger.error('Export error:', error);
-      alert('Dışa aktarma başarısız oldu');
+      notify.error('Dışa aktarma başarısız oldu');
     } finally {
       setExporting(false);
     }

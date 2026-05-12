@@ -5,6 +5,7 @@
 'use client';
 
 import { useEffect, useState, use } from 'react';
+import { notify } from '@/lib/ui/notify';
 import Link from 'next/link';
 import { ClipboardCheck, AlertCircle, RefreshCw, Plus, ChevronRight, Loader2 } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
@@ -94,18 +95,18 @@ export default function SayimListPage({ params }: { params: Promise<{ code: stri
       });
       const d = await res.json();
       if (!res.ok || !d.success) {
-        alert(d.error || 'Generate başarısız');
+        notify.error(d.error || 'Generate başarısız');
         return;
       }
       const r = d.data;
-      alert(
+      notify.error(
         `Üretildi: ${r.created} | Atlandı: ${r.skipped} | Değerlendirildi: ${r.evaluated}` +
           (r.capped ? ' (günlük limite ulaşıldı)' : '')
       );
       setRefreshKey((k) => k + 1);
     } catch (e) {
       logger.error('Generate', e);
-      alert('Sunucu hatası');
+      notify.error('Sunucu hatası');
     } finally {
       setGenerating(false);
     }

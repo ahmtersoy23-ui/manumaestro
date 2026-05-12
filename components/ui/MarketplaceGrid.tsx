@@ -6,6 +6,7 @@
 'use client';
 
 import Link from 'next/link';
+import { notify } from '@/lib/ui/notify';
 import { ArrowRight, Plus } from 'lucide-react';
 
 // Temporary static data - will be replaced with API call
@@ -150,7 +151,7 @@ export function MarketplaceGrid() {
 
       {/* Add New Marketplace Card */}
       <button
-        onClick={() => alert('Pazar yeri ekleme özelliği yakında!')}
+        onClick={() => notify.error('Pazar yeri ekleme özelliği yakında!')}
         className="group w-full"
       >
         <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border-2 border-dashed border-gray-300 p-6 hover:border-purple-400 hover:from-purple-50 hover:to-purple-100 transition-all h-full flex flex-col items-center justify-center min-h-[240px]">

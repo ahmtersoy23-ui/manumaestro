@@ -7,6 +7,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
+import { notify } from '@/lib/ui/notify';
 import { AlertCircle, Search, Check, SkipForward, ChevronRight, ChevronDown } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { ResolveUnmatchedDialog, type UnmatchedSource } from './ResolveUnmatchedDialog';
@@ -113,13 +114,13 @@ export function UnmatchedSeedTable({ warehouseCode, canResolve, refreshTick, onC
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        alert(data.error || 'Atlanamadı');
+        notify.error(data.error || 'Atlanamadı');
         return;
       }
       onChange();
     } catch (e) {
       logger.error('Skip group', e);
-      alert('Sunucu hatası');
+      notify.error('Sunucu hatası');
     } finally {
       setSkippingLookup(null);
     }
@@ -136,13 +137,13 @@ export function UnmatchedSeedTable({ warehouseCode, canResolve, refreshTick, onC
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        alert(data.error || 'Atlanamadı');
+        notify.error(data.error || 'Atlanamadı');
         return;
       }
       onChange();
     } catch (e) {
       logger.error('Skip single', e);
-      alert('Sunucu hatası');
+      notify.error('Sunucu hatası');
     }
   }
 

@@ -5,6 +5,7 @@
 'use client';
 
 import { useEffect, useState, use } from 'react';
+import { notify } from '@/lib/ui/notify';
 import Link from 'next/link';
 import { ChevronLeft, AlertCircle, Truck, X, PackageOpen, Box as BoxIcon } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
@@ -95,13 +96,13 @@ export default function SiparisDetayPage({
       });
       const d = await res.json();
       if (!res.ok || !d.success) {
-        alert(d.error || 'Gönderilemedi');
+        notify.error(d.error || 'Gönderilemedi');
         return;
       }
       setRefreshKey((k) => k + 1);
     } catch (e) {
       logger.error('Ship hatası', e);
-      alert('Sunucu hatası');
+      notify.error('Sunucu hatası');
     } finally {
       setSubmitting(false);
     }
@@ -117,13 +118,13 @@ export default function SiparisDetayPage({
       });
       const d = await res.json();
       if (!res.ok || !d.success) {
-        alert(d.error || 'İptal başarısız');
+        notify.error(d.error || 'İptal başarısız');
         return;
       }
       setRefreshKey((k) => k + 1);
     } catch (e) {
       logger.error('Cancel hatası', e);
-      alert('Sunucu hatası');
+      notify.error('Sunucu hatası');
     } finally {
       setSubmitting(false);
     }
@@ -140,13 +141,13 @@ export default function SiparisDetayPage({
       });
       const d = await res.json();
       if (!res.ok || !d.success) {
-        alert(d.error || 'Geri alınamadı');
+        notify.error(d.error || 'Geri alınamadı');
         return;
       }
       setRefreshKey((k) => k + 1);
     } catch (e) {
       logger.error('Revert hatası', e);
-      alert('Sunucu hatası');
+      notify.error('Sunucu hatası');
     } finally {
       setSubmitting(false);
     }
@@ -161,13 +162,13 @@ export default function SiparisDetayPage({
       });
       const d = await res.json();
       if (!res.ok || !d.success) {
-        alert(d.error || 'Silinemedi');
+        notify.error(d.error || 'Silinemedi');
         return;
       }
       setRefreshKey((k) => k + 1);
     } catch (e) {
       logger.error('Remove item hatası', e);
-      alert('Sunucu hatası');
+      notify.error('Sunucu hatası');
     }
   }
 

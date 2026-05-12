@@ -5,6 +5,7 @@
 'use client';
 
 import { useEffect, useState, use, useMemo } from 'react';
+import { notify } from '@/lib/ui/notify';
 import Link from 'next/link';
 import { Search, Layers, Package, Box, AlertCircle, Plus, PackagePlus, Layers3, AlertTriangle, FileSpreadsheet, LayoutGrid, ArrowRightLeft, Printer } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
@@ -87,7 +88,7 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
       downloadPdf(blob, `raf-etiketleri-${code}.pdf`);
     } catch (e) {
       logger.error('Print all labels', e);
-      alert('Etiketler oluşturulamadı');
+      notify.error('Etiketler oluşturulamadı');
     } finally {
       setPrintingAll(false);
     }

@@ -8,6 +8,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { notify } from '@/lib/ui/notify';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
@@ -299,8 +300,8 @@ export default function ShipmentDetailPage() {
       });
       const data = await res.json();
       if (data.success) { setEditing(false); await fetchShipment(); }
-      else alert(data.error);
-    } catch { alert('Kaydetme hatası'); } finally { setSaving(false); }
+      else notify.error(data.error);
+    } catch { notify.error('Kaydetme hatası'); } finally { setSaving(false); }
   };
 
   // --- Handlers ---
@@ -374,8 +375,8 @@ export default function ShipmentDetailPage() {
       });
       const data = await res.json();
       if (data.success) setShowExitModal(false);
-      else alert(data.error);
-    } catch { alert('Çıkış kayıt hatası'); } finally { setExitSaving(false); }
+      else notify.error(data.error);
+    } catch { notify.error('Çıkış kayıt hatası'); } finally { setExitSaving(false); }
   };
 
   // Karayolu/hava: seçili packed itemleri gönder (kısmi miktar destekli)
@@ -386,7 +387,7 @@ export default function ShipmentDetailPage() {
     if (toSend.length === 0) return;
     const missingQty = toSend.filter(item => !sendQtyOverrides[item.id]);
     if (missingQty.length > 0) {
-      alert(`${missingQty.length} ürün için gönderilecek miktar giriniz`);
+      notify.error(`${missingQty.length} ürün için gönderilecek miktar giriniz`);
       return;
     }
     const sendItems = toSend.map(item => ({
@@ -417,8 +418,8 @@ export default function ShipmentDetailPage() {
         });
         await fetchShipment();
         openExitModal(sentItemDetails);
-      } else alert(data.error);
-    } catch { alert('Gönderim hatası'); } finally { setSending(false); }
+      } else notify.error(data.error);
+    } catch { notify.error('Gönderim hatası'); } finally { setSending(false); }
   };
 
   // Gönderilmişleri geri al
@@ -436,8 +437,8 @@ export default function ShipmentDetailPage() {
       if (data.success) {
         setSelectedSentIds(new Set());
         await fetchShipment();
-      } else alert(data.error);
-    } catch { alert('Geri alma hatası'); } finally { setUnsending(false); }
+      } else notify.error(data.error);
+    } catch { notify.error('Geri alma hatası'); } finally { setUnsending(false); }
   };
 
   // Gönderilenleri depo çıkışı modalına gönder
@@ -469,8 +470,8 @@ export default function ShipmentDetailPage() {
             .map(b => ({ iwasku: b.iwasku!, productName: b.productName || b.iwasku!, quantity: b.quantity }));
           openExitModal(boxItems);
         }
-      } else alert(data.error);
-    } catch { alert('Kapama hatası'); } finally { setSending(false); }
+      } else notify.error(data.error);
+    } catch { notify.error('Kapama hatası'); } finally { setSending(false); }
   };
 
   const handleAddItem = async (e: React.FormEvent) => {
@@ -482,8 +483,8 @@ export default function ShipmentDetailPage() {
       });
       const data = await res.json();
       if (data.success) { setAddForm({ iwasku: '', quantity: '', marketplaceId: '' }); setShowAddItem(false); fetchShipment(); }
-      else alert(data.error);
-    } catch { alert('Hata'); } finally { setAdding(false); }
+      else notify.error(data.error);
+    } catch { notify.error('Hata'); } finally { setAdding(false); }
   };
 
   const handleCreateBox = async (form: BoxFormData, shipmentItemId: string | null) => {
@@ -493,7 +494,7 @@ export default function ShipmentDetailPage() {
     });
     const data = await res.json();
     if (data.success) { await Promise.all([fetchBoxes(), fetchShipment()]); return data.data as ShipmentBox; }
-    else { alert(data.error); return null; }
+    else { notify.error(data.error); return null; }
   };
 
   const handleSyncFnsku = async (boxId: string) => {
@@ -578,7 +579,7 @@ export default function ShipmentDetailPage() {
 
   const handleExportShipmate = async () => {
     const usBoxes = boxes.filter(b => b.marketplaceCode === 'AMZN_US' && b.fnsku);
-    if (usBoxes.length === 0) return alert('Amazon US pazar yerine ait FNSKU\'lu koli bulunamadı.');
+    if (usBoxes.length === 0) return notify.error('Amazon US pazar yerine ait FNSKU\'lu koli bulunamadı.');
     const XLSX = await loadXLSX();
     const rows = usBoxes.map(b => ({
       koli_no: b.boxNumber,

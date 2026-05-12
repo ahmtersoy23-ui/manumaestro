@@ -7,6 +7,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { notify } from '@/lib/ui/notify';
 import { GripVertical, Save, Loader2 } from 'lucide-react';
 
 interface Marketplace {
@@ -118,9 +119,9 @@ export function MarketplacePriority({ month }: Props) {
       });
       const data = await res.json();
       if (data.success) setDirty(false);
-      else alert(data.error);
+      else notify.error(data.error);
     } catch {
-      alert('Kayıt hatası');
+      notify.error('Kayıt hatası');
     } finally {
       setSaving(false);
     }

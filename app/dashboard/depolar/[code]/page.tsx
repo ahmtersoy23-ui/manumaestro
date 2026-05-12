@@ -8,6 +8,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, use } from 'react';
+import { notify } from '@/lib/ui/notify';
 import Link from 'next/link';
 import { Search, Layers, Package, Box, AlertTriangle, History, Download } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
@@ -131,13 +132,13 @@ export default function DepoDashboardPage({ params }: { params: Promise<{ code: 
       });
       const d = await res.json();
       if (!res.ok || !d.success) {
-        alert(d.error || 'Geri alınamadı');
+        notify.error(d.error || 'Geri alınamadı');
         return;
       }
       setRefreshKey((k) => k + 1);
     } catch (e) {
       logger.error('Undo hatası', e);
-      alert('Sunucu hatası');
+      notify.error('Sunucu hatası');
     } finally {
       setUndoingId(null);
     }

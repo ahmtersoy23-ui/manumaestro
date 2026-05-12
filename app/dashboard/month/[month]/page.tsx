@@ -6,6 +6,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { notify } from '@/lib/ui/notify';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Calendar, Package, ShoppingCart, Factory, Plus, ChevronDown, ChevronUp, Warehouse, Pencil, Hammer, Sofa, ShoppingBag, Camera } from 'lucide-react';
@@ -280,7 +281,7 @@ export default function MonthDetailPage() {
       });
       const data = await res.json();
       if (data.success) {
-        alert(`${data.data.message}`);
+        notify.error(`${data.data.message}`);
         // Refresh snapshot data
         const snapRes = await fetch(`/api/month-snapshot?month=${month}`);
         const snapData = await snapRes.json();
@@ -291,11 +292,11 @@ export default function MonthDetailPage() {
           });
         }
       } else {
-        alert(data.error || 'Snapshot alınamadı');
+        notify.error(data.error || 'Snapshot alınamadı');
       }
     } catch (error) {
       logger.error('Snapshot generation failed:', error);
-      alert('Snapshot alınamadı');
+      notify.error('Snapshot alınamadı');
     } finally {
       setSnapshotGenerating(false);
     }

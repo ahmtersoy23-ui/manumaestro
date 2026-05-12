@@ -5,6 +5,7 @@
 'use client';
 
 import { useEffect, useState, use } from 'react';
+import { notify } from '@/lib/ui/notify';
 import Link from 'next/link';
 import { ChevronLeft, AlertCircle, Play, CheckCircle2, Loader2, Box as BoxIcon, Package, Eye, EyeOff } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
@@ -97,13 +98,13 @@ export default function SayimDetayPage({
       });
       const d = await res.json();
       if (!res.ok || !d.success) {
-        alert(d.error || 'Başlatılamadı');
+        notify.error(d.error || 'Başlatılamadı');
         return;
       }
       setRefreshKey((k) => k + 1);
     } catch (e) {
       logger.error('Start', e);
-      alert('Sunucu hatası');
+      notify.error('Sunucu hatası');
     } finally {
       setSubmitting(false);
     }
@@ -119,14 +120,14 @@ export default function SayimDetayPage({
       });
       const d = await res.json();
       if (!res.ok || !d.success) {
-        alert(d.error || 'Kayıt başarısız');
+        notify.error(d.error || 'Kayıt başarısız');
         return false;
       }
       setRefreshKey((k) => k + 1);
       return true;
     } catch (e) {
       logger.error('Count submit', e);
-      alert('Sunucu hatası');
+      notify.error('Sunucu hatası');
       return false;
     }
   }
@@ -141,13 +142,13 @@ export default function SayimDetayPage({
       });
       const d = await res.json();
       if (!res.ok || !d.success) {
-        alert(d.error || 'Tamamlanamadı');
+        notify.error(d.error || 'Tamamlanamadı');
         return;
       }
       setRefreshKey((k) => k + 1);
     } catch (e) {
       logger.error('Complete', e);
-      alert('Sunucu hatası');
+      notify.error('Sunucu hatası');
     } finally {
       setSubmitting(false);
     }
@@ -170,13 +171,13 @@ export default function SayimDetayPage({
       });
       const d = await res.json();
       if (!res.ok || !d.success) {
-        alert(d.error || 'Resolve başarısız');
+        notify.error(d.error || 'Resolve başarısız');
         return;
       }
       setRefreshKey((k) => k + 1);
     } catch (e) {
       logger.error('Resolve', e);
-      alert('Sunucu hatası');
+      notify.error('Sunucu hatası');
     }
   }
 
@@ -329,7 +330,7 @@ function ItemRow({ item, tolerance, taskStatus, canPerform, canResolve, onCount,
   async function saveCount() {
     const qty = Math.max(0, Math.floor(Number(value)));
     if (!Number.isFinite(qty)) {
-      alert('Geçersiz miktar');
+      notify.error('Geçersiz miktar');
       return;
     }
     setSaving(true);
