@@ -1,23 +1,22 @@
 /**
- * Etiket Bas sayfası — tüm katalog ürünlerinden serbest etiket basımı.
+ * Etiket Bas — Server Component.
  *
- * Search bar + kategori + parent filtreleri + pagination (50/sayfa).
- * Talebi olmayan ürünler de listede (spot üretim, yeniden basım vb.).
+ * URL searchParams: ?search=...&category=...&parent=...&page=N
+ * pricelab_db.products doğrudan server'da sorgulanır (queryProductDb).
+ * Search input debounce + URL state + modal interactivity LabelsClient'te.
  */
 
-'use client';
+import { Printer } from 'lucide-react';
+import { queryProductDb } from '@/lib/db/prisma';
+import { LabelsClient, type ProductDTO, type PaginationDTO } from './LabelsClient';
 
-import { useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
-import { Search, Printer, Loader2, Package, ChevronLeft, ChevronRight } from 'lucide-react';
+const PAGE_SIZE = 50;
 
-// qrcode (~80KB) sadece etiket modalı açıldığında yüklensin
-const LabelPrintModal = dynamic(
-  () => import('@/components/labels/LabelPrintModal').then((m) => ({ default: m.LabelPrintModal })),
-  { ssr: false },
-);
+interface PageProps {
+  searchParams: Promise<{ search?: string; category?: string; parent?: string; page?: string }>;
+}
 
-interface Product {
+type Row = {
   iwasku: string;
   product_name: string;
   category: string | null;
@@ -27,105 +26,92 @@ interface Product {
   height: string | null;
   weight: string | null;
   verified_package: boolean | null;
+};
+type CountRow = { count: string };
+type StrRow = { value: string };
+
+async function loadProducts(search: string, category: string, parent: string, page: number) {
+  const offset = (page - 1) * PAGE_SIZE;
+  const conditions: string[] = ['product_sku IS NOT NULL', 'name IS NOT NULL'];
+  const params: (string | number)[] = [];
+
+  if (search) {
+    params.push(`%${search}%`);
+    conditions.push(`(LOWER(product_sku) LIKE LOWER($${params.length}) OR LOWER(name) LIKE LOWER($${params.length}))`);
+  }
+  if (category) {
+    params.push(category);
+    conditions.push(`category = $${params.length}`);
+  }
+  if (parent) {
+    params.push(parent);
+    conditions.push(`parent = $${params.length}`);
+  }
+  const whereSql = conditions.join(' AND ');
+
+  const countResult = (await queryProductDb(
+    `SELECT COUNT(*) AS count FROM products WHERE ${whereSql}`,
+    params,
+  )) as CountRow[];
+  const total = parseInt(countResult[0].count, 10);
+
+  params.push(PAGE_SIZE, offset);
+  const rows = (await queryProductDb(
+    `SELECT product_sku AS iwasku, name AS product_name, category, parent, width, length, height, weight, verified_package
+     FROM products
+     WHERE ${whereSql}
+     ORDER BY name
+     LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params,
+  )) as Row[];
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  return { rows, total, totalPages };
 }
 
-interface Pagination {
-  page: number;
-  pageSize: number;
-  total: number;
-  totalPages: number;
+async function loadFilters(category: string) {
+  const categoryRows = (await queryProductDb(
+    `SELECT DISTINCT category AS value FROM products
+     WHERE category IS NOT NULL AND category <> ''
+     ORDER BY value`,
+    [],
+  )) as StrRow[];
+
+  let parentRows: StrRow[] = [];
+  if (category) {
+    parentRows = (await queryProductDb(
+      `SELECT DISTINCT parent AS value FROM products
+       WHERE category = $1 AND parent IS NOT NULL AND parent <> ''
+       ORDER BY value`,
+      [category],
+    )) as StrRow[];
+  }
+
+  return {
+    categories: categoryRows.map(r => r.value),
+    parents: parentRows.map(r => r.value),
+  };
 }
 
-export default function LabelsPage() {
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [category, setCategory] = useState('');
-  const [parent, setParent] = useState('');
-  const [page, setPage] = useState(1);
+export default async function LabelsPage({ searchParams }: PageProps) {
+  const sp = await searchParams;
+  const search = (sp.search ?? '').slice(0, 100);
+  const category = (sp.category ?? '').slice(0, 200);
+  const parent = (sp.parent ?? '').slice(0, 200);
+  const page = Math.max(1, parseInt(sp.page ?? '1', 10) || 1);
 
-  const [products, setProducts] = useState<Product[]>([]);
-  const [pagination, setPagination] = useState<Pagination | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [products, filters] = await Promise.all([
+    loadProducts(search, category, parent, page),
+    loadFilters(category),
+  ]);
 
-  const [categories, setCategories] = useState<string[]>([]);
-  const [parents, setParents] = useState<string[]>([]);
-
-  const [labelTarget, setLabelTarget] = useState<Product | null>(null);
-
-  // Debounce search
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 350);
-    return () => clearTimeout(t);
-  }, [search]);
-
-  // Filter (kategori/parent/search) değişince sayfa 1'e dön
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedSearch, category, parent]);
-
-  // Kategori değişince parent sıfırlansın + parent listesi yenilenecek
-  useEffect(() => {
-    setParent('');
-  }, [category]);
-
-  // Filtre listelerini yükle (kategori + parent — parent kategoriye bağlı)
-  useEffect(() => {
-    let cancelled = false;
-    async function loadFilters() {
-      try {
-        const url = `/api/labels/products/filters${category ? `?category=${encodeURIComponent(category)}` : ''}`;
-        const res = await fetch(url);
-        const json = await res.json();
-        if (cancelled || !res.ok || !json.success) return;
-        setCategories(json.data.categories || []);
-        setParents(json.data.parents || []);
-      } catch {
-        /* noop */
-      }
-    }
-    loadFilters();
-    return () => {
-      cancelled = true;
-    };
-  }, [category]);
-
-  // Ürünleri yükle
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      setLoading(true);
-      setError(null);
-      try {
-        const params = new URLSearchParams();
-        if (debouncedSearch) params.set('search', debouncedSearch);
-        if (category) params.set('category', category);
-        if (parent) params.set('parent', parent);
-        params.set('page', String(page));
-
-        const res = await fetch(`/api/labels/products?${params.toString()}`);
-        const json = await res.json();
-        if (cancelled) return;
-        if (!res.ok || !json.success) {
-          throw new Error(json.error || 'Ürünler yüklenemedi');
-        }
-        setProducts(json.data || []);
-        setPagination(json.pagination || null);
-      } catch (err) {
-        if (!cancelled) setError((err as Error).message);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [debouncedSearch, category, parent, page]);
-
-  const total = pagination?.total ?? 0;
-  const totalPages = pagination?.totalPages ?? 1;
-  const filtersActive = !!(debouncedSearch || category || parent);
+  const initialProducts: ProductDTO[] = products.rows;
+  const pagination: PaginationDTO = {
+    page,
+    pageSize: PAGE_SIZE,
+    total: products.total,
+    totalPages: products.totalPages,
+  };
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -139,168 +125,15 @@ export default function LabelsPage() {
         </p>
       </div>
 
-      {/* Search */}
-      <div className="relative mb-3">
-        <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="IWASKU veya ürün adı ile ara..."
-          autoFocus
-          className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-purple-500 text-sm"
-        />
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-purple-500 text-sm bg-white min-w-[180px]"
-          aria-label="Kategori filtresi"
-        >
-          <option value="">Tüm kategoriler</option>
-          {categories.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-
-        <select
-          value={parent}
-          onChange={(e) => setParent(e.target.value)}
-          disabled={!category}
-          className="px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-purple-500 text-sm bg-white min-w-[200px] disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
-          aria-label="Parent filtresi"
-          title={!category ? 'Önce kategori seçin' : 'Parent ürün ailesi'}
-        >
-          <option value="">{category ? 'Tüm parent\'lar' : 'Önce kategori seç'}</option>
-          {parents.map((p) => (
-            <option key={p} value={p}>{p}</option>
-          ))}
-        </select>
-
-        {filtersActive && (
-          <button
-            type="button"
-            onClick={() => { setSearch(''); setCategory(''); setParent(''); }}
-            className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            Filtreleri temizle
-          </button>
-        )}
-
-        <div className="ml-auto flex items-center text-sm text-gray-500">
-          {loading ? '…' : `${total.toLocaleString('tr-TR')} ürün`}
-        </div>
-      </div>
-
-      {/* Liste */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center p-12 text-gray-500">
-            <Loader2 className="w-5 h-5 animate-spin mr-2" />
-            Ürünler yükleniyor...
-          </div>
-        ) : error ? (
-          <div className="p-6 text-red-700 bg-red-50">{error}</div>
-        ) : products.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-12 text-center">
-            <Package className="w-10 h-10 text-gray-300 mb-3" />
-            <p className="text-sm text-gray-600">
-              {filtersActive ? 'Bu filtrelerle eşleşen ürün yok' : 'Ürün bulunamadı'}
-            </p>
-          </div>
-        ) : (
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">IWASKU</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Ürün Adı</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Kategori</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Parent</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider w-20"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {products.map((p) => (
-                <tr key={p.iwasku} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="text-sm font-mono text-gray-900">{p.iwasku}</span>
-                  </td>
-                  <td className="px-4 py-3"><span className="text-sm text-gray-800">{p.product_name}</span></td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    {p.category ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-50 text-purple-700">{p.category}</span>
-                    ) : (
-                      <span className="text-xs text-gray-400">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-xs text-gray-500">{p.parent || '—'}</span>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => setLabelTarget(p)}
-                      className="p-2 text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors"
-                      title="Etiket Bas"
-                      aria-label="Etiket Bas"
-                    >
-                      <Printer className="w-4 h-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-
-        {/* Pagination */}
-        {!loading && totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200 text-sm">
-            <div className="text-gray-600">
-              {((page - 1) * 50) + 1}–{Math.min(page * 50, total)} / {total.toLocaleString('tr-TR')}
-            </div>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setPage(Math.max(1, page - 1))}
-                disabled={page === 1}
-                className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                aria-label="Önceki sayfa"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <span className="px-3 font-semibold text-gray-700">
-                {page} / {totalPages}
-              </span>
-              <button
-                type="button"
-                onClick={() => setPage(Math.min(totalPages, page + 1))}
-                disabled={page === totalPages}
-                className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                aria-label="Sonraki sayfa"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {labelTarget && (
-        <LabelPrintModal
-          iwasku={labelTarget.iwasku}
-          productName={labelTarget.product_name}
-          width={labelTarget.width}
-          length={labelTarget.length}
-          height={labelTarget.height}
-          weight={labelTarget.weight}
-          verified={labelTarget.verified_package === true}
-          onClose={() => setLabelTarget(null)}
-        />
-      )}
+      <LabelsClient
+        initialProducts={initialProducts}
+        pagination={pagination}
+        categories={filters.categories}
+        parents={filters.parents}
+        currentSearch={search}
+        currentCategory={category}
+        currentParent={parent}
+      />
     </div>
   );
 }
