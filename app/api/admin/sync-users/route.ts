@@ -3,12 +3,13 @@
  * POST: Fetch ManuMaestro users from SSO and upsert into local DB
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { UserRole } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
-import { requireRole, extractToken } from '@/lib/auth/verify';
-import { errorResponse } from '@/lib/api/response';
+import { extractToken } from '@/lib/auth/verify';
 import { createLogger } from '@/lib/logger';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
 const logger = createLogger('SSO Sync');
 const SSO_ADMIN_USERS_URL = process.env.SSO_URL
@@ -36,11 +37,9 @@ interface SSOUser {
   apps: SSOAppRole[] | null;
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const authResult = await requireRole(request, ['admin']);
-    if (authResult instanceof NextResponse) return authResult;
-
+export const POST = withRoute(
+  { roles: ['admin'], rateLimit: 'bulk', fallbackMessage: 'SSO senkronizasyonu başarısız' },
+  async ({ request }) => {
     // Forward admin's SSO token to fetch all users
     const token = extractToken(request);
 
@@ -104,11 +103,6 @@ export async function POST(request: NextRequest) {
 
     logger.info(`SSO sync completed: ${synced} users synced`);
 
-    return NextResponse.json({
-      success: true,
-      data: { synced },
-    });
-  } catch (error) {
-    return errorResponse(error, 'SSO senkronizasyonu başarısız');
+    return successResponse({ synced });
   }
-}
+);

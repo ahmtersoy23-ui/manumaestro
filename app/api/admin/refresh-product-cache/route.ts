@@ -7,18 +7,14 @@
  * bayat cache'leri toptan tazelemek için tetiklenir.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma, queryProductDb } from '@/lib/db/prisma';
-import { requireRole } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
-import { errorResponse } from '@/lib/api/response';
+import { withRoute } from '@/lib/api/withRoute';
 
-export async function POST(request: NextRequest) {
-  try {
-    const auth = await requireRole(request, ['admin']);
-    if (auth instanceof NextResponse) return auth;
-    const { user } = auth;
-
+export const POST = withRoute(
+  { roles: ['admin'], rateLimit: 'bulk', fallbackMessage: 'Ürün cache yenilenemedi' },
+  async ({ user }) => {
     // 1. Tüm benzersiz iwasku'ları al
     const distinct = await prisma.productionRequest.findMany({
       select: { iwasku: true },
@@ -68,7 +64,7 @@ export async function POST(request: NextRequest) {
     }
 
     await logAction({
-      userId: user.id, userName: user.name, userEmail: user.email,
+      userId: user!.id, userName: user!.name, userEmail: user!.email,
       action: 'BULK_UPLOAD', entityType: 'ProductionRequest', entityId: 'cache-refresh',
       description: `Ürün cache yenilendi: ${updated} kayıt güncellendi (${skus.length} iwasku tarandı, ${unmatched} eşleşmedi)`,
       metadata: { scanned: skus.length, updated, unmatched },
@@ -80,7 +76,5 @@ export async function POST(request: NextRequest) {
       updated,
       unmatched,
     });
-  } catch (error) {
-    return errorResponse(error, 'Ürün cache yenilenemedi');
   }
-}
+);

@@ -5,13 +5,13 @@
  * DELETE: Remove stock permission for a user
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { UserRole } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
-import { requireRole } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
-import { errorResponse } from '@/lib/api/response';
 import { z } from 'zod';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
 const StockPermissionSchema = z.object({
   userId: z.string().uuid(),
@@ -22,11 +22,9 @@ const StockPermissionSchema = z.object({
   path: ['canView'],
 });
 
-export async function GET(request: NextRequest) {
-  try {
-    const authResult = await requireRole(request, ['admin']);
-    if (authResult instanceof NextResponse) return authResult;
-
+export const GET = withRoute(
+  { roles: ['admin'], rateLimit: 'read', fallbackMessage: 'Stok izinleri getirilemedi' },
+  async () => {
     const users = await prisma.user.findMany({
       where: { role: UserRole.OPERATOR, isActive: true },
       select: {
@@ -40,18 +38,13 @@ export async function GET(request: NextRequest) {
       orderBy: { name: 'asc' },
     });
 
-    return NextResponse.json({ success: true, data: { users } });
-  } catch (error) {
-    return errorResponse(error, 'Stok izinleri getirilemedi');
+    return successResponse({ users });
   }
-}
+);
 
-export async function POST(request: NextRequest) {
-  try {
-    const authResult = await requireRole(request, ['admin']);
-    if (authResult instanceof NextResponse) return authResult;
-    const { user } = authResult;
-
+export const POST = withRoute(
+  { roles: ['admin'], rateLimit: 'write', fallbackMessage: 'Stok izni güncellenemedi' },
+  async ({ request, user }) => {
     const body = await request.json();
     const validation = StockPermissionSchema.safeParse(body);
     if (!validation.success) {
@@ -70,9 +63,9 @@ export async function POST(request: NextRequest) {
     });
 
     await logAction({
-      userId: user.id,
-      userName: user.name,
-      userEmail: user.email,
+      userId: user!.id,
+      userName: user!.name,
+      userEmail: user!.email,
       action: 'UPDATE_STOCK',
       entityType: 'UserStockPermission',
       entityId: userId,
@@ -80,18 +73,13 @@ export async function POST(request: NextRequest) {
       metadata: { userId, canView, canEdit },
     });
 
-    return NextResponse.json({ success: true, data: permission });
-  } catch (error) {
-    return errorResponse(error, 'Stok izni güncellenemedi');
+    return successResponse(permission);
   }
-}
+);
 
-export async function DELETE(request: NextRequest) {
-  try {
-    const authResult = await requireRole(request, ['admin']);
-    if (authResult instanceof NextResponse) return authResult;
-    const { user } = authResult;
-
+export const DELETE = withRoute(
+  { roles: ['admin'], rateLimit: 'write', fallbackMessage: 'Stok izni kaldırılamadı' },
+  async ({ request, user }) => {
     const body = await request.json();
     const userIdResult = z.string().uuid().safeParse(body.userId);
     if (!userIdResult.success) {
@@ -106,9 +94,9 @@ export async function DELETE(request: NextRequest) {
     });
 
     await logAction({
-      userId: user.id,
-      userName: user.name,
-      userEmail: user.email,
+      userId: user!.id,
+      userName: user!.name,
+      userEmail: user!.email,
       action: 'UPDATE_STOCK',
       entityType: 'UserStockPermission',
       entityId: userIdResult.data,
@@ -117,7 +105,5 @@ export async function DELETE(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    return errorResponse(error, 'Stok izni kaldırılamadı');
   }
-}
+);

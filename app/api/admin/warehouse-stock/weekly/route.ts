@@ -3,12 +3,13 @@
  * POST: Upsert a weekly production entry for a product
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { verifyAuth, checkStockPermission } from '@/lib/auth/verify';
+import { checkStockPermission } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
-import { errorResponse } from '@/lib/api/response';
 import { z } from 'zod';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
 const WeeklyEntrySchema = z.object({
   iwasku: z.string().min(1),
@@ -18,14 +19,10 @@ const WeeklyEntrySchema = z.object({
   poolId: z.string().uuid().optional(), // Seasonal pool — if set, updates reserve.producedQuantity
 });
 
-export async function POST(request: NextRequest) {
-  try {
-    const auth = await verifyAuth(request);
-    if (!auth.success || !auth.user) {
-      return NextResponse.json({ success: false, error: auth.error }, { status: 401 });
-    }
-
-    const permCheck = await checkStockPermission(auth.user.id, auth.user.role, 'edit');
+export const POST = withRoute(
+  { rateLimit: 'write', fallbackMessage: 'Haftalık giriş güncellenemedi' },
+  async ({ request, user }) => {
+    const permCheck = await checkStockPermission(user!.id, user!.role, 'edit');
     if (!permCheck.allowed) {
       return NextResponse.json({ success: false, error: permCheck.reason }, { status: 403 });
     }
@@ -62,11 +59,11 @@ export async function POST(request: NextRequest) {
       if (existing) {
         entry = await prisma.warehouseWeekly.update({
           where: { id: existing.id },
-          data: { quantity, enteredById: auth.user.id },
+          data: { quantity, enteredById: user!.id },
         });
       } else {
         entry = await prisma.warehouseWeekly.create({
-          data: { iwasku, weekStart: weekDate, quantity, type, enteredById: auth.user.id },
+          data: { iwasku, weekStart: weekDate, quantity, type, enteredById: user!.id },
         });
       }
     }
@@ -80,9 +77,9 @@ export async function POST(request: NextRequest) {
     const typeLabel = type === 'PRODUCTION' ? 'Üretim' : 'Çıkış';
     const poolLabel = poolId ? ' [SEZON]' : '';
     await logAction({
-      userId: auth.user.id,
-      userName: auth.user.name,
-      userEmail: auth.user.email,
+      userId: user!.id,
+      userName: user!.name,
+      userEmail: user!.email,
       action: 'UPDATE_STOCK',
       entityType: 'WarehouseWeekly',
       entityId: iwasku,
@@ -90,8 +87,6 @@ export async function POST(request: NextRequest) {
       metadata: { iwasku, weekStart, type, oldQty, newQty: quantity, poolId },
     });
 
-    return NextResponse.json({ success: true, data: entry });
-  } catch (error) {
-    return errorResponse(error, 'Haftalık giriş güncellenemedi');
+    return successResponse(entry);
   }
-}
+);

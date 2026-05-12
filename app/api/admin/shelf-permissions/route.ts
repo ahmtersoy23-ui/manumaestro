@@ -8,13 +8,13 @@
  * warehouseCode: ANKARA | NJ | SHOWROOM | "*" (tüm depolar)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { UserRole } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
-import { requireRole } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
-import { errorResponse } from '@/lib/api/response';
 import { z } from 'zod';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
 const VALID_WAREHOUSES = ['ANKARA', 'NJ', 'SHOWROOM', '*'] as const;
 const VALID_ROLES = ['VIEWER', 'PACKER', 'OPERATOR', 'MANAGER', 'ADMIN'] as const;
@@ -30,11 +30,9 @@ const DeleteSchema = z.object({
   warehouseCode: z.enum(VALID_WAREHOUSES),
 });
 
-export async function GET(request: NextRequest) {
-  try {
-    const authResult = await requireRole(request, ['admin']);
-    if (authResult instanceof NextResponse) return authResult;
-
+export const GET = withRoute(
+  { roles: ['admin'], rateLimit: 'read', fallbackMessage: 'Depo rolleri getirilemedi' },
+  async () => {
     const users = await prisma.user.findMany({
       where: { role: UserRole.OPERATOR, isActive: true },
       select: { id: true, name: true, email: true },
@@ -53,27 +51,19 @@ export async function GET(request: NextRequest) {
       byUser.set(p.userId, cur);
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        warehouses: ['ANKARA', 'NJ', 'SHOWROOM'],
-        users: users.map((u) => ({
-          ...u,
-          permissions: byUser.get(u.id) ?? {},
-        })),
-      },
+    return successResponse({
+      warehouses: ['ANKARA', 'NJ', 'SHOWROOM'],
+      users: users.map((u) => ({
+        ...u,
+        permissions: byUser.get(u.id) ?? {},
+      })),
     });
-  } catch (error) {
-    return errorResponse(error, 'Depo rolleri getirilemedi');
   }
-}
+);
 
-export async function POST(request: NextRequest) {
-  try {
-    const authResult = await requireRole(request, ['admin']);
-    if (authResult instanceof NextResponse) return authResult;
-    const { user } = authResult;
-
+export const POST = withRoute(
+  { roles: ['admin'], rateLimit: 'write', fallbackMessage: 'Depo rolü güncellenemedi' },
+  async ({ request, user }) => {
     const body = await request.json();
     const parsed = UpsertSchema.safeParse(body);
     if (!parsed.success) {
@@ -91,9 +81,9 @@ export async function POST(request: NextRequest) {
     });
 
     await logAction({
-      userId: user.id,
-      userName: user.name,
-      userEmail: user.email,
+      userId: user!.id,
+      userName: user!.name,
+      userEmail: user!.email,
       action: 'UPDATE_STOCK',
       entityType: 'UserShelfPermission',
       entityId: userId,
@@ -101,18 +91,13 @@ export async function POST(request: NextRequest) {
       metadata: { userId, warehouseCode, role },
     });
 
-    return NextResponse.json({ success: true, data: permission });
-  } catch (error) {
-    return errorResponse(error, 'Depo rolü güncellenemedi');
+    return successResponse(permission);
   }
-}
+);
 
-export async function DELETE(request: NextRequest) {
-  try {
-    const authResult = await requireRole(request, ['admin']);
-    if (authResult instanceof NextResponse) return authResult;
-    const { user } = authResult;
-
+export const DELETE = withRoute(
+  { roles: ['admin'], rateLimit: 'write', fallbackMessage: 'Depo rolü kaldırılamadı' },
+  async ({ request, user }) => {
     const body = await request.json();
     const parsed = DeleteSchema.safeParse(body);
     if (!parsed.success) {
@@ -128,9 +113,9 @@ export async function DELETE(request: NextRequest) {
       .catch(() => {/* zaten yoksa sorun değil */});
 
     await logAction({
-      userId: user.id,
-      userName: user.name,
-      userEmail: user.email,
+      userId: user!.id,
+      userName: user!.name,
+      userEmail: user!.email,
       action: 'UPDATE_STOCK',
       entityType: 'UserShelfPermission',
       entityId: userId,
@@ -139,7 +124,5 @@ export async function DELETE(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    return errorResponse(error, 'Depo rolü kaldırılamadı');
   }
-}
+);

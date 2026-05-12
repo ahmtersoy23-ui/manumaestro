@@ -5,20 +5,18 @@
  * DELETE: Remove a category permission for a user
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { UserRole } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
-import { requireRole } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
 import { CategoryPermissionSchema, UUIDParamSchema } from '@/lib/validation/schemas';
-import { errorResponse } from '@/lib/api/response';
 import { z } from 'zod';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
-export async function GET(request: NextRequest) {
-  try {
-    const authResult = await requireRole(request, ['admin']);
-    if (authResult instanceof NextResponse) return authResult;
-
+export const GET = withRoute(
+  { roles: ['admin'], rateLimit: 'read', fallbackMessage: 'Kategori izinleri getirilemedi' },
+  async () => {
     const [users, reqCategories, permCategories] = await Promise.all([
       prisma.user.findMany({
         where: { role: UserRole.OPERATOR, isActive: true },
@@ -52,18 +50,13 @@ export async function GET(request: NextRequest) {
       ...permCategories.map(p => p.category),
     ])].filter(Boolean).sort();
 
-    return NextResponse.json({ success: true, data: { users, categories } });
-  } catch (error) {
-    return errorResponse(error, 'Kategori izinleri getirilemedi');
+    return successResponse({ users, categories });
   }
-}
+);
 
-export async function POST(request: NextRequest) {
-  try {
-    const authResult = await requireRole(request, ['admin']);
-    if (authResult instanceof NextResponse) return authResult;
-    const { user } = authResult;
-
+export const POST = withRoute(
+  { roles: ['admin'], rateLimit: 'write', fallbackMessage: 'Kategori izni güncellenemedi' },
+  async ({ request, user }) => {
     const body = await request.json();
     const validation = CategoryPermissionSchema.safeParse(body);
     if (!validation.success) {
@@ -94,9 +87,9 @@ export async function POST(request: NextRequest) {
     });
 
     await logAction({
-      userId: user.id,
-      userName: user.name,
-      userEmail: user.email,
+      userId: user!.id,
+      userName: user!.name,
+      userEmail: user!.email,
       action: 'UPDATE_MARKETPLACE',
       entityType: 'UserCategoryPermission',
       entityId: userId,
@@ -104,18 +97,13 @@ export async function POST(request: NextRequest) {
       metadata: { userId, category, canView, canEdit },
     });
 
-    return NextResponse.json({ success: true, data: permission });
-  } catch (error) {
-    return errorResponse(error, 'Kategori izni güncellenemedi');
+    return successResponse(permission);
   }
-}
+);
 
-export async function DELETE(request: NextRequest) {
-  try {
-    const authResult = await requireRole(request, ['admin']);
-    if (authResult instanceof NextResponse) return authResult;
-    const { user } = authResult;
-
+export const DELETE = withRoute(
+  { roles: ['admin'], rateLimit: 'write', fallbackMessage: 'Kategori izni kaldırılamadı' },
+  async ({ request, user }) => {
     const body = await request.json();
     const userIdResult = UUIDParamSchema.safeParse(body.userId);
     const categoryResult = z.string().min(1).max(100).safeParse(body.category);
@@ -135,9 +123,9 @@ export async function DELETE(request: NextRequest) {
     });
 
     await logAction({
-      userId: user.id,
-      userName: user.name,
-      userEmail: user.email,
+      userId: user!.id,
+      userName: user!.name,
+      userEmail: user!.email,
       action: 'UPDATE_MARKETPLACE',
       entityType: 'UserCategoryPermission',
       entityId: userId,
@@ -146,7 +134,5 @@ export async function DELETE(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    return errorResponse(error, 'Kategori izni kaldırılamadı');
   }
-}
+);

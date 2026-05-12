@@ -3,13 +3,14 @@
  * POST: Import products with eskiStok from Excel/CSV
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { queryProductDb } from '@/lib/db/prisma';
-import { verifyAuth, checkStockPermission } from '@/lib/auth/verify';
+import { checkStockPermission } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
-import { errorResponse } from '@/lib/api/response';
 import { z } from 'zod';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
 const BulkStockSchema = z.object({
   items: z.array(z.object({
@@ -18,14 +19,10 @@ const BulkStockSchema = z.object({
   })).min(1).max(1000),
 });
 
-export async function POST(request: NextRequest) {
-  try {
-    const auth = await verifyAuth(request);
-    if (!auth.success || !auth.user) {
-      return NextResponse.json({ success: false, error: auth.error }, { status: 401 });
-    }
-
-    const permCheck = await checkStockPermission(auth.user.id, auth.user.role, 'edit');
+export const POST = withRoute(
+  { rateLimit: 'bulk', fallbackMessage: 'Toplu stok import başarısız' },
+  async ({ request, user }) => {
+    const permCheck = await checkStockPermission(user!.id, user!.role, 'edit');
     if (!permCheck.allowed) {
       return NextResponse.json({ success: false, error: permCheck.reason }, { status: 403 });
     }
@@ -75,9 +72,9 @@ export async function POST(request: NextRequest) {
     const imported = validItems.length;
 
     await logAction({
-      userId: auth.user.id,
-      userName: auth.user.name,
-      userEmail: auth.user.email,
+      userId: user!.id,
+      userName: user!.name,
+      userEmail: user!.email,
       action: 'UPDATE_STOCK',
       entityType: 'WarehouseProduct',
       entityId: 'bulk',
@@ -85,11 +82,6 @@ export async function POST(request: NextRequest) {
       metadata: { imported, warnings: warnings.length },
     });
 
-    return NextResponse.json({
-      success: true,
-      data: { imported, warnings },
-    });
-  } catch (error) {
-    return errorResponse(error, 'Toplu stok import başarısız');
+    return successResponse({ imported, warnings });
   }
-}
+);

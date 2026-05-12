@@ -5,19 +5,17 @@
  * DELETE: Remove a marketplace permission for a user
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { UserRole } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
-import { requireRole } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
 import { MarketplacePermissionSchema, UUIDParamSchema } from '@/lib/validation/schemas';
-import { errorResponse } from '@/lib/api/response';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
-export async function GET(request: NextRequest) {
-  try {
-    const authResult = await requireRole(request, ['admin']);
-    if (authResult instanceof NextResponse) return authResult;
-
+export const GET = withRoute(
+  { roles: ['admin'], rateLimit: 'read', fallbackMessage: 'İzinler getirilemedi' },
+  async () => {
     const [users, marketplaces] = await Promise.all([
       prisma.user.findMany({
         where: { role: UserRole.OPERATOR, isActive: true },
@@ -42,18 +40,13 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    return NextResponse.json({ success: true, data: { users, marketplaces } });
-  } catch (error) {
-    return errorResponse(error, 'İzinler getirilemedi');
+    return successResponse({ users, marketplaces });
   }
-}
+);
 
-export async function POST(request: NextRequest) {
-  try {
-    const authResult = await requireRole(request, ['admin']);
-    if (authResult instanceof NextResponse) return authResult;
-    const { user } = authResult;
-
+export const POST = withRoute(
+  { roles: ['admin'], rateLimit: 'write', fallbackMessage: 'İzin güncellenemedi' },
+  async ({ request, user }) => {
     const body = await request.json();
     const validation = MarketplacePermissionSchema.safeParse(body);
     if (!validation.success) {
@@ -84,9 +77,9 @@ export async function POST(request: NextRequest) {
     });
 
     await logAction({
-      userId: user.id,
-      userName: user.name,
-      userEmail: user.email,
+      userId: user!.id,
+      userName: user!.name,
+      userEmail: user!.email,
       action: 'UPDATE_MARKETPLACE',
       entityType: 'UserMarketplacePermission',
       entityId: userId,
@@ -94,18 +87,13 @@ export async function POST(request: NextRequest) {
       metadata: { userId, marketplaceId, canView, canEdit },
     });
 
-    return NextResponse.json({ success: true, data: permission });
-  } catch (error) {
-    return errorResponse(error, 'İzin güncellenemedi');
+    return successResponse(permission);
   }
-}
+);
 
-export async function DELETE(request: NextRequest) {
-  try {
-    const authResult = await requireRole(request, ['admin']);
-    if (authResult instanceof NextResponse) return authResult;
-    const { user } = authResult;
-
+export const DELETE = withRoute(
+  { roles: ['admin'], rateLimit: 'write', fallbackMessage: 'İzin kaldırılamadı' },
+  async ({ request, user }) => {
     const body = await request.json();
     const userIdResult = UUIDParamSchema.safeParse(body.userId);
     const marketplaceIdResult = UUIDParamSchema.safeParse(body.marketplaceId);
@@ -125,9 +113,9 @@ export async function DELETE(request: NextRequest) {
     });
 
     await logAction({
-      userId: user.id,
-      userName: user.name,
-      userEmail: user.email,
+      userId: user!.id,
+      userName: user!.name,
+      userEmail: user!.email,
       action: 'UPDATE_MARKETPLACE',
       entityType: 'UserMarketplacePermission',
       entityId: userId,
@@ -136,7 +124,5 @@ export async function DELETE(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    return errorResponse(error, 'İzin kaldırılamadı');
   }
-}
+);

@@ -5,24 +5,21 @@
  * DELETE: Remove a product from warehouse
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { queryProductDb } from '@/lib/db/prisma';
-import { verifyAuth, checkStockPermission } from '@/lib/auth/verify';
+import { checkStockPermission } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
-import { errorResponse } from '@/lib/api/response';
 import { getATPMap } from '@/lib/db/atp';
 import { formatMonthValue } from '@/lib/monthUtils';
 import { z } from 'zod';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
-export async function GET(request: NextRequest) {
-  try {
-    const auth = await verifyAuth(request);
-    if (!auth.success || !auth.user) {
-      return NextResponse.json({ success: false, error: auth.error }, { status: 401 });
-    }
-
-    const permCheck = await checkStockPermission(auth.user.id, auth.user.role, 'view');
+export const GET = withRoute(
+  { rateLimit: 'read', fallbackMessage: 'Stok verileri getirilemedi' },
+  async ({ user }) => {
+    const permCheck = await checkStockPermission(user!.id, user!.role, 'view');
     if (!permCheck.allowed) {
       return NextResponse.json({ success: false, error: permCheck.reason }, { status: 403 });
     }
@@ -227,11 +224,9 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({ success: true, data });
-  } catch (error) {
-    return errorResponse(error, 'Stok verileri getirilemedi');
+    return successResponse(data);
   }
-}
+);
 
 const UpdateProductSchema = z.object({
   iwasku: z.string().min(1),
@@ -239,14 +234,10 @@ const UpdateProductSchema = z.object({
   value: z.number().int(),
 });
 
-export async function POST(request: NextRequest) {
-  try {
-    const auth = await verifyAuth(request);
-    if (!auth.success || !auth.user) {
-      return NextResponse.json({ success: false, error: auth.error }, { status: 401 });
-    }
-
-    const permCheck = await checkStockPermission(auth.user.id, auth.user.role, 'edit');
+export const POST = withRoute(
+  { rateLimit: 'write', fallbackMessage: 'Stok güncellenemedi' },
+  async ({ request, user }) => {
+    const permCheck = await checkStockPermission(user!.id, user!.role, 'edit');
     if (!permCheck.allowed) {
       return NextResponse.json({ success: false, error: permCheck.reason }, { status: 403 });
     }
@@ -274,9 +265,9 @@ export async function POST(request: NextRequest) {
 
     const fieldLabels: Record<string, string> = { eskiStok: 'Başlangıç Stoğu', ilaveStok: 'İlave', cikis: 'Çıkış' };
     await logAction({
-      userId: auth.user.id,
-      userName: auth.user.name,
-      userEmail: auth.user.email,
+      userId: user!.id,
+      userName: user!.name,
+      userEmail: user!.email,
       action: 'UPDATE_STOCK',
       entityType: 'WarehouseProduct',
       entityId: product.id,
@@ -284,20 +275,14 @@ export async function POST(request: NextRequest) {
       metadata: { iwasku, field, oldValue, newValue: value },
     });
 
-    return NextResponse.json({ success: true, data: product });
-  } catch (error) {
-    return errorResponse(error, 'Stok güncellenemedi');
+    return successResponse(product);
   }
-}
+);
 
-export async function DELETE(request: NextRequest) {
-  try {
-    const auth = await verifyAuth(request);
-    if (!auth.success || !auth.user) {
-      return NextResponse.json({ success: false, error: auth.error }, { status: 401 });
-    }
-
-    const permCheck = await checkStockPermission(auth.user.id, auth.user.role, 'edit');
+export const DELETE = withRoute(
+  { rateLimit: 'write', fallbackMessage: 'Ürün silinemedi' },
+  async ({ request, user }) => {
+    const permCheck = await checkStockPermission(user!.id, user!.role, 'edit');
     if (!permCheck.allowed) {
       return NextResponse.json({ success: false, error: permCheck.reason }, { status: 403 });
     }
@@ -311,7 +296,5 @@ export async function DELETE(request: NextRequest) {
     await prisma.warehouseProduct.delete({ where: { iwasku: iwasku.data } });
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    return errorResponse(error, 'Ürün silinemedi');
   }
-}
+);
