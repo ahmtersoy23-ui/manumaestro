@@ -1,18 +1,21 @@
 /**
- * Depo Lobby — kullanıcının erişebileceği depoları kart olarak listeler.
- * Ankara (TOTALS_PRIMARY) için: tek toplam stok rakamı + ürün sayısı + raf sayısı.
- * NJ/Showroom (SHELF_PRIMARY) için: tekil + koli + raf kırılımı.
+ * Depo Lobby — Server Component.
+ *
+ * Kullanıcının erişebileceği depolar + özet rakamları Prisma'dan server'da
+ * çekilir. Pure read-only — client interactivity gerekmiyor.
+ * Ankara (TOTALS_PRIMARY): tek toplam stok + ürün + raf sayısı.
+ * NJ/Showroom (SHELF_PRIMARY): tekil + koli + raf kırılımı.
  */
 
-'use client';
-
-import { useEffect, useState } from 'react';
+import { headers } from 'next/headers';
 import Link from 'next/link';
 import { Warehouse as WarehouseIcon, AlertTriangle, Package, Box, Layers } from 'lucide-react';
-import { createLogger } from '@/lib/logger';
+import { prisma } from '@/lib/db/prisma';
 import { codeToSlug } from '@/lib/warehouseLabels';
+import { getAccessibleWarehouses, getShelfRole } from '@/lib/auth/shelfPermission';
+import { getAnkaraTotals } from '@/lib/warehouse/ankaraTotals';
 
-const logger = createLogger('DepolarLobby');
+const ADMIN_WAREHOUSES = ['ANKARA', 'NJ', 'SHOWROOM'];
 
 type WarehouseCard = {
   code: string;
@@ -39,31 +42,86 @@ type WarehouseCard = {
       };
 };
 
-export default function DepolarLobbyPage() {
-  const [warehouses, setWarehouses] = useState<WarehouseCard[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+async function loadWarehouses(userId: string, userRole: string): Promise<WarehouseCard[]> {
+  const accessibleCodes = userRole === 'admin'
+    ? ADMIN_WAREHOUSES
+    : await getAccessibleWarehouses(userId, userRole);
 
-  useEffect(() => {
-    fetch('/api/depolar', { credentials: 'include' })
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.success) setWarehouses(d.data);
-        else setError(d.error || 'Depolar yüklenemedi');
-      })
-      .catch((e) => {
-        logger.error('Lobby fetch error', e);
-        setError('Sunucuya bağlanılamadı');
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  if (accessibleCodes.length === 0) return [];
 
-  if (loading) return <div className="text-center py-12 text-gray-500">Depolar yükleniyor…</div>;
-  if (error) {
+  const warehouses = await prisma.warehouse.findMany({
+    where: { isActive: true, code: { in: accessibleCodes } },
+    orderBy: { code: 'asc' },
+  });
+
+  return Promise.all(
+    warehouses.map(async (w): Promise<WarehouseCard> => {
+      const role = await getShelfRole(userId, userRole, w.code);
+      const [shelfCount, pendingUnmatched] = await Promise.all([
+        prisma.shelf.count({ where: { warehouseCode: w.code, isActive: true } }),
+        prisma.unmatchedSeedRow.count({
+          where: { warehouseCode: w.code, status: 'PENDING' },
+        }),
+      ]);
+
+      if (w.stockMode === 'TOTALS_PRIMARY') {
+        const totals = await getAnkaraTotals();
+        return {
+          code: w.code, name: w.name, region: w.region, stockMode: w.stockMode, role,
+          summary: {
+            mode: 'TOTALS_PRIMARY',
+            shelfCount,
+            totalQty: totals.totalQty,
+            productCount: totals.productCount,
+            pendingUnmatched,
+          },
+        };
+      }
+
+      const [stockAgg, boxAgg] = await Promise.all([
+        prisma.shelfStock.aggregate({
+          where: { warehouseCode: w.code },
+          _sum: { quantity: true },
+          _count: true,
+        }),
+        prisma.shelfBox.aggregate({
+          where: { warehouseCode: w.code, status: { not: 'EMPTY' } },
+          _sum: { quantity: true },
+          _count: true,
+        }),
+      ]);
+
+      return {
+        code: w.code, name: w.name, region: w.region, stockMode: w.stockMode, role,
+        summary: {
+          mode: 'SHELF_PRIMARY',
+          shelfCount,
+          looseSkuLines: stockAgg._count,
+          looseTotalQty: stockAgg._sum.quantity ?? 0,
+          boxCount: boxAgg._count,
+          boxTotalQty: boxAgg._sum.quantity ?? 0,
+          pendingUnmatched,
+        },
+      };
+    })
+  );
+}
+
+export default async function DepolarLobbyPage() {
+  const h = await headers();
+  const userId = h.get('x-user-id');
+  const userRole = h.get('x-user-role');
+
+  if (!userId || !userRole) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">{error}</div>
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
+        Kullanıcı bilgileri okunamadı.
+      </div>
     );
   }
+
+  const warehouses = await loadWarehouses(userId, userRole);
+
   if (warehouses.length === 0) {
     return (
       <div className="text-center py-12 text-gray-500">
