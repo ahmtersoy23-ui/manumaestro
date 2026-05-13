@@ -123,7 +123,7 @@ export default function ShipmentDetailPage() {
     try {
       const res = await fetch(`/api/shipments/${id}`);
       const data = await res.json();
-      if (data.success) { setShipment(data.data); if (data.permissions) setPerms(data.permissions); }
+      if (data.success) { setShipment(data.data); if (data.meta?.permissions) setPerms(data.meta.permissions); }
     } catch (err) {
       logger.error('fetchShipment failed', err);
       notify.error('Sevkiyat yüklenemedi');
