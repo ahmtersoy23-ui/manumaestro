@@ -5,13 +5,15 @@
  * Sipariş çıkışı yalnız NJ + SHOWROOM'da; ANKARA için 400.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
 import { getMarketplaceAccess, canEditMarketplace } from '@/lib/auth/marketplaceAccess';
 import type { Prisma } from '@prisma/client';
+import { withRoute } from '@/lib/api/withRoute';
+import { createdResponse } from '@/lib/api/response';
 
 const SHELF_PRIMARY = new Set(['NJ', 'SHOWROOM']);
 
@@ -29,189 +31,180 @@ const CreateOrderSchema = z.object({
   items: z.array(CreateOrderItemSchema).max(50).optional(),
 });
 
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ code: string }> }
-) {
-  const { code } = await context.params;
-  const upperCode = code.toUpperCase();
+export const GET = withRoute<{ code: string }>(
+  { skipAuth: true, rateLimit: 'read', fallbackMessage: 'Sipariş listesi alınamadı' },
+  async ({ request, params }) => {
+    const { code } = params;
+    const upperCode = code.toUpperCase();
 
-  if (!ALL_WAREHOUSES.includes(upperCode as typeof ALL_WAREHOUSES[number])) {
-    return NextResponse.json({ success: false, error: 'Bilinmeyen depo' }, { status: 404 });
-  }
-  if (!SHELF_PRIMARY.has(upperCode)) {
-    return NextResponse.json(
-      { success: false, error: 'Sipariş çıkışı yalnız NJ ve SHOWROOM depolarında' },
-      { status: 400 }
-    );
-  }
+    if (!ALL_WAREHOUSES.includes(upperCode as typeof ALL_WAREHOUSES[number])) {
+      return NextResponse.json({ success: false, error: 'Bilinmeyen depo' }, { status: 404 });
+    }
+    if (!SHELF_PRIMARY.has(upperCode)) {
+      return NextResponse.json(
+        { success: false, error: 'Sipariş çıkışı yalnız NJ ve SHOWROOM depolarında' },
+        { status: 400 }
+      );
+    }
 
-  const auth = await requireShelfAction(request, upperCode, 'view');
-  if (auth instanceof NextResponse) return auth;
+    const auth = await requireShelfAction(request, upperCode, 'view');
+    if (auth instanceof NextResponse) return auth;
 
-  const { searchParams } = new URL(request.url);
-  const statusFilter = searchParams.get('status');
-  const typeFilter = searchParams.get('orderType');
-  const marketplaceFilter = searchParams.get('marketplaceCode');
+    const { searchParams } = new URL(request.url);
+    const statusFilter = searchParams.get('status');
+    const typeFilter = searchParams.get('orderType');
+    const marketplaceFilter = searchParams.get('marketplaceCode');
 
-  const where: Prisma.OutboundOrderWhereInput = { warehouseCode: upperCode };
-  if (statusFilter && ['DRAFT', 'SHIPPED', 'CANCELLED'].includes(statusFilter)) {
-    where.status = statusFilter as 'DRAFT' | 'SHIPPED' | 'CANCELLED';
-  }
-  if (typeFilter && ['SINGLE', 'FBA_PICKUP'].includes(typeFilter)) {
-    where.orderType = typeFilter as 'SINGLE' | 'FBA_PICKUP';
-  }
-  if (marketplaceFilter) {
-    // View herkese açık (depo personeli tüm pazaryerlerini VIEWER olarak görür).
-    // canEdit sadece "Yeni Sipariş" yaratma akışında gate'lenir (POST'ta).
-    where.marketplaceCode = marketplaceFilter;
-  }
+    const where: Prisma.OutboundOrderWhereInput = { warehouseCode: upperCode };
+    if (statusFilter && ['DRAFT', 'SHIPPED', 'CANCELLED'].includes(statusFilter)) {
+      where.status = statusFilter as 'DRAFT' | 'SHIPPED' | 'CANCELLED';
+    }
+    if (typeFilter && ['SINGLE', 'FBA_PICKUP'].includes(typeFilter)) {
+      where.orderType = typeFilter as 'SINGLE' | 'FBA_PICKUP';
+    }
+    if (marketplaceFilter) {
+      where.marketplaceCode = marketplaceFilter;
+    }
 
-  const orders = await prisma.outboundOrder.findMany({
-    where,
-    orderBy: { createdAt: 'desc' },
-    take: 200,
-    include: {
-      _count: { select: { items: true } },
-      labels: {
-        where: { type: 'SHIPPING', archivedAt: null },
-        select: { id: true },
-        take: 1,
-      },
-    },
-  });
-
-  // Toplu sayı: DRAFT/SHIPPED/CANCELLED + SINGLE/FBA_PICKUP
-  const counts = await prisma.outboundOrder.groupBy({
-    by: ['status', 'orderType'],
-    where: { warehouseCode: upperCode },
-    _count: true,
-  });
-
-  // Eğer marketplaceFilter varsa, kullanıcının o pazaryerinde edit yetkisi
-  // bilgisini de döndür (marketplace alt sayfası "Yeni Sipariş" butonunu
-  // bu bilgiye göre gösterir).
-  let canEditMp: boolean | undefined;
-  if (marketplaceFilter) {
-    const mpAccess = await getMarketplaceAccess(auth.user.id, auth.user.role);
-    canEditMp = canEditMarketplace(mpAccess, marketplaceFilter);
-  }
-
-  return NextResponse.json({
-    success: true,
-    data: {
-      role: auth.shelfRole,
-      ...(canEditMp !== undefined ? { canEditMarketplace: canEditMp } : {}),
-      orders: orders.map((o) => ({
-        id: o.id,
-        orderType: o.orderType,
-        marketplaceCode: o.marketplaceCode,
-        orderNumber: o.orderNumber,
-        description: o.description,
-        addressNote: o.addressNote,
-        status: o.status,
-        itemCount: o._count.items,
-        hasShippingLabel: o.labels.length > 0,
-        createdAt: o.createdAt,
-        shippedAt: o.shippedAt,
-      })),
-      counts,
-    },
-  });
-}
-
-export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ code: string }> }
-) {
-  const { code } = await context.params;
-  const upperCode = code.toUpperCase();
-
-  if (!SHELF_PRIMARY.has(upperCode)) {
-    return NextResponse.json(
-      { success: false, error: 'Sipariş çıkışı yalnız NJ ve SHOWROOM depolarında' },
-      { status: 400 }
-    );
-  }
-
-  const auth = await requireShelfAction(request, upperCode, 'createOutbound');
-  if (auth instanceof NextResponse) return auth;
-
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return NextResponse.json({ success: false, error: 'Geçersiz JSON' }, { status: 400 });
-  }
-  const parsed = CreateOrderSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { success: false, error: 'Doğrulama hatası', details: parsed.error.flatten().fieldErrors },
-      { status: 400 }
-    );
-  }
-  const { orderType, marketplaceCode, orderNumber, description, addressNote, items } = parsed.data;
-
-  // Marketplace edit yetkisi: SINGLE için zorunlu (FBA_PICKUP da aynı kural)
-  const mpAccess = await getMarketplaceAccess(auth.user.id, auth.user.role);
-  if (!canEditMarketplace(mpAccess, marketplaceCode)) {
-    return NextResponse.json(
-      { success: false, error: `${marketplaceCode} pazaryerinde sipariş yaratma yetkiniz yok` },
-      { status: 403 }
-    );
-  }
-
-  // FBA_PICKUP'ta items entry stage'de boş gelir (koliler detay ekranında eklenir);
-  // SINGLE'da en az 1 item bekleriz (yeni akış).
-  if (orderType === 'SINGLE' && (!items || items.length === 0)) {
-    return NextResponse.json(
-      { success: false, error: 'En az 1 ürün satırı girin' },
-      { status: 400 }
-    );
-  }
-
-  // Aynı (warehouse, marketplace, orderNumber) zaten DRAFT/SHIPPED ise hata
-  const dup = await prisma.outboundOrder.findUnique({
-    where: {
-      warehouseCode_marketplaceCode_orderNumber: {
-        warehouseCode: upperCode,
-        marketplaceCode,
-        orderNumber,
-      },
-    },
-  });
-  if (dup) {
-    return NextResponse.json(
-      { success: false, error: `Bu marketplace + sipariş no zaten var (status: ${dup.status})` },
-      { status: 409 }
-    );
-  }
-
-  const created = await prisma.$transaction(async (tx) => {
-    const order = await tx.outboundOrder.create({
-      data: {
-        warehouseCode: upperCode,
-        orderType,
-        marketplaceCode,
-        orderNumber,
-        description: description ?? null,
-        addressNote: addressNote ?? null,
-        status: 'DRAFT',
-        createdById: auth.user.id,
+    const orders = await prisma.outboundOrder.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      include: {
+        _count: { select: { items: true } },
+        labels: {
+          where: { type: 'SHIPPING', archivedAt: null },
+          select: { id: true },
+          take: 1,
+        },
       },
     });
 
-    if (items && items.length > 0) {
-      await tx.outboundOrderItem.createMany({
-        data: items.map((it) => ({
-          outboundOrderId: order.id,
-          iwasku: it.iwasku,
-          quantity: it.quantity,
-          // shelfId/shelfBoxId çıkış aşamasında allocation üzerinden bağlanır
-        })),
-      });
+    const counts = await prisma.outboundOrder.groupBy({
+      by: ['status', 'orderType'],
+      where: { warehouseCode: upperCode },
+      _count: true,
+    });
+
+    let canEditMp: boolean | undefined;
+    if (marketplaceFilter) {
+      const mpAccess = await getMarketplaceAccess(auth.user.id, auth.user.role);
+      canEditMp = canEditMarketplace(mpAccess, marketplaceFilter);
     }
 
-    return order;
-  });
+    return NextResponse.json({
+      success: true,
+      data: {
+        role: auth.shelfRole,
+        ...(canEditMp !== undefined ? { canEditMarketplace: canEditMp } : {}),
+        orders: orders.map((o) => ({
+          id: o.id,
+          orderType: o.orderType,
+          marketplaceCode: o.marketplaceCode,
+          orderNumber: o.orderNumber,
+          description: o.description,
+          addressNote: o.addressNote,
+          status: o.status,
+          itemCount: o._count.items,
+          hasShippingLabel: o.labels.length > 0,
+          createdAt: o.createdAt,
+          shippedAt: o.shippedAt,
+        })),
+        counts,
+      },
+    });
+  }
+);
 
-  return NextResponse.json({ success: true, data: created }, { status: 201 });
-}
+export const POST = withRoute<{ code: string }>(
+  { skipAuth: true, rateLimit: 'write', fallbackMessage: 'Sipariş oluşturulamadı' },
+  async ({ request, params }) => {
+    const { code } = params;
+    const upperCode = code.toUpperCase();
+
+    if (!SHELF_PRIMARY.has(upperCode)) {
+      return NextResponse.json(
+        { success: false, error: 'Sipariş çıkışı yalnız NJ ve SHOWROOM depolarında' },
+        { status: 400 }
+      );
+    }
+
+    const auth = await requireShelfAction(request, upperCode, 'createOutbound');
+    if (auth instanceof NextResponse) return auth;
+
+    let body: unknown;
+    try { body = await request.json(); } catch {
+      return NextResponse.json({ success: false, error: 'Geçersiz JSON' }, { status: 400 });
+    }
+    const parsed = CreateOrderSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: 'Doğrulama hatası', details: parsed.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+    const { orderType, marketplaceCode, orderNumber, description, addressNote, items } = parsed.data;
+
+    // Marketplace edit yetkisi: SINGLE için zorunlu (FBA_PICKUP da aynı kural)
+    const mpAccess = await getMarketplaceAccess(auth.user.id, auth.user.role);
+    if (!canEditMarketplace(mpAccess, marketplaceCode)) {
+      return NextResponse.json(
+        { success: false, error: `${marketplaceCode} pazaryerinde sipariş yaratma yetkiniz yok` },
+        { status: 403 }
+      );
+    }
+
+    if (orderType === 'SINGLE' && (!items || items.length === 0)) {
+      return NextResponse.json(
+        { success: false, error: 'En az 1 ürün satırı girin' },
+        { status: 400 }
+      );
+    }
+
+    // Aynı (warehouse, marketplace, orderNumber) zaten DRAFT/SHIPPED ise hata
+    const dup = await prisma.outboundOrder.findUnique({
+      where: {
+        warehouseCode_marketplaceCode_orderNumber: {
+          warehouseCode: upperCode,
+          marketplaceCode,
+          orderNumber,
+        },
+      },
+    });
+    if (dup) {
+      return NextResponse.json(
+        { success: false, error: `Bu marketplace + sipariş no zaten var (status: ${dup.status})` },
+        { status: 409 }
+      );
+    }
+
+    const created = await prisma.$transaction(async (tx) => {
+      const order = await tx.outboundOrder.create({
+        data: {
+          warehouseCode: upperCode,
+          orderType,
+          marketplaceCode,
+          orderNumber,
+          description: description ?? null,
+          addressNote: addressNote ?? null,
+          status: 'DRAFT',
+          createdById: auth.user.id,
+        },
+      });
+
+      if (items && items.length > 0) {
+        await tx.outboundOrderItem.createMany({
+          data: items.map((it) => ({
+            outboundOrderId: order.id,
+            iwasku: it.iwasku,
+            quantity: it.quantity,
+          })),
+        });
+      }
+
+      return order;
+    });
+
+    return createdResponse(created);
+  }
+);

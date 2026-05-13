@@ -6,95 +6,94 @@
  *   Sipariş etiketlerini listele.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
 import { saveLabelFile, LabelStorageError } from '@/lib/wms/labelStorage';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
 const VALID_TYPES = new Set(['SHIPPING', 'FNSKU', 'OTHER']);
 
-export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ code: string; id: string }> }
-) {
-  const { code, id: orderId } = await context.params;
-  const upperCode = code.toUpperCase();
+export const POST = withRoute<{ code: string; id: string }>(
+  { skipAuth: true, rateLimit: 'write', fallbackMessage: 'Etiket yüklenemedi' },
+  async ({ request, params }) => {
+    const { code, id: orderId } = params;
+    const upperCode = code.toUpperCase();
 
-  if (!ALL_WAREHOUSES.includes(upperCode as (typeof ALL_WAREHOUSES)[number])) {
-    return NextResponse.json({ success: false, error: 'Bilinmeyen depo' }, { status: 404 });
-  }
-
-  const auth = await requireShelfAction(request, upperCode, 'uploadLabel');
-  if (auth instanceof NextResponse) return auth;
-
-  const order = await prisma.outboundOrder.findUnique({
-    where: { id: orderId },
-    select: { id: true, warehouseCode: true },
-  });
-  if (!order || order.warehouseCode !== upperCode) {
-    return NextResponse.json({ success: false, error: 'Sipariş bulunamadı' }, { status: 404 });
-  }
-
-  let formData: FormData;
-  try {
-    formData = await request.formData();
-  } catch {
-    return NextResponse.json({ success: false, error: 'Geçersiz form data' }, { status: 400 });
-  }
-
-  const file = formData.get('file');
-  const type = formData.get('type');
-  const shipmentBoxId = formData.get('shipmentBoxId');
-  const notes = formData.get('notes');
-  const trackingNumber = formData.get('trackingNumber');
-
-  if (!(file instanceof File)) {
-    return NextResponse.json({ success: false, error: 'Dosya gerekli' }, { status: 400 });
-  }
-  if (typeof type !== 'string' || !VALID_TYPES.has(type)) {
-    return NextResponse.json(
-      { success: false, error: 'Etiket tipi geçersiz (SHIPPING|FNSKU|OTHER)' },
-      { status: 400 }
-    );
-  }
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-  let saved;
-  try {
-    saved = await saveLabelFile({
-      outboundOrderId: orderId,
-      fileBuffer: buffer,
-      fileName: file.name,
-      mimeType: file.type,
-    });
-  } catch (err) {
-    if (err instanceof LabelStorageError) {
-      const status = err.code === 'TOO_LARGE' || err.code === 'INVALID_MIME' ? 400 : 500;
-      return NextResponse.json({ success: false, error: err.message }, { status });
+    if (!ALL_WAREHOUSES.includes(upperCode as (typeof ALL_WAREHOUSES)[number])) {
+      return NextResponse.json({ success: false, error: 'Bilinmeyen depo' }, { status: 404 });
     }
-    throw err;
-  }
 
-  const label = await prisma.orderLabel.create({
-    data: {
-      id: saved.id,
-      outboundOrderId: orderId,
-      shipmentBoxId: typeof shipmentBoxId === 'string' && shipmentBoxId.length > 0 ? shipmentBoxId : null,
-      type: type as 'SHIPPING' | 'FNSKU' | 'OTHER',
-      fileName: file.name,
-      storagePath: saved.storagePath,
-      mimeType: file.type,
-      fileSize: saved.fileSize,
-      uploadedById: auth.user.id,
-      notes: typeof notes === 'string' && notes.length > 0 ? notes : null,
-      trackingNumber: typeof trackingNumber === 'string' && trackingNumber.length > 0 ? trackingNumber : null,
-    },
-  });
+    const auth = await requireShelfAction(request, upperCode, 'uploadLabel');
+    if (auth instanceof NextResponse) return auth;
 
-  return NextResponse.json({
-    success: true,
-    data: {
+    const order = await prisma.outboundOrder.findUnique({
+      where: { id: orderId },
+      select: { id: true, warehouseCode: true },
+    });
+    if (!order || order.warehouseCode !== upperCode) {
+      return NextResponse.json({ success: false, error: 'Sipariş bulunamadı' }, { status: 404 });
+    }
+
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch {
+      return NextResponse.json({ success: false, error: 'Geçersiz form data' }, { status: 400 });
+    }
+
+    const file = formData.get('file');
+    const type = formData.get('type');
+    const shipmentBoxId = formData.get('shipmentBoxId');
+    const notes = formData.get('notes');
+    const trackingNumber = formData.get('trackingNumber');
+
+    if (!(file instanceof File)) {
+      return NextResponse.json({ success: false, error: 'Dosya gerekli' }, { status: 400 });
+    }
+    if (typeof type !== 'string' || !VALID_TYPES.has(type)) {
+      return NextResponse.json(
+        { success: false, error: 'Etiket tipi geçersiz (SHIPPING|FNSKU|OTHER)' },
+        { status: 400 }
+      );
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    let saved;
+    try {
+      saved = await saveLabelFile({
+        outboundOrderId: orderId,
+        fileBuffer: buffer,
+        fileName: file.name,
+        mimeType: file.type,
+      });
+    } catch (err) {
+      if (err instanceof LabelStorageError) {
+        const status = err.code === 'TOO_LARGE' || err.code === 'INVALID_MIME' ? 400 : 500;
+        return NextResponse.json({ success: false, error: err.message }, { status });
+      }
+      throw err;
+    }
+
+    const label = await prisma.orderLabel.create({
+      data: {
+        id: saved.id,
+        outboundOrderId: orderId,
+        shipmentBoxId: typeof shipmentBoxId === 'string' && shipmentBoxId.length > 0 ? shipmentBoxId : null,
+        type: type as 'SHIPPING' | 'FNSKU' | 'OTHER',
+        fileName: file.name,
+        storagePath: saved.storagePath,
+        mimeType: file.type,
+        fileSize: saved.fileSize,
+        uploadedById: auth.user.id,
+        notes: typeof notes === 'string' && notes.length > 0 ? notes : null,
+        trackingNumber: typeof trackingNumber === 'string' && trackingNumber.length > 0 ? trackingNumber : null,
+      },
+    });
+
+    return successResponse({
       id: label.id,
       type: label.type,
       fileName: label.fileName,
@@ -106,49 +105,50 @@ export async function POST(
       notes: label.notes,
       trackingNumber: label.trackingNumber,
       archivedAt: label.archivedAt,
-    },
-  });
-}
-
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ code: string; id: string }> }
-) {
-  const { code, id: orderId } = await context.params;
-  const upperCode = code.toUpperCase();
-
-  if (!ALL_WAREHOUSES.includes(upperCode as (typeof ALL_WAREHOUSES)[number])) {
-    return NextResponse.json({ success: false, error: 'Bilinmeyen depo' }, { status: 404 });
+    });
   }
+);
 
-  const auth = await requireShelfAction(request, upperCode, 'view');
-  if (auth instanceof NextResponse) return auth;
+export const GET = withRoute<{ code: string; id: string }>(
+  { skipAuth: true, rateLimit: 'read', fallbackMessage: 'Etiketler alınamadı' },
+  async ({ request, params }) => {
+    const { code, id: orderId } = params;
+    const upperCode = code.toUpperCase();
 
-  const order = await prisma.outboundOrder.findUnique({
-    where: { id: orderId },
-    select: { id: true, warehouseCode: true },
-  });
-  if (!order || order.warehouseCode !== upperCode) {
-    return NextResponse.json({ success: false, error: 'Sipariş bulunamadı' }, { status: 404 });
+    if (!ALL_WAREHOUSES.includes(upperCode as (typeof ALL_WAREHOUSES)[number])) {
+      return NextResponse.json({ success: false, error: 'Bilinmeyen depo' }, { status: 404 });
+    }
+
+    const auth = await requireShelfAction(request, upperCode, 'view');
+    if (auth instanceof NextResponse) return auth;
+
+    const order = await prisma.outboundOrder.findUnique({
+      where: { id: orderId },
+      select: { id: true, warehouseCode: true },
+    });
+    if (!order || order.warehouseCode !== upperCode) {
+      return NextResponse.json({ success: false, error: 'Sipariş bulunamadı' }, { status: 404 });
+    }
+
+    const labels = await prisma.orderLabel.findMany({
+      where: { outboundOrderId: orderId },
+      orderBy: [{ type: 'asc' }, { uploadedAt: 'desc' }],
+      select: {
+        id: true,
+        type: true,
+        fileName: true,
+        fileSize: true,
+        mimeType: true,
+        uploadedAt: true,
+        printedAt: true,
+        shipmentBoxId: true,
+        notes: true,
+        trackingNumber: true,
+        archivedAt: true,
+      },
+    });
+
+    // Original kept extra top-level `role` field; flat shape preserved.
+    return NextResponse.json({ success: true, data: labels, role: auth.shelfRole });
   }
-
-  const labels = await prisma.orderLabel.findMany({
-    where: { outboundOrderId: orderId },
-    orderBy: [{ type: 'asc' }, { uploadedAt: 'desc' }],
-    select: {
-      id: true,
-      type: true,
-      fileName: true,
-      fileSize: true,
-      mimeType: true,
-      uploadedAt: true,
-      printedAt: true,
-      shipmentBoxId: true,
-      notes: true,
-      trackingNumber: true,
-      archivedAt: true,
-    },
-  });
-
-  return NextResponse.json({ success: true, data: labels, role: auth.shelfRole });
-}
+);
