@@ -7,7 +7,33 @@ const logger = createLogger('SSO Middleware');
 const SSO_URL = process.env.SSO_URL || 'https://apps.iwa.web.tr';
 const SSO_APP_CODE = process.env.SSO_APP_CODE || 'manumaestro';
 
+// H2 audit (Report-Only mode): nonce-based CSP'ye gecisin gozlem fazi.
+// next.config.ts'deki enforce CSP dokunulmadi — bu paralel header sadece
+// browser console'a violation log'u basar, kullanici davranisini bloklamaz.
+// 1 hafta sonra (2026-05-20) enforce moduna gecis degerlendirilecek.
+function buildReportOnlyCsp(nonce: string): string {
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    `style-src 'self' 'nonce-${nonce}'`,
+    "img-src 'self' data: blob:",
+    "media-src 'self' blob:",
+    "font-src 'self'",
+    "connect-src 'self' https://apps.iwa.web.tr",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join('; ');
+}
+
 export async function middleware(request: NextRequest) {
+  const nonce = crypto.randomUUID().replace(/-/g, '');
+  const response = await runMiddleware(request);
+  response.headers.set('Content-Security-Policy-Report-Only', buildReportOnlyCsp(nonce));
+  return response;
+}
+
+async function runMiddleware(request: NextRequest): Promise<NextResponse> {
   // Health endpoint bypasses auth (for monitoring/load balancers)
   if (request.nextUrl.pathname === '/api/health') {
     return NextResponse.next();
