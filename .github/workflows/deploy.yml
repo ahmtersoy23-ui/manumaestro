@@ -7,6 +7,8 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    outputs:
+      deployed_sha: ${{ github.sha }}
 
     steps:
       - name: Checkout
@@ -80,3 +82,64 @@ jobs:
             # startOrReload + --update-env: .env'de yeni env vars eklendiyse reload'da yansisin.
             # Sade `pm2 restart` env cache'ini guncellemez.
             sudo -u iwaapps -H PM2_HOME=/home/iwaapps/.pm2 pm2 startOrReload /var/www/manumaestro/ecosystem.config.js --update-env
+
+  e2e-smoke:
+    needs: deploy
+    runs-on: ubuntu-latest
+    # E2E altyapisi prod'da hazir olana kadar (env+secret+seed+PAT) job skip
+    # olsun. Repo variable E2E_ENABLED='true' yapilinca aktiflesir.
+    if: vars.E2E_ENABLED == 'true'
+    # Deploy yeni bundle'i PM2'ye yansitana kadar ufak bir gecikme — production
+    # warm-up. Bu adim ufak (45 sn) ama yine de smoke onunde tampon bekliyor.
+    steps:
+      - name: Wait for production warm-up
+        run: sleep 45
+
+      - name: Checkout iwa-e2e
+        uses: actions/checkout@v4
+        with:
+          repository: ahmtersoy23-ui/iwa-e2e
+          ref: main
+          token: ${{ secrets.E2E_REPO_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run manumaestro smoke tests
+        env:
+          SSO_URL: https://apps.iwa.web.tr
+          MANUMAESTRO_URL: https://manumaestro.apps.iwa.web.tr
+          TEST_LOGIN_SECRET: ${{ secrets.TEST_LOGIN_SECRET }}
+          TEST_USER_EMAIL_PACKER: e2e-packer@iwa.test
+          TEST_USER_EMAIL_ADMIN: e2e-admin@iwa.test
+        run: npm run test:manumaestro
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.sha }}
+          path: playwright-report/
+          retention-days: 7
+
+      - name: Slack alert on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "SLACK_WEBHOOK_URL not set — skipping alert"
+            exit 0
+          fi
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\":rotating_light: ManuMaestro E2E smoke FAIL — commit ${{ github.sha }}. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            "$SLACK_WEBHOOK_URL"
