@@ -1,10 +1,11 @@
 # ManuMaestro Audit — Sonraki Session Handoff
 
 Bağımsız audit (2026-05-12, `AUDIT_2026_05_12_FRESH.md`) sonucunda
-**3 HIGH** maddesi açık.
+**2 HIGH** maddesi açık (H1 kapandı, 2026-05-13).
 
-- **H1** (withRoute migration): %67 tamamlandı (66/98 handler). Kalan
-  tek domain: **depolar/** (41 route). Sub-batch'lere bölünmüş.
+- ~~**H1** (withRoute migration)~~ — **KAPANDI**. 12 batch'te tamamlandı,
+  depolar/ domain'i dahil tüm 41 route migrate edildi (batch 7-12).
+  Kasıtlı atlanan: auth/login (custom shape), sentry-verify (throw test).
 - **H2** browser-level manuel test gerektiriyor (CSP nonce migration).
 - **H4** Apps-SSO koordinasyonu gerektirir (token cache TTL).
 
@@ -13,7 +14,13 @@ hazırlanmış prompt'lar aşağıda.
 
 ---
 
-## H1 — withRoute Migration: depolar/ domain (41 route)
+## ~~H1 — withRoute Migration: depolar/ domain (41 route)~~  KAPANDI 2026-05-13
+
+> Tüm 41 route 6 sub-batch'te (batch 7-12) migrate edildi. Aşağıdaki prompt
+> referans için korunuyor — gelecekte benzer domain migration'larında pattern
+> rehberi olarak kullanılabilir.
+
+### Eski Prompt (kapanmış)
 
 ### Prompt
 
@@ -285,16 +292,16 @@ ADIM A yap. CACHE_TTL_MS = 60_000. Smoke test + production deploy.
 
 ---
 
-## Audit Genel Durum (Bu Session Sonu)
+## Audit Genel Durum (Bu Session Sonu — 2026-05-13)
 
 | Severity | Başlangıç | Şu an | Detay |
 |---|---|---|---|
 | CRITICAL | 5 | **0** | Hepsi kapandı |
-| HIGH | 8 | **3** | H1 (~%67 adopted, kalan: depolar/ 41 route), H2, H4 |
+| HIGH | 8 | **2** | H1 kapandı bu session'da, kalan: H2, H4 |
 | MEDIUM | 15 | **12** | M9, M10, M12 kapandı |
 | LOW | 10 | 10 | Dokunulmadı |
 
-**Kapanan kritikler:** C1-C5, M9, M10, M12, H3, H5, H6, H7, H8.
+**Kapanan kritikler:** C1-C5, M9, M10, M12, H1, H3, H5, H6, H7, H8.
 
 **H1 batch'leri tamamlanan:**
 - Batch 1 (shipments): `46bbb6c`
@@ -303,7 +310,14 @@ ADIM A yap. CACHE_TTL_MS = 60_000. Smoke test + production deploy.
 - Batch 4 (requests): `4bac2e5`
 - Batch 5 (labels/export/products/manufacturer): `e3ef8ba`
 - Batch 6 (tek dosyalılar): `361e8f5`
+- Batch 7 (depolar lobby): `fff4f4a`
+- Batch 8 (depolar/raflar): `c438649`
+- Batch 9 (depolar/siparis): `2256aea`
+- Batch 10 (depolar/sayim): `d5c765f`
+- Batch 11 (depolar/hareketler): `8b6547f`
+- Batch 12 (depolar misc): `00985e4`
 
-**H1 için kalan:** sadece **depolar/** domain (41 route, 6 sub-batch).
+**H1 KAPANDI** (2026-05-13) — kasıtlı atlananlar: auth/login (custom error
+shape, /auth/bootstrap kontratı), sentry-verify (?throw=1 Sentry'e propagate).
 
 **Memory:** `project_audit_fresh_2026_05_12.md` — tüm durum güncel.
