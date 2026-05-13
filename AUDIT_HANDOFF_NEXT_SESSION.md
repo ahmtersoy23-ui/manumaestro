@@ -1,13 +1,15 @@
 # ManuMaestro Audit — Sonraki Session Handoff
 
 Bağımsız audit (2026-05-12, `AUDIT_2026_05_12_FRESH.md`) sonucunda
-**2 HIGH** maddesi açık (H1 kapandı, 2026-05-13).
+**1 HIGH** maddesi açık (H1 + H4 kapandı, 2026-05-13).
 
-- ~~**H1** (withRoute migration)~~ — **KAPANDI**. 12 batch'te tamamlandı,
-  depolar/ domain'i dahil tüm 41 route migrate edildi (batch 7-12).
-  Kasıtlı atlanan: auth/login (custom shape), sentry-verify (throw test).
+- ~~**H1** (withRoute migration)~~ — **KAPANDI** (2026-05-13). 12 batch'te
+  tamamlandı, depolar/ domain'i dahil tüm 41 route migrate edildi
+  (batch 7-12). Kasıtlı atlanan: auth/login (custom shape), sentry-verify
+  (throw test).
 - **H2** browser-level manuel test gerektiriyor (CSP nonce migration).
-- **H4** Apps-SSO koordinasyonu gerektirir (token cache TTL).
+- ~~**H4** SSO token cache TTL~~ — **KAPANDI** (2026-05-13, `b37ce61`).
+  Plan A: 5dk → 1dk. Production deploy + 1 hafta SSO load gözlem.
 
 Her biri için bağımsız bir Claude Code session'ında çalıştırılmak üzere
 hazırlanmış prompt'lar aşağıda.
@@ -227,7 +229,13 @@ kullanıcı için gözlem talimatı.
 
 ---
 
-## H4 — SSO Token Cache Replay Window Daraltma
+## ~~H4 — SSO Token Cache Replay Window Daraltma~~  KAPANDI 2026-05-13
+
+> Plan A uygulandı: `lib/auth/verify.ts` `SSO_CACHE_TTL` 5 dakika → 1 dakika
+> (`b37ce61`). Production deploy + 1 hafta SSO load gözlem sonrası B'ye
+> gerek var mı değerlendirilecek. Aşağıdaki prompt arşiv için korunuyor.
+
+### Eski Prompt (kapanmış)
 
 ### Prompt
 
@@ -297,11 +305,11 @@ ADIM A yap. CACHE_TTL_MS = 60_000. Smoke test + production deploy.
 | Severity | Başlangıç | Şu an | Detay |
 |---|---|---|---|
 | CRITICAL | 5 | **0** | Hepsi kapandı |
-| HIGH | 8 | **2** | H1 kapandı bu session'da, kalan: H2, H4 |
+| HIGH | 8 | **1** | H1 + H4 kapandı bu session'da, kalan: H2 |
 | MEDIUM | 15 | **12** | M9, M10, M12 kapandı |
 | LOW | 10 | 10 | Dokunulmadı |
 
-**Kapanan kritikler:** C1-C5, M9, M10, M12, H1, H3, H5, H6, H7, H8.
+**Kapanan kritikler:** C1-C5, M9, M10, M12, H1, H3, H4, H5, H6, H7, H8.
 
 **H1 batch'leri tamamlanan:**
 - Batch 1 (shipments): `46bbb6c`
