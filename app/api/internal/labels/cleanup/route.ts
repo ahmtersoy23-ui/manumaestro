@@ -19,6 +19,7 @@ import { prisma } from '@/lib/db/prisma';
 import { verifyAuth } from '@/lib/auth/verify';
 import { deleteLabelFile, getRetentionThreshold } from '@/lib/wms/labelStorage';
 import { createLogger } from '@/lib/logger';
+import { withRoute } from '@/lib/api/withRoute';
 
 const logger = createLogger('LabelCleanup');
 
@@ -35,56 +36,60 @@ async function authorize(request: NextRequest): Promise<boolean> {
   return auth.success && auth.user?.role === 'admin';
 }
 
-export async function POST(request: NextRequest) {
-  const ok = await authorize(request);
-  if (!ok) {
-    return NextResponse.json({ success: false, error: 'Yetkisiz' }, { status: 401 });
-  }
+// Cron token VEYA SSO admin — çift mod, handler içinde authorize.
+export const POST = withRoute(
+  { skipAuth: true, rateLimit: 'bulk', fallbackMessage: 'Cleanup başarısız' },
+  async ({ request }) => {
+    const ok = await authorize(request);
+    if (!ok) {
+      return NextResponse.json({ success: false, error: 'Yetkisiz' }, { status: 401 });
+    }
 
-  const dryRun = new URL(request.url).searchParams.get('dryRun') === 'true';
-  const now = new Date();
+    const dryRun = new URL(request.url).searchParams.get('dryRun') === 'true';
+    const now = new Date();
 
-  const summary: Record<string, { eligible: number; archived: number; failed: number }> = {};
-  let totalArchived = 0;
+    const summary: Record<string, { eligible: number; archived: number; failed: number }> = {};
+    let totalArchived = 0;
 
-  for (const type of TYPES_WITH_RETENTION) {
-    const threshold = getRetentionThreshold(type, now);
-    if (!threshold) continue;
+    for (const type of TYPES_WITH_RETENTION) {
+      const threshold = getRetentionThreshold(type, now);
+      if (!threshold) continue;
 
-    const candidates = await prisma.orderLabel.findMany({
-      where: {
-        type,
-        archivedAt: null,
-        uploadedAt: { lt: threshold },
-      },
-      select: { id: true, storagePath: true, fileSize: true },
-    });
+      const candidates = await prisma.orderLabel.findMany({
+        where: {
+          type,
+          archivedAt: null,
+          uploadedAt: { lt: threshold },
+        },
+        select: { id: true, storagePath: true, fileSize: true },
+      });
 
-    summary[type] = { eligible: candidates.length, archived: 0, failed: 0 };
+      summary[type] = { eligible: candidates.length, archived: 0, failed: 0 };
 
-    if (dryRun) continue;
+      if (dryRun) continue;
 
-    for (const c of candidates) {
-      try {
-        await deleteLabelFile(c.storagePath);
-        await prisma.orderLabel.update({
-          where: { id: c.id },
-          data: { archivedAt: now },
-        });
-        summary[type].archived++;
-        totalArchived++;
-      } catch (e) {
-        logger.error(`Cleanup ${type}/${c.id}`, e);
-        summary[type].failed++;
+      for (const c of candidates) {
+        try {
+          await deleteLabelFile(c.storagePath);
+          await prisma.orderLabel.update({
+            where: { id: c.id },
+            data: { archivedAt: now },
+          });
+          summary[type].archived++;
+          totalArchived++;
+        } catch (e) {
+          logger.error(`Cleanup ${type}/${c.id}`, e);
+          summary[type].failed++;
+        }
       }
     }
-  }
 
-  return NextResponse.json({
-    success: true,
-    dryRun,
-    runAt: now.toISOString(),
-    totalArchived,
-    summary,
-  });
-}
+    return NextResponse.json({
+      success: true,
+      dryRun,
+      runAt: now.toISOString(),
+      totalArchived,
+      summary,
+    });
+  }
+);

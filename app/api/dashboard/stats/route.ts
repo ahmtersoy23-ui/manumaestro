@@ -4,13 +4,12 @@
  * Replaces N+1 calls to /api/requests/monthly from the dashboard page
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/db/prisma';
 import { enrichProductSize } from '@/lib/db/enrichProductSize';
-import { errorResponse } from '@/lib/api/response';
-import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-import { verifyAuth } from '@/lib/auth/verify';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
 /**
  * Hesaplanmış stats'i 5dk cache'le. Tag: 'dashboard-stats'.
@@ -102,23 +101,9 @@ const computeStats = unstable_cache(
   { tags: ['dashboard-stats'], revalidate: 300 },
 );
 
-export async function GET(request: NextRequest) {
-  try {
-    // Rate limiting: 200 requests per minute for read operations
-    const rateLimitResult = await rateLimiters.read.check(request, 'dashboard-stats');
-    if (!rateLimitResult.success) {
-      return rateLimitExceededResponse(rateLimitResult);
-    }
-
-    // Authentication: Require any authenticated user
-    const auth = await verifyAuth(request);
-    if (!auth.success || !auth.user) {
-      return NextResponse.json(
-        { success: false, error: auth.error || 'Yetkisiz erişim' },
-        { status: 401 }
-      );
-    }
-
+export const GET = withRoute(
+  { rateLimit: 'read', fallbackMessage: 'Panel istatistikleri getirilemedi' },
+  async ({ request }) => {
     const { searchParams } = new URL(request.url);
     const monthsParam = searchParams.get('months');
 
@@ -153,11 +138,6 @@ export async function GET(request: NextRequest) {
     const sortedMonths = [...months].sort();
     const result = await computeStats(sortedMonths);
 
-    return NextResponse.json({
-      success: true,
-      data: result,
-    });
-  } catch (error) {
-    return errorResponse(error, 'Panel istatistikleri getirilemedi');
+    return successResponse(result);
   }
-}
+);

@@ -1,33 +1,21 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-import { verifyAuth, isSuperAdmin } from '@/lib/auth/verify';
-import { errorResponse } from '@/lib/api/response';
+import { isSuperAdmin } from '@/lib/auth/verify';
+import { withRoute } from '@/lib/api/withRoute';
 
 /**
  * GET /api/auth/me
  * Returns current user info + permissions
+ * Custom response shape (user/role/isSuperAdmin/permissions at top level, NOT under data).
  */
-export async function GET(request: NextRequest) {
-  try {
-    const rateLimitResult = await rateLimiters.read.check(request, 'auth-me');
-    if (!rateLimitResult.success) {
-      return rateLimitExceededResponse(rateLimitResult);
-    }
-
-    const auth = await verifyAuth(request);
-    if (!auth.success || !auth.user) {
-      return NextResponse.json(
-        { success: false, error: auth.error || 'Yetkisiz erişim' },
-        { status: 401 }
-      );
-    }
-
+export const GET = withRoute(
+  { rateLimit: 'read', fallbackMessage: 'Sunucu hatası' },
+  async ({ user }) => {
     // Check stock permission for non-admin users
-    let canViewStock = auth.user.role === 'admin';
+    let canViewStock = user!.role === 'admin';
     if (!canViewStock) {
       const stockPerm = await prisma.userStockPermission.findUnique({
-        where: { userId: auth.user.id },
+        where: { userId: user!.id },
       });
       canViewStock = stockPerm?.canView ?? false;
     }
@@ -35,7 +23,7 @@ export async function GET(request: NextRequest) {
     // Marketplace permissions (code-level): admin implicitly has all
     // Non-admin users get explicit UserMarketplacePermission rows joined with marketplaces
     let marketplacePermissions: { code: string; canView: boolean; canEdit: boolean }[] = [];
-    if (auth.user.role === 'admin') {
+    if (user!.role === 'admin') {
       const allMps = await prisma.marketplace.findMany({
         where: { isActive: true },
         select: { code: true },
@@ -43,7 +31,7 @@ export async function GET(request: NextRequest) {
       marketplacePermissions = allMps.map(m => ({ code: m.code, canView: true, canEdit: true }));
     } else {
       const rows = await prisma.userMarketplacePermission.findMany({
-        where: { userId: auth.user.id },
+        where: { userId: user!.id },
         select: { canView: true, canEdit: true, marketplace: { select: { code: true } } },
       });
       marketplacePermissions = rows.map(r => ({
@@ -56,15 +44,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       user: {
-        id: auth.user.id,
-        email: auth.user.email,
-        name: auth.user.name,
+        id: user!.id,
+        email: user!.email,
+        name: user!.name,
       },
-      role: auth.user.role,
-      isSuperAdmin: isSuperAdmin(auth.user.email),
+      role: user!.role,
+      isSuperAdmin: isSuperAdmin(user!.email),
       permissions: { canViewStock, marketplaces: marketplacePermissions },
     });
-  } catch (error) {
-    return errorResponse(error, 'Sunucu hatası');
   }
-}
+);

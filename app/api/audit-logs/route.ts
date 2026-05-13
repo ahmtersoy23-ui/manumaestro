@@ -3,27 +3,14 @@
  * GET: List audit logs (admin only)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
-import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-import { requireRole } from '@/lib/auth/verify';
-import { errorResponse } from '@/lib/api/response';
+import { withRoute } from '@/lib/api/withRoute';
 
-export async function GET(request: NextRequest) {
-  try {
-    // Rate limiting: 200 requests per minute for read operations
-    const rateLimitResult = await rateLimiters.read.check(request, 'audit-logs');
-    if (!rateLimitResult.success) {
-      return rateLimitExceededResponse(rateLimitResult);
-    }
-
-    // Authentication & Authorization: Admin only
-    const authResult = await requireRole(request, ['admin']);
-    if (authResult instanceof NextResponse) {
-      return authResult;
-    }
-
+export const GET = withRoute(
+  { roles: ['admin'], rateLimit: 'read', fallbackMessage: 'Denetim kayıtları getirilemedi' },
+  async ({ request }) => {
     const searchParams = request.nextUrl.searchParams;
 
     // Pagination parameters
@@ -79,7 +66,5 @@ export async function GET(request: NextRequest) {
         totalPages,
       },
     });
-  } catch (error) {
-    return errorResponse(error, 'Denetim kayıtları getirilemedi');
   }
-}
+);

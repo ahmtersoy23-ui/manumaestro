@@ -5,15 +5,15 @@
  * Snapshot captures current warehouse "mevcut" at month boundary.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { queryProductDb } from '@/lib/db/prisma';
-import { verifyAuth } from '@/lib/auth/verify';
 import { isMonthLocked } from '@/lib/monthUtils';
-import { errorResponse } from '@/lib/api/response';
 import { createLogger } from '@/lib/logger';
 import { revalidateTag } from 'next/cache';
 import { getATPBulk } from '@/lib/db/atp';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
 const logger = createLogger('MonthSnapshot');
 
@@ -59,13 +59,9 @@ async function generateSnapshot(month: string): Promise<void> {
   logger.info(`Snapshot generated for ${month}: ${upsertOps.length} products`);
 }
 
-export async function GET(request: NextRequest) {
-  try {
-    const auth = await verifyAuth(request);
-    if (!auth.success || !auth.user) {
-      return NextResponse.json({ success: false, error: auth.error }, { status: 401 });
-    }
-
+export const GET = withRoute(
+  { rateLimit: 'read', fallbackMessage: 'Snapshot verisi getirilemedi' },
+  async ({ request }) => {
     const month = request.nextUrl.searchParams.get('month');
     if (!month) {
       return NextResponse.json({ success: false, error: 'month parametresi gerekli' }, { status: 400 });
@@ -118,35 +114,23 @@ export async function GET(request: NextRequest) {
     const totalStock = requested.reduce((sum, s) => sum + s.warehouseStock, 0);
     const totalNet = requested.reduce((sum, s) => sum + s.netProduction, 0);
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        month,
-        locked,
-        snapshotCount: snapshots.length,
-        summary: { totalRequested, totalStock, totalNet },
-        snapshots: enriched,
-      },
+    return successResponse({
+      month,
+      locked,
+      snapshotCount: snapshots.length,
+      summary: { totalRequested, totalStock, totalNet },
+      snapshots: enriched,
     });
-  } catch (error) {
-    return errorResponse(error, 'Snapshot verisi getirilemedi');
   }
-}
+);
 
 /**
  * POST: Manually trigger snapshot generation (admin only)
  * Forces regeneration even if snapshots already exist (upsert)
  */
-export async function POST(request: NextRequest) {
-  try {
-    const auth = await verifyAuth(request);
-    if (!auth.success || !auth.user) {
-      return NextResponse.json({ success: false, error: auth.error }, { status: 401 });
-    }
-    if (auth.user.role !== 'admin') {
-      return NextResponse.json({ success: false, error: 'Yalnızca admin kullanabilir' }, { status: 403 });
-    }
-
+export const POST = withRoute(
+  { roles: ['admin'], rateLimit: 'write', fallbackMessage: 'Snapshot oluşturulamadı' },
+  async ({ request }) => {
     const body = await request.json();
     const month = body.month;
     if (!month || !/^\d{4}-\d{2}$/.test(month)) {
@@ -159,11 +143,6 @@ export async function POST(request: NextRequest) {
 
     revalidateTag('dashboard-stats', 'default');
 
-    return NextResponse.json({
-      success: true,
-      data: { month, snapshotCount: count, message: `${count} ürün için snapshot alındı` },
-    });
-  } catch (error) {
-    return errorResponse(error, 'Snapshot oluşturulamadı');
+    return successResponse({ month, snapshotCount: count, message: `${count} ürün için snapshot alındı` });
   }
-}
+);
