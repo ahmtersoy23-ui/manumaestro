@@ -100,7 +100,6 @@ jobs:
         with:
           repository: ahmtersoy23-ui/iwa-e2e
           ref: main
-          token: ${{ secrets.E2E_REPO_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
