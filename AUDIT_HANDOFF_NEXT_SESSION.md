@@ -1,82 +1,93 @@
 # ManuMaestro Audit — Sonraki Session Handoff
 
 Bağımsız audit (2026-05-12, `AUDIT_2026_05_12_FRESH.md`) sonucunda
-**3 HIGH** maddesi açık. Bu maddeler bu session'da ele alınamadı çünkü:
+**3 HIGH** maddesi açık.
 
-- **H1** çok büyük (~88 route), session'a sığmıyor
-- **H2** browser-level manuel test gerektiriyor, otomatik garanti edilemez
-- **H4** Apps-SSO koordinasyonu gerektirir, ayrı repo
+- **H1** (withRoute migration): %67 tamamlandı (66/98 handler). Kalan
+  tek domain: **depolar/** (41 route). Sub-batch'lere bölünmüş.
+- **H2** browser-level manuel test gerektiriyor (CSP nonce migration).
+- **H4** Apps-SSO koordinasyonu gerektirir (token cache TTL).
 
 Her biri için bağımsız bir Claude Code session'ında çalıştırılmak üzere
 hazırlanmış prompt'lar aşağıda.
 
 ---
 
-## H1 — withRoute Migration (Kalan ~88 route)
+## H1 — withRoute Migration: depolar/ domain (41 route)
 
 ### Prompt
 
 ```
 ManuMaestro Next.js 16 + Prisma 7 app'inde API route'ları HOF pattern'i
-'lib/api/withRoute.ts'e taşıyacağız. Audit ile başlatılan H1 maddesinin
-batch 2+'sı. Shipments domain'i (8/8 route) zaten taşındı, commit `46bbb6c`
-ile gönderildi. Pattern oturmuş durumda.
+`lib/api/withRoute.ts`e taşıyacağız. Audit H1'in son ve en büyük domain'i:
+**depolar/** (41 route). Önceki 6 batch tamamlandı (shipments + admin +
+stock-pools + requests + labels/export/products/manufacturer + tek
+dosyalılar). H1 adoption %10 → %67. Depolar bitince ~%100.
 
 CONTEXT:
 - Repo: /Users/ahmetersoy/apps/manumaestro
-- 88 route hâlâ eski boilerplate'te (try/catch + ham auth + rate-limit yok
-  veya manuel)
+- Branch: main
+- 41 depolar/ route hâlâ eski boilerplate'te (verifyAuth + try/catch +
+  errorResponse manuel + rate-limit yok veya manuel)
 - withRoute helper: lib/api/withRoute.ts — auth, rate limit, try/catch +
   errorResponse standartlaştırıyor
-- Reference commit (örnek pattern): `46bbb6c` — shipments domain
-  - shipment'lar gibi özel role sistemi olan domain'lerde
-    `withRoute({ skipAuth: true, rateLimit: 'write' })` + domain-spesifik
-    auth handler içinde (örn. `requireShelfAction`, `requireShipmentAction`)
-  - skipAuth: false (default) — base auth + roles filter'ı yeterli olan
-    route'lar için
-- Audit rapor: AUDIT_2026_05_12_FRESH.md (H1 ile bağlantılı bölüm)
+- Reference commit'ler:
+  * shipments domain (46bbb6c) — özel destinasyon-bazlı yetki pattern'i
+  * admin domain (6a8a77a) — `roles: ['admin']` native filter
+  * stock-pools (77fb3ce) — requireSuperAdmin skipAuth: true
+  * requests (4bac2e5) — revalidateTag handler içinde korundu
+  * Memory: project_audit_fresh_2026_05_12.md
+- Depolar domain auth pattern'i: `requireShelfView`, `requireShelfAction`
+  ve depo-spesifik permission (lib/auth/requireShelfRole.ts).
+  withRoute'un generic roles filter'ı KAPSAMAZ — handler içinde tutulmalı
+  (skipAuth: true pattern'i, shipments gibi).
 
-DOMAIN BREAKDOWN (her birini ayrı atomik commit olarak işle):
+SUB-BATCH'LER (her birini AYRI atomik commit + push):
 
-1. depolar/ — 41 route (en büyük). Bu kendisi 4-5 alt batch'e bölünmeli:
-   - depolar/route.ts + depolar/[code]/route.ts (ana lobby)
-   - depolar/[code]/raflar/* (raf işlemleri, ~8 route)
-   - depolar/[code]/siparis/* (sipariş, ~10 route)
-   - depolar/[code]/sayim/* (sayım, ~6 route)
-   - depolar/[code]/hareketler/* + diğer (~10 route)
-   - depolar/[code]/koli/* + tekil/* + unmatched/* + transfer (~7 route)
+1. **depolar lobby (~2 route)**:
+   - depolar/route.ts (depo listesi)
+   - depolar/[code]/route.ts (depo detayı)
 
-2. admin/ — 10 route. requireRole(['admin']) kullanıyor — withRoute roles
-   parametresi ile basit refactor (skipAuth değil, roles: ['admin']).
+2. **raflar (~8 route)**:
+   - depolar/[code]/raf/* ve depolar/[code]/raflar/*
 
-3. stock-pools/ — 9 route. requireSuperAdmin kullanıyor; super-admin
-   audit-log'lu olduğu için handler içinde tutulmalı (skipAuth: true).
+3. **siparis (~10 route)**:
+   - depolar/[code]/siparis/* (lobby, marketplace, stage, [id], yeni, etc.)
+   - Bu en kompleks alt-domain; FIFO/Allocation/ShipModal kontrolü var
 
-4. requests/ — 5 route. requireRole + dashboard cache revalidateTag çağrıları
-   zaten var; withRoute ile sarman lazım.
+4. **sayim (~6 route)**:
+   - depolar/[code]/sayim/* (CycleCount akışı)
 
-5. labels/, export/, products/, manufacturer/ — küçük batch'ler (~13 toplam)
+5. **hareketler + diğer (~10 route)**:
+   - depolar/[code]/hareketler/* (ShelfMovement)
+   - Tekil olarak kalan endpoint'ler
 
-6. Tek dosyalı kalanlar (sku-master, audit-logs, marketplaces, vb.) —
-   diğer batch'lerden sonra tek seferde.
+6. **koli/tekil/unmatched/transfer (~7 route)**:
+   - depolar/[code]/koli/*
+   - depolar/[code]/tekil/*
+   - depolar/[code]/unmatched/*
+   - depolar/[code]/transfer/*
 
-KURALLAR:
-- Her batch'i ayrı commit + push + smoke test (271 test yeşil).
-- Domain-spesifik auth (requireShipmentX, requireShelfX, requireSuperAdmin,
-  requireRole) handler içinde kalır. withRoute SADECE try/catch + rate
-  limit + (mümkünse base auth) standartlaştırması için.
-- response shape: successResponse() / createdResponse() / errorResponse()
-  helper'larını kullan (lib/api/response.ts).
-- Zod validation handler içinde kalır (withRoute schema validation yapmıyor).
-- Status code'lar:
-  * 400: validation hatası, business rule ihlali
-  * 404: kaynak bulunamadı
-  * NextResponse.json({ success: false, error: '...' }, { status: N })
-    pattern'i validation hatası için OK; helper kullanmak da OK.
-- Type generics: withRoute<{ id: string }> formatı (TS strict gerekli).
-- Test: her batch sonrası `npx tsc --noEmit && npm run lint && npm test &&
-  npm run build`.
-- Kullanıcı onay vermeden manuel browser test yapma; sadece automated.
+İLK ADIM:
+`find app/api/depolar -name "route.ts"` ile gerçek envanteri al, alt-batch'leri
+doğrula (sayım tahminden farklıysa düzenle). Sonra **sub-batch 1 (lobby)** ile
+başla — küçük + pattern'i doğrula.
+
+KURALLAR (önceki batch'lerden öğrenilenler):
+- requireShelfX domain-spesifik → `withRoute({ skipAuth: true, rateLimit: ... })`
+  + handler içinde requireShelfX (shipments pattern'i ile aynı)
+- try/catch + errorResponse → `withRoute fallbackMessage`
+- Response shape:
+  * `successResponse()` / `createdResponse()` — DATA wrapper kullananlar için
+  * Manuel `NextResponse.json({ success: true, ... })` — flat shape (pagination,
+    summary, extra top-level fields) için; ZORUNLU KORUN
+- Validation hatası: `NextResponse.json({ success: false, error, details }, { status: 400 })`
+- Generic params: `withRoute<{ code: string }>` veya `<{ code: string; id: string }>`
+- Zod validation handler içinde kalır
+- revalidateTag çağrıları varsa handler içinde aynen kalır
+- `ctx.user` `user!` ile kullanılır (skipAuth: true ise undefined olabilir,
+  ama domain auth gates kullanıcıyı handler içinde alır)
+- Logger çağrıları, transaction'lar, business logic AYNEN KORUN
 
 PATTERN ÖRNEK (shipments/[id]/route.ts'ten):
 
@@ -105,17 +116,34 @@ YENİ:
     }
   );
 
-İŞ SIRASI:
-1. Önce 1 küçük batch (admin/ veya requests/) ile pattern'i doğrula.
-2. Sonra depolar/'ı 4-5 alt-batch'e böl, her birini ayrı commit.
-3. Diğer küçük batch'ler.
-4. Her batch sonu memory güncelle: project_audit_fresh_2026_05_12.md.
+VALIDATION (her batch sonrası ZORUNLU):
+  npx tsc --noEmit && npm run lint && npm test -- --run && npm run build
+Hepsi yeşil olmadan commit YAPMA. Test sayısı: 271 (azalmamalı).
 
-İSTENEN İLK ADIM:
-admin/ domain'i (10 route) ile başla. requireRole(['admin']) pattern'i
-withRoute'un native roles filter'ına en iyi uyuyor. skipAuth: false +
-roles: ['admin'] — boilerplate ciddi azalır. Smoke test geçince
-depolar/'a geç.
+COMMIT MESSAGE FORMAT:
+  refactor(audit-fresh H1 batch N): depolar/<sub-domain> withRoute migration
+
+  X route withRoute pattern'ine taşındı (Y handler):
+  - ... liste ...
+
+  Pattern: ... (requireShelfX/Y inline, vb.)
+  Audit H1 adoption %X → %Y (N/98 handler).
+
+  Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+
+Push: `git push origin main` her batch sonrası — sıradaki sub-batch
+bağımsız çalışabilsin.
+
+MEMORY GÜNCELLEME:
+Tüm depolar bittikten sonra `project_audit_fresh_2026_05_12.md`'nin "Kalan
+kritikler" bölümünü güncelle (H1 → kapandı, H1 batch tablosu).
+
+Başlamadan önce: `git log --oneline -10` ile son commit'leri kontrol et,
+working tree clean olduğunu doğrula.
+
+KASITLI ATLANANLAR (depolar/'da değil, referans için):
+- auth/login: custom error shape, /auth/bootstrap kontratı
+- sentry-verify: ?throw=1 Sentry'e propagate olmalı
 ```
 
 ---
@@ -262,11 +290,20 @@ ADIM A yap. CACHE_TTL_MS = 60_000. Smoke test + production deploy.
 | Severity | Başlangıç | Şu an | Detay |
 |---|---|---|---|
 | CRITICAL | 5 | **0** | Hepsi kapandı |
-| HIGH | 8 | **3** | H1 (batch 1 yapıldı, ~88 kaldı), H2, H4 |
+| HIGH | 8 | **3** | H1 (~%67 adopted, kalan: depolar/ 41 route), H2, H4 |
 | MEDIUM | 15 | **12** | M9, M10, M12 kapandı |
 | LOW | 10 | 10 | Dokunulmadı |
 
 **Kapanan kritikler:** C1-C5, M9, M10, M12, H3, H5, H6, H7, H8.
-**Tamamlanan commit'ler:** 13 (`544f1f8` → `b3c9078`).
+
+**H1 batch'leri tamamlanan:**
+- Batch 1 (shipments): `46bbb6c`
+- Batch 2 (admin): `6a8a77a`
+- Batch 3 (stock-pools): `77fb3ce`
+- Batch 4 (requests): `4bac2e5`
+- Batch 5 (labels/export/products/manufacturer): `e3ef8ba`
+- Batch 6 (tek dosyalılar): `361e8f5`
+
+**H1 için kalan:** sadece **depolar/** domain (41 route, 6 sub-batch).
 
 **Memory:** `project_audit_fresh_2026_05_12.md` — tüm durum güncel.
