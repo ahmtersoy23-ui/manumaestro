@@ -15,8 +15,11 @@ const SSO_VERIFY_URL = process.env.SSO_URL
   : 'https://apps.iwa.web.tr/api/auth/verify';
 const APP_CODE = process.env.SSO_APP_CODE || 'manumaestro';
 
-// In-memory SSO verification cache (5 min TTL)
-const SSO_CACHE_TTL = 5 * 60 * 1000;
+// In-memory SSO verification cache (1 min TTL).
+// Audit H4: 5dk → 1dk daraltıldı (2026-05-13). Token leak window
+// pratik saldırı için çok kısa. Trade-off: SSO verify roundtrip 5x
+// daha sık (her dakikada bir, 5 dakikada bir yerine).
+const SSO_CACHE_TTL = 60 * 1000;
 const ssoCache = new Map<string, { result: AuthResult; expiresAt: number }>();
 
 // Cleanup expired cache entries every 2 minutes
