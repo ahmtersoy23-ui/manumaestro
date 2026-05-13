@@ -14,85 +14,87 @@
  *   - REVERSAL (zaten tersine alındı)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
 import { Prisma } from '@prisma/client';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
 const OWN_RECENT_HOURS = 24;
 
-export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ code: string; id: string }> }
-) {
-  const { code, id: movementId } = await context.params;
-  const upperCode = code.toUpperCase();
+export const POST = withRoute<{ code: string; id: string }>(
+  { skipAuth: true, rateLimit: 'write', fallbackMessage: 'Geri alma başarısız' },
+  async ({ request, params }) => {
+    const { code, id: movementId } = params;
+    const upperCode = code.toUpperCase();
 
-  if (!ALL_WAREHOUSES.includes(upperCode as typeof ALL_WAREHOUSES[number])) {
-    return NextResponse.json({ success: false, error: 'Bilinmeyen depo' }, { status: 404 });
-  }
+    if (!ALL_WAREHOUSES.includes(upperCode as typeof ALL_WAREHOUSES[number])) {
+      return NextResponse.json({ success: false, error: 'Bilinmeyen depo' }, { status: 404 });
+    }
 
-  // Auth: ya undoAny ya undoOwnRecent — esas yetki kontrolü içeride
-  const auth = await requireShelfAction(request, upperCode, 'undoOwnRecent');
-  if (auth instanceof NextResponse) return auth;
+    // Auth: ya undoAny ya undoOwnRecent — esas yetki kontrolü içeride
+    const auth = await requireShelfAction(request, upperCode, 'undoOwnRecent');
+    if (auth instanceof NextResponse) return auth;
 
-  try {
-    const result = await prisma.$transaction(async (tx) => {
-      const orig = await tx.shelfMovement.findUnique({
-        where: { id: movementId },
-        include: { reversedBy: { select: { id: true } } },
-      });
-      if (!orig) throw new Error('Hareket bulunamadı');
-      if (orig.warehouseCode !== upperCode) throw new Error('Hareket bu depoya ait değil');
-      if (orig.reversedBy.length > 0) throw new Error('Bu hareket zaten geri alınmış');
-      if (orig.type === 'REVERSAL') throw new Error('REVERSAL hareketi geri alınamaz');
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        const orig = await tx.shelfMovement.findUnique({
+          where: { id: movementId },
+          include: { reversedBy: { select: { id: true } } },
+        });
+        if (!orig) throw new Error('Hareket bulunamadı');
+        if (orig.warehouseCode !== upperCode) throw new Error('Hareket bu depoya ait değil');
+        if (orig.reversedBy.length > 0) throw new Error('Bu hareket zaten geri alınmış');
+        if (orig.type === 'REVERSAL') throw new Error('REVERSAL hareketi geri alınamaz');
 
-      // Yetki: MANAGER+ herhangi birini, OPERATOR sadece kendi son 24 saat
-      const isManagerPlus = ['MANAGER', 'ADMIN'].includes(auth.shelfRole);
-      if (!isManagerPlus) {
-        if (orig.userId !== auth.user.id) {
-          throw new Error('Sadece kendi hareketini geri alabilirsin (Manager onayı gerekir)');
+        // Yetki: MANAGER+ herhangi birini, OPERATOR sadece kendi son 24 saat
+        const isManagerPlus = ['MANAGER', 'ADMIN'].includes(auth.shelfRole);
+        if (!isManagerPlus) {
+          if (orig.userId !== auth.user.id) {
+            throw new Error('Sadece kendi hareketini geri alabilirsin (Manager onayı gerekir)');
+          }
+          const ageMs = Date.now() - orig.createdAt.getTime();
+          if (ageMs > OWN_RECENT_HOURS * 3600 * 1000) {
+            throw new Error(`OPERATOR ${OWN_RECENT_HOURS} saatten eski hareketi geri alamaz`);
+          }
         }
-        const ageMs = Date.now() - orig.createdAt.getTime();
-        if (ageMs > OWN_RECENT_HOURS * 3600 * 1000) {
-          throw new Error(`OPERATOR ${OWN_RECENT_HOURS} saatten eski hareketi geri alamaz`);
-        }
-      }
 
-      // Tip-spesifik reverse mantığı
-      const reverse = await reverseMovement(tx, orig);
+        // Tip-spesifik reverse mantığı
+        const reverse = await reverseMovement(tx, orig);
 
-      // REVERSAL hareketi yarat
-      const reversal = await tx.shelfMovement.create({
-        data: {
-          warehouseCode: upperCode,
-          type: 'REVERSAL',
-          fromShelfId: reverse.fromShelfId,
-          toShelfId: reverse.toShelfId,
-          iwasku: orig.iwasku,
-          quantity: orig.quantity,
-          shelfBoxId: orig.shelfBoxId,
-          refType: 'UNDO',
-          refId: orig.id,
-          reverseOfId: orig.id,
-          userId: auth.user.id,
-          notes: `Geri alındı: ${orig.type} (${orig.notes ?? '—'})`,
-        },
+        // REVERSAL hareketi yarat
+        const reversal = await tx.shelfMovement.create({
+          data: {
+            warehouseCode: upperCode,
+            type: 'REVERSAL',
+            fromShelfId: reverse.fromShelfId,
+            toShelfId: reverse.toShelfId,
+            iwasku: orig.iwasku,
+            quantity: orig.quantity,
+            shelfBoxId: orig.shelfBoxId,
+            refType: 'UNDO',
+            refId: orig.id,
+            reverseOfId: orig.id,
+            userId: auth.user.id,
+            notes: `Geri alındı: ${orig.type} (${orig.notes ?? '—'})`,
+          },
+        });
+
+        // Orijinali işaretlemeye gerek yok — REVERSAL'ın reverseOfId'si bağlantıyı kuruyor.
+        // UI tarafı orig.reversedBy[] üzerinden tespit eder.
+
+        return { reversalId: reversal.id, originalId: orig.id, originalType: orig.type };
       });
 
-      // Orijinali işaretlemeye gerek yok — REVERSAL'ın reverseOfId'si bağlantıyı kuruyor.
-      // UI tarafı orig.reversedBy[] üzerinden tespit eder.
-
-      return { reversalId: reversal.id, originalId: orig.id, originalType: orig.type };
-    });
-
-    return NextResponse.json({ success: true, data: result });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Geri alma başarısız';
-    return NextResponse.json({ success: false, error: msg }, { status: 400 });
+      return successResponse(result);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Geri alma başarısız';
+      return NextResponse.json({ success: false, error: msg }, { status: 400 });
+    }
   }
-}
+);
 
 type Tx = Prisma.TransactionClient;
 
