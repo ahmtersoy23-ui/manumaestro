@@ -4,95 +4,91 @@
  * Case-insensitive. Tüm eşleşen ShelfStock ve ShelfBox kayıtlarını döner.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma, queryProductDb } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
 import { getProductsByIwasku } from '@/lib/products/lookup';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ code: string }> }
-) {
-  const { code } = await context.params;
-  const upperCode = code.toUpperCase();
+export const GET = withRoute<{ code: string }>(
+  { skipAuth: true, rateLimit: 'read', fallbackMessage: 'Arama başarısız' },
+  async ({ request, params }) => {
+    const { code } = params;
+    const upperCode = code.toUpperCase();
 
-  if (!ALL_WAREHOUSES.includes(upperCode as typeof ALL_WAREHOUSES[number])) {
-    return NextResponse.json({ success: false, error: 'Bilinmeyen depo' }, { status: 404 });
-  }
+    if (!ALL_WAREHOUSES.includes(upperCode as typeof ALL_WAREHOUSES[number])) {
+      return NextResponse.json({ success: false, error: 'Bilinmeyen depo' }, { status: 404 });
+    }
 
-  const auth = await requireShelfAction(request, upperCode, 'view');
-  if (auth instanceof NextResponse) return auth;
+    const auth = await requireShelfAction(request, upperCode, 'view');
+    if (auth instanceof NextResponse) return auth;
 
-  const { searchParams } = new URL(request.url);
-  const q = searchParams.get('q')?.trim() ?? '';
-  if (q.length < 2) {
-    return NextResponse.json({
-      success: true,
-      data: { stocks: [], boxes: [], shelves: [], query: q },
+    const { searchParams } = new URL(request.url);
+    const q = searchParams.get('q')?.trim() ?? '';
+    if (q.length < 2) {
+      return successResponse({ stocks: [], boxes: [], shelves: [], query: q });
+    }
+
+    // Pricelab'da ürün adı eşleşen iwasku'ları bul (name araması)
+    let nameMatchIwaskus: string[] = [];
+    try {
+      const rows = await queryProductDb(
+        `SELECT product_sku FROM products WHERE name ILIKE $1 LIMIT 200`,
+        [`%${q}%`]
+      );
+      nameMatchIwaskus = rows.map((r: { product_sku: string }) => r.product_sku);
+    } catch {
+      // Pricelab erişimi yoksa name araması atlanır
+    }
+
+    // Önce raf kodu eşleşmeleri (sadece bu depo)
+    const shelves = await prisma.shelf.findMany({
+      where: {
+        warehouseCode: upperCode,
+        isActive: true,
+        code: { contains: q, mode: 'insensitive' },
+      },
+      select: { id: true, code: true, shelfType: true },
+      take: 30,
     });
-  }
 
-  // Pricelab'da ürün adı eşleşen iwasku'ları bul (name araması)
-  let nameMatchIwaskus: string[] = [];
-  try {
-    const rows = await queryProductDb(
-      `SELECT product_sku FROM products WHERE name ILIKE $1 LIMIT 200`,
-      [`%${q}%`]
-    );
-    nameMatchIwaskus = rows.map((r: { product_sku: string }) => r.product_sku);
-  } catch {
-    // Pricelab erişimi yoksa name araması atlanır
-  }
+    // ShelfStock — iwasku VEYA isim eşleşmesi
+    const stocks = await prisma.shelfStock.findMany({
+      where: {
+        warehouseCode: upperCode,
+        OR: [
+          { iwasku: { contains: q, mode: 'insensitive' } },
+          ...(nameMatchIwaskus.length > 0 ? [{ iwasku: { in: nameMatchIwaskus } }] : []),
+        ],
+      },
+      include: { shelf: { select: { code: true, shelfType: true } } },
+      orderBy: { iwasku: 'asc' },
+      take: 100,
+    });
 
-  // Önce raf kodu eşleşmeleri (sadece bu depo)
-  const shelves = await prisma.shelf.findMany({
-    where: {
-      warehouseCode: upperCode,
-      isActive: true,
-      code: { contains: q, mode: 'insensitive' },
-    },
-    select: { id: true, code: true, shelfType: true },
-    take: 30,
-  });
+    // ShelfBox — iwasku, fnsku, boxNumber VEYA isim eşleşmesi
+    const boxes = await prisma.shelfBox.findMany({
+      where: {
+        warehouseCode: upperCode,
+        OR: [
+          { iwasku: { contains: q, mode: 'insensitive' } },
+          { fnsku: { contains: q, mode: 'insensitive' } },
+          { boxNumber: { contains: q, mode: 'insensitive' } },
+          ...(nameMatchIwaskus.length > 0 ? [{ iwasku: { in: nameMatchIwaskus } }] : []),
+        ],
+      },
+      include: { shelf: { select: { code: true, shelfType: true } } },
+      orderBy: [{ status: 'asc' }, { boxNumber: 'asc' }],
+      take: 100,
+    });
 
-  // ShelfStock — iwasku VEYA isim eşleşmesi
-  const stocks = await prisma.shelfStock.findMany({
-    where: {
-      warehouseCode: upperCode,
-      OR: [
-        { iwasku: { contains: q, mode: 'insensitive' } },
-        ...(nameMatchIwaskus.length > 0 ? [{ iwasku: { in: nameMatchIwaskus } }] : []),
-      ],
-    },
-    include: { shelf: { select: { code: true, shelfType: true } } },
-    orderBy: { iwasku: 'asc' },
-    take: 100,
-  });
+    // Product name lookup (batch)
+    const allIwaskus = [...stocks.map((s) => s.iwasku), ...boxes.map((b) => b.iwasku)];
+    const productMap = await getProductsByIwasku(allIwaskus);
 
-  // ShelfBox — iwasku, fnsku, boxNumber VEYA isim eşleşmesi
-  const boxes = await prisma.shelfBox.findMany({
-    where: {
-      warehouseCode: upperCode,
-      OR: [
-        { iwasku: { contains: q, mode: 'insensitive' } },
-        { fnsku: { contains: q, mode: 'insensitive' } },
-        { boxNumber: { contains: q, mode: 'insensitive' } },
-        ...(nameMatchIwaskus.length > 0 ? [{ iwasku: { in: nameMatchIwaskus } }] : []),
-      ],
-    },
-    include: { shelf: { select: { code: true, shelfType: true } } },
-    orderBy: [{ status: 'asc' }, { boxNumber: 'asc' }],
-    take: 100,
-  });
-
-  // Product name lookup (batch)
-  const allIwaskus = [...stocks.map((s) => s.iwasku), ...boxes.map((b) => b.iwasku)];
-  const productMap = await getProductsByIwasku(allIwaskus);
-
-  return NextResponse.json({
-    success: true,
-    data: {
+    return successResponse({
       query: q,
       shelves,
       stocks: stocks.map((s) => ({
@@ -117,6 +113,6 @@ export async function GET(
         quantity: b.quantity,
         status: b.status,
       })),
-    },
-  });
-}
+    });
+  }
+);

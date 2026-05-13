@@ -8,12 +8,14 @@
  * applyToAllSameLookup=true → aynı rawLookup'lı tüm PENDING satırları toplu resolve.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma, queryProductDb } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
 import type { Prisma } from '@prisma/client';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
 const ResolveSchema = z.object({
   iwasku: z.string().trim().min(1),
@@ -29,96 +31,96 @@ const DESTINATION_TAB: Record<string, string> = {
   SHOWROOM: 'US_SHOWROOM',
 };
 
-export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ code: string; id: string }> }
-) {
-  const { code, id } = await context.params;
-  const upperCode = code.toUpperCase();
+export const POST = withRoute<{ code: string; id: string }>(
+  { skipAuth: true, rateLimit: 'write', fallbackMessage: 'Çözme başarısız' },
+  async ({ request, params }) => {
+    const { code, id } = params;
+    const upperCode = code.toUpperCase();
 
-  if (!ALL_WAREHOUSES.includes(upperCode as typeof ALL_WAREHOUSES[number])) {
-    return NextResponse.json({ success: false, error: 'Bilinmeyen depo' }, { status: 404 });
-  }
+    if (!ALL_WAREHOUSES.includes(upperCode as typeof ALL_WAREHOUSES[number])) {
+      return NextResponse.json({ success: false, error: 'Bilinmeyen depo' }, { status: 404 });
+    }
 
-  const auth = await requireShelfAction(request, upperCode, 'resolveUnmatched');
-  if (auth instanceof NextResponse) return auth;
+    const auth = await requireShelfAction(request, upperCode, 'resolveUnmatched');
+    if (auth instanceof NextResponse) return auth;
 
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return NextResponse.json({ success: false, error: 'Geçersiz JSON' }, { status: 400 });
-  }
-  const parsed = ResolveSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { success: false, error: 'Doğrulama hatası', details: parsed.error.flatten().fieldErrors },
-      { status: 400 }
-    );
-  }
-  const { iwasku, resolutionType, applyToAllSameLookup } = parsed.data;
+    let body: unknown;
+    try { body = await request.json(); } catch {
+      return NextResponse.json({ success: false, error: 'Geçersiz JSON' }, { status: 400 });
+    }
+    const parsed = ResolveSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: 'Doğrulama hatası', details: parsed.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+    const { iwasku, resolutionType, applyToAllSameLookup } = parsed.data;
 
-  // iwasku verify (sku_master.iwasku veya products.product_sku)
-  const verifyRows = (await queryProductDb(
-    `SELECT 1 AS x FROM sku_master WHERE iwasku=$1
-     UNION ALL
-     SELECT 1 AS x FROM products WHERE product_sku=$1
-     LIMIT 1`,
-    [iwasku]
-  )) as Array<{ x: number }>;
-  if (verifyRows.length === 0) {
-    return NextResponse.json(
-      { success: false, error: `iwasku "${iwasku}" sistemde bulunamadı (sku_master ve products'ta yok)` },
-      { status: 400 }
-    );
-  }
-
-  // FNSKU lookup (opsiyonel)
-  let fnsku: string | null = null;
-  try {
-    const fnskuRows = (await queryProductDb(
-      `SELECT fnsku FROM sku_master WHERE iwasku=$1 AND fnsku IS NOT NULL LIMIT 1`,
+    // iwasku verify (sku_master.iwasku veya products.product_sku)
+    const verifyRows = (await queryProductDb(
+      `SELECT 1 AS x FROM sku_master WHERE iwasku=$1
+       UNION ALL
+       SELECT 1 AS x FROM products WHERE product_sku=$1
+       LIMIT 1`,
       [iwasku]
-    )) as Array<{ fnsku: string }>;
-    fnsku = fnskuRows[0]?.fnsku ?? null;
-  } catch { /* noop */ }
+    )) as Array<{ x: number }>;
+    if (verifyRows.length === 0) {
+      return NextResponse.json(
+        { success: false, error: `iwasku "${iwasku}" sistemde bulunamadı (sku_master ve products'ta yok)` },
+        { status: 400 }
+      );
+    }
 
-  try {
-    const result = await prisma.$transaction(async (tx) => {
-      const target = await tx.unmatchedSeedRow.findUnique({ where: { id } });
-      if (!target) throw new Error('Eşleşmeyen kayıt bulunamadı');
-      if (target.warehouseCode !== upperCode) throw new Error('Kayıt bu depoya ait değil');
-      if (target.status !== 'PENDING') throw new Error('Bu kayıt zaten çözülmüş veya atlanmış');
+    // FNSKU lookup (opsiyonel)
+    let fnsku: string | null = null;
+    try {
+      const fnskuRows = (await queryProductDb(
+        `SELECT fnsku FROM sku_master WHERE iwasku=$1 AND fnsku IS NOT NULL LIMIT 1`,
+        [iwasku]
+      )) as Array<{ fnsku: string }>;
+      fnsku = fnskuRows[0]?.fnsku ?? null;
+    } catch { /* noop */ }
 
-      // Toplu mod: aynı rawLookup için tüm PENDING'leri al
-      const targets = applyToAllSameLookup
-        ? await tx.unmatchedSeedRow.findMany({
-            where: {
-              warehouseCode: upperCode,
-              rawLookup: target.rawLookup,
-              status: 'PENDING',
-            },
-          })
-        : [target];
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        const target = await tx.unmatchedSeedRow.findUnique({ where: { id } });
+        if (!target) throw new Error('Eşleşmeyen kayıt bulunamadı');
+        if (target.warehouseCode !== upperCode) throw new Error('Kayıt bu depoya ait değil');
+        if (target.status !== 'PENDING') throw new Error('Bu kayıt zaten çözülmüş veya atlanmış');
 
-      let resolvedCount = 0;
-      let stocksCreated = 0;
-      let boxesCreated = 0;
+        // Toplu mod: aynı rawLookup için tüm PENDING'leri al
+        const targets = applyToAllSameLookup
+          ? await tx.unmatchedSeedRow.findMany({
+              where: {
+                warehouseCode: upperCode,
+                rawLookup: target.rawLookup,
+                status: 'PENDING',
+              },
+            })
+          : [target];
 
-      for (const row of targets) {
-        await resolveRow(tx, row, iwasku, fnsku, resolutionType, auth.user.id, upperCode);
-        if (row.boxNumber) boxesCreated++;
-        else stocksCreated++;
-        resolvedCount++;
-      }
+        let resolvedCount = 0;
+        let stocksCreated = 0;
+        let boxesCreated = 0;
 
-      return { resolvedCount, stocksCreated, boxesCreated, iwasku };
-    });
+        for (const row of targets) {
+          await resolveRow(tx, row, iwasku, fnsku, resolutionType, auth.user.id, upperCode);
+          if (row.boxNumber) boxesCreated++;
+          else stocksCreated++;
+          resolvedCount++;
+        }
 
-    return NextResponse.json({ success: true, data: result });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Çözme başarısız';
-    return NextResponse.json({ success: false, error: msg }, { status: 400 });
+        return { resolvedCount, stocksCreated, boxesCreated, iwasku };
+      });
+
+      return successResponse(result);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Çözme başarısız';
+      return NextResponse.json({ success: false, error: msg }, { status: 400 });
+    }
   }
-}
+);
 
 async function resolveRow(
   tx: Tx,

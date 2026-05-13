@@ -13,11 +13,13 @@
  *   - ShelfBox aynı satır update olur (warehouseCode + shelfId değişir, shipmentBoxId korunur)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
 const TransferSchema = z.object({
   source: z.object({
@@ -29,84 +31,84 @@ const TransferSchema = z.object({
   notes: z.string().trim().max(500).optional(),
 });
 
-export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ code: string }> }
-) {
-  const { code } = await context.params;
-  const upperCode = code.toUpperCase();
+export const POST = withRoute<{ code: string }>(
+  { skipAuth: true, rateLimit: 'write', fallbackMessage: 'Transfer başarısız' },
+  async ({ request, params }) => {
+    const { code } = params;
+    const upperCode = code.toUpperCase();
 
-  if (!ALL_WAREHOUSES.includes(upperCode as typeof ALL_WAREHOUSES[number])) {
-    return NextResponse.json({ success: false, error: 'Bilinmeyen depo' }, { status: 404 });
-  }
-
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ success: false, error: 'Geçersiz JSON' }, { status: 400 });
-  }
-
-  const parsed = TransferSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { success: false, error: 'Doğrulama hatası', details: parsed.error.flatten().fieldErrors },
-      { status: 400 }
-    );
-  }
-
-  const { source, toShelfId, quantity, notes } = parsed.data;
-
-  // Hedef raf
-  const toShelf = await prisma.shelf.findFirst({
-    where: { id: toShelfId, isActive: true },
-  });
-  if (!toShelf) {
-    return NextResponse.json({ success: false, error: 'Hedef raf bulunamadı' }, { status: 404 });
-  }
-
-  const isCross = toShelf.warehouseCode !== upperCode;
-  const action = isCross ? 'crossWarehouseTransfer' : 'transferStock';
-
-  const auth = await requireShelfAction(request, upperCode, action);
-  if (auth instanceof NextResponse) return auth;
-
-  // Cross-warehouse → hedef raf POOL/TEMP zorunlu
-  if (isCross && !['POOL', 'TEMP'].includes(toShelf.shelfType)) {
-    return NextResponse.json(
-      { success: false, error: 'Diğer depoya transfer için hedef raf POOL veya TEMP olmalı' },
-      { status: 400 }
-    );
-  }
-
-  try {
-    if (source.type === 'stock') {
-      const result = await transferStock(
-        upperCode,
-        source.id,
-        toShelf,
-        quantity ?? 0,
-        auth.user.id,
-        isCross,
-        notes
-      );
-      return NextResponse.json({ success: true, data: result });
-    } else {
-      const result = await transferBox(
-        upperCode,
-        source.id,
-        toShelf,
-        auth.user.id,
-        isCross,
-        notes
-      );
-      return NextResponse.json({ success: true, data: result });
+    if (!ALL_WAREHOUSES.includes(upperCode as typeof ALL_WAREHOUSES[number])) {
+      return NextResponse.json({ success: false, error: 'Bilinmeyen depo' }, { status: 404 });
     }
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Transfer başarısız';
-    return NextResponse.json({ success: false, error: msg }, { status: 400 });
+
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ success: false, error: 'Geçersiz JSON' }, { status: 400 });
+    }
+
+    const parsed = TransferSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: 'Doğrulama hatası', details: parsed.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+
+    const { source, toShelfId, quantity, notes } = parsed.data;
+
+    // Hedef raf
+    const toShelf = await prisma.shelf.findFirst({
+      where: { id: toShelfId, isActive: true },
+    });
+    if (!toShelf) {
+      return NextResponse.json({ success: false, error: 'Hedef raf bulunamadı' }, { status: 404 });
+    }
+
+    const isCross = toShelf.warehouseCode !== upperCode;
+    const action = isCross ? 'crossWarehouseTransfer' : 'transferStock';
+
+    const auth = await requireShelfAction(request, upperCode, action);
+    if (auth instanceof NextResponse) return auth;
+
+    // Cross-warehouse → hedef raf POOL/TEMP zorunlu
+    if (isCross && !['POOL', 'TEMP'].includes(toShelf.shelfType)) {
+      return NextResponse.json(
+        { success: false, error: 'Diğer depoya transfer için hedef raf POOL veya TEMP olmalı' },
+        { status: 400 }
+      );
+    }
+
+    try {
+      if (source.type === 'stock') {
+        const result = await transferStock(
+          upperCode,
+          source.id,
+          toShelf,
+          quantity ?? 0,
+          auth.user.id,
+          isCross,
+          notes
+        );
+        return successResponse(result);
+      } else {
+        const result = await transferBox(
+          upperCode,
+          source.id,
+          toShelf,
+          auth.user.id,
+          isCross,
+          notes
+        );
+        return successResponse(result);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Transfer başarısız';
+      return NextResponse.json({ success: false, error: msg }, { status: 400 });
+    }
   }
-}
+);
 
 async function transferStock(
   fromWarehouseCode: string,
