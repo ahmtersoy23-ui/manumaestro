@@ -16,6 +16,10 @@ import { prisma } from '@/lib/db/prisma';
 import { isSuperAdmin } from '@/lib/auth/verify';
 import { CreatePoolFallback } from './CreatePoolFallback';
 
+// Prisma cagrisi top-level — build-time prerender DB'ye baglanamadan
+// ECONNREFUSED firlatiyor. Bu sayfa her zaman request-time render olsun.
+export const dynamic = 'force-dynamic';
+
 export default async function SeasonalPage() {
   const activePool = await prisma.stockPool.findFirst({
     where: { status: { in: ['ACTIVE', 'RELEASING'] } },
