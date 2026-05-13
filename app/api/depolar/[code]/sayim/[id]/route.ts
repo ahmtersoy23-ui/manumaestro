@@ -6,48 +6,47 @@
  *   COMPLETED/DISCREPANCY sonrası tüm değerleri görür.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
 import { getProductsByIwasku } from '@/lib/products/lookup';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ code: string; id: string }> }
-) {
-  const { code, id } = await context.params;
-  const upperCode = code.toUpperCase();
+export const GET = withRoute<{ code: string; id: string }>(
+  { skipAuth: true, rateLimit: 'read', fallbackMessage: 'Sayım detayı alınamadı' },
+  async ({ request, params }) => {
+    const { code, id } = params;
+    const upperCode = code.toUpperCase();
 
-  if (!ALL_WAREHOUSES.includes(upperCode as (typeof ALL_WAREHOUSES)[number])) {
-    return NextResponse.json({ success: false, error: 'Bilinmeyen depo' }, { status: 404 });
-  }
+    if (!ALL_WAREHOUSES.includes(upperCode as (typeof ALL_WAREHOUSES)[number])) {
+      return NextResponse.json({ success: false, error: 'Bilinmeyen depo' }, { status: 404 });
+    }
 
-  const auth = await requireShelfAction(request, upperCode, 'view');
-  if (auth instanceof NextResponse) return auth;
+    const auth = await requireShelfAction(request, upperCode, 'view');
+    if (auth instanceof NextResponse) return auth;
 
-  const task = await prisma.cycleCountTask.findUnique({
-    where: { id },
-    include: {
-      shelf: { select: { code: true, shelfType: true } },
-      items: { orderBy: { iwasku: 'asc' } },
-    },
-  });
+    const task = await prisma.cycleCountTask.findUnique({
+      where: { id },
+      include: {
+        shelf: { select: { code: true, shelfType: true } },
+        items: { orderBy: { iwasku: 'asc' } },
+      },
+    });
 
-  if (!task || task.warehouseCode !== upperCode) {
-    return NextResponse.json({ success: false, error: 'Sayım bulunamadı' }, { status: 404 });
-  }
+    if (!task || task.warehouseCode !== upperCode) {
+      return NextResponse.json({ success: false, error: 'Sayım bulunamadı' }, { status: 404 });
+    }
 
-  const productMap = await getProductsByIwasku(task.items.map((i) => i.iwasku));
+    const productMap = await getProductsByIwasku(task.items.map((i) => i.iwasku));
 
-  // Blind görünüm: PENDING/IN_PROGRESS'te systemQty gizlenir
-  const blind = task.status === 'PENDING' || task.status === 'IN_PROGRESS';
-  // Yetki: cycleCountResolve olanlar tüm değerleri görür (audit + adjust için)
-  const canSeeSystemQty = !blind || ['MANAGER', 'ADMIN'].includes(auth.shelfRole);
+    // Blind görünüm: PENDING/IN_PROGRESS'te systemQty gizlenir
+    const blind = task.status === 'PENDING' || task.status === 'IN_PROGRESS';
+    // Yetki: cycleCountResolve olanlar tüm değerleri görür (audit + adjust için)
+    const canSeeSystemQty = !blind || ['MANAGER', 'ADMIN'].includes(auth.shelfRole);
 
-  return NextResponse.json({
-    success: true,
-    data: {
+    return successResponse({
       role: auth.shelfRole,
       task: {
         id: task.id,
@@ -75,6 +74,6 @@ export async function GET(
         resolution: it.resolution,
       })),
       blind,
-    },
-  });
-}
+    });
+  }
+);

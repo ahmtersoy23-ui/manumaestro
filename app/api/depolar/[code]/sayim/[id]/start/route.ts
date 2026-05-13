@@ -7,83 +7,82 @@
  *   ayrı bir kayıt).
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
-export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ code: string; id: string }> }
-) {
-  const { code, id } = await context.params;
-  const upperCode = code.toUpperCase();
+export const POST = withRoute<{ code: string; id: string }>(
+  { skipAuth: true, rateLimit: 'write', fallbackMessage: 'Sayım başlatılamadı' },
+  async ({ request, params }) => {
+    const { code, id } = params;
+    const upperCode = code.toUpperCase();
 
-  if (!ALL_WAREHOUSES.includes(upperCode as (typeof ALL_WAREHOUSES)[number])) {
-    return NextResponse.json({ success: false, error: 'Bilinmeyen depo' }, { status: 404 });
-  }
+    if (!ALL_WAREHOUSES.includes(upperCode as (typeof ALL_WAREHOUSES)[number])) {
+      return NextResponse.json({ success: false, error: 'Bilinmeyen depo' }, { status: 404 });
+    }
 
-  const auth = await requireShelfAction(request, upperCode, 'cycleCountPerform');
-  if (auth instanceof NextResponse) return auth;
+    const auth = await requireShelfAction(request, upperCode, 'cycleCountPerform');
+    if (auth instanceof NextResponse) return auth;
 
-  const task = await prisma.cycleCountTask.findUnique({
-    where: { id },
-    select: { id: true, warehouseCode: true, shelfId: true, status: true },
-  });
-  if (!task || task.warehouseCode !== upperCode) {
-    return NextResponse.json({ success: false, error: 'Sayım bulunamadı' }, { status: 404 });
-  }
-  if (task.status !== 'PENDING') {
-    return NextResponse.json(
-      { success: false, error: `Bu sayım zaten başlamış (durum: ${task.status})` },
-      { status: 400 }
-    );
-  }
-
-  // Mevcut raf içeriği — snapshot zamanı
-  const [stocks, boxes] = await Promise.all([
-    prisma.shelfStock.findMany({
-      where: { shelfId: task.shelfId, quantity: { gt: 0 } },
-      select: { id: true, iwasku: true, quantity: true },
-    }),
-    prisma.shelfBox.findMany({
-      where: { shelfId: task.shelfId, status: { not: 'EMPTY' }, quantity: { gt: 0 } },
-      select: { id: true, iwasku: true, quantity: true },
-    }),
-  ]);
-
-  await prisma.$transaction(async (tx) => {
-    await tx.cycleCountTask.update({
+    const task = await prisma.cycleCountTask.findUnique({
       where: { id },
-      data: { status: 'IN_PROGRESS', startedAt: new Date(), startedById: auth.user.id },
+      select: { id: true, warehouseCode: true, shelfId: true, status: true },
+    });
+    if (!task || task.warehouseCode !== upperCode) {
+      return NextResponse.json({ success: false, error: 'Sayım bulunamadı' }, { status: 404 });
+    }
+    if (task.status !== 'PENDING') {
+      return NextResponse.json(
+        { success: false, error: `Bu sayım zaten başlamış (durum: ${task.status})` },
+        { status: 400 }
+      );
+    }
+
+    // Mevcut raf içeriği — snapshot zamanı
+    const [stocks, boxes] = await Promise.all([
+      prisma.shelfStock.findMany({
+        where: { shelfId: task.shelfId, quantity: { gt: 0 } },
+        select: { id: true, iwasku: true, quantity: true },
+      }),
+      prisma.shelfBox.findMany({
+        where: { shelfId: task.shelfId, status: { not: 'EMPTY' }, quantity: { gt: 0 } },
+        select: { id: true, iwasku: true, quantity: true },
+      }),
+    ]);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.cycleCountTask.update({
+        where: { id },
+        data: { status: 'IN_PROGRESS', startedAt: new Date(), startedById: auth.user.id },
+      });
+
+      if (stocks.length > 0) {
+        await tx.cycleCountItem.createMany({
+          data: stocks.map((s) => ({
+            taskId: id,
+            iwasku: s.iwasku,
+            source: 'STOCK' as const,
+            shelfStockId: s.id,
+            systemQty: s.quantity,
+          })),
+        });
+      }
+      if (boxes.length > 0) {
+        await tx.cycleCountItem.createMany({
+          data: boxes.map((b) => ({
+            taskId: id,
+            iwasku: b.iwasku,
+            source: 'BOX' as const,
+            shelfBoxId: b.id,
+            systemQty: b.quantity,
+          })),
+        });
+      }
     });
 
-    if (stocks.length > 0) {
-      await tx.cycleCountItem.createMany({
-        data: stocks.map((s) => ({
-          taskId: id,
-          iwasku: s.iwasku,
-          source: 'STOCK' as const,
-          shelfStockId: s.id,
-          systemQty: s.quantity,
-        })),
-      });
-    }
-    if (boxes.length > 0) {
-      await tx.cycleCountItem.createMany({
-        data: boxes.map((b) => ({
-          taskId: id,
-          iwasku: b.iwasku,
-          source: 'BOX' as const,
-          shelfBoxId: b.id,
-          systemQty: b.quantity,
-        })),
-      });
-    }
-  });
-
-  return NextResponse.json({
-    success: true,
-    data: { snapshotItems: stocks.length + boxes.length },
-  });
-}
+    return successResponse({ snapshotItems: stocks.length + boxes.length });
+  }
+);
