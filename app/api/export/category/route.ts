@@ -3,19 +3,17 @@
  * Exports production requests for a specific category to Excel (aggregated by IWASKU)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { enrichProductSize } from '@/lib/db/enrichProductSize';
-import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-import { verifyAuth } from '@/lib/auth/verify';
 import {
   exportToExcel,
   formatStatusForExcel,
   type ExportColumn,
 } from '@/lib/excel/exporter';
 import { getProducedMap, getSnapshotStockMap } from '@/lib/export/helpers';
-import { errorResponse } from '@/lib/api/response';
+import { withRoute } from '@/lib/api/withRoute';
 
 interface AggregatedProduct {
   iwasku: string;
@@ -33,21 +31,9 @@ interface AggregatedProduct {
   manufacturerNotes: string;
 }
 
-export async function GET(request: NextRequest) {
-  try {
-    const rateLimitResult = await rateLimiters.bulk.check(request, 'export-category');
-    if (!rateLimitResult.success) {
-      return rateLimitExceededResponse(rateLimitResult);
-    }
-
-    const auth = await verifyAuth(request);
-    if (!auth.success || !auth.user) {
-      return NextResponse.json(
-        { success: false, error: auth.error || 'Yetkisiz erişim' },
-        { status: 401 }
-      );
-    }
-
+export const GET = withRoute(
+  { rateLimit: 'bulk', fallbackMessage: 'Veri dışa aktarılamadı' },
+  async ({ request }) => {
     const searchParams = request.nextUrl.searchParams;
     const category = searchParams.get('category');
     const month = searchParams.get('month');
@@ -165,7 +151,5 @@ export async function GET(request: NextRequest) {
         'Content-Length': buffer.byteLength.toString(),
       },
     });
-  } catch (error) {
-    return errorResponse(error, 'Veri dışa aktarılamadı');
   }
-}
+);

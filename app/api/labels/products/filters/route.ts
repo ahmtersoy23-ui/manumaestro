@@ -7,18 +7,13 @@
  * - category varsa: { categories: [...], parents: [...o kategorinin parent'ları...] }
  */
 
-import { NextRequest, NextResponse } from 'next/server';
 import { queryProductDb } from '@/lib/db/prisma';
-import { verifyAuth } from '@/lib/auth/verify';
-import { errorResponse } from '@/lib/api/response';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
-export async function GET(request: NextRequest) {
-  try {
-    const authResult = await verifyAuth(request);
-    if (!authResult.success || !authResult.user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
+export const GET = withRoute(
+  { rateLimit: 'read', fallbackMessage: 'Filtreler getirilemedi' },
+  async ({ request }) => {
     const category = (request.nextUrl.searchParams.get('category') || '').trim().slice(0, 200);
 
     type StrRow = { value: string };
@@ -40,14 +35,9 @@ export async function GET(request: NextRequest) {
       )) as StrRow[];
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        categories: categoryRows.map((r) => r.value),
-        parents: parentRows.map((r) => r.value),
-      },
+    return successResponse({
+      categories: categoryRows.map((r) => r.value),
+      parents: parentRows.map((r) => r.value),
     });
-  } catch (err) {
-    return errorResponse(err);
   }
-}
+);

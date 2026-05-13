@@ -4,33 +4,16 @@
  * Groups by IWASKU, paginated by unique product count, sorted A-Z
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma, queryProductDb } from '@/lib/db/prisma';
 import { enrichProductSize } from '@/lib/db/enrichProductSize';
-import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
 import { formatMonthValue } from '@/lib/monthUtils';
-import { verifyAuth } from '@/lib/auth/verify';
-import { errorResponse } from '@/lib/api/response';
+import { withRoute } from '@/lib/api/withRoute';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ category: string }> }
-) {
-  try {
-    const rateLimitResult = await rateLimiters.read.check(request, 'category-requests');
-    if (!rateLimitResult.success) {
-      return rateLimitExceededResponse(rateLimitResult);
-    }
-
-    const auth = await verifyAuth(request);
-    if (!auth.success || !auth.user) {
-      return NextResponse.json(
-        { success: false, error: auth.error || 'Yetkisiz erişim' },
-        { status: 401 }
-      );
-    }
-
-    const { category } = await params;
+export const GET = withRoute<{ category: string }>(
+  { rateLimit: 'read', fallbackMessage: 'Talepler getirilemedi' },
+  async ({ request, params }) => {
+    const { category } = params;
     const searchParams = request.nextUrl.searchParams;
     const monthParam = searchParams.get('month');
     const searchQuery = searchParams.get('search')?.trim() || '';
@@ -245,7 +228,5 @@ export async function GET(
       summary,
       availableMarketplaces,
     });
-  } catch (error) {
-    return errorResponse(error, 'Talepler getirilemedi');
   }
-}
+);

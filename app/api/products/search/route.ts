@@ -3,29 +3,14 @@
  * Searches products from pricelab_db.products table
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { queryProductDb } from '@/lib/db/prisma';
-import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-import { verifyAuth } from '@/lib/auth/verify';
-import { errorResponse } from '@/lib/api/response';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
-export async function GET(request: NextRequest) {
-  try {
-    // Rate limiting: 200 requests per minute for read operations
-    const rateLimitResult = await rateLimiters.read.check(request, 'search-products');
-    if (!rateLimitResult.success) {
-      return rateLimitExceededResponse(rateLimitResult);
-    }
-
-    // Authentication: Require any authenticated user
-    const auth = await verifyAuth(request);
-    if (!auth.success || !auth.user) {
-      return NextResponse.json(
-        { success: false, error: auth.error || 'Yetkisiz erişim' },
-        { status: 401 }
-      );
-    }
-
+export const GET = withRoute(
+  { rateLimit: 'read', fallbackMessage: 'Ürün araması başarısız' },
+  async ({ request }) => {
     const searchParams = request.nextUrl.searchParams;
     const query = searchParams.get('q');
     const category = searchParams.get('category')?.trim() || null;
@@ -67,11 +52,6 @@ export async function GET(request: NextRequest) {
       params
     );
 
-    return NextResponse.json({
-      success: true,
-      data: products,
-    });
-  } catch (error) {
-    return errorResponse(error, 'Ürün araması başarısız');
+    return successResponse(products);
   }
-}
+);

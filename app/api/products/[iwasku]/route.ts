@@ -3,33 +3,15 @@
  * Retrieves a single product from pricelab_db.products table
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { queryProductDb } from '@/lib/db/prisma';
-import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-import { verifyAuth } from '@/lib/auth/verify';
-import { errorResponse } from '@/lib/api/response';
+import { withRoute } from '@/lib/api/withRoute';
+import { successResponse } from '@/lib/api/response';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ iwasku: string }> }
-) {
-  try {
-    // Rate limiting: 200 requests per minute for read operations
-    const rateLimitResult = await rateLimiters.read.check(request, 'get-product');
-    if (!rateLimitResult.success) {
-      return rateLimitExceededResponse(rateLimitResult);
-    }
-
-    // Authentication: Require any authenticated user
-    const auth = await verifyAuth(request);
-    if (!auth.success || !auth.user) {
-      return NextResponse.json(
-        { success: false, error: auth.error || 'Yetkisiz erişim' },
-        { status: 401 }
-      );
-    }
-
-    const { iwasku } = await params;
+export const GET = withRoute<{ iwasku: string }>(
+  { rateLimit: 'read', fallbackMessage: 'Ürün getirilemedi' },
+  async ({ params }) => {
+    const { iwasku } = params;
 
     if (!iwasku) {
       return NextResponse.json(
@@ -57,11 +39,6 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      data: products[0],
-    });
-  } catch (error) {
-    return errorResponse(error, 'Ürün getirilemedi');
+    return successResponse(products[0]);
   }
-}
+);

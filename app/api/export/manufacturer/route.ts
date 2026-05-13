@@ -3,18 +3,16 @@
  * Exports manufacturer production requests to Excel
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
-import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-import { verifyAuth } from '@/lib/auth/verify';
 import {
   exportToExcel,
   formatStatusForExcel,
   type ExportColumn,
 } from '@/lib/excel/exporter';
 import { getProducedMap } from '@/lib/export/helpers';
-import { errorResponse } from '@/lib/api/response';
+import { withRoute } from '@/lib/api/withRoute';
 
 interface AggregatedProduct {
   iwasku: string;
@@ -31,23 +29,9 @@ interface AggregatedProduct {
   manufacturerNotes: string;
 }
 
-export async function GET(request: NextRequest) {
-  try {
-    // Rate limiting: 10 requests per minute for exports (same as bulk)
-    const rateLimitResult = await rateLimiters.bulk.check(request, 'export-manufacturer');
-    if (!rateLimitResult.success) {
-      return rateLimitExceededResponse(rateLimitResult);
-    }
-
-    // Authentication: Require any authenticated user
-    const auth = await verifyAuth(request);
-    if (!auth.success || !auth.user) {
-      return NextResponse.json(
-        { success: false, error: auth.error || 'Yetkisiz erişim' },
-        { status: 401 }
-      );
-    }
-
+export const GET = withRoute(
+  { rateLimit: 'bulk', fallbackMessage: 'Veri dışa aktarılamadı' },
+  async ({ request }) => {
     const searchParams = request.nextUrl.searchParams;
     const category = searchParams.get('category');
     const month = searchParams.get('month');
@@ -62,7 +46,6 @@ export async function GET(request: NextRequest) {
     if (month) {
       where.productionMonth = month;
     }
-
 
     // Fetch data from database (capped at 10000 rows for memory safety)
     const requests = await prisma.productionRequest.findMany({
@@ -81,7 +64,6 @@ export async function GET(request: NextRequest) {
         { iwasku: 'asc' },
       ],
     });
-
 
     // Fetch produced values from MonthSnapshot
     const productionMonth = month || requests[0]?.productionMonth;
@@ -155,7 +137,5 @@ export async function GET(request: NextRequest) {
         'Content-Length': buffer.byteLength.toString(),
       },
     });
-  } catch (error) {
-    return errorResponse(error, 'Veri dışa aktarılamadı');
   }
-}
+);

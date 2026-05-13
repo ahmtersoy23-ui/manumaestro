@@ -3,36 +3,20 @@
  * Updates produced quantity, manufacturer notes, and status
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { ManufacturerUpdateSchema, UUIDParamSchema, formatValidationError } from '@/lib/validation/schemas';
-import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-import { requireRole, checkCategoryPermission } from '@/lib/auth/verify';
-import { errorResponse } from '@/lib/api/response';
+import { checkCategoryPermission } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
 import { revalidateTag } from 'next/cache';
 import { waterfallComplete } from '@/lib/waterfallComplete';
+import { withRoute } from '@/lib/api/withRoute';
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    // Rate limiting: 100 requests per minute for write operations
-    const rateLimitResult = await rateLimiters.write.check(request, 'manufacturer-update');
-    if (!rateLimitResult.success) {
-      return rateLimitExceededResponse(rateLimitResult);
-    }
-
-    // Authentication & Authorization: Require editor or admin role
-    const authResult = await requireRole(request, ['admin', 'editor']);
-    if (authResult instanceof NextResponse) {
-      return authResult;
-    }
-    const { user } = authResult;
-
-    const { id } = await params;
+export const PATCH = withRoute<{ id: string }>(
+  { roles: ['admin', 'editor'], rateLimit: 'write', fallbackMessage: 'Talep güncellenemedi' },
+  async ({ request, user, params }) => {
+    const { id } = params;
 
     // Validate ID format
     const idValidation = UUIDParamSchema.safeParse(id);
@@ -77,7 +61,7 @@ export async function PATCH(
     }
 
     // Category permission check for OPERATOR users (üretim durumu kategori bazlı)
-    const catCheck = await checkCategoryPermission(user.id, user.role, existingRequest.productCategory, 'edit');
+    const catCheck = await checkCategoryPermission(user!.id, user!.role, existingRequest.productCategory, 'edit');
     if (!catCheck.allowed) {
       return NextResponse.json(
         { success: false, error: catCheck.reason || 'Bu kategoriye erişim izniniz yok' },
@@ -109,7 +93,7 @@ export async function PATCH(
       });
 
       await logAction({
-        userId: user.id, userName: user.name, userEmail: user.email,
+        userId: user!.id, userName: user!.name, userEmail: user!.email,
         action: 'UPDATE_PRODUCTION', entityType: 'ProductionRequest', entityId: id,
         description: `Üretim güncellendi: ${existingRequest.iwasku} ${existingRequest.productName} (${existingRequest.productCategory}) — durum: ${updated.status}, üretilen: ${updated.producedQuantity ?? '-'}`,
         metadata: { ...updateData, requestId: id, iwasku: existingRequest.iwasku },
@@ -145,7 +129,5 @@ export async function PATCH(
     revalidateTag('dashboard-stats', 'default');
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    return errorResponse(error, 'Talep güncellenemedi');
   }
-}
+);

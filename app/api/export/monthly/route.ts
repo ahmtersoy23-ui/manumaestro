@@ -3,11 +3,9 @@
  * Exports monthly production data to Excel
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { enrichProductSize } from '@/lib/db/enrichProductSize';
-import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-import { verifyAuth } from '@/lib/auth/verify';
 import {
   exportToExcel,
   formatDateForExcel,
@@ -15,25 +13,11 @@ import {
   type ExportColumn,
 } from '@/lib/excel/exporter';
 import { getProducedMap } from '@/lib/export/helpers';
-import { errorResponse } from '@/lib/api/response';
+import { withRoute } from '@/lib/api/withRoute';
 
-export async function GET(request: NextRequest) {
-  try {
-    // Rate limiting: 10 requests per minute for exports
-    const rateLimitResult = await rateLimiters.bulk.check(request, 'export-monthly');
-    if (!rateLimitResult.success) {
-      return rateLimitExceededResponse(rateLimitResult);
-    }
-
-    // Authentication: Require any authenticated user
-    const auth = await verifyAuth(request);
-    if (!auth.success || !auth.user) {
-      return NextResponse.json(
-        { success: false, error: auth.error || 'Yetkisiz erişim' },
-        { status: 401 }
-      );
-    }
-
+export const GET = withRoute(
+  { rateLimit: 'bulk', fallbackMessage: 'Veri dışa aktarılamadı' },
+  async ({ request }) => {
     const searchParams = request.nextUrl.searchParams;
     const month = searchParams.get('month');
 
@@ -43,7 +27,6 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       );
     }
-
 
     // Fetch requests for the month (capped at 10000 rows for memory safety)
     const requests = await prisma.productionRequest.findMany({
@@ -68,7 +51,6 @@ export async function GET(request: NextRequest) {
 
     // Pricelab.products'tan canli desi (cache bayatlamasin)
     await enrichProductSize(requests);
-
 
     // Fetch produced values from MonthSnapshot
     const producedMap = await getProducedMap(month);
@@ -129,7 +111,5 @@ export async function GET(request: NextRequest) {
         'Content-Length': buffer.byteLength.toString(),
       },
     });
-  } catch (error) {
-    return errorResponse(error, 'Veri dışa aktarılamadı');
   }
-}
+);

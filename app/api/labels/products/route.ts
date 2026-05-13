@@ -5,24 +5,15 @@
  * pricelab_db.products tablosundan filtreli arama. Sayfa başına 50 sonuç.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { queryProductDb } from '@/lib/db/prisma';
-import { verifyAuth } from '@/lib/auth/verify';
-import { rateLimiters, rateLimitExceededResponse } from '@/lib/middleware/rateLimit';
-import { errorResponse } from '@/lib/api/response';
+import { withRoute } from '@/lib/api/withRoute';
 
 const PAGE_SIZE = 50;
 
-export async function GET(request: NextRequest) {
-  try {
-    const rateLimitResult = await rateLimiters.read.check(request, 'list-label-products');
-    if (!rateLimitResult.success) return rateLimitExceededResponse(rateLimitResult);
-
-    const authResult = await verifyAuth(request);
-    if (!authResult.success || !authResult.user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
+export const GET = withRoute(
+  { rateLimit: 'read', fallbackMessage: 'Ürünler getirilemedi' },
+  async ({ request }) => {
     const sp = request.nextUrl.searchParams;
     const search = (sp.get('search') || '').trim().slice(0, 100);
     const category = (sp.get('category') || '').trim().slice(0, 200);
@@ -87,7 +78,5 @@ export async function GET(request: NextRequest) {
       data: rows,
       pagination: { page, pageSize: PAGE_SIZE, total, totalPages },
     });
-  } catch (err) {
-    return errorResponse(err);
   }
-}
+);
