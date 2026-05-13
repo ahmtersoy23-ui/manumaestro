@@ -7,12 +7,12 @@
  * NJ/Showroom (SHELF_PRIMARY): tekil + koli + raf kırılımı.
  */
 
-import { headers } from 'next/headers';
 import Link from 'next/link';
 import { Warehouse as WarehouseIcon, AlertTriangle, Package, Box, Layers } from 'lucide-react';
 import { prisma } from '@/lib/db/prisma';
 import { codeToSlug } from '@/lib/warehouseLabels';
 import { getAccessibleWarehouses, getShelfRole } from '@/lib/auth/shelfPermission';
+import { getRscUser } from '@/lib/auth/rscUser';
 import { getAnkaraTotals } from '@/lib/warehouse/ankaraTotals';
 
 const ADMIN_WAREHOUSES = ['ANKARA', 'NJ', 'SHOWROOM'];
@@ -108,11 +108,9 @@ async function loadWarehouses(userId: string, userRole: string): Promise<Warehou
 }
 
 export default async function DepolarLobbyPage() {
-  const h = await headers();
-  const userId = h.get('x-user-id');
-  const userRole = h.get('x-user-role');
+  const user = await getRscUser();
 
-  if (!userId || !userRole) {
+  if (!user) {
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
         Kullanıcı bilgileri okunamadı.
@@ -120,7 +118,7 @@ export default async function DepolarLobbyPage() {
     );
   }
 
-  const warehouses = await loadWarehouses(userId, userRole);
+  const warehouses = await loadWarehouses(user.id, user.role);
 
   if (warehouses.length === 0) {
     return (

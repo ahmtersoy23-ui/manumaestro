@@ -6,9 +6,9 @@
  * tab switching + create form için kalır.
  */
 
-import { headers } from 'next/headers';
 import { prisma } from '@/lib/db/prisma';
 import { getShipmentRole, canDoAction } from '@/lib/auth/shipmentPermission';
+import { getRscUser } from '@/lib/auth/rscUser';
 import { ShipmentsClient, type ShipmentDTO, type Tab } from './ShipmentsClient';
 
 const TABS = ['US', 'UK', 'EU', 'NL', 'AU', 'ZA'] as const;
@@ -26,9 +26,7 @@ export default async function ShipmentsPage({ searchParams }: PageProps) {
   const { tab: tabParam } = await searchParams;
   const activeTab = parseTab(tabParam);
 
-  const h = await headers();
-  const userId = h.get('x-user-id');
-  const userRole = h.get('x-user-role');
+  const user = await getRscUser();
 
   const shipments = await prisma.shipment.findMany({
     where: { destinationTab: activeTab },
@@ -62,8 +60,8 @@ export default async function ShipmentsPage({ searchParams }: PageProps) {
     };
   });
 
-  const userShipRole = userId && userRole
-    ? await getShipmentRole(userId, userRole, activeTab)
+  const userShipRole = user
+    ? await getShipmentRole(user.id, user.role, activeTab)
     : null;
   const canCreate = canDoAction(userShipRole, 'createShipment');
 
