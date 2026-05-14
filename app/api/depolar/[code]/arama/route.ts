@@ -31,17 +31,28 @@ export const GET = withRoute<{ code: string }>(
       return successResponse({ stocks: [], boxes: [], shelves: [], query: q });
     }
 
-    // Pricelab'da ürün adı eşleşen iwasku'ları bul (name araması)
+    // Pricelab'dan ad/FNSKU eşleşen iwasku'ları toparla (sku_master.fnsku tek noktada)
     let nameMatchIwaskus: string[] = [];
+    let fnskuMatchIwaskus: string[] = [];
     try {
-      const rows = await queryProductDb(
-        `SELECT product_sku FROM products WHERE name ILIKE $1 LIMIT 200`,
-        [`%${q}%`]
-      );
-      nameMatchIwaskus = rows.map((r: { product_sku: string }) => r.product_sku);
+      const [nameRows, fnskuRows] = await Promise.all([
+        queryProductDb(
+          `SELECT product_sku FROM products WHERE name ILIKE $1 LIMIT 200`,
+          [`%${q}%`]
+        ),
+        queryProductDb(
+          `SELECT DISTINCT iwasku FROM sku_master
+           WHERE fnsku IS NOT NULL AND fnsku ILIKE $1
+           LIMIT 200`,
+          [`%${q}%`]
+        ),
+      ]);
+      nameMatchIwaskus = (nameRows as Array<{ product_sku: string }>).map((r) => r.product_sku);
+      fnskuMatchIwaskus = (fnskuRows as Array<{ iwasku: string }>).map((r) => r.iwasku);
     } catch {
-      // Pricelab erişimi yoksa name araması atlanır
+      // Pricelab erişimi yoksa name/FNSKU araması sessizce atlanır
     }
+    const indirectIwaskus = [...new Set([...nameMatchIwaskus, ...fnskuMatchIwaskus])];
 
     // Önce raf kodu eşleşmeleri (sadece bu depo)
     const shelves = await prisma.shelf.findMany({
@@ -54,13 +65,13 @@ export const GET = withRoute<{ code: string }>(
       take: 30,
     });
 
-    // ShelfStock — iwasku VEYA isim eşleşmesi
+    // ShelfStock — iwasku VEYA isim/FNSKU eşleşmesi
     const stocks = await prisma.shelfStock.findMany({
       where: {
         warehouseCode: upperCode,
         OR: [
           { iwasku: { contains: q, mode: 'insensitive' } },
-          ...(nameMatchIwaskus.length > 0 ? [{ iwasku: { in: nameMatchIwaskus } }] : []),
+          ...(indirectIwaskus.length > 0 ? [{ iwasku: { in: indirectIwaskus } }] : []),
         ],
       },
       include: { shelf: { select: { code: true, shelfType: true } } },
@@ -68,7 +79,7 @@ export const GET = withRoute<{ code: string }>(
       take: 100,
     });
 
-    // ShelfBox — iwasku, fnsku, boxNumber VEYA isim eşleşmesi
+    // ShelfBox — iwasku, fnsku, boxNumber VEYA isim/FNSKU eşleşmesi
     const boxes = await prisma.shelfBox.findMany({
       where: {
         warehouseCode: upperCode,
@@ -76,7 +87,7 @@ export const GET = withRoute<{ code: string }>(
           { iwasku: { contains: q, mode: 'insensitive' } },
           { fnsku: { contains: q, mode: 'insensitive' } },
           { boxNumber: { contains: q, mode: 'insensitive' } },
-          ...(nameMatchIwaskus.length > 0 ? [{ iwasku: { in: nameMatchIwaskus } }] : []),
+          ...(indirectIwaskus.length > 0 ? [{ iwasku: { in: indirectIwaskus } }] : []),
         ],
       },
       include: { shelf: { select: { code: true, shelfType: true } } },

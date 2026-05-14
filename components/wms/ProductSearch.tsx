@@ -43,7 +43,7 @@ export function ProductSearch({
   onSelect,
   onClear,
   autoFocus,
-  placeholder = 'iwasku veya ürün adı (en az 2 karakter)',
+  placeholder = 'iwasku / FNSKU / ürün adı (en az 2 karakter)',
   inputId,
   compact,
 }: Props) {

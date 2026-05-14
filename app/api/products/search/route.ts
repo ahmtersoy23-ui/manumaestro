@@ -23,13 +23,40 @@ export const GET = withRoute(
       );
     }
 
+    // FNSKU eşleşmesi (sku_master) → iwasku set'i topla
+    let fnskuMatchIwaskus: string[] = [];
+    if (query && query.length >= 2) {
+      try {
+        const rows = (await queryProductDb(
+          `SELECT DISTINCT iwasku FROM sku_master
+           WHERE fnsku IS NOT NULL AND fnsku ILIKE $1
+           LIMIT 200`,
+          [`%${query}%`]
+        )) as Array<{ iwasku: string }>;
+        fnskuMatchIwaskus = rows.map((r) => r.iwasku);
+      } catch {
+        // sku_master erişimi yoksa FNSKU araması sessizce atlanır
+      }
+    }
+
     // Dinamik WHERE ve params
     const conditions: string[] = [];
     const params: (string | null)[] = [];
     if (query && query.length >= 2) {
       const pat = `%${query}%`;
       params.push(pat, pat);
-      conditions.push(`(product_sku ILIKE $${params.length - 1} OR name ILIKE $${params.length})`);
+      const textCond = `(product_sku ILIKE $${params.length - 1} OR name ILIKE $${params.length})`;
+      if (fnskuMatchIwaskus.length > 0) {
+        const placeholders = fnskuMatchIwaskus
+          .map((iw) => {
+            params.push(iw);
+            return `$${params.length}`;
+          })
+          .join(',');
+        conditions.push(`(${textCond} OR product_sku IN (${placeholders}))`);
+      } else {
+        conditions.push(textCond);
+      }
     }
     if (category) {
       params.push(category);
