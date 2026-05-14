@@ -22,6 +22,7 @@ export interface ProductHit {
   iwasku: string;
   name: string;
   category: string | null;
+  matchedFnsku?: string | null;
 }
 
 interface Props {
@@ -202,9 +203,16 @@ export function ProductSearch({
               >
                 <div className="font-mono text-xs text-gray-500">{p.iwasku}</div>
                 <div className="truncate">{p.name}</div>
-                {p.category && (
-                  <div className="text-[10px] text-gray-500 mt-0.5">{p.category}</div>
-                )}
+                <div className="flex items-center gap-2 mt-0.5">
+                  {p.category && (
+                    <span className="text-[10px] text-gray-500">{p.category}</span>
+                  )}
+                  {p.matchedFnsku && (
+                    <span className="text-[10px] font-mono text-blue-700 bg-blue-50 px-1 rounded">
+                      FNSKU: {p.matchedFnsku}
+                    </span>
+                  )}
+                </div>
               </button>
             ))
           )}

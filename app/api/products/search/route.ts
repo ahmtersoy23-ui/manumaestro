@@ -23,21 +23,25 @@ export const GET = withRoute(
       );
     }
 
-    // FNSKU eşleşmesi (sku_master) → iwasku set'i topla
-    let fnskuMatchIwaskus: string[] = [];
+    // FNSKU eşleşmesi (sku_master) → iwasku → matched FNSKU map
+    const fnskuByIwasku = new Map<string, string>();
     if (query && query.length >= 2) {
       try {
         const rows = (await queryProductDb(
-          `SELECT DISTINCT iwasku FROM sku_master
+          `SELECT iwasku, fnsku FROM sku_master
            WHERE fnsku IS NOT NULL AND fnsku ILIKE $1
+           ORDER BY iwasku, fnsku
            LIMIT 200`,
           [`%${query}%`]
-        )) as Array<{ iwasku: string }>;
-        fnskuMatchIwaskus = rows.map((r) => r.iwasku);
+        )) as Array<{ iwasku: string; fnsku: string }>;
+        for (const r of rows) {
+          if (!fnskuByIwasku.has(r.iwasku)) fnskuByIwasku.set(r.iwasku, r.fnsku);
+        }
       } catch {
         // sku_master erişimi yoksa FNSKU araması sessizce atlanır
       }
     }
+    const fnskuMatchIwaskus = [...fnskuByIwasku.keys()];
 
     // Dinamik WHERE ve params
     const conditions: string[] = [];
@@ -64,7 +68,7 @@ export const GET = withRoute(
     }
     const whereSql = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    const products = await queryProductDb(
+    const products = (await queryProductDb(
       `
       SELECT
         product_sku as iwasku,
@@ -77,8 +81,13 @@ export const GET = withRoute(
       LIMIT 50
     `,
       params
-    );
+    )) as Array<{ iwasku: string; name: string | null; category: string | null; size: string | null }>;
 
-    return successResponse(products);
+    const enriched = products.map((p) => ({
+      ...p,
+      matchedFnsku: fnskuByIwasku.get(p.iwasku) ?? null,
+    }));
+
+    return successResponse(enriched);
   }
 );
