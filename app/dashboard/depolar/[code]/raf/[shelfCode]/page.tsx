@@ -9,12 +9,13 @@ import { useEffect, useState, use } from 'react';
 import { notify } from '@/lib/ui/notify';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import Link from 'next/link';
-import { ChevronLeft, Package, Box, History, AlertCircle, ArrowRightLeft, PackageOpen, Scissors, Trash2, Settings, Printer, PackagePlus, Plus } from 'lucide-react';
+import { ChevronLeft, Package, Box, History, AlertCircle, ArrowRightLeft, PackageOpen, Scissors, Trash2, Settings, Printer, PackagePlus, Plus, Pencil } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { slugToCode, codeToSlug } from '@/lib/warehouseLabels';
 import { TransferDialog, type TransferSource } from '@/components/wms/TransferDialog';
 import { BreakBoxDialog, type BreakBoxSource } from '@/components/wms/BreakBoxDialog';
 import { DeleteRowConfirm, type DeleteRowTarget } from '@/components/wms/DeleteRowConfirm';
+import { EditQuantityDialog, type EditQtyTarget } from '@/components/wms/EditQuantityDialog';
 import { EditShelfDialog } from '@/components/wms/EditShelfDialog';
 import { ManualBoxDialog } from '@/components/wms/ManualBoxDialog';
 import { LooseStockDialog } from '@/components/wms/LooseStockDialog';
@@ -100,6 +101,7 @@ export default function RafDetayPage({
   const [breakSource, setBreakSource] = useState<BreakBoxSource | null>(null);
   const [openingBoxId, setOpeningBoxId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteRowTarget | null>(null);
+  const [editQtyTarget, setEditQtyTarget] = useState<EditQtyTarget | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [printingLabel, setPrintingLabel] = useState(false);
   const [addBoxOpen, setAddBoxOpen] = useState(false);
@@ -149,6 +151,7 @@ export default function RafDetayPage({
   const canTransfer = data && ['OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role);
   const canBoxOps = data && ['OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role);
   const canDelete = data?.role === 'ADMIN';
+  const canEditQty = data?.role === 'ADMIN';
   const canAdd = data && ['OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role);
   const isShelfPrimaryWh = code === 'NJ' || code === 'SHOWROOM';
   const handleSuccess = () => setRefreshKey((k) => k + 1);
@@ -323,7 +326,7 @@ export default function RafDetayPage({
                   <th className="text-right px-4 py-2">Adet</th>
                   <th className="text-right px-4 py-2">Rezerve</th>
                   <th className="text-right px-4 py-2">Kullanılabilir</th>
-                  {canTransfer && <th className="text-right px-4 py-2 w-24">İşlem</th>}
+                  {(canTransfer || canEditQty) && <th className="text-right px-4 py-2 w-28">İşlem</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -341,7 +344,7 @@ export default function RafDetayPage({
                     <td className="px-4 py-2 text-right font-semibold text-gray-900">
                       {s.availableQty}
                     </td>
-                    {(canTransfer || canDelete) && (
+                    {(canTransfer || canDelete || canEditQty) && (
                       <td className="px-4 py-2 text-right">
                         <div className="inline-flex items-center gap-1 justify-end">
                           {canTransfer && s.availableQty > 0 && (
@@ -361,6 +364,25 @@ export default function RafDetayPage({
                               title="Transfer"
                             >
                               <ArrowRightLeft className="w-3 h-3" /> Transfer
+                            </button>
+                          )}
+                          {canEditQty && (
+                            <button
+                              onClick={() =>
+                                setEditQtyTarget({
+                                  kind: 'STOCK',
+                                  shelfStockId: s.id,
+                                  iwasku: s.iwasku,
+                                  productName: s.productName,
+                                  shelfCode: data.shelf.code,
+                                  quantity: s.quantity,
+                                  reservedQty: s.reservedQty,
+                                })
+                              }
+                              title="Adet düzelt"
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-amber-700 bg-amber-50 hover:bg-amber-100 rounded"
+                            >
+                              <Pencil className="w-3 h-3" />
                             </button>
                           )}
                           {canDelete && (
@@ -386,7 +408,7 @@ export default function RafDetayPage({
                               <Trash2 className="w-3 h-3" />
                             </button>
                           )}
-                          {!canTransfer && !canDelete && (
+                          {!canTransfer && !canDelete && !canEditQty && (
                             <span className="text-[11px] text-gray-400">—</span>
                           )}
                         </div>
@@ -425,7 +447,7 @@ export default function RafDetayPage({
                   <th className="text-left px-4 py-2">Hedef</th>
                   <th className="text-right px-4 py-2">Adet</th>
                   <th className="text-left px-4 py-2">Durum</th>
-                  {canTransfer && <th className="text-right px-4 py-2 w-24">İşlem</th>}
+                  {(canTransfer || canEditQty) && <th className="text-right px-4 py-2 w-28">İşlem</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -444,7 +466,7 @@ export default function RafDetayPage({
                         {b.status}
                       </span>
                     </td>
-                    {(canTransfer || canDelete) && (
+                    {(canTransfer || canDelete || canEditQty) && (
                       <td className="px-4 py-2 text-right">
                         {b.status !== 'EMPTY' && b.reservedQty === 0 ? (
                           <div className="inline-flex flex-wrap gap-1 justify-end">
@@ -496,6 +518,26 @@ export default function RafDetayPage({
                                   <PackageOpen className="w-3 h-3" /> {openingBoxId === b.id ? '...' : 'Aç'}
                                 </button>
                               </>
+                            )}
+                            {canEditQty && (
+                              <button
+                                onClick={() =>
+                                  setEditQtyTarget({
+                                    kind: 'BOX',
+                                    shelfBoxId: b.id,
+                                    iwasku: b.iwasku,
+                                    productName: b.productName,
+                                    shelfCode: data.shelf.code,
+                                    boxNumber: b.boxNumber,
+                                    quantity: b.quantity,
+                                    reservedQty: b.reservedQty,
+                                  })
+                                }
+                                className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-amber-700 bg-amber-50 hover:bg-amber-100 rounded"
+                                title="Adet düzelt"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
                             )}
                             {canDelete && (
                               <button
@@ -632,6 +674,15 @@ export default function RafDetayPage({
         warehouseCode={code}
         target={deleteTarget}
         onClose={() => setDeleteTarget(null)}
+        onSuccess={handleSuccess}
+      />
+
+      {/* Adet düzelt (admin) */}
+      <EditQuantityDialog
+        isOpen={!!editQtyTarget}
+        warehouseCode={code}
+        target={editQtyTarget}
+        onClose={() => setEditQtyTarget(null)}
         onSuccess={handleSuccess}
       />
 

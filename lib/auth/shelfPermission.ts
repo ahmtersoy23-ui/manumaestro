@@ -49,6 +49,8 @@ const ROLE_CAN: Record<ShelfRoleLevel, {
   manageWarehouseSettings: boolean;
   // Stok silme — kritik audit'li aksiyon, sadece ADMIN
   deleteStock: boolean;
+  // Tekil/koli adet manuel düzeltme (sayım dışı) — sadece ADMIN
+  editStockQuantity: boolean;
 }> = {
   VIEWER: {
     view: true,
@@ -62,6 +64,7 @@ const ROLE_CAN: Record<ShelfRoleLevel, {
     cycleCountPerform: false, cycleCountResolve: false, cycleCountGenerate: false,
     managePermissions: false, manageWarehouseSettings: false,
     deleteStock: false,
+    editStockQuantity: false,
   },
   PACKER: {
     view: true,
@@ -75,6 +78,7 @@ const ROLE_CAN: Record<ShelfRoleLevel, {
     cycleCountPerform: true, cycleCountResolve: false, cycleCountGenerate: false,
     managePermissions: false, manageWarehouseSettings: false,
     deleteStock: false,
+    editStockQuantity: false,
   },
   OPERATOR: {
     view: true,
@@ -88,6 +92,7 @@ const ROLE_CAN: Record<ShelfRoleLevel, {
     cycleCountPerform: true, cycleCountResolve: false, cycleCountGenerate: false,
     managePermissions: false, manageWarehouseSettings: false,
     deleteStock: false,
+    editStockQuantity: false,
   },
   MANAGER: {
     view: true,
@@ -101,6 +106,7 @@ const ROLE_CAN: Record<ShelfRoleLevel, {
     cycleCountPerform: true, cycleCountResolve: true, cycleCountGenerate: true,
     managePermissions: false, manageWarehouseSettings: false,
     deleteStock: false,
+    editStockQuantity: false,
   },
   ADMIN: {
     view: true,
@@ -114,6 +120,7 @@ const ROLE_CAN: Record<ShelfRoleLevel, {
     cycleCountPerform: true, cycleCountResolve: true, cycleCountGenerate: true,
     managePermissions: true, manageWarehouseSettings: true,
     deleteStock: true,
+    editStockQuantity: true,
   },
 };
 
