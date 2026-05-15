@@ -115,6 +115,7 @@ export function SentItemsTab({
                 <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Ürün Adı</th>
                 <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Kategori</th>
                 <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Pazar Yeri</th>
+                <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Eklenme</th>
                 <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Miktar</th>
                 <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Gönderim</th>
               </tr>
@@ -136,6 +137,9 @@ export function SentItemsTab({
                   <td className="px-3 py-3 text-xs text-gray-700 line-clamp-1">{item.productName || '—'}</td>
                   <td className="px-3 py-3 text-sm text-gray-600">{item.productCategory || '—'}</td>
                   <td className="px-3 py-3 text-sm text-gray-600">{item.marketplace?.name ?? '—'}</td>
+                  <td className="px-3 py-3 text-xs text-gray-500">
+                    {new Date(item.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}
+                  </td>
                   <td className="text-center px-3 py-3 font-semibold text-gray-900">{item.quantity}</td>
                   <td className="text-center px-3 py-3 text-xs text-green-700">
                     {item.sentAt ? new Date(item.sentAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }) : '—'}

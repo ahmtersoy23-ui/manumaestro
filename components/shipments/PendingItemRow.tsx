@@ -85,6 +85,9 @@ export function PendingItemRow({
         <td className="px-3 py-3"><div className={`text-xs leading-tight line-clamp-2 ${item.packed ? 'text-green-700' : 'text-gray-700'}`}>{item.productName || '—'}</div></td>
         <td className={`px-3 py-3 text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.productCategory || '—'}</td>
         <td className={`px-3 py-3 text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.marketplace?.name ?? '—'}</td>
+        <td className={`px-3 py-3 text-xs ${item.packed ? 'text-green-600' : 'text-gray-500'}`}>
+          {new Date(item.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}
+        </td>
         {!isSea && onSendQtyChange ? (
           <>
             <td className={`text-center px-3 py-3 text-sm ${item.packed ? 'text-green-600' : 'text-gray-500'}`}>{item.quantity}</td>
@@ -132,7 +135,7 @@ export function PendingItemRow({
         )}
       </tr>
       {isExpanded && isActive && isSea && canBoxes && (
-        <tr><td colSpan={10} className="px-4 py-3 bg-blue-50/50 border-t border-blue-100">
+        <tr><td colSpan={11} className="px-4 py-3 bg-blue-50/50 border-t border-blue-100">
           <BoxEntryPanel item={item} existingBoxes={itemBoxes} onCreateBox={onCreateBox} onDeleteBox={onDeleteBox} />
         </td></tr>
       )}

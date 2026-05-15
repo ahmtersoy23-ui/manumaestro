@@ -77,6 +77,7 @@ export function PendingItemsTable({
               <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Ürün Adı</th>
               <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Kategori</th>
               <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Pazar Yeri</th>
+              <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Eklenme</th>
               {!isSea ? (
                 <>
                   <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Talep</th>

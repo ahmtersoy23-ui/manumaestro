@@ -25,7 +25,7 @@ export const GET = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'read'
     where: { id },
     include: {
       items: {
-        orderBy: { iwasku: 'asc' },
+        orderBy: { createdAt: 'asc' },
         include: {
           shipment: false,
         },
