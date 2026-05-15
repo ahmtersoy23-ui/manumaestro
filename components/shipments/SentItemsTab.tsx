@@ -7,6 +7,7 @@
 
 import { Search, X, Package, Loader2, CheckSquare, Square, Ship } from 'lucide-react';
 import type { ShipmentItem } from '@/lib/shipments/types';
+import { DateMultiFilter } from './DateMultiFilter';
 
 interface Props {
   items: ShipmentItem[];       // filteredSentItems
@@ -16,9 +17,10 @@ interface Props {
   search: string;
   categoryFilter: string;
   marketFilter: string;
-  dateFilter: string;
+  dateFilter: Set<string>;
   categories: string[];
   markets: string[];
+  dates: string[];
 
   selectedSentIds: Set<string>;
   canSend: boolean;
@@ -28,7 +30,7 @@ interface Props {
   onSearchChange: (search: string) => void;
   onCategoryFilterChange: (filter: string) => void;
   onMarketFilterChange: (filter: string) => void;
-  onDateFilterChange: (filter: string) => void;
+  onDateFilterChange: (filter: Set<string>) => void;
   onSelectionChange: (next: Set<string>) => void;
   onExitForSent: () => void;
   onUnsendSelected: () => void;
@@ -36,7 +38,7 @@ interface Props {
 
 export function SentItemsTab({
   items, hasAnySent, totalSentCount,
-  search, categoryFilter, marketFilter, dateFilter, categories, markets,
+  search, categoryFilter, marketFilter, dateFilter, categories, markets, dates,
   selectedSentIds, canSend, canUnsend, unsending,
   onSearchChange, onCategoryFilterChange, onMarketFilterChange, onDateFilterChange,
   onSelectionChange, onExitForSent, onUnsendSelected,
@@ -84,13 +86,7 @@ export function SentItemsTab({
               {markets.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           )}
-          <select value={dateFilter} onChange={e => onDateFilterChange(e.target.value)}
-            className="px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white">
-            <option value="">Tüm Tarihler</option>
-            <option value="today">Bugün</option>
-            <option value="3d">Son 3 gün</option>
-            <option value="7d">Son 7 gün</option>
-          </select>
+          <DateMultiFilter dates={dates} selected={dateFilter} onChange={onDateFilterChange} />
           {canSend && selectedSentIds.size > 0 && (
             <button onClick={onExitForSent}
               className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700">

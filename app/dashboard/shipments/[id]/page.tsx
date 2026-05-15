@@ -19,7 +19,8 @@ import { MissingFnskuWarning } from '@/components/shipments/MissingFnskuWarning'
 import { PendingItemsTable } from '@/components/shipments/PendingItemsTable';
 import { SentItemsTab } from '@/components/shipments/SentItemsTab';
 import { BoxesTab } from '@/components/shipments/BoxesTab';
-import { useShipmentFilters, inDateWindow } from '@/lib/shipments/useShipmentFilters';
+import { useShipmentFilters } from '@/lib/shipments/useShipmentFilters';
+import { DateMultiFilter } from '@/components/shipments/DateMultiFilter';
 import { useModalToggles } from '@/lib/shipments/useModalToggles';
 import type { BoxFormData, ShipmentItem, ShipmentBox } from '@/lib/shipments/types';
 import { useParams, useRouter } from 'next/navigation';
@@ -178,7 +179,7 @@ export default function ShipmentDetailPage() {
     }
     if (itemCategoryFilter) result = result.filter(i => i.productCategory === itemCategoryFilter);
     if (itemMarketFilter) result = result.filter(i => i.marketplace?.code === itemMarketFilter);
-    if (itemDateFilter) result = result.filter(i => inDateWindow(i.createdAt, itemDateFilter));
+    if (itemDateFilter.size > 0) result = result.filter(i => itemDateFilter.has(i.createdAt.slice(0, 10)));
     return result;
   }, [shipment, itemSearch, itemCategoryFilter, itemMarketFilter, itemDateFilter]);
 
@@ -201,6 +202,7 @@ export default function ShipmentDetailPage() {
   // Unique values for dropdown filters
   const itemCategories = useMemo(() => [...new Set((shipment?.items.filter(i => !i.sentAt) ?? []).map(i => i.productCategory).filter(Boolean))].sort(), [shipment]);
   const itemMarkets = useMemo(() => [...new Set((shipment?.items.filter(i => !i.sentAt) ?? []).map(i => i.marketplace?.code).filter(Boolean) as string[])].sort(), [shipment]);
+  const itemDates = useMemo(() => [...new Set((shipment?.items.filter(i => !i.sentAt) ?? []).map(i => i.createdAt.slice(0, 10)))].sort().reverse(), [shipment]);
   const boxCategories = useMemo(() => [...new Set(boxes.map(b => b.productCategory).filter(Boolean) as string[])].sort(), [boxes]);
   const boxMarkets = useMemo(() => [...new Set(boxes.map(b => b.marketplaceCode).filter(Boolean) as string[])].sort(), [boxes]);
 
@@ -216,11 +218,12 @@ export default function ShipmentDetailPage() {
     }
     if (sentCategoryFilter) result = result.filter(i => i.productCategory === sentCategoryFilter);
     if (sentMarketFilter) result = result.filter(i => i.marketplace?.code === sentMarketFilter);
-    if (sentDateFilter) result = result.filter(i => inDateWindow(i.createdAt, sentDateFilter));
+    if (sentDateFilter.size > 0) result = result.filter(i => sentDateFilter.has(i.createdAt.slice(0, 10)));
     return result;
   }, [shipment, sentSearch, sentCategoryFilter, sentMarketFilter, sentDateFilter]);
   const sentCategories = useMemo(() => [...new Set((shipment?.items.filter(i => i.sentAt) ?? []).map(i => i.productCategory).filter(Boolean))].sort(), [shipment]);
   const sentMarkets = useMemo(() => [...new Set((shipment?.items.filter(i => i.sentAt) ?? []).map(i => i.marketplace?.code).filter(Boolean) as string[])].sort(), [shipment]);
+  const sentDates = useMemo(() => [...new Set((shipment?.items.filter(i => i.sentAt) ?? []).map(i => i.createdAt.slice(0, 10)))].sort().reverse(), [shipment]);
 
   // Donor map: iwasku+quantity → ilk dolu koli (ölçü kopyalama için)
   const donorMap = useMemo(() => {
@@ -1132,13 +1135,7 @@ export default function ShipmentDetailPage() {
                     {itemMarkets.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
                 )}
-                <select value={itemDateFilter} onChange={e => setItemDateFilter(e.target.value)}
-                  className="px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white">
-                  <option value="">Tüm Tarihler</option>
-                  <option value="today">Bugün</option>
-                  <option value="3d">Son 3 gün</option>
-                  <option value="7d">Son 7 gün</option>
-                </select>
+                <DateMultiFilter dates={itemDates} selected={itemDateFilter} onChange={setItemDateFilter} />
               </>
             )}
             {/* Karayolu/hava: Gönder butonu */}
@@ -1201,6 +1198,7 @@ export default function ShipmentDetailPage() {
           dateFilter={sentDateFilter}
           categories={sentCategories}
           markets={sentMarkets}
+          dates={sentDates}
           selectedSentIds={selectedSentIds}
           canSend={canSend}
           canUnsend={canUnsend}
