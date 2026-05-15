@@ -19,7 +19,7 @@ import { MissingFnskuWarning } from '@/components/shipments/MissingFnskuWarning'
 import { PendingItemsTable } from '@/components/shipments/PendingItemsTable';
 import { SentItemsTab } from '@/components/shipments/SentItemsTab';
 import { BoxesTab } from '@/components/shipments/BoxesTab';
-import { useShipmentFilters } from '@/lib/shipments/useShipmentFilters';
+import { useShipmentFilters, inDateWindow } from '@/lib/shipments/useShipmentFilters';
 import { useModalToggles } from '@/lib/shipments/useModalToggles';
 import type { BoxFormData, ShipmentItem, ShipmentBox } from '@/lib/shipments/types';
 import { useParams, useRouter } from 'next/navigation';
@@ -75,6 +75,7 @@ export default function ShipmentDetailPage() {
     itemSearch, setItemSearch,
     itemCategoryFilter, setItemCategoryFilter,
     itemMarketFilter, setItemMarketFilter,
+    itemDateFilter, setItemDateFilter,
     boxSearch, setBoxSearch,
     boxCategoryFilter, setBoxCategoryFilter,
     boxDestFilter, setBoxDestFilter,
@@ -82,6 +83,7 @@ export default function ShipmentDetailPage() {
     sentSearch, setSentSearch,
     sentCategoryFilter, setSentCategoryFilter,
     sentMarketFilter, setSentMarketFilter,
+    sentDateFilter, setSentDateFilter,
   } = useShipmentFilters();
 
   // Modal/panel toggles (custom hook — 6 state)
@@ -176,8 +178,9 @@ export default function ShipmentDetailPage() {
     }
     if (itemCategoryFilter) result = result.filter(i => i.productCategory === itemCategoryFilter);
     if (itemMarketFilter) result = result.filter(i => i.marketplace?.code === itemMarketFilter);
+    if (itemDateFilter) result = result.filter(i => inDateWindow(i.createdAt, itemDateFilter));
     return result;
-  }, [shipment, itemSearch, itemCategoryFilter, itemMarketFilter]);
+  }, [shipment, itemSearch, itemCategoryFilter, itemMarketFilter, itemDateFilter]);
 
   const filteredBoxes = useMemo(() => {
     let result = boxes;
@@ -213,8 +216,9 @@ export default function ShipmentDetailPage() {
     }
     if (sentCategoryFilter) result = result.filter(i => i.productCategory === sentCategoryFilter);
     if (sentMarketFilter) result = result.filter(i => i.marketplace?.code === sentMarketFilter);
+    if (sentDateFilter) result = result.filter(i => inDateWindow(i.createdAt, sentDateFilter));
     return result;
-  }, [shipment, sentSearch, sentCategoryFilter, sentMarketFilter]);
+  }, [shipment, sentSearch, sentCategoryFilter, sentMarketFilter, sentDateFilter]);
   const sentCategories = useMemo(() => [...new Set((shipment?.items.filter(i => i.sentAt) ?? []).map(i => i.productCategory).filter(Boolean))].sort(), [shipment]);
   const sentMarkets = useMemo(() => [...new Set((shipment?.items.filter(i => i.sentAt) ?? []).map(i => i.marketplace?.code).filter(Boolean) as string[])].sort(), [shipment]);
 
@@ -1128,6 +1132,13 @@ export default function ShipmentDetailPage() {
                     {itemMarkets.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
                 )}
+                <select value={itemDateFilter} onChange={e => setItemDateFilter(e.target.value)}
+                  className="px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white">
+                  <option value="">Tüm Tarihler</option>
+                  <option value="today">Bugün</option>
+                  <option value="3d">Son 3 gün</option>
+                  <option value="7d">Son 7 gün</option>
+                </select>
               </>
             )}
             {/* Karayolu/hava: Gönder butonu */}
@@ -1187,6 +1198,7 @@ export default function ShipmentDetailPage() {
           search={sentSearch}
           categoryFilter={sentCategoryFilter}
           marketFilter={sentMarketFilter}
+          dateFilter={sentDateFilter}
           categories={sentCategories}
           markets={sentMarkets}
           selectedSentIds={selectedSentIds}
@@ -1196,6 +1208,7 @@ export default function ShipmentDetailPage() {
           onSearchChange={setSentSearch}
           onCategoryFilterChange={setSentCategoryFilter}
           onMarketFilterChange={setSentMarketFilter}
+          onDateFilterChange={setSentDateFilter}
           onSelectionChange={setSelectedSentIds}
           onExitForSent={handleExitForSent}
           onUnsendSelected={handleUnsendSelected}

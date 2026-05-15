@@ -16,6 +16,7 @@ interface Props {
   search: string;
   categoryFilter: string;
   marketFilter: string;
+  dateFilter: string;
   categories: string[];
   markets: string[];
 
@@ -27,6 +28,7 @@ interface Props {
   onSearchChange: (search: string) => void;
   onCategoryFilterChange: (filter: string) => void;
   onMarketFilterChange: (filter: string) => void;
+  onDateFilterChange: (filter: string) => void;
   onSelectionChange: (next: Set<string>) => void;
   onExitForSent: () => void;
   onUnsendSelected: () => void;
@@ -34,9 +36,9 @@ interface Props {
 
 export function SentItemsTab({
   items, hasAnySent, totalSentCount,
-  search, categoryFilter, marketFilter, categories, markets,
+  search, categoryFilter, marketFilter, dateFilter, categories, markets,
   selectedSentIds, canSend, canUnsend, unsending,
-  onSearchChange, onCategoryFilterChange, onMarketFilterChange,
+  onSearchChange, onCategoryFilterChange, onMarketFilterChange, onDateFilterChange,
   onSelectionChange, onExitForSent, onUnsendSelected,
 }: Props) {
   const toggleItem = (id: string) => {
@@ -82,6 +84,13 @@ export function SentItemsTab({
               {markets.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           )}
+          <select value={dateFilter} onChange={e => onDateFilterChange(e.target.value)}
+            className="px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white">
+            <option value="">Tüm Tarihler</option>
+            <option value="today">Bugün</option>
+            <option value="3d">Son 3 gün</option>
+            <option value="7d">Son 7 gün</option>
+          </select>
           {canSend && selectedSentIds.size > 0 && (
             <button onClick={onExitForSent}
               className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700">
