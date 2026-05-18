@@ -5,16 +5,24 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { requireShipmentView } from '@/lib/auth/requireShipmentRole';
+import { verifyAuth } from '@/lib/auth/verify';
 import { withRoute } from '@/lib/api/withRoute';
 import { successResponse } from '@/lib/api/response';
 
-// requireShipmentView destinasyon-bazlı özel yetki — handler içinde tutuluyor.
+// Talep eden kullanicilar kendi pazaryerleri icin yonlendirme yapabilsin diye
+// destinasyon-bazli yetki yerine sade auth yeterli. Sonuc zaten marketplaceId'nin
+// destinationTab'i ile filtreleniyor ve sadece okuma — gerçek yönlendirme aksiyonu
+// route-to-shipment'ta self-route bypass'la korunur.
 export const GET = withRoute(
   { skipAuth: true, rateLimit: 'read', fallbackMessage: 'Uygun sevkiyatlar getirilemedi' },
   async ({ request }) => {
-    const authResult = await requireShipmentView(request);
-    if (authResult instanceof NextResponse) return authResult;
+    const auth = await verifyAuth(request);
+    if (!auth.success || !auth.user) {
+      return NextResponse.json(
+        { success: false, error: auth.error || 'Yetkisiz erisim' },
+        { status: 401 }
+      );
+    }
 
     const marketplaceId = request.nextUrl.searchParams.get('marketplaceId');
     if (!marketplaceId) {

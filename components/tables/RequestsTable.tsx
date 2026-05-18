@@ -55,7 +55,7 @@ interface Request {
   createdAt: string;
   notes: string | null;
   routedShipment: RoutedShipment | null;
-  enteredBy: { name: string };
+  enteredBy: { id: string; name: string; email: string };
 }
 
 interface AvailableShipment {
@@ -94,7 +94,8 @@ const METHOD_LABEL: Record<string, string> = { sea: 'Deniz', road: 'Kara', air: 
 const PAGE_SIZE = 30;
 
 export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, archiveMode = false, onSummary }: RequestsTableProps) {
-  const { hasRole, isSuperAdmin } = useAuth();
+  const { hasRole, isSuperAdmin, user } = useAuth();
+  const currentEmail = user?.email?.toLowerCase() ?? null;
   const confirm = useConfirm();
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,6 +113,13 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
 
   const isAdmin = hasRole(['admin']);
   const isEditor = hasRole(['admin', 'editor']);
+
+  // Talep eden kendi talebini sevkiyata yonlendirebilir (self-route)
+  const canRouteRequest = useCallback(
+    (request: Request) =>
+      isAdmin || (!!currentEmail && request.enteredBy.email.toLowerCase() === currentEmail),
+    [isAdmin, currentEmail],
+  );
 
   // Fetch requests
   useEffect(() => {
@@ -152,10 +160,11 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
     setShipmentsLoaded(false);
   }, [marketplaceId, month, refreshTrigger, archiveMode, onSummary]);
 
-  // Fetch available shipments
+  // Fetch available shipments — admin veya en az bir kendi talebi COMPLETED
   useEffect(() => {
-    if (shipmentsLoaded || !isAdmin) return;
-    if (!requests.some(r => r.status === 'COMPLETED')) return;
+    if (shipmentsLoaded) return;
+    const hasRoutable = requests.some(r => r.status === 'COMPLETED' && canRouteRequest(r));
+    if (!hasRoutable) return;
 
     (async () => {
       try {
@@ -168,7 +177,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
         setShipmentsLoaded(true);
       }
     })();
-  }, [requests, marketplaceId, shipmentsLoaded, isAdmin]);
+  }, [requests, marketplaceId, shipmentsLoaded, canRouteRequest]);
 
   // Status counts for filter pills
   const statusCounts = useMemo(() => {
@@ -187,13 +196,13 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
   const totalPages = Math.ceil(filteredRequests.length / PAGE_SIZE);
   const paginatedRequests = filteredRequests.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  // Selected completed unrouted for bulk routing
+  // Selected completed unrouted for bulk routing — sadece kullanicinin yonlendirebildikleri
   const selectedCompletedIds = useMemo(
     () => [...selectedIds].filter(id => {
       const req = requests.find(r => r.id === id);
-      return req && req.status === 'COMPLETED' && !req.routedShipment;
+      return req && req.status === 'COMPLETED' && !req.routedShipment && canRouteRequest(req);
     }),
-    [selectedIds, requests]
+    [selectedIds, requests, canRouteRequest]
   );
 
   const handleToggleSelect = (id: string) => {
@@ -338,7 +347,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
       );
     }
 
-    if (!isAdmin) return <span className="text-xs text-gray-400">Bekliyor</span>;
+    if (!canRouteRequest(request)) return <span className="text-xs text-gray-400">Bekliyor</span>;
     if (!shipmentsLoaded) return <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin" />;
     if (availableShipments.length === 0) return <span className="text-xs text-gray-400">Rota yok</span>;
     if (routingId === request.id) return <Loader2 className="w-3.5 h-3.5 text-purple-600 animate-spin" />;
@@ -427,7 +436,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
           </p>
           <div className="flex items-center gap-2">
             {/* Bulk Route buttons — one per available shipment */}
-            {isAdmin && selectedCompletedIds.length > 0 && availableShipments.map(s => {
+            {selectedCompletedIds.length > 0 && availableShipments.map(s => {
               const Icon = METHOD_ICON[s.shippingMethod] ?? Anchor;
               const label = METHOD_LABEL[s.shippingMethod] ?? s.shippingMethod;
               return (
@@ -475,7 +484,7 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
               <col className="w-20" />
               <col className="w-20" />
               <col className="w-28" />
-              {isAdmin && <col className="w-28" />}
+              <col className="w-28" />
               {isSuperAdmin && <col className="w-16" />}
             </colgroup>
             <thead className="bg-gray-50 border-b border-gray-200">

@@ -7,12 +7,15 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { enrichProductSize } from '@/lib/db/enrichProductSize';
 import { requireShipmentAction } from '@/lib/auth/requireShipmentRole';
+import { verifyAuth } from '@/lib/auth/verify';
 import { RouteToShipmentSchema, formatValidationError } from '@/lib/validation/schemas';
 import { logAction } from '@/lib/auditLog';
 import { withRoute } from '@/lib/api/withRoute';
 import { successResponse } from '@/lib/api/response';
 
 // requireShipmentAction destinasyon-bazlı özel yetki — handler içinde tutuluyor.
+// Self-route istisnası: kullanıcı sadece kendi açtığı talepleri yönlendiriyorsa
+// destinasyon yetkisi aranmaz (talep yetkisi yeterli sayılır).
 export const POST = withRoute(
   { skipAuth: true, rateLimit: 'write', fallbackMessage: 'Sevkiyata yönlendirme başarısız' },
   async ({ request }) => {
@@ -30,7 +33,7 @@ export const POST = withRoute(
     // Tüm request'leri getir
     const requests = await prisma.productionRequest.findMany({
       where: { id: { in: requestIds } },
-      select: { id: true, iwasku: true, productName: true, productSize: true, quantity: true, status: true, marketplaceId: true },
+      select: { id: true, iwasku: true, productName: true, productSize: true, quantity: true, status: true, marketplaceId: true, enteredById: true },
     });
 
     if (requests.length !== requestIds.length) {
@@ -58,9 +61,23 @@ export const POST = withRoute(
       );
     }
 
-    const authResult = await requireShipmentAction(request, shipment.destinationTab, 'routeItems');
-    if (authResult instanceof NextResponse) return authResult;
-    const { user } = authResult;
+    // Önce kullaniciyi dogrula — self-route kontrolu icin gerekli
+    const auth = await verifyAuth(request);
+    if (!auth.success || !auth.user) {
+      return NextResponse.json(
+        { success: false, error: auth.error || 'Yetkisiz erisim' },
+        { status: 401 }
+      );
+    }
+    const user = auth.user;
+
+    // Self-route: kullanici sadece kendi taleplerini yonlendiriyorsa destinasyon
+    // yetkisi aranmaz. Aksi halde mevcut destinasyon-bazli yetki kontrolu calisir.
+    const isSelfRoute = requests.every(r => r.enteredById === user.id);
+    if (!isSelfRoute) {
+      const authResult = await requireShipmentAction(request, shipment.destinationTab, 'routeItems');
+      if (authResult instanceof NextResponse) return authResult;
+    }
     if (shipment.status === 'IN_TRANSIT' || shipment.status === 'DELIVERED') {
       return NextResponse.json(
         { success: false, error: 'Gönderilmiş veya teslim edilmiş sevkiyata yönlendirme yapılamaz' },
@@ -131,7 +148,7 @@ export const POST = withRoute(
       entityType: 'Shipment',
       entityId: shipmentId,
       description: `${items.length} talep ${shipment.name} sevkiyatına yönlendirildi`,
-      metadata: { requestIds, shipmentName: shipment.name, itemCount: items.length },
+      metadata: { requestIds, shipmentName: shipment.name, itemCount: items.length, selfRoute: isSelfRoute },
     });
 
     return successResponse({ routed: items.length, shipmentName: shipment.name });
