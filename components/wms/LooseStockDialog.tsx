@@ -11,6 +11,7 @@ import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { warehouseLabel } from '@/lib/warehouseLabels';
+import { notify } from '@/lib/ui/notify';
 import { ProductSearch, type ProductHit } from '@/components/wms/ProductSearch';
 
 const logger = createLogger('LooseStockDialog');
@@ -44,11 +45,12 @@ export function LooseStockDialog({ isOpen, warehouseCode, fixedShelfId, fixedShe
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') handleClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isOpen, onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -67,12 +69,13 @@ export function LooseStockDialog({ isOpen, warehouseCode, fixedShelfId, fixedShe
 
   if (!isOpen) return null;
 
-  const reset = () => {
+  const handleClose = () => {
     setProduct(null);
     setQuantity('');
-    setTargetShelfId('');
+    setTargetShelfId(fixedShelfId ?? '');
     setNotes('');
     setError(null);
+    onClose();
   };
 
   const handleSubmit = async () => {
@@ -99,9 +102,13 @@ export function LooseStockDialog({ isOpen, warehouseCode, fixedShelfId, fixedShe
         setError(data.error || 'Ekleme başarısız');
         return;
       }
-      reset();
+      // Sticky multi-add: shelf + notes korunur, sadece ürün + adet temizlenir.
+      // Aynı rafa hızlı çoklu giriş için. "Kapat" ile çıkış.
+      const destShelf = data.data?.shelfCode ?? 'POOL';
+      notify.success(`${iwasku} × ${quantity} → ${destShelf}`);
+      setProduct(null);
+      setQuantity('');
       onSuccess();
-      onClose();
     } catch (e) {
       logger.error('Tekil ekleme hatası', e);
       setError('Sunucu hatası');
@@ -113,7 +120,7 @@ export function LooseStockDialog({ isOpen, warehouseCode, fixedShelfId, fixedShe
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={onClose}
+      onClick={handleClose}
     >
       <div
         role="dialog"
@@ -128,7 +135,7 @@ export function LooseStockDialog({ isOpen, warehouseCode, fixedShelfId, fixedShe
           </h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             aria-label="Kapat"
             className="p-1 hover:bg-gray-100 rounded"
           >
@@ -224,11 +231,11 @@ export function LooseStockDialog({ isOpen, warehouseCode, fixedShelfId, fixedShe
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
               disabled={submitting}
             >
-              İptal
+              Kapat
             </button>
             <button
               type="button"
