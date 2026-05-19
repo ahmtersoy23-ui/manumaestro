@@ -335,7 +335,7 @@ export default function RafDetayPage({
                     <td className="px-4 py-2 font-mono text-xs">{s.iwasku}</td>
                     <td className="px-4 py-2 font-mono text-[11px] text-gray-400">—</td>
                     <td className="px-4 py-2 font-mono text-[11px] text-gray-500">{s.asin ?? '—'}</td>
-                    <td className="px-4 py-2 text-xs truncate max-w-[260px]">{s.productName ?? '—'}</td>
+                    <td className="px-4 py-2 text-xs max-w-[260px] whitespace-normal break-words">{s.productName ?? '—'}</td>
                     <td className="px-4 py-2 text-xs text-gray-500">{s.category ?? '—'}</td>
                     <td className="px-4 py-2 text-right font-medium">{s.quantity}</td>
                     <td className="px-4 py-2 text-right text-amber-600">
@@ -457,7 +457,7 @@ export default function RafDetayPage({
                     <td className="px-4 py-2 font-mono text-xs">{b.iwasku}</td>
                     <td className="px-4 py-2 font-mono text-[10px] text-gray-500">{b.fnsku ?? '—'}</td>
                     <td className="px-4 py-2 font-mono text-[10px] text-gray-500">{b.asin ?? '—'}</td>
-                    <td className="px-4 py-2 text-xs truncate max-w-[220px]">{b.productName ?? '—'}</td>
+                    <td className="px-4 py-2 text-xs max-w-[220px] whitespace-normal break-words">{b.productName ?? '—'}</td>
                     <td className="px-4 py-2 text-[11px] text-gray-500">{b.marketplaceCode ?? '—'}</td>
                     <td className="px-4 py-2 text-[11px] text-gray-500">{b.destination}</td>
                     <td className="px-4 py-2 text-right font-medium">{b.quantity}</td>

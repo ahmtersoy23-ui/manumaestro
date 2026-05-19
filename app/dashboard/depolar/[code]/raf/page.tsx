@@ -399,7 +399,7 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
                           </Link>
                         </td>
                         <td className="py-1.5 font-mono text-xs">{s.iwasku}</td>
-                        <td className="py-1.5 text-xs text-gray-600 truncate max-w-[300px]">
+                        <td className="py-1.5 text-xs text-gray-600 max-w-[300px] whitespace-normal break-words">
                           {s.productName ?? '—'}
                         </td>
                         <td className="py-1.5 text-right">{s.quantity}</td>
@@ -444,7 +444,7 @@ export default function RafPage({ params }: { params: Promise<{ code: string }> 
                         </td>
                         <td className="py-1.5 font-mono text-xs">{b.boxNumber}</td>
                         <td className="py-1.5 font-mono text-xs">{b.iwasku}</td>
-                        <td className="py-1.5 text-xs text-gray-600 truncate max-w-[280px]">
+                        <td className="py-1.5 text-xs text-gray-600 max-w-[280px] whitespace-normal break-words">
                           {b.productName ?? '—'}
                         </td>
                         <td className="py-1.5 text-right">{b.quantity}</td>
