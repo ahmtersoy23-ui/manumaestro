@@ -68,7 +68,7 @@ export function ExtraBoxForm({ onSubmit, onCancel, marketplaces }: Props) {
           <select value={f.marketplaceCode} onChange={e => setF(p => ({ ...p, marketplaceCode: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-40 bg-white">
             <option value="">— seçin —</option>
             {marketplaces.map(m => (
-              <option key={m.code} value={m.code}>{m.name} ({m.code})</option>
+              <option key={m.code} value={m.code}>{m.name}</option>
             ))}
             <option value="DEPO">Doğrudan Depo</option>
           </select></div>

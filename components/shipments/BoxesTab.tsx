@@ -151,7 +151,7 @@ export function BoxesTab({
               <select value={marketFilter} onChange={e => onMarketFilterChange(e.target.value)}
                 className="px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white">
                 <option value="">Tüm Pazarlar</option>
-                {markets.map(m => <option key={m} value={m}>{m}</option>)}
+                {markets.map(m => <option key={m} value={m}>{mktCodeToName.get(m) || m}</option>)}
               </select>
             )}
           </>

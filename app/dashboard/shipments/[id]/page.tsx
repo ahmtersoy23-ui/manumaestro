@@ -153,9 +153,13 @@ export default function ShipmentDetailPage() {
     }).catch(err => logger.error('marketplaces fetch failed', err));
   }, []);
 
-  // Marketplace code → name mapping (koliler tablosu icin) — hook, early return'den once olmali
+  // Marketplace code → name mapping (koliler tablosu icin) — hook, early return'den once olmali.
+  // Hem item marketplace'leri hem global liste (yeni eklenen koliler icin)
   const mktCodeToName = useMemo(() => {
     const map = new Map<string, string>();
+    for (const m of allMarketplaces) {
+      if (m.code && m.name) map.set(m.code, m.name);
+    }
     if (shipment) {
       for (const item of shipment.items) {
         if (item.marketplace?.code && item.marketplace.name) {
@@ -164,7 +168,7 @@ export default function ShipmentDetailPage() {
       }
     }
     return map;
-  }, [shipment]);
+  }, [shipment, allMarketplaces]);
 
   // Filtered items (search + dropdowns) — hook'lar early return'den once olmali
   const filteredPendingItems = useMemo(() => {
@@ -1164,7 +1168,7 @@ export default function ShipmentDetailPage() {
                   <select value={itemMarketFilter} onChange={e => setItemMarketFilter(e.target.value)}
                     className="px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white">
                     <option value="">Tüm Pazarlar</option>
-                    {itemMarkets.map(m => <option key={m} value={m}>{m}</option>)}
+                    {itemMarkets.map(m => <option key={m} value={m}>{mktCodeToName.get(m) || m}</option>)}
                   </select>
                 )}
                 <DateMultiFilter dates={itemDates} selected={itemDateFilter} onChange={setItemDateFilter} />
@@ -1235,6 +1239,7 @@ export default function ShipmentDetailPage() {
           canSend={canSend}
           canUnsend={canUnsend}
           unsending={unsending}
+          mktCodeToName={mktCodeToName}
           onSearchChange={setSentSearch}
           onCategoryFilterChange={setSentCategoryFilter}
           onMarketFilterChange={setSentMarketFilter}

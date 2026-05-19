@@ -26,6 +26,7 @@ interface Props {
   canSend: boolean;
   canUnsend: boolean;
   unsending: boolean;
+  mktCodeToName: Map<string, string>;
 
   onSearchChange: (search: string) => void;
   onCategoryFilterChange: (filter: string) => void;
@@ -39,7 +40,7 @@ interface Props {
 export function SentItemsTab({
   items, hasAnySent, totalSentCount,
   search, categoryFilter, marketFilter, dateFilter, categories, markets, dates,
-  selectedSentIds, canSend, canUnsend, unsending,
+  selectedSentIds, canSend, canUnsend, unsending, mktCodeToName,
   onSearchChange, onCategoryFilterChange, onMarketFilterChange, onDateFilterChange,
   onSelectionChange, onExitForSent, onUnsendSelected,
 }: Props) {
@@ -83,7 +84,7 @@ export function SentItemsTab({
             <select value={marketFilter} onChange={e => onMarketFilterChange(e.target.value)}
               className="px-3 py-2 border rounded-lg text-sm text-gray-700 bg-white">
               <option value="">Tüm Pazarlar</option>
-              {markets.map(m => <option key={m} value={m}>{m}</option>)}
+              {markets.map(m => <option key={m} value={m}>{mktCodeToName.get(m) || m}</option>)}
             </select>
           )}
           <DateMultiFilter dates={dates} selected={dateFilter} onChange={onDateFilterChange} />
