@@ -202,7 +202,7 @@ export function ProductSearch({
                 className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0 text-gray-900"
               >
                 <div className="font-mono text-xs text-gray-500">{p.iwasku}</div>
-                <div className="truncate">{p.name}</div>
+                <div className="break-words">{p.name}</div>
                 <div className="flex items-center gap-2 mt-0.5">
                   {p.category && (
                     <span className="text-[10px] text-gray-500">{p.category}</span>
