@@ -186,7 +186,7 @@ export function ProductSearch({
       </div>
 
       {showDropdown && (hits.length > 0 || loading) && (
-        <div className="absolute z-30 mt-1 w-full max-h-64 overflow-y-auto bg-white border border-gray-200 rounded-md shadow-lg">
+        <div className="absolute z-30 mt-1 w-full max-h-[min(70vh,32rem)] overflow-y-auto bg-white border border-gray-200 rounded-md shadow-lg">
           {loading && hits.length === 0 ? (
             <div className="px-3 py-3 text-sm text-gray-400 text-center">Aranıyor…</div>
           ) : (
