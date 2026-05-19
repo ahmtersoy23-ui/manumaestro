@@ -4,7 +4,8 @@
  *
  * Hedef seçimi: destinationTab + ShipmentBox.destination kombinasyonu
  *   destinationTab='US' AND box.destination='SHOWROOM' → SHOWROOM POOL
- *   destinationTab='US' AND box.destination ∈ {FBA, DEPO} → NJ POOL
+ *   destinationTab='US' AND box.destination='DEPO'     → NJ POOL
+ *   destinationTab='US' AND box.destination='FBA'      → atla (doğrudan kargoya teslim, depoya girmez)
  *   diğer destinationTab (UK/EU/...) → raf yansıması atlanır (eski akış)
  *
  * Idempotent: aynı shipmentBoxId'li ShelfBox zaten varsa atlar.
@@ -26,7 +27,9 @@ export interface ArrivalResult {
 function resolveTargetWarehouse(destinationTab: string, boxDestination: string): string | null {
   if (destinationTab === 'US') {
     if (boxDestination === 'SHOWROOM') return 'SHOWROOM';
-    return 'NJ'; // FBA + DEPO → NJ
+    if (boxDestination === 'DEPO') return 'NJ';
+    // FBA koliler doğrudan kargoya teslim edilir, depoya hiç girmez
+    return null;
   }
   // Diğer destinasyonlar şimdilik raf takibinde değil
   return null;
