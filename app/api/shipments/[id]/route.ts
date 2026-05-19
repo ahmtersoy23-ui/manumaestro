@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma, queryProductDb } from '@/lib/db/prisma';
 import { requireShipmentView, requireShipmentAction } from '@/lib/auth/requireShipmentRole';
+import { requireSuperAdmin } from '@/lib/auth/verify';
 import { getShipmentRole, canDoAction, ShipmentAction } from '@/lib/auth/shipmentPermission';
 import { logAction } from '@/lib/auditLog';
 import { withRoute } from '@/lib/api/withRoute';
@@ -279,3 +280,43 @@ export const POST = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'writ
 
   return successResponse({ added: created.count });
 });
+
+// --- DELETE: Sevkiyatı sil (super-admin only, sadece PLANNING/LOADING) ---
+// ShipmentItem + ShipmentBox cascade silinir. ProductionRequest silinmez —
+// routedShipment NULL olur ve baska sevkiyata yonlendirilebilir hale gelir.
+export const DELETE = withRoute<{ id: string }>(
+  { skipAuth: true, rateLimit: 'write', fallbackMessage: 'Sevkiyat silinemedi' },
+  async ({ request, params }) => {
+    const auth = await requireSuperAdmin(request);
+    if (auth instanceof NextResponse) return auth;
+    const { user } = auth;
+
+    const { id } = params;
+    const shipment = await prisma.shipment.findUnique({
+      where: { id },
+      select: { id: true, name: true, status: true, destinationTab: true, _count: { select: { items: true, boxes: true } } },
+    });
+    if (!shipment) {
+      return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadı' }, { status: 404 });
+    }
+
+    if (shipment.status !== 'PLANNING' && shipment.status !== 'LOADING') {
+      return NextResponse.json(
+        { success: false, error: `Sadece PLANNING veya LOADING durumundaki sevkiyatlar silinebilir (mevcut: ${shipment.status})` },
+        { status: 400 }
+      );
+    }
+
+    // ShipmentItem + ShipmentBox cascade ile silinir (schema.prisma: onDelete: Cascade)
+    await prisma.shipment.delete({ where: { id } });
+
+    await logAction({
+      userId: user.id, userName: user.name, userEmail: user.email,
+      action: 'UPDATE_REQUEST', entityType: 'Shipment', entityId: id,
+      description: `Sevkiyat silindi: ${shipment.name} (${shipment.destinationTab}) — ${shipment._count.items} item, ${shipment._count.boxes} koli`,
+      metadata: { shipmentName: shipment.name, status: shipment.status, itemCount: shipment._count.items, boxCount: shipment._count.boxes },
+    });
+
+    return successResponse({ deleted: true, shipmentName: shipment.name });
+  }
+);

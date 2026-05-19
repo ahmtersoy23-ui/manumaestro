@@ -53,6 +53,7 @@ interface Props {
   // Derived maps
   mktCodeToName: Map<string, string>;
   donorMap: Map<string, ShipmentBox>;
+  marketplaces: { id: string; name: string; code: string }[];
 
   // Setters / callbacks
   onSearchChange: (search: string) => void;
@@ -86,7 +87,7 @@ export function BoxesTab({
   showExtraBox, showBulkFba, bulkFbaText, bulkFbaResult, settingDest,
   search, categoryFilter, destFilter, marketFilter, categories, markets,
   selectedBoxIds, syncingFnskuBoxId, editingCell, printedBoxIds,
-  mktCodeToName, donorMap,
+  mktCodeToName, donorMap, marketplaces,
   onSearchChange, onCategoryFilterChange, onDestFilterChange, onMarketFilterChange,
   onToggleExtraBox, onToggleBulkFba, onBulkFbaTextChange, onBulkFbaSubmit, onCloseBulkFba,
   onExportBoxes, onExportShipmate,
@@ -178,6 +179,7 @@ export function BoxesTab({
         <ExtraBoxForm
           onSubmit={async (form) => { const r = await onCreateBox(form, null); if (r) onCloseExtraBox(); }}
           onCancel={onCloseExtraBox}
+          marketplaces={marketplaces}
         />
       )}
       {showBulkFba && (

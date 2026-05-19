@@ -13,9 +13,10 @@ import type { BoxFormData } from '@/lib/shipments/types';
 interface Props {
   onSubmit: (form: BoxFormData) => Promise<void>;
   onCancel: () => void;
+  marketplaces: { id: string; name: string; code: string }[];
 }
 
-export function ExtraBoxForm({ onSubmit, onCancel }: Props) {
+export function ExtraBoxForm({ onSubmit, onCancel, marketplaces }: Props) {
   const [f, setF] = useState({
     iwasku: '', fnsku: '', productName: '', productCategory: '', marketplaceCode: '',
     quantity: '1', count: '1', width: '', height: '', depth: '', weight: '',
@@ -64,7 +65,13 @@ export function ExtraBoxForm({ onSubmit, onCancel }: Props) {
         <div><label className="block text-xs text-gray-500 mb-0.5">Kategori</label>
           <input type="text" value={f.productCategory} onChange={e => setF(p => ({ ...p, productCategory: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-36" /></div>
         <div><label className="block text-xs text-gray-500 mb-0.5">Pazar Yeri</label>
-          <input type="text" value={f.marketplaceCode} onChange={e => setF(p => ({ ...p, marketplaceCode: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-24" /></div>
+          <select value={f.marketplaceCode} onChange={e => setF(p => ({ ...p, marketplaceCode: e.target.value }))} className="px-2 py-1.5 border rounded text-sm w-40 bg-white">
+            <option value="">— seçin —</option>
+            {marketplaces.map(m => (
+              <option key={m.code} value={m.code}>{m.name} ({m.code})</option>
+            ))}
+            <option value="DEPO">Doğrudan Depo</option>
+          </select></div>
       </div>
       <div className="flex flex-wrap gap-3">
         <div><label className="block text-xs text-gray-500 mb-0.5">Adet/Koli</label>

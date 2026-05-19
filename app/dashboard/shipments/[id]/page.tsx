@@ -29,7 +29,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   ArrowLeft, Plus, Send, Loader2, AlertCircle, Pencil,
   Calendar, Anchor, Truck as TruckIcon, Plane,
-  Download, Ship, X, Search,
+  Download, Ship, X, Search, Trash2,
 } from 'lucide-react';
 
 // --- Types ---
@@ -49,7 +49,7 @@ const logger = createLogger('ShipmentDetailPage');
 
 
 export default function ShipmentDetailPage() {
-  const { role } = useAuth(); // Session check
+  const { role, isSuperAdmin } = useAuth(); // Session check
   const confirm = useConfirm();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -487,6 +487,31 @@ export default function ShipmentDetailPage() {
         }
       } else notify.error(data.error);
     } catch { notify.error('Kapama hatası'); } finally { setSending(false); }
+  };
+
+  const handleDeleteShipment = async () => {
+    if (!shipment) return;
+    const confirmed = await confirm({
+      title: 'Sevkiyat silinsin mi?',
+      message: `${shipment.name} kalıcı olarak silinecek. İçindeki tüm koliler ve item'lar da silinir. Talepler "yönlendirilmemiş" durumuna döner ve başka sevkiyata atanabilir. Bu işlem geri alınamaz.`,
+      confirmLabel: 'Sil',
+    });
+    if (!confirmed) return;
+    setSending(true);
+    try {
+      const res = await fetch(`/api/shipments/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        notify.success(`${data.data.shipmentName} silindi`);
+        router.push('/dashboard/shipments');
+      } else {
+        notify.error(data.error || 'Silinemedi');
+      }
+    } catch {
+      notify.error('Silme hatası');
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleAddItem = async (e: React.FormEvent) => {
@@ -1037,6 +1062,13 @@ export default function ShipmentDetailPage() {
               <Ship className="w-4 h-4" /> StockPulse
             </button>
           )}
+          {isSuperAdmin && (shipment.status === 'PLANNING' || shipment.status === 'LOADING') && (
+            <button onClick={handleDeleteShipment} disabled={sending}
+              className="px-3 py-2 bg-red-50 text-red-700 border border-red-200 text-sm rounded-lg hover:bg-red-100 disabled:opacity-50 flex items-center gap-2"
+              title="Sevkiyatı sil (super-admin)">
+              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} Sevkiyatı Sil
+            </button>
+          )}
         </div>
       </div>
 
@@ -1240,6 +1272,7 @@ export default function ShipmentDetailPage() {
           printedBoxIds={printedBoxIds}
           mktCodeToName={mktCodeToName}
           donorMap={donorMap}
+          marketplaces={allMarketplaces}
           onSearchChange={setBoxSearch}
           onCategoryFilterChange={setBoxCategoryFilter}
           onDestFilterChange={setBoxDestFilter}
