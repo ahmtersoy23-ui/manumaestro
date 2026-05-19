@@ -52,6 +52,14 @@ export function LooseStockDialog({ isOpen, warehouseCode, fixedShelfId, fixedShe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
+  // Açılışta hedef rafı fixedShelfId'ye senkronla. State eski bir
+  // session'dan bayatsa veya parent farklı bir raf'a geçtiyse yine de doğru
+  // rafa gönderir. Raf detayından açılan tüm girişler garantili o rafa düşer.
+  useEffect(() => {
+    if (!isOpen) return;
+    setTargetShelfId(fixedShelfId ?? '');
+  }, [isOpen, fixedShelfId]);
+
   useEffect(() => {
     if (!isOpen) return;
     let cancelled = false;
