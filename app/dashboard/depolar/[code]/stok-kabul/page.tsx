@@ -14,7 +14,7 @@
  *  5. Yanlışlık varsa Hareketler sekmesinden undo edilebilir
  */
 
-import { use, useCallback, useEffect, useState } from 'react';
+import { use, useCallback, useEffect, useRef, useState } from 'react';
 import { notify } from '@/lib/ui/notify';
 import { Camera, Loader2, Check, AlertCircle, MapPin, X, Search } from 'lucide-react';
 import { slugToCode, warehouseLabelLong } from '@/lib/warehouseLabels';
@@ -64,6 +64,10 @@ export default function StokKabulPage({ params }: { params: Promise<{ code: stri
   const [shelfModalOpen, setShelfModalOpen] = useState(false);
   const [qtyPrompt, setQtyPrompt] = useState<QtyPrompt | null>(null);
   const [lastFeedback, setLastFeedback] = useState<{ kind: 'ok' | 'err'; text: string; key: number } | null>(null);
+
+  // Bu session'da kaydedilen seri'ler — duplicate tarama (aynı etiketin
+  // tekrar tekrar +1 sayılması) burada engellenir. Re-render gereksiz, useRef.
+  const usedSerials = useRef<Set<string>>(new Set());
 
   // POST + log'a ekle, kameradaki overlay'i güncelle
   const saveProduct = useCallback(
@@ -138,8 +142,18 @@ export default function StokKabulPage({ params }: { params: Promise<{ code: stri
         }
         const product = data.data as ScanLookup;
 
-        // Manu seri etiketi → her zaman 1 adet, anında kaydet
-        if (product.foundBy === 'serial') {
+        // Manu seri etiketi → her zaman 1 adet, anında kaydet.
+        // Aynı seri 2. kez okunursa atla (her etiket benzersiz, duplicate kayıt olmamalı).
+        if (product.foundBy === 'serial' && product.serial) {
+          if (usedSerials.current.has(product.serial)) {
+            setLastFeedback({
+              kind: 'err',
+              text: `Bu etiket zaten okundu: ${product.serial}`,
+              key: Date.now(),
+            });
+            return;
+          }
+          usedSerials.current.add(product.serial);
           await saveProduct(product, 1);
           return;
         }
@@ -280,12 +294,14 @@ export default function StokKabulPage({ params }: { params: Promise<{ code: stri
       {qtyPrompt && (
         <QtyPromptModal
           product={qtyPrompt.product}
+          targetShelf={targetShelf}
           onConfirm={async (qty) => {
             const product = qtyPrompt.product;
             setQtyPrompt(null);
             await saveProduct(product, qty);
           }}
           onCancel={() => setQtyPrompt(null)}
+          onChangeShelf={() => setShelfModalOpen(true)}
         />
       )}
 
@@ -312,11 +328,13 @@ export default function StokKabulPage({ params }: { params: Promise<{ code: stri
 
 interface QtyPromptProps {
   product: ScanLookup;
+  targetShelf: ShelfLite | null;
   onConfirm: (qty: number) => void;
   onCancel: () => void;
+  onChangeShelf: () => void;
 }
 
-function QtyPromptModal({ product, onConfirm, onCancel }: QtyPromptProps) {
+function QtyPromptModal({ product, targetShelf, onConfirm, onCancel, onChangeShelf }: QtyPromptProps) {
   const [qty, setQty] = useState<string>('1');
 
   const submit = () => {
@@ -374,6 +392,19 @@ function QtyPromptModal({ product, onConfirm, onCancel }: QtyPromptProps) {
               </button>
             ))}
           </div>
+
+          <button
+            type="button"
+            onClick={onChangeShelf}
+            className="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm hover:bg-gray-100"
+          >
+            <span className="flex items-center gap-2 text-gray-700">
+              <MapPin className="w-4 h-4 text-gray-500" />
+              <span className="text-xs">Hedef Raf:</span>
+              <span className="font-medium">{targetShelf ? targetShelf.code : 'POOL (varsayılan)'}</span>
+            </span>
+            <span className="text-xs text-blue-700">Değiştir</span>
+          </button>
 
           <div className="flex gap-2 pt-2">
             <button
@@ -438,7 +469,7 @@ function ShelfPickerModal({ warehouseCode, current, onSelect, onClear, onClose }
   }, [warehouseCode, q]);
 
   return (
-    <div className="fixed inset-0 z-40 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4">
+    <div className="fixed inset-0 z-[60] bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4">
       <div className="bg-white w-full max-w-md max-h-[80vh] rounded-t-xl md:rounded-xl flex flex-col">
         <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-gray-900">Hedef Raf Seç</h3>
