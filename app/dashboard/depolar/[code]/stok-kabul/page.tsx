@@ -25,7 +25,7 @@ interface ScanLookup {
   iwasku: string;
   name: string | null;
   category: string | null;
-  foundBy: 'serial' | 'fnsku' | 'iwasku' | 'ean';
+  foundBy: 'serial' | 'fnsku' | 'iwasku' | 'asin' | 'ean';
   fnsku: string | null;
   serial: string | null;
 }
@@ -232,6 +232,11 @@ export default function StokKabulPage({ params }: { params: Promise<{ code: stri
                       Etiket
                     </span>
                   )}
+                  {row.foundBy === 'asin' && (
+                    <span className="ml-2 text-[10px] uppercase tracking-wide bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded">
+                      ASIN
+                    </span>
+                  )}
                 </div>
                 <div className="text-sm text-gray-900 truncate" title={row.name ?? undefined}>
                   {row.name ?? '(isimsiz)'}
@@ -352,7 +357,7 @@ function QtyPromptModal({ product, onConfirm, onCancel }: QtyPromptProps) {
       <div className="bg-white w-full max-w-md rounded-t-2xl md:rounded-xl shadow-2xl">
         <div className="px-4 pt-4 pb-2 border-b border-gray-100">
           <div className="text-[11px] uppercase tracking-wide text-gray-500">
-            {product.foundBy === 'fnsku' ? 'FNSKU okundu' : product.foundBy === 'ean' ? 'EAN okundu' : 'Ürün'}
+            {product.foundBy === 'fnsku' ? 'FNSKU okundu' : product.foundBy === 'asin' ? 'ASIN okundu' : product.foundBy === 'ean' ? 'EAN okundu' : 'Ürün'}
           </div>
           <div className="text-sm font-mono text-gray-700 mt-0.5">{product.iwasku}</div>
           <div className="text-base font-semibold text-gray-900 mt-1">

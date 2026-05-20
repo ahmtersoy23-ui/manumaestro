@@ -6,7 +6,7 @@
 
 import { queryProductDb } from '@/lib/db/prisma';
 
-export type ScanFoundBy = 'serial' | 'fnsku' | 'iwasku' | 'ean';
+export type ScanFoundBy = 'serial' | 'fnsku' | 'iwasku' | 'asin' | 'ean';
 
 export interface ScanLookupResult {
   iwasku: string;
@@ -81,7 +81,27 @@ export async function lookupByScan(code: string): Promise<ScanLookupResult | nul
     };
   }
 
-  // 3) EAN — şimdilik tabloda yok, ileride eklenecek
+  // 3) ASIN eşleşmesi (sku_master.asin) — manufacturer barcode'lar (B...) FNSKU'da yoksa
+  // bazen direkt ASIN olarak basılmış olabilir
+  const asinRows = (await queryProductDb(
+    `SELECT iwasku FROM sku_master WHERE asin = $1 LIMIT 1`,
+    [trimmed],
+  )) as Array<{ iwasku: string }>;
+  if (asinRows.length > 0) {
+    const iwasku = asinRows[0].iwasku;
+    const detail = await fetchIwaskuDetail(iwasku);
+    const fnsku = await fetchFirstFnsku(iwasku);
+    return {
+      iwasku,
+      name: detail?.name ?? null,
+      category: detail?.category ?? null,
+      foundBy: 'asin',
+      fnsku,
+      serial: null,
+    };
+  }
+
+  // 4) EAN — şimdilik tabloda yok, ileride eklenecek
   return null;
 }
 
