@@ -40,6 +40,8 @@ interface Props {
   cooldownMs?: number;
   /** true ise yeni okumalar dispatch edilmez (kamera açık kalır). Modal/dialog için. */
   paused?: boolean;
+  /** Son okunan ürün için overlay toast (örn. "+1 AHM-001 ✓"). 2 sn sonra otomatik kaybolur. */
+  lastFeedback?: { kind: 'ok' | 'err'; text: string; key: number } | null;
 }
 
 type NativeBarcodeDetector = {
@@ -70,11 +72,21 @@ export function ContinuousScanner({
   hint,
   cooldownMs = 1500,
   paused = false,
+  lastFeedback,
 }: Props) {
   const pausedRef = useRef(paused);
   useEffect(() => {
     pausedRef.current = paused;
   }, [paused]);
+
+  // Son okunan ürün overlay toast — feedback.key her değiştiğinde 2 sn göster
+  const [visibleFeedback, setVisibleFeedback] = useState<typeof lastFeedback>(null);
+  useEffect(() => {
+    if (!lastFeedback) return;
+    setVisibleFeedback(lastFeedback);
+    const t = setTimeout(() => setVisibleFeedback(null), 2000);
+    return () => clearTimeout(t);
+  }, [lastFeedback]);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const controlsRef = useRef<{ stop: () => void } | null>(null);
@@ -360,7 +372,19 @@ export function ContinuousScanner({
           </div>
         )}
 
-        {hint && !starting && !error && (
+        {visibleFeedback && !starting && (
+          <div
+            className={`pointer-events-none absolute top-16 left-4 right-4 rounded-xl px-4 py-3 text-center font-semibold shadow-xl ${
+              visibleFeedback.kind === 'ok'
+                ? 'bg-emerald-600/95 text-white'
+                : 'bg-red-600/95 text-white'
+            }`}
+          >
+            {visibleFeedback.text}
+          </div>
+        )}
+
+        {hint && !starting && !error && !visibleFeedback && (
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs rounded px-3 py-1.5">
             {hint}
           </div>
