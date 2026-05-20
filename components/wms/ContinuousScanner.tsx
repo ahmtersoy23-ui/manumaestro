@@ -110,7 +110,22 @@ export function ContinuousScanner({
     (async () => {
       try {
         const { BrowserMultiFormatReader } = await import('@zxing/browser');
-        const reader = new BrowserMultiFormatReader();
+        const { DecodeHintType, BarcodeFormat } = await import('@zxing/library');
+        // Yaygın formatlara daralt + TRY_HARDER → dikey/eğri barkodları da yakalar
+        const hints = new Map();
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+          BarcodeFormat.QR_CODE,
+          BarcodeFormat.CODE_128,
+          BarcodeFormat.CODE_39,
+          BarcodeFormat.EAN_13,
+          BarcodeFormat.EAN_8,
+          BarcodeFormat.UPC_A,
+          BarcodeFormat.UPC_E,
+          BarcodeFormat.ITF,
+          BarcodeFormat.DATA_MATRIX,
+        ]);
+        hints.set(DecodeHintType.TRY_HARDER, true);
+        const reader = new BrowserMultiFormatReader(hints);
 
         // Mevcut kameralardan arka kamera tercih et
         let deviceId: string | undefined = undefined;
