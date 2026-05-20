@@ -42,6 +42,26 @@ interface Props {
   paused?: boolean;
 }
 
+type NativeBarcodeDetector = {
+  detect(source: HTMLVideoElement): Promise<Array<{ rawValue: string; format: string }>>;
+};
+
+type NativeBarcodeDetectorCtor = new (options?: { formats?: string[] }) => NativeBarcodeDetector;
+
+const NATIVE_FORMATS = [
+  'qr_code',
+  'code_128',
+  'code_39',
+  'ean_13',
+  'ean_8',
+  'upc_a',
+  'upc_e',
+  'itf',
+  'data_matrix',
+  'pdf417',
+  'aztec',
+];
+
 export function ContinuousScanner({
   open,
   onScan,
@@ -100,18 +120,95 @@ export function ContinuousScanner({
     return () => clearTimeout(t);
   }, [status]);
 
-  // Kamera başlat
+  // Kamera başlat — önce native BarcodeDetector (Android Chrome / iOS Safari 17+),
+  // yoksa @zxing/browser fallback
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
+    let rafId = 0;
+    let nativeStream: MediaStream | null = null;
     setError(null);
     setStarting(true);
 
+    const dispatch = (text: string) => {
+      if (cancelled || pausedRef.current) return;
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      const now = Date.now();
+      const last = lastScanRef.current;
+      if (last && last.code === trimmed && now - last.at < cooldownMs) return;
+      lastScanRef.current = { code: trimmed, at: now };
+      onScan(trimmed);
+    };
+
+    const setupTorchInfo = (videoEl: HTMLVideoElement) => {
+      const stream = videoEl.srcObject as MediaStream | null;
+      const track = stream?.getVideoTracks()[0] ?? null;
+      trackRef.current = track;
+      try {
+        const caps = track?.getCapabilities?.() as MediaTrackCapabilities & { torch?: boolean };
+        setTorchSupported(!!caps?.torch);
+      } catch {
+        setTorchSupported(false);
+      }
+    };
+
     (async () => {
+      const w = window as unknown as { BarcodeDetector?: NativeBarcodeDetectorCtor };
+      const NativeCtor = w.BarcodeDetector;
+
+      // --- Native yol ---
+      if (NativeCtor) {
+        try {
+          const detector = new NativeCtor({ formats: NATIVE_FORMATS });
+          // getUserMedia ile arka kamera açmaya çalış
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' } },
+            audio: false,
+          });
+          if (cancelled) {
+            stream.getTracks().forEach((t) => t.stop());
+            return;
+          }
+          nativeStream = stream;
+          const videoEl = videoRef.current;
+          if (!videoEl) {
+            stream.getTracks().forEach((t) => t.stop());
+            return;
+          }
+          videoEl.srcObject = stream;
+          await videoEl.play().catch(() => {});
+          setupTorchInfo(videoEl);
+          setStarting(false);
+
+          const tick = async () => {
+            if (cancelled) return;
+            try {
+              if (!pausedRef.current && videoEl.readyState >= 2) {
+                const codes = await detector.detect(videoEl);
+                if (codes.length > 0) dispatch(codes[0].rawValue);
+              }
+            } catch (e) {
+              logger.error('BarcodeDetector.detect', e);
+            }
+            if (!cancelled) rafId = requestAnimationFrame(tick);
+          };
+          rafId = requestAnimationFrame(tick);
+          return;
+        } catch (e) {
+          logger.error('Native BarcodeDetector init failed, falling back to zxing', e);
+          // Fallback'e düş
+          if (nativeStream) {
+            (nativeStream as MediaStream).getTracks().forEach((t) => t.stop());
+            nativeStream = null;
+          }
+        }
+      }
+
+      // --- zxing fallback ---
       try {
         const { BrowserMultiFormatReader } = await import('@zxing/browser');
         const { DecodeHintType, BarcodeFormat } = await import('@zxing/library');
-        // Yaygın formatlara daralt + TRY_HARDER → dikey/eğri barkodları da yakalar
         const hints = new Map();
         hints.set(DecodeHintType.POSSIBLE_FORMATS, [
           BarcodeFormat.QR_CODE,
@@ -127,7 +224,6 @@ export function ContinuousScanner({
         hints.set(DecodeHintType.TRY_HARDER, true);
         const reader = new BrowserMultiFormatReader(hints);
 
-        // Mevcut kameralardan arka kamera tercih et
         let deviceId: string | undefined = undefined;
         try {
           const devices = await navigator.mediaDevices.enumerateDevices();
@@ -135,7 +231,7 @@ export function ContinuousScanner({
           const back = cameras.find((c) => /back|rear|environment|arka/i.test(c.label));
           deviceId = back?.deviceId ?? cameras[0]?.deviceId;
         } catch {
-          // ignore — undefined ile default kameraya bırak
+          // ignore
         }
 
         if (cancelled) return;
@@ -143,34 +239,15 @@ export function ContinuousScanner({
         if (!videoEl) return;
 
         const controls = await reader.decodeFromVideoDevice(deviceId, videoEl, (result) => {
-          if (cancelled || !result) return;
-          if (pausedRef.current) return;
-          const text = result.getText().trim();
-          if (!text) return;
-
-          const now = Date.now();
-          const last = lastScanRef.current;
-          if (last && last.code === text && now - last.at < cooldownMs) return;
-          lastScanRef.current = { code: text, at: now };
-          onScan(text);
+          if (!result) return;
+          dispatch(result.getText());
         });
         if (cancelled) {
           controls.stop();
           return;
         }
         controlsRef.current = controls;
-
-        // Track referansı + torch desteğini tespit et
-        const stream = videoEl.srcObject as MediaStream | null;
-        const track = stream?.getVideoTracks()[0] ?? null;
-        trackRef.current = track;
-        try {
-          const caps = track?.getCapabilities?.() as MediaTrackCapabilities & { torch?: boolean };
-          setTorchSupported(!!caps?.torch);
-        } catch {
-          setTorchSupported(false);
-        }
-
+        setupTorchInfo(videoEl);
         setStarting(false);
       } catch (e) {
         if (cancelled) return;
@@ -183,6 +260,11 @@ export function ContinuousScanner({
 
     return () => {
       cancelled = true;
+      if (rafId) cancelAnimationFrame(rafId);
+      if (nativeStream) {
+        nativeStream.getTracks().forEach((t) => t.stop());
+        nativeStream = null;
+      }
       try {
         controlsRef.current?.stop();
       } catch {
