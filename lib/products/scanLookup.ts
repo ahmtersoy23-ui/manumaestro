@@ -6,7 +6,7 @@
 
 import { queryProductDb } from '@/lib/db/prisma';
 
-export type ScanFoundBy = 'fnsku' | 'iwasku' | 'ean';
+export type ScanFoundBy = 'serial' | 'fnsku' | 'iwasku' | 'ean';
 
 export interface ScanLookupResult {
   iwasku: string;
@@ -14,11 +14,36 @@ export interface ScanLookupResult {
   category: string | null;
   foundBy: ScanFoundBy;
   fnsku: string | null;
+  /** Sadece serial taramalarda — etiketin tam barkodu (örn. SCS0120VQKBY-000001) */
+  serial: string | null;
 }
+
+// Manu üretim etiketi formatı: <IWASKU>-NNNNNN (6 haneli sayaç)
+// Bkz. lib/serial/generate.ts
+const SERIAL_RE = /^(.+)-(\d{6})$/;
 
 export async function lookupByScan(code: string): Promise<ScanLookupResult | null> {
   const trimmed = code.trim();
   if (!trimmed) return null;
+
+  // 0) Manu seri etiketi (IWASKU-NNNNNN) — direkt IWASKU çöz, miktar zorunlu olarak 1
+  const serialMatch = SERIAL_RE.exec(trimmed);
+  if (serialMatch) {
+    const iwaskuFromSerial = serialMatch[1];
+    const detail = await fetchIwaskuDetail(iwaskuFromSerial);
+    if (detail) {
+      const fnsku = await fetchFirstFnsku(iwaskuFromSerial);
+      return {
+        iwasku: iwaskuFromSerial,
+        name: detail.name,
+        category: detail.category,
+        foundBy: 'serial',
+        fnsku,
+        serial: trimmed,
+      };
+    }
+    // Serial gibi görünen ama prefix IWASKU değilse devam et — alttaki fallback'lere düş
+  }
 
   // 1) FNSKU eşleşmesi (sku_master)
   const fnskuRows = (await queryProductDb(
@@ -34,6 +59,7 @@ export async function lookupByScan(code: string): Promise<ScanLookupResult | nul
       category: detail?.category ?? null,
       foundBy: 'fnsku',
       fnsku: trimmed,
+      serial: null,
     };
   }
 
@@ -51,6 +77,7 @@ export async function lookupByScan(code: string): Promise<ScanLookupResult | nul
       category: productRows[0].category,
       foundBy: 'iwasku',
       fnsku,
+      serial: null,
     };
   }
 

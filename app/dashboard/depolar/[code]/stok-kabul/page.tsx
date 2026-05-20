@@ -25,8 +25,9 @@ interface ScanLookup {
   iwasku: string;
   name: string | null;
   category: string | null;
-  foundBy: 'fnsku' | 'iwasku' | 'ean';
+  foundBy: 'serial' | 'fnsku' | 'iwasku' | 'ean';
   fnsku: string | null;
+  serial: string | null;
 }
 
 interface CartRow {
@@ -35,6 +36,10 @@ interface CartRow {
   fnsku: string | null;
   foundBy: ScanLookup['foundBy'];
   qty: number;
+}
+
+interface QtyPrompt {
+  product: ScanLookup;
 }
 
 interface ShelfLite {
@@ -53,8 +58,33 @@ export default function StokKabulPage({ params }: { params: Promise<{ code: stri
   const [targetShelf, setTargetShelf] = useState<ShelfLite | null>(null);
   const [shelfModalOpen, setShelfModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [qtyPrompt, setQtyPrompt] = useState<QtyPrompt | null>(null);
 
   const totalQty = useMemo(() => cart.reduce((s, r) => s + r.qty, 0), [cart]);
+
+  const addProductToCart = useCallback((product: ScanLookup, qty: number) => {
+    if (qty <= 0) return;
+    setCart((prev) => {
+      const existing = prev.find((r) => r.iwasku === product.iwasku);
+      if (existing) {
+        return prev.map((r) =>
+          r.iwasku === product.iwasku ? { ...r, qty: r.qty + qty } : r,
+        );
+      }
+      return [
+        ...prev,
+        {
+          iwasku: product.iwasku,
+          name: product.name,
+          fnsku: product.fnsku,
+          foundBy: product.foundBy,
+          qty,
+        },
+      ];
+    });
+    setScanStatus('ok');
+    setTimeout(() => setScanStatus(null), 400);
+  }, []);
 
   const handleScan = useCallback(
     async (rawCode: string) => {
@@ -68,26 +98,15 @@ export default function StokKabulPage({ params }: { params: Promise<{ code: stri
           return;
         }
         const product = data.data as ScanLookup;
-        setCart((prev) => {
-          const existing = prev.find((r) => r.iwasku === product.iwasku);
-          if (existing) {
-            return prev.map((r) =>
-              r.iwasku === product.iwasku ? { ...r, qty: r.qty + 1 } : r,
-            );
-          }
-          return [
-            ...prev,
-            {
-              iwasku: product.iwasku,
-              name: product.name,
-              fnsku: product.fnsku,
-              foundBy: product.foundBy,
-              qty: 1,
-            },
-          ];
-        });
-        setScanStatus('ok');
-        setTimeout(() => setScanStatus(null), 400);
+
+        // Manu seri etiketi → her zaman 1 adet, miktar sorma
+        if (product.foundBy === 'serial') {
+          addProductToCart(product, 1);
+          return;
+        }
+
+        // FNSKU/IWASKU/EAN → miktar sor (modal scanner'ı pause'lar)
+        setQtyPrompt({ product });
       } catch (e) {
         logger.error('scan-lookup error', e);
         setScanStatus('err');
@@ -95,7 +114,7 @@ export default function StokKabulPage({ params }: { params: Promise<{ code: stri
         setTimeout(() => setScanStatus(null), 400);
       }
     },
-    [],
+    [addProductToCart],
   );
 
   const incrementQty = (iwasku: string, delta: number) => {
@@ -208,6 +227,11 @@ export default function StokKabulPage({ params }: { params: Promise<{ code: stri
                       FNSKU
                     </span>
                   )}
+                  {row.foundBy === 'serial' && (
+                    <span className="ml-2 text-[10px] uppercase tracking-wide bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded">
+                      Etiket
+                    </span>
+                  )}
                 </div>
                 <div className="text-sm text-gray-900 truncate" title={row.name ?? undefined}>
                   {row.name ?? '(isimsiz)'}
@@ -273,8 +297,20 @@ export default function StokKabulPage({ params }: { params: Promise<{ code: stri
         onScan={handleScan}
         onClose={() => setScannerOpen(false)}
         status={scanStatus}
-        hint="FNSKU veya IWASKU barkodunu kameraya gösterin"
+        hint="Etiket / FNSKU / IWASKU barkodunu kameraya gösterin"
+        paused={qtyPrompt !== null}
       />
+
+      {qtyPrompt && (
+        <QtyPromptModal
+          product={qtyPrompt.product}
+          onConfirm={(qty) => {
+            addProductToCart(qtyPrompt.product, qty);
+            setQtyPrompt(null);
+          }}
+          onCancel={() => setQtyPrompt(null)}
+        />
+      )}
 
       {shelfModalOpen && (
         <ShelfPickerModal
@@ -291,6 +327,94 @@ export default function StokKabulPage({ params }: { params: Promise<{ code: stri
           onClose={() => setShelfModalOpen(false)}
         />
       )}
+    </div>
+  );
+}
+
+// --- Miktar sor modal ---
+
+interface QtyPromptProps {
+  product: ScanLookup;
+  onConfirm: (qty: number) => void;
+  onCancel: () => void;
+}
+
+function QtyPromptModal({ product, onConfirm, onCancel }: QtyPromptProps) {
+  const [qty, setQty] = useState<string>('1');
+
+  const submit = () => {
+    const n = parseInt(qty, 10);
+    onConfirm(Number.isFinite(n) && n > 0 ? n : 1);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-end md:items-center justify-center p-0 md:p-4">
+      <div className="bg-white w-full max-w-md rounded-t-2xl md:rounded-xl shadow-2xl">
+        <div className="px-4 pt-4 pb-2 border-b border-gray-100">
+          <div className="text-[11px] uppercase tracking-wide text-gray-500">
+            {product.foundBy === 'fnsku' ? 'FNSKU okundu' : product.foundBy === 'ean' ? 'EAN okundu' : 'Ürün'}
+          </div>
+          <div className="text-sm font-mono text-gray-700 mt-0.5">{product.iwasku}</div>
+          <div className="text-base font-semibold text-gray-900 mt-1">
+            {product.name ?? '(isimsiz)'}
+          </div>
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+          className="p-4 space-y-4"
+        >
+          <label className="block">
+            <span className="text-xs text-gray-500">Adet</span>
+            <input
+              autoFocus
+              type="number"
+              min="1"
+              inputMode="numeric"
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+              onFocus={(e) => e.target.select()}
+              className="mt-1 w-full text-2xl font-bold text-center px-3 py-3 border-2 border-blue-500 rounded-lg"
+            />
+          </label>
+
+          <div className="grid grid-cols-4 gap-2">
+            {[1, 5, 10, 20].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setQty(String(n))}
+                className={`py-2 rounded-lg text-sm font-medium border ${
+                  qty === String(n)
+                    ? 'border-blue-600 bg-blue-50 text-blue-700'
+                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="flex-1 py-3 rounded-lg text-sm font-medium text-gray-700 border border-gray-300 hover:bg-gray-50"
+            >
+              İptal
+            </button>
+            <button
+              type="submit"
+              className="flex-[2] py-3 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700"
+            >
+              Ekle
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

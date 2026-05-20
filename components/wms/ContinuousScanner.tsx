@@ -38,6 +38,8 @@ interface Props {
   hint?: string;
   /** Cooldown süresi (ms). Default 1500 */
   cooldownMs?: number;
+  /** true ise yeni okumalar dispatch edilmez (kamera açık kalır). Modal/dialog için. */
+  paused?: boolean;
 }
 
 export function ContinuousScanner({
@@ -47,7 +49,13 @@ export function ContinuousScanner({
   status,
   hint,
   cooldownMs = 1500,
+  paused = false,
 }: Props) {
+  const pausedRef = useRef(paused);
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const controlsRef = useRef<{ stop: () => void } | null>(null);
   const trackRef = useRef<MediaStreamTrack | null>(null);
@@ -121,6 +129,7 @@ export function ContinuousScanner({
 
         const controls = await reader.decodeFromVideoDevice(deviceId, videoEl, (result) => {
           if (cancelled || !result) return;
+          if (pausedRef.current) return;
           const text = result.getText().trim();
           if (!text) return;
 
@@ -245,6 +254,12 @@ export function ContinuousScanner({
         {error && (
           <div className="absolute bottom-4 left-4 right-4 bg-red-700 text-white text-xs rounded p-2">
             {error}
+          </div>
+        )}
+
+        {paused && !starting && (
+          <div className="pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 bg-yellow-500 text-black text-xs font-semibold rounded-full px-3 py-1 shadow">
+            Duraklatıldı
           </div>
         )}
 
