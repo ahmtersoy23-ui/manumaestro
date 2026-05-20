@@ -10,7 +10,7 @@
 import { ReactNode, use, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, LayoutGrid, PackageOpen, ChevronRight, ClipboardCheck, History } from 'lucide-react';
+import { LayoutDashboard, LayoutGrid, PackageOpen, ChevronRight, ClipboardCheck, History, Camera } from 'lucide-react';
 import {
   warehouseLabelLong,
   slugToCode,
@@ -52,6 +52,7 @@ export default function DepoDetayLayout({
 
   const tabs = [
     { href: baseHref, label: 'Dashboard', icon: LayoutDashboard, exact: true },
+    { href: `${baseHref}/stok-kabul`, label: 'Stok Kabul', icon: Camera, exact: false },
     { href: `${baseHref}/raf`, label: 'Depo İşlem', icon: LayoutGrid, exact: false },
     ...(showOutbound
       ? [{ href: `${baseHref}/siparis`, label: 'Sipariş Çıkış', icon: PackageOpen, exact: false }]
