@@ -47,11 +47,11 @@ export default function MobilHubPage({ params }: { params: Promise<{ code: strin
       status: 'ready',
     },
     {
-      href: null,
+      href: `/dashboard/depolar/${rawParam}/mobil/transfer`,
       label: 'Raf → Raf Transfer',
       description: 'Bir raftaki ürünü başka bir rafa taşı',
       icon: ArrowRightLeft,
-      status: 'soon',
+      status: 'ready',
     },
     {
       href: null,
