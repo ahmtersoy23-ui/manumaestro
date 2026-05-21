@@ -52,7 +52,7 @@ export default function DepoDetayLayout({
 
   const tabs = [
     { href: baseHref, label: 'Dashboard', icon: LayoutDashboard, exact: true },
-    { href: `${baseHref}/stok-kabul`, label: 'Stok Kabul', icon: Camera, exact: false },
+    { href: `${baseHref}/mobil`, label: 'Mobil', icon: Camera, exact: false },
     { href: `${baseHref}/raf`, label: 'Depo İşlem', icon: LayoutGrid, exact: false },
     ...(showOutbound
       ? [{ href: `${baseHref}/siparis`, label: 'Sipariş Çıkış', icon: PackageOpen, exact: false }]
