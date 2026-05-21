@@ -40,11 +40,11 @@ export default function MobilHubPage({ params }: { params: Promise<{ code: strin
       status: 'ready',
     },
     {
-      href: null,
+      href: `/dashboard/depolar/${rawParam}/mobil/rafa-yerlestir`,
       label: 'Rafa Yerleştirme',
       description: 'POOL\'daki ürünleri kamera ile raflara dağıt',
       icon: PackagePlus,
-      status: 'soon',
+      status: 'ready',
     },
     {
       href: null,
