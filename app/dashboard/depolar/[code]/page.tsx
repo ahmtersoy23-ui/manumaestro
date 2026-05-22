@@ -448,7 +448,7 @@ function IwaskuAggregateTable({ rows, searchTerm, categoryFilter, warehouseCode,
                   <td className="px-4 py-2 font-mono text-[11px] text-gray-600">
                     {r.asin ?? <span className="text-gray-300">—</span>}
                   </td>
-                  <td className="px-4 py-2 text-xs truncate max-w-[280px]">
+                  <td className="px-4 py-2 text-xs max-w-[280px] whitespace-normal break-words">
                     {r.productName ?? <span className="text-gray-400">—</span>}
                     {r.category && <span className="ml-2 text-[10px] text-gray-400">{r.category}</span>}
                   </td>
