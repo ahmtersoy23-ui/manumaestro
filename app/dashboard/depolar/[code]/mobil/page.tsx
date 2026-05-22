@@ -8,7 +8,7 @@
 
 import { use } from 'react';
 import Link from 'next/link';
-import { Camera, PackagePlus, ArrowRightLeft, Truck, ChevronRight } from 'lucide-react';
+import { Camera, Package, PackagePlus, ArrowRightLeft, Truck, ChevronRight } from 'lucide-react';
 import { slugToCode, warehouseLabelLong } from '@/lib/warehouseLabels';
 
 interface ActionCard {
@@ -35,8 +35,15 @@ export default function MobilHubPage({ params }: { params: Promise<{ code: strin
     {
       href: `/dashboard/depolar/${rawParam}/mobil/stok-kabul`,
       label: 'Stok Kabul',
-      description: 'Üretimden gelen ürünleri kamera ile okutup depoya al',
+      description: 'Üretimden gelen tekil ürünleri kamera ile okutup depoya al',
       icon: Camera,
+      status: 'ready',
+    },
+    {
+      href: `/dashboard/depolar/${rawParam}/mobil/koli-ekle`,
+      label: 'Koli Ekle',
+      description: 'Sevkiyat kolisini QR ile okut, içerik otomatik dolar (eskiler manuel)',
+      icon: Package,
       status: 'ready',
     },
     {
