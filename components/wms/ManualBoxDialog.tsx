@@ -11,6 +11,7 @@ import { X } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { warehouseLabel } from '@/lib/warehouseLabels';
 import { ProductSearch, type ProductHit } from '@/components/wms/ProductSearch';
+import { notify } from '@/lib/ui/notify';
 
 const logger = createLogger('ManualBoxDialog');
 
@@ -51,11 +52,20 @@ export function ManualBoxDialog({ isOpen, warehouseCode, fixedShelfId, fixedShel
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') handleClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isOpen, onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  // Açılışta hedef rafı fixedShelfId'ye senkronla. State eski bir session'dan
+  // bayatsa veya parent farklı bir raf'a geçtiyse yine de doğru rafa gönderir.
+  // Raf detayından açılan tüm girişler garantili o rafa düşer.
+  useEffect(() => {
+    if (!isOpen) return;
+    setTargetShelfId(fixedShelfId ?? '');
+  }, [isOpen, fixedShelfId]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -74,6 +84,17 @@ export function ManualBoxDialog({ isOpen, warehouseCode, fixedShelfId, fixedShel
   }, [isOpen, warehouseCode]);
 
   if (!isOpen) return null;
+
+  const handleClose = () => {
+    setProduct(null);
+    setQuantity('');
+    setMarketplaceCode('');
+    setDestination('DEPO');
+    setBoxNumber('');
+    setTargetShelfId(fixedShelfId ?? '');
+    setError(null);
+    onClose();
+  };
 
   const handleSubmit = async () => {
     setError(null);
@@ -102,15 +123,16 @@ export function ManualBoxDialog({ isOpen, warehouseCode, fixedShelfId, fixedShel
         setError(data.error || 'Koli yaratılamadı');
         return;
       }
-      // Reset + kapat
+      // Sticky multi-add: marketplace + destination + shelf KORUNUR, sadece
+      // product + quantity + boxNumber temizlenir. Aynı rafa/marketplace'e
+      // hızlı çoklu koli için. "Kapat" ile çıkış.
+      const destShelf = data.data?.shelfCode ?? 'POOL';
+      const finalBoxNumber = data.data?.boxNumber ?? boxNumber.trim();
+      notify.success(`${iwasku} × ${quantity} → ${destShelf} (${finalBoxNumber})`);
       setProduct(null);
       setQuantity('');
-      setMarketplaceCode('');
-      setDestination('DEPO');
       setBoxNumber('');
-      setTargetShelfId('');
       onSuccess();
-      onClose();
     } catch (e) {
       logger.error('Manuel koli hatası', e);
       setError('Sunucu hatası');
@@ -120,7 +142,7 @@ export function ManualBoxDialog({ isOpen, warehouseCode, fixedShelfId, fixedShel
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={handleClose}>
       <div
         role="dialog"
         aria-modal="true"
@@ -130,7 +152,7 @@ export function ManualBoxDialog({ isOpen, warehouseCode, fixedShelfId, fixedShel
       >
         <div className="flex items-center justify-between mb-4">
           <h2 id="manual-box-dialog-title" className="text-lg font-semibold">Yeni Koli (Manuel) — {warehouseLabel(warehouseCode)}</h2>
-          <button type="button" onClick={onClose} aria-label="Kapat" className="p-1 hover:bg-gray-100 rounded">
+          <button type="button" onClick={handleClose} aria-label="Kapat" className="p-1 hover:bg-gray-100 rounded">
             <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
@@ -242,11 +264,11 @@ export function ManualBoxDialog({ isOpen, warehouseCode, fixedShelfId, fixedShel
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
               disabled={submitting}
             >
-              İptal
+              Kapat
             </button>
             <button
               type="button"
