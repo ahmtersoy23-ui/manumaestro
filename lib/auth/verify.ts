@@ -342,6 +342,32 @@ export async function requireSuperAdmin(
 }
 
 /**
+ * Service-to-service auth (StockPulse → ManuMaestro sync endpoint).
+ * Sadece /api/production-suggestions/sync route'unda kullanılır;
+ * SSO akışına dokunmaz. Token .env STOCKPULSE_SERVICE_TOKEN.
+ */
+export function requireServiceToken(
+  request: NextRequest,
+): { ok: true } | NextResponse {
+  const expected = process.env.STOCKPULSE_SERVICE_TOKEN;
+  if (!expected) {
+    return NextResponse.json(
+      { success: false, error: 'Service token yapılandırılmamış' },
+      { status: 503 },
+    );
+  }
+  const header = request.headers.get('authorization');
+  const token = header?.startsWith('Bearer ') ? header.slice(7) : null;
+  if (!token || token !== expected) {
+    return NextResponse.json(
+      { success: false, error: 'Geçersiz service token' },
+      { status: 401 },
+    );
+  }
+  return { ok: true };
+}
+
+/**
  * Verify user has required role
  * Returns user if authorized, error response if not
  */

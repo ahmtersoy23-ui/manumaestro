@@ -10,6 +10,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   ChevronRight,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 
@@ -22,6 +23,12 @@ const navSections = [
         href: '/dashboard',
         icon: LayoutDashboard,
         description: 'Aylık üretim görünümü',
+      },
+      {
+        label: 'Talep Girişi V2',
+        href: '/dashboard/oneriler',
+        icon: Sparkles,
+        description: 'StockPulse otomatik öneri (pilot)',
       },
     ],
   },

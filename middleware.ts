@@ -61,6 +61,13 @@ async function runMiddleware(request: NextRequest): Promise<NextResponse> {
     return NextResponse.next();
   }
 
+  // StockPulse → ManuMaestro service-to-service sync.
+  // SSO cookie YOK, Authorization: Bearer <STOCKPULSE_SERVICE_TOKEN> ile yetkilendirilir.
+  // Token kontrolü route handler'da (requireServiceToken) — middleware sadece geçirir.
+  if (request.nextUrl.pathname === '/api/production-suggestions/sync') {
+    return NextResponse.next();
+  }
+
   logger.debug('Request:', request.nextUrl.pathname);
 
   // Apply rate limiting based on endpoint

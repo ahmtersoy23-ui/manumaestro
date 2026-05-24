@@ -29,6 +29,7 @@ model User {
   stockPermission     UserStockPermission?
   shipmentPermissions UserShipmentPermission[]
   requests            ProductionRequest[]
+  decidedSuggestions  ProductionSuggestion[]
   createdMarketplaces Marketplace[]               @relation("CreatedBy")
   auditLogs           AuditLog[]
 
@@ -64,6 +65,7 @@ model Marketplace {
   createdBy     User?                       @relation("CreatedBy", fields: [createdById], references: [id])
   permissions   UserMarketplacePermission[]
   requests      ProductionRequest[]
+  suggestions   ProductionSuggestion[]
   priorities    MarketplacePriority[]
   shippingRoute ShippingRoute?
 
@@ -188,6 +190,49 @@ enum RequestStatus {
 enum EntryType {
   MANUAL
   EXCEL
+  STOCKPULSE
+}
+
+// ============================================
+// PRODUCTION SUGGESTIONS (StockPulse → ManuMaestro köprüsü, V2 pilot)
+// StockPulse günlük tavsiyelerini PENDING olarak yazar; operatör kabul/red eder.
+// Kabul edilince ProductionRequest oluşur (entryType=STOCKPULSE).
+// ============================================
+
+model ProductionSuggestion {
+  id                String           @id @default(uuid())
+  iwasku            String
+  productName       String
+  productCategory   String
+  productSize       Float?           // desi
+  marketplaceId     String
+  productionMonth   String           // "YYYY-MM"
+  suggestedQty      Int              // StockPulse planned_qty (ham)
+  formulaVersion    String           // "v4" | "v4D" | "v1"
+  reasoning         String?          // selectModel autoReasoning
+  l30               Int
+  l90               Int
+  l180              Int
+  status            SuggestionStatus @default(PENDING)
+  acceptedRequestId String?          // ProductionRequest.id (kabul edilirse)
+  syncedAt          DateTime         @default(now())
+  decidedAt         DateTime?
+  decidedById       String?
+
+  marketplace Marketplace @relation(fields: [marketplaceId], references: [id])
+  decidedBy   User?       @relation(fields: [decidedById], references: [id])
+
+  @@unique([iwasku, marketplaceId, productionMonth])
+  @@index([status, productionMonth])
+  @@index([marketplaceId, status])
+  @@map("production_suggestions")
+}
+
+enum SuggestionStatus {
+  PENDING     // Yeni geldi, karar bekliyor
+  ACCEPTED    // ProductionRequest yaratıldı
+  DISMISSED   // Operatör reddetti
+  EXPIRED     // 30+ gün karar verilmedi
 }
 
 enum WorkflowStage {
