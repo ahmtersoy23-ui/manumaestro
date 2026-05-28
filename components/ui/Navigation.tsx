@@ -28,7 +28,7 @@ const navSections = [
         label: 'Dashboard 2',
         href: '/dashboard2',
         icon: Sparkles,
-        description: 'Merkezi üretim talebi (StockPulse otomatik)',
+        description: 'Merkezi üretim talebi — ay seçin',
       },
     ],
   },
