@@ -18,7 +18,7 @@ import { parseMonthValue } from '@/lib/monthUtils';
 import { NewRequestModal } from '@/components/forms/NewRequestModal';
 import {
   DETAIL_CHANNELS_BY_DESTINATION,
-  regionForMarketplace, REGION_LABELS,
+  regionForMarketplace, REGION_LABELS, destinationLabel,
 } from '@/lib/marketplaceRegions';
 
 const logger = createLogger('Dashboard2Destinasyon');
@@ -166,7 +166,7 @@ export default function DestinasyonDetailPage() {
         <span>›</span>
         <Link href={`/dashboard2/${month}`} className="hover:text-purple-600">{monthLabel}</Link>
         <span>›</span>
-        <span className="text-slate-700 font-medium">{destMp?.name ?? destCode}</span>
+        <span className="text-slate-700 font-medium">{destinationLabel(destCode, destMp?.name)}</span>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl p-5 flex flex-wrap items-center justify-between gap-3">
@@ -178,7 +178,7 @@ export default function DestinasyonDetailPage() {
             <Truck className="w-6 h-6 text-purple-600" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900">{destMp?.name ?? destCode}</h1>
+            <h1 className="text-xl font-bold text-slate-900">{destinationLabel(destCode, destMp?.name)}</h1>
             <p className="text-xs text-slate-500">
               {region ? REGION_LABELS[region] : ''} · {channelMps.length} pazar yeri · {monthLabel}
             </p>

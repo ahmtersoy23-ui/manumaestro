@@ -25,7 +25,7 @@ import { parseMonthValue } from '@/lib/monthUtils';
 import { NewRequestModal } from '@/components/forms/NewRequestModal';
 import {
   REGIONS, REGION_LABELS, DESTINATIONS_BY_REGION,
-  DETAIL_CHANNELS_BY_DESTINATION,
+  DETAIL_CHANNELS_BY_DESTINATION, destinationLabel,
   type Region,
 } from '@/lib/marketplaceRegions';
 
@@ -538,7 +538,7 @@ export default function Dashboard2MonthPage() {
                               <Truck className="w-5 h-5 text-purple-600" />
                             </div>
                             <div>
-                              <p className="text-sm font-semibold text-slate-900">{destMp.name}</p>
+                              <p className="text-sm font-semibold text-slate-900">{destinationLabel(destMp.code, destMp.name)}</p>
                               <p className="text-[10px] text-slate-500">
                                 {channelCount > 1 ? `${channelCount} pazar yeri` : '1 pazar yeri'}
                               </p>

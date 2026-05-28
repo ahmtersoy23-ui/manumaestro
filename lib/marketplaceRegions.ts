@@ -27,6 +27,30 @@ export const DESTINATIONS_BY_REGION: Record<Region, string[]> = {
 };
 
 /**
+ * Destinasyon kartlarında gösterilecek "gideceği yer" bazlı etiketler.
+ * Marketplace.name (DB) genel kullanım için, bu etiket sevkiyat hedefini vurgular.
+ */
+export const DESTINATION_LABELS: Record<string, string> = {
+  AMZN_US: 'US FBA',
+  AMZN_UK: 'UK FBA',
+  AMZN_EU: 'EU FBA',
+  AMZN_CA: 'CA FBA',
+  AMZN_AU: 'AU FBA',
+  WAYFAIR_US: 'US CG Depo (Wayfair)',
+  WAYFAIR_UK: 'UK Wayfair',
+  NJ_DEPO: 'US NJ Depo',
+  UK_DEPO: 'UK Depo',
+  EU_NL_DEPO: 'EU NL Depo',
+  TAKEALOT_ZA: 'ZA Takealot',
+  CUSTOM_06: 'TR Trendyol',
+  SEZON: 'TR Sezon',
+};
+
+export function destinationLabel(code: string, fallback?: string): string {
+  return DESTINATION_LABELS[code] ?? fallback ?? code;
+}
+
+/**
  * 2. barem — Destinasyon altında satış görünürlüğü kanalları.
  * Boş array → bu destinasyon kendi başına satış sinyali, alt detay yok.
  */
