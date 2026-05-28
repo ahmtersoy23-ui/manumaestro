@@ -25,10 +25,10 @@ const navSections = [
         description: 'Aylık üretim görünümü',
       },
       {
-        label: 'Talep Girişi V2',
-        href: '/dashboard/oneriler',
+        label: 'Dashboard 2',
+        href: '/dashboard2',
         icon: Sparkles,
-        description: 'StockPulse otomatik öneri (pilot)',
+        description: 'Merkezi üretim talebi (StockPulse otomatik)',
       },
     ],
   },
