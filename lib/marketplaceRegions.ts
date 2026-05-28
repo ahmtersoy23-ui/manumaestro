@@ -46,6 +46,21 @@ export const DETAIL_CHANNELS_BY_DESTINATION: Record<string, string[]> = {
   SEZON: [],
 };
 
+/** Marketplace code → ana Destinasyon code resolve.
+ *  - Eğer code 1. barem (destinasyon) ise: kendisi döner
+ *  - Eğer code 2. barem (detay kanal) ise: bağlı olduğu destinasyon döner
+ *  - Bilinmeyen: null
+ */
+export function destinationForMarketplace(code: string): string | null {
+  for (const region of REGIONS) {
+    if (DESTINATIONS_BY_REGION[region].includes(code)) return code;
+  }
+  for (const [dest, details] of Object.entries(DETAIL_CHANNELS_BY_DESTINATION)) {
+    if (details.includes(code)) return dest;
+  }
+  return null;
+}
+
 /** Marketplace code → Region resolve. Bilinmeyen → null. */
 export function regionForMarketplace(code: string): Region | null {
   for (const region of REGIONS) {
