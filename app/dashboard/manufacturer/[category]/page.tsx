@@ -593,12 +593,12 @@ export default function ManufacturerCategoryPage() {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className="text-sm text-emerald-700">
-                        {group.warehouseStock !== null ? group.warehouseStock : '-'}
+                        {group.warehouseStock ?? 0}
                       </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className={`text-sm font-semibold ${group.netNeed > 0 ? 'text-blue-700' : 'text-green-600'}`}>
-                        {group.warehouseStock !== null ? (group.netNeed > 0 ? group.netNeed : '✓ Yeterli') : '-'}
+                        {group.netNeed > 0 ? group.netNeed : '✓ Yeterli'}
                       </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
@@ -627,7 +627,7 @@ export default function ManufacturerCategoryPage() {
                         const remaining = Math.max(0, group.netNeed - produced);
                         return (
                           <span className={`text-sm font-semibold ${remaining === 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {group.warehouseStock !== null ? (remaining === 0 ? '✓' : remaining) : '-'}
+                            {remaining === 0 ? '✓' : remaining}
                           </span>
                         );
                       })()}
