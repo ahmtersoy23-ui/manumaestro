@@ -36,6 +36,7 @@ const ItemSchema = z.object({
   productName: z.string().min(1).max(200),
   productCategory: z.string().min(1).max(100),
   productSize: z.number().positive().optional().nullable(),
+  recommendedDestination: z.string().max(10).optional().nullable(),
 });
 
 const PayloadSchema = z.object({
@@ -157,7 +158,7 @@ export async function POST(request: NextRequest) {
             marketplaceId: s.marketplaceId,
             productionMonth: s.productionMonth,
           },
-          select: { id: true, entryType: true, status: true, quantity: true },
+          select: { id: true, entryType: true, status: true, quantity: true, recommendedDestination: true },
         });
 
         if (!existing) {
@@ -174,6 +175,7 @@ export async function POST(request: NextRequest) {
               status: 'REQUESTED',
               priority: 'MEDIUM',
               notes: reasoningStr,
+              recommendedDestination: s.recommendedDestination ?? null,
               enteredById: systemUser.id,
             },
           });
@@ -185,8 +187,9 @@ export async function POST(request: NextRequest) {
           // Kapatılmış PR — dokunma
           skipped++;
         } else {
-          // STOCKPULSE varlığı güncelle
-          if (existing.quantity !== s.suggestedQty) {
+          // STOCKPULSE varlığı güncelle (qty veya destinasyon değiştiyse)
+          const newDest = s.recommendedDestination ?? null;
+          if (existing.quantity !== s.suggestedQty || existing.recommendedDestination !== newDest) {
             await prisma.productionRequest.update({
               where: { id: existing.id },
               data: {
@@ -195,6 +198,7 @@ export async function POST(request: NextRequest) {
                 productName: s.productName,
                 productCategory: s.productCategory,
                 productSize: s.productSize ?? null,
+                recommendedDestination: newDest,
               },
             });
             updated++;

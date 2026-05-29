@@ -145,6 +145,7 @@ model ProductionRequest {
   status            RequestStatus   @default(REQUESTED)
   workflowStage     WorkflowStage? // For furniture category workflow tracking
   entryType         EntryType
+  recommendedDestination String? @db.VarChar(10) // Sevkiyat hedefi: US_FBA/NJ_DEPO/CG_DEPO/UK_FBA/UK_DEPO/EU_FBA/NL_DEPO/CA_FBA/AU_FBA. StockPulse sync ile yazılır; null ise pipeline endpoint runtime hesaplar.
   notes             String? // Operator notes
   manufacturerNotes String? // Manufacturer production notes
   enteredById       String

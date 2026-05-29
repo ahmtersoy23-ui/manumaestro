@@ -46,6 +46,7 @@ interface PipelineItem {
   reasoning: string | null;
   createdAt: string;
   notes: string | null;
+  recommendedDestination: string | null;
 }
 
 /**
@@ -279,6 +280,7 @@ export const GET = withRoute(
         reasoning: s.reasoning,
         createdAt: s.syncedAt.toISOString(),
         notes: null,
+        recommendedDestination: null, // suggestion'da kolon yok — PR'a accept edilince yazılır
       });
     }
 
@@ -312,6 +314,7 @@ export const GET = withRoute(
         reasoning: null,
         createdAt: r.createdAt.toISOString(),
         notes: r.notes,
+        recommendedDestination: r.recommendedDestination,
       });
     }
 

@@ -17,8 +17,8 @@ import { createLogger } from '@/lib/logger';
 import { parseMonthValue } from '@/lib/monthUtils';
 import { NewRequestModal } from '@/components/forms/NewRequestModal';
 import {
-  DETAIL_CHANNELS_BY_DESTINATION,
   regionForMarketplace, REGION_LABELS, destinationLabel,
+  SHIPMENT_DESTINATION_LABELS,
 } from '@/lib/marketplaceRegions';
 
 const logger = createLogger('Dashboard2Destinasyon');
@@ -45,6 +45,7 @@ interface PipelineItem {
   reasoning: string | null;
   createdAt: string;
   notes: string | null;
+  recommendedDestination: string | null;
 }
 
 export default function DestinasyonDetailPage() {
@@ -55,17 +56,13 @@ export default function DestinasyonDetailPage() {
   const [allMarketplaces, setAllMarketplaces] = useState<MarketplaceMeta[]>([]);
   const [items, setItems] = useState<PipelineItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [marketplaceFilter, setMarketplaceFilter] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [q, setQ] = useState('');
   const [newReqOpen, setNewReqOpen] = useState(false);
 
   const destMp = useMemo(() => allMarketplaces.find(m => m.code === destCode), [allMarketplaces, destCode]);
-  const detailCodes = DETAIL_CHANNELS_BY_DESTINATION[destCode] ?? [];
-  const allCodes = useMemo(() => [destCode, ...detailCodes], [destCode, detailCodes]);
-  const channelMps = useMemo(() =>
-    allCodes.map(c => allMarketplaces.find(m => m.code === c)).filter(Boolean) as MarketplaceMeta[],
-    [allCodes, allMarketplaces]);
+  // Artık sayfa SADECE bu pazar yerinin PR'larını gösterir (alt-detay kanal yok).
+  const channelMps = useMemo(() => destMp ? [destMp] : [], [destMp]);
   const region = useMemo(() => regionForMarketplace(destCode), [destCode]);
 
   const loadAll = async () => {
@@ -75,14 +72,14 @@ export default function DestinasyonDetailPage() {
       const mpData = await mpRes.json();
       if (mpData.success) setAllMarketplaces(mpData.data);
 
-      // /api/production-pipeline endpoint region bazlı filter alıyor;
-      // tüm bölge geliyor, client tarafında destCode + detayları filtreleyeceğiz.
+      // production-pipeline region bazlı tüm PR'ları döner; client tarafında
+      // sadece bu pazar yerine ait olanları filtrele.
       const reg = regionForMarketplace(destCode);
       if (reg) {
         const res = await fetch(`/api/production-pipeline?region=${reg}&productionMonth=${month}`);
         const data = await res.json();
         if (data.success) {
-          const filtered = (data.data.items as PipelineItem[]).filter(it => allCodes.includes(it.marketplaceCode));
+          const filtered = (data.data.items as PipelineItem[]).filter(it => it.marketplaceCode === destCode);
           setItems(filtered);
         }
       }
@@ -96,10 +93,9 @@ export default function DestinasyonDetailPage() {
 
   useEffect(() => { loadAll(); }, [month, destCode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Filter
+  // Filter (marketplace zaten tek — sayfa marketplaceCode'a göre)
   const filtered = useMemo(() => {
     return items.filter(it => {
-      if (marketplaceFilter && it.marketplaceCode !== marketplaceFilter) return false;
       if (statusFilter && it.status !== statusFilter) return false;
       if (q) {
         const ql = q.toLowerCase();
@@ -107,7 +103,7 @@ export default function DestinasyonDetailPage() {
       }
       return true;
     });
-  }, [items, marketplaceFilter, statusFilter, q]);
+  }, [items, statusFilter, q]);
 
   const monthLabel = useMemo(() => {
     try { return parseMonthValue(month).toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' }); }
@@ -215,16 +211,6 @@ export default function DestinasyonDetailPage() {
       {/* Filter bar */}
       <div className="bg-white border border-slate-200 rounded-lg p-3 flex flex-wrap gap-3 items-end">
         <div>
-          <label className="block text-[10px] uppercase text-slate-500 mb-1">Pazar Yeri</label>
-          <select value={marketplaceFilter} onChange={e => setMarketplaceFilter(e.target.value)}
-            className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm w-48">
-            <option value="">Tümü ({channelMps.length})</option>
-            {channelMps.map(mp => (
-              <option key={mp.code} value={mp.code}>{mp.name}</option>
-            ))}
-          </select>
-        </div>
-        <div>
           <label className="block text-[10px] uppercase text-slate-500 mb-1">Durum</label>
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
             className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm w-36">
@@ -254,7 +240,7 @@ export default function DestinasyonDetailPage() {
               <tr>
                 <th className="px-3 py-2 text-left text-xs font-medium whitespace-nowrap">IWASKU</th>
                 <th className="px-3 py-2 text-left text-xs font-medium">Ürün</th>
-                <th className="px-3 py-2 text-left text-xs font-medium whitespace-nowrap">Pazar Yeri</th>
+                <th className="px-3 py-2 text-left text-xs font-medium whitespace-nowrap">Destinasyon</th>
                 <th className="px-3 py-2 text-left text-xs font-medium whitespace-nowrap">Kategori</th>
                 <th className="px-3 py-2 text-right text-xs font-medium whitespace-nowrap">Adet</th>
                 <th className="px-3 py-2 text-right text-xs font-medium whitespace-nowrap">L30</th>
@@ -275,9 +261,13 @@ export default function DestinasyonDetailPage() {
                   <td className="px-3 py-1.5 font-mono text-xs text-cyan-700 whitespace-nowrap">{it.iwasku}</td>
                   <td className="px-3 py-1.5 text-xs text-slate-900 break-words" title={it.productName}>{it.productName}</td>
                   <td className="px-3 py-1.5 text-xs whitespace-nowrap">
-                    <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px]">
-                      {it.marketplaceName}
-                    </span>
+                    {it.recommendedDestination ? (
+                      <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 text-[11px] font-medium">
+                        {SHIPMENT_DESTINATION_LABELS[it.recommendedDestination] ?? it.recommendedDestination}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 text-[11px]">-</span>
+                    )}
                   </td>
                   <td className="px-3 py-1.5 text-xs text-slate-600 whitespace-nowrap">{it.productCategory}</td>
                   <td className="px-3 py-1.5 text-right text-sm font-bold text-purple-700 tabular-nums whitespace-nowrap">{it.quantity.toLocaleString('tr-TR')}</td>

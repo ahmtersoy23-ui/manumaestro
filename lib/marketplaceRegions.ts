@@ -18,32 +18,59 @@ export const REGION_LABELS: Record<Region, string> = {
   OTHER: 'Diğer',
 };
 
-/** 1. barem — Üretim emri verilen marketplace code'ları (her bölge için sıralı). */
+/**
+ * Pazar yeri listesi (her bölge için sıralı).
+ * Üretim talepleri PR.marketplaceId = pazar yeri (Amazon US, Shopify, Wayfair, vs).
+ * Sevkiyat hedefi (US FBA / NJ Depo / CG Depo / vs) PR.recommendedDestination
+ * kolonunda; UI'da tablo kolonu olarak gösterilir.
+ *
+ * Eski destinasyon marketplaces (NJ_DEPO, UK_DEPO, EU_NL_DEPO) artık burada YOK —
+ * StockPulse pazar yeri-bazlı sync ile bunlara yazmıyor, sadece eski PR'lar için
+ * geriye dönük destek (pipeline endpoint'inde fallback mapping).
+ */
 export const DESTINATIONS_BY_REGION: Record<Region, string[]> = {
-  US: ['AMZN_US', 'NJ_DEPO', 'WAYFAIR_US'],
-  UK: ['AMZN_UK', 'UK_DEPO', 'WAYFAIR_UK'],
-  EU: ['AMZN_EU', 'EU_NL_DEPO'],
+  US: ['AMZN_US', 'CUSTOM_07', 'CUSTOM_05', 'CUSTOM_01', 'CUSTOM_03', 'WAYFAIR_US'],
+  UK: ['AMZN_UK', 'WAYFAIR_UK', 'CUSTOM_04'],
+  EU: ['AMZN_EU', 'BOL_NL', 'CUSTOM_02'],
   OTHER: ['AMZN_CA', 'AMZN_AU', 'TAKEALOT_ZA', 'CUSTOM_06', 'SEZON'],
 };
 
 /**
- * Destinasyon kartlarında gösterilecek "gideceği yer" bazlı etiketler.
- * Marketplace.name (DB) genel kullanım için, bu etiket sevkiyat hedefini vurgular.
+ * Pazar yeri kartlarında gösterilecek etiket.
+ * marketplace.name DB'de kısa (Amazon Citi, Shopify vs.) — UI için yeterli, bu
+ * mapping artık sevkiyat hedefini değil pazar yeri adını vurgular.
  */
 export const DESTINATION_LABELS: Record<string, string> = {
-  AMZN_US: 'US FBA',
-  AMZN_UK: 'UK FBA',
-  AMZN_EU: 'EU FBA',
-  AMZN_CA: 'CA FBA',
-  AMZN_AU: 'AU FBA',
-  WAYFAIR_US: 'US CG Depo (Wayfair)',
-  WAYFAIR_UK: 'UK Wayfair',
-  NJ_DEPO: 'US NJ Depo',
+  AMZN_US: 'Amazon US',
+  AMZN_UK: 'Amazon UK',
+  AMZN_EU: 'Amazon EU',
+  AMZN_CA: 'Amazon CA',
+  AMZN_AU: 'Amazon AU',
+  WAYFAIR_US: 'Wayfair',
+  WAYFAIR_UK: 'Wayfair UK',
+  CUSTOM_01: 'Amazon Citi',
+  CUSTOM_02: 'Kaufland',
+  CUSTOM_03: 'Etsy',
+  CUSTOM_04: 'Ebay',
+  CUSTOM_05: 'Walmart',
+  CUSTOM_06: 'Trendyol',
+  CUSTOM_07: 'Shopify',
+  BOL_NL: 'Bol',
+  TAKEALOT_ZA: 'Takealot',
+  SEZON: 'Sezon',
+};
+
+/** recommendedDestination → Türkçe gösterim etiketi (sevkiyat hedefi). */
+export const SHIPMENT_DESTINATION_LABELS: Record<string, string> = {
+  US_FBA: 'US FBA',
+  NJ_DEPO: 'NJ Depo',
+  CG_DEPO: 'CG Depo',
+  UK_FBA: 'UK FBA',
   UK_DEPO: 'UK Depo',
-  EU_NL_DEPO: 'EU NL Depo',
-  TAKEALOT_ZA: 'ZA Takealot',
-  CUSTOM_06: 'TR Trendyol',
-  SEZON: 'TR Sezon',
+  EU_FBA: 'EU FBA',
+  NL_DEPO: 'NL Depo',
+  CA_FBA: 'CA FBA',
+  AU_FBA: 'AU FBA',
 };
 
 export function destinationLabel(code: string, fallback?: string): string {
