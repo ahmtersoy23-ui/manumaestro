@@ -31,7 +31,12 @@ function resolveTargetWarehouse(destinationTab: string, boxDestination: string):
     // FBA koliler doğrudan kargoya teslim edilir, depoya hiç girmez
     return null;
   }
-  // Diğer destinasyonlar şimdilik raf takibinde değil
+  if (destinationTab === 'EU') {
+    if (boxDestination === 'DEPO' || boxDestination === 'NL') return 'NL';
+    // FBA (Amazon EU) doğrudan Amazon inbound — depoya girmez
+    return null;
+  }
+  // UK / CA / AU / ZA: şimdilik raf takibinde değil (FBA odaklı)
   return null;
 }
 
