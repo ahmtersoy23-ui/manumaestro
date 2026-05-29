@@ -27,7 +27,7 @@ const ItemSchema = z.object({
   iwasku: z.string().min(1).max(50),
   marketplaceCode: z.string().min(1).max(50),
   productionMonth: z.string().regex(/^\d{4}-\d{2}$/),
-  suggestedQty: z.number().int().positive().max(999999),
+  suggestedQty: z.number().int().nonnegative().max(999999),
   formulaVersion: z.string().min(1).max(20),
   reasoning: z.string().max(500).optional().nullable(),
   l30: z.number().int().nonnegative(),
@@ -103,6 +103,7 @@ export async function POST(request: NextRequest) {
 
     let created = 0;
     let updated = 0;
+    let deleted = 0;
     let skipped = suggestions.length - validRows.length; // unknown marketplace
     const now = new Date();
 
@@ -162,6 +163,11 @@ export async function POST(request: NextRequest) {
         });
 
         if (!existing) {
+          if (s.suggestedQty === 0) {
+            // Yeni kayıt + qty=0: yaratma. Sezonsal/durdurulan SKU'lar.
+            skipped++;
+            continue;
+          }
           await prisma.productionRequest.create({
             data: {
               iwasku: s.iwasku,
@@ -181,11 +187,16 @@ export async function POST(request: NextRequest) {
           });
           created++;
         } else if (existing.entryType !== 'STOCKPULSE') {
-          // Operatör manuel veya excel girmiş — dokunma
+          // Operatör manuel veya excel girmiş — dokunma (qty=0 dahil)
           skipped++;
         } else if (existing.status === 'COMPLETED' || existing.status === 'CANCELLED') {
           // Kapatılmış PR — dokunma
           skipped++;
+        } else if (s.suggestedQty === 0) {
+          // STOCKPULSE + qty=0: sezonsal/durdurulmuş SKU → eski PR'ı SİL.
+          // Operatör listede görmesin; gelecek sync planned_qty>0 olursa yeniden yaratılır.
+          await prisma.productionRequest.delete({ where: { id: existing.id } });
+          deleted++;
         } else {
           // STOCKPULSE varlığı güncelle (qty veya destinasyon değiştiyse)
           const newDest = s.recommendedDestination ?? null;
@@ -212,13 +223,14 @@ export async function POST(request: NextRequest) {
     revalidateTag('dashboard-stats', 'default');
 
     logger.info('StockPulse sync tamamlandı', {
-      processed: suggestions.length, created, updated, skipped, unknownMarketplaces,
+      processed: suggestions.length, created, updated, deleted, skipped, unknownMarketplaces,
     });
 
     return successResponse({
       processed: suggestions.length,
       created,
       updated,
+      deleted,
       skipped,
       unknownMarketplaces,
     });
