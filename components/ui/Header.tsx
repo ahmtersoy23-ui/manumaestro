@@ -115,14 +115,6 @@ export function Header() {
               </>
             )}
 
-            <Link
-              href="/dashboard"
-              className="text-xs text-slate-400 hover:text-slate-600 hover:underline transition-colors"
-              title="V1 dashboard — geçici erişim"
-            >
-              Eski Görünüm
-            </Link>
-
             <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
               <div className="text-right">
                 <p className="text-sm font-medium text-gray-900">{user?.name || 'Kullanıcı'}</p>
@@ -222,14 +214,6 @@ export function Header() {
                 </Link>
               </>
             )}
-
-            <Link
-              href="/dashboard"
-              onClick={() => setMenuOpen(false)}
-              className="flex items-center gap-3 px-3 py-2.5 text-xs text-slate-500 hover:bg-gray-100 rounded-lg"
-            >
-              Eski Görünüm (V1)
-            </Link>
 
             <button
               onClick={logout}
