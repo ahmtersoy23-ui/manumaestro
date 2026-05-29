@@ -46,7 +46,7 @@ export function Header() {
           {/* Desktop: Right side */}
           <div className="hidden md:flex items-center gap-4">
             <Link
-              href="/dashboard"
+              href="/dashboard2"
               className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
               title="Ana Sayfa"
             >
@@ -115,6 +115,14 @@ export function Header() {
               </>
             )}
 
+            <Link
+              href="/dashboard"
+              className="text-xs text-slate-400 hover:text-slate-600 hover:underline transition-colors"
+              title="V1 dashboard — geçici erişim"
+            >
+              Eski Görünüm
+            </Link>
+
             <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
               <div className="text-right">
                 <p className="text-sm font-medium text-gray-900">{user?.name || 'Kullanıcı'}</p>
@@ -170,7 +178,7 @@ export function Header() {
             </div>
 
             <Link
-              href="/dashboard"
+              href="/dashboard2"
               onClick={() => setMenuOpen(false)}
               className="flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
             >
@@ -214,6 +222,14 @@ export function Header() {
                 </Link>
               </>
             )}
+
+            <Link
+              href="/dashboard"
+              onClick={() => setMenuOpen(false)}
+              className="flex items-center gap-3 px-3 py-2.5 text-xs text-slate-500 hover:bg-gray-100 rounded-lg"
+            >
+              Eski Görünüm (V1)
+            </Link>
 
             <button
               onClick={logout}
