@@ -53,11 +53,33 @@ export async function queryProductDb(query: string, params: (string | number | b
   }
 }
 
-// Graceful shutdown: close both connection pools (register once)
+// DataBridge database client (databridge_db) — Wisersell raw_orders için read-only.
+// Production-pipeline endpoint pazar yeri-bazlı L30/L90 hesabında kullanır.
+const databridgePool = new Pool({
+  connectionString: process.env.DATABRIDGE_DB_URL,
+  user: undefined,
+  database: undefined,
+  password: undefined,
+  host: undefined,
+  port: undefined,
+});
+
+export async function queryDataBridge(query: string, params: (string | number | boolean | null | string[])[] = []) {
+  const client = await databridgePool.connect();
+  try {
+    const result = await client.query(query, params);
+    return result.rows;
+  } finally {
+    client.release();
+  }
+}
+
+// Graceful shutdown: close all connection pools (register once)
 if (!(globalThis as Record<string, unknown>).__dbCleanupRegistered) {
   (globalThis as Record<string, unknown>).__dbCleanupRegistered = true;
   const cleanup = async () => {
     await productPool.end().catch(() => {});
+    await databridgePool.end().catch(() => {});
     await pool.end().catch(() => {});
   };
   process.on('SIGTERM', cleanup);

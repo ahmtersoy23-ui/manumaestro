@@ -13,7 +13,7 @@
  */
 
 import { Prisma } from '@prisma/client';
-import { prisma, queryProductDb } from '@/lib/db/prisma';
+import { prisma, queryProductDb, queryDataBridge } from '@/lib/db/prisma';
 import { isSuperAdmin } from '@/lib/auth/verify';
 import { successResponse } from '@/lib/api/response';
 import { withRoute } from '@/lib/api/withRoute';
@@ -48,19 +48,41 @@ interface PipelineItem {
   notes: string | null;
 }
 
-/** marketplace_code → sales_data.channel mapping (L30/L90 enrichment için). */
-function marketplaceToChannel(code: string): string | null {
-  if (code.startsWith('AMZN_')) {
-    return code.slice(5).toLowerCase(); // AMZN_US → us, AMZN_UK → uk
-  }
-  // US non-FBA marketplace'ler (NJ_DEPO altındakiler) → us
-  if (['NJ_DEPO', 'WAYFAIR_US', 'CUSTOM_01', 'CUSTOM_03', 'CUSTOM_05', 'CUSTOM_07'].includes(code)) {
-    return 'us';
-  }
-  if (['UK_DEPO', 'WAYFAIR_UK', 'CUSTOM_04'].includes(code)) return 'uk';
-  if (['EU_NL_DEPO', 'BOL_NL', 'CUSTOM_02'].includes(code)) return 'eu';
-  if (code === 'TAKEALOT_ZA') return 'za';
-  if (code === 'CUSTOM_06') return 'tr';
+/**
+ * marketplace_code → satış kaynağı çözümleme (L30/L90 enrichment için).
+ *
+ * StockPulse snapshot job aynı kaynakları kullanır (server/services/salesAggregator.cjs):
+ *   - sales_data: Amazon, Walmart, Wayfair, Bol, Kaufland, Takealot
+ *   - databridge.raw_orders: Wisersell-only (Shopify/CITI/Etsy/Ebay/Trendyol)
+ *
+ * Eski destinasyon-bazlı marketplace'ler (NJ_DEPO/UK_DEPO/EU_NL_DEPO) için fallback
+ * Amazon birleşik kullanılır — yeni pazar yeri-bazlı PR'lar geldiğinde otomatik
+ * doğru kaynaktan beslenir.
+ */
+type SalesSource =
+  | { kind: 'sales_data'; channels: string[] }
+  | { kind: 'wisersell'; pattern: string; ulke: string };
+
+function marketplaceToSource(code: string): SalesSource | null {
+  // sales_data tarafı
+  if (code === 'AMZN_US' || code === 'NJ_DEPO') return { kind: 'sales_data', channels: ['us'] };
+  if (code === 'AMZN_UK' || code === 'UK_DEPO') return { kind: 'sales_data', channels: ['uk'] };
+  if (code === 'AMZN_EU' || code === 'EU_NL_DEPO') return { kind: 'sales_data', channels: ['eu'] };
+  if (code === 'AMZN_CA') return { kind: 'sales_data', channels: ['ca'] };
+  if (code === 'AMZN_AU') return { kind: 'sales_data', channels: ['au'] };
+  if (code === 'WAYFAIR_US') return { kind: 'sales_data', channels: ['wfs', 'wfm'] };
+  if (code === 'CUSTOM_05') return { kind: 'sales_data', channels: ['walmart'] };
+  if (code === 'CUSTOM_02') return { kind: 'sales_data', channels: ['kaufland_de', 'kaufland_at', 'kaufland_pl', 'kaufland_cz', 'kaufland_sk'] };
+  if (code === 'BOL_NL') return { kind: 'sales_data', channels: ['bol_pera', 'bol_onebv'] };
+  if (code === 'TAKEALOT_ZA') return { kind: 'sales_data', channels: ['takealot'] };
+
+  // Wisersell raw_orders tarafı (LIKE pattern + ulke filter)
+  if (code === 'CUSTOM_01') return { kind: 'wisersell', pattern: 'Ama_CITI', ulke: 'United States' };
+  if (code === 'CUSTOM_03') return { kind: 'wisersell', pattern: 'Etsy%', ulke: 'United States' };
+  if (code === 'CUSTOM_04') return { kind: 'wisersell', pattern: 'eBay%', ulke: 'United Kingdom' };
+  if (code === 'CUSTOM_06') return { kind: 'wisersell', pattern: 'T\\_%', ulke: 'Turkiye' };
+  if (code === 'CUSTOM_07') return { kind: 'wisersell', pattern: 'S\\_%', ulke: 'United States' };
+
   return null;
 }
 
@@ -153,36 +175,77 @@ export const GET = withRoute(
       ? suggestions.filter(s => s.status === status)
       : (status ? [] : suggestions); // status= REQUESTED/IN_PROD ise suggestion gösterme
 
-    // 4. L30/L90/L180 enrichment for REQUESTS (suggestions zaten dolu)
-    // Tek query: tüm iwasku + channel kombinasyonları için sales_data
-    const requestSalesKeys = new Set<string>();
+    // 4. L30/L90/L180 enrichment for REQUESTS (suggestions zaten dolu).
+    // Pazar yeri-bazlı kaynak çözümü: salesMap key = iwasku|marketplaceCode.
+    // sales_data kanalları tek sorgu + marketplace bazlı SUM; Wisersell-only
+    // pazar yerleri (Etsy/Shopify/CITI/Ebay/Trendyol) için ayrı raw_orders sorgusu.
+    const salesMap = new Map<string, { l30: number; l90: number; l180: number }>();
+    const iwaskus = [...new Set(requests.map(r => r.iwasku))];
+    const usedCodes = new Set<string>();
     requests.forEach(r => {
       const mp = mpById.get(r.marketplaceId);
-      if (!mp) return;
-      const channel = marketplaceToChannel(mp.code);
-      if (channel) requestSalesKeys.add(`${r.iwasku}|${channel}`);
+      if (mp) usedCodes.add(mp.code);
     });
 
-    const salesMap = new Map<string, { l30: number; l90: number; l180: number }>();
-    if (requestSalesKeys.size > 0) {
-      const iwaskus = [...new Set(requests.map(r => r.iwasku))];
-      const channels = [...new Set(
-        requests.map(r => marketplaceToChannel(mpById.get(r.marketplaceId)?.code ?? '')).filter(Boolean) as string[],
-      )];
-      if (iwaskus.length > 0 && channels.length > 0) {
+    if (iwaskus.length > 0 && usedCodes.size > 0) {
+      // sales_data tarafı: tüm gerekli channel'ları topla, channel→code geri eşleme.
+      const allChannels = new Set<string>();
+      const channelToCode = new Map<string, string>();
+      const wisersellCodes: Array<{ code: string; pattern: string; ulke: string }> = [];
+      for (const code of usedCodes) {
+        const src = marketplaceToSource(code);
+        if (!src) continue;
+        if (src.kind === 'sales_data') {
+          for (const ch of src.channels) {
+            allChannels.add(ch);
+            channelToCode.set(ch, code);
+          }
+        } else {
+          wisersellCodes.push({ code, pattern: src.pattern, ulke: src.ulke });
+        }
+      }
+
+      if (allChannels.size > 0) {
         const rows = await queryProductDb(
           `SELECT iwasku, channel, last30, last90, last180
            FROM sales_data
            WHERE iwasku = ANY($1::text[])
              AND channel = ANY($2::text[])
              AND fulfillment_channel IS NULL`,
-          [iwaskus as unknown as string, channels as unknown as string],
+          [iwaskus as unknown as string, [...allChannels] as unknown as string],
         );
         for (const row of rows as Array<{ iwasku: string; channel: string; last30: number; last90: number; last180: number }>) {
-          salesMap.set(`${row.iwasku}|${row.channel}`, {
-            l30: row.last30 ?? 0,
-            l90: row.last90 ?? 0,
-            l180: row.last180 ?? 0,
+          const code = channelToCode.get(row.channel);
+          if (!code) continue;
+          const key = `${row.iwasku}|${code}`;
+          const ex = salesMap.get(key) ?? { l30: 0, l90: 0, l180: 0 };
+          salesMap.set(key, {
+            l30: ex.l30 + (row.last30 ?? 0),
+            l90: ex.l90 + (row.last90 ?? 0),
+            l180: ex.l180 + (row.last180 ?? 0),
+          });
+        }
+      }
+
+      // Wisersell raw_orders: her marketplaceCode için ayrı sorgu (LIKE pattern + ulke).
+      for (const { code, pattern, ulke } of wisersellCodes) {
+        const rows = await queryDataBridge(
+          `SELECT iwasku,
+                  SUM(CASE WHEN siparis_tarihi >= CURRENT_DATE - 30  THEN adet ELSE 0 END)::int AS l30,
+                  SUM(CASE WHEN siparis_tarihi >= CURRENT_DATE - 90  THEN adet ELSE 0 END)::int AS l90,
+                  SUM(CASE WHEN siparis_tarihi >= CURRENT_DATE - 180 THEN adet ELSE 0 END)::int AS l180
+           FROM wisersell_orders
+           WHERE iwasku = ANY($1::text[])
+             AND ulke = $2
+             AND platform LIKE $3 ESCAPE '\\'
+           GROUP BY iwasku`,
+          [iwaskus, ulke, pattern],
+        );
+        for (const row of rows as Array<{ iwasku: string; l30: number; l90: number; l180: number }>) {
+          salesMap.set(`${row.iwasku}|${code}`, {
+            l30: row.l30 ?? 0,
+            l90: row.l90 ?? 0,
+            l180: row.l180 ?? 0,
           });
         }
       }
@@ -222,8 +285,7 @@ export const GET = withRoute(
     for (const r of requests) {
       const mp = mpById.get(r.marketplaceId);
       if (!mp) continue;
-      const channel = marketplaceToChannel(mp.code);
-      const sales = channel ? salesMap.get(`${r.iwasku}|${channel}`) : null;
+      const sales = salesMap.get(`${r.iwasku}|${mp.code}`);
       let source: PipelineItem['source'] = 'MANUAL';
       if (r.entryType === 'STOCKPULSE') source = 'AUTO_ACCEPTED';
       else if (r.entryType === 'EXCEL') source = 'EXCEL';
