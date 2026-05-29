@@ -1,22 +1,30 @@
 /**
  * Shipments Dashboard — Server Component.
  *
- * URL searchParams ile destinasyon seçimi (?tab=US_FBA|NJ_DEPO|CG_DEPO|...).
- * Yeni yapı: 2-seviyeli tab (üst ülke + alt destinasyon). ShipmentsClient
- * tab değişimini router.replace(?tab=...) ile tetikler, fresh RSC.
+ * URL searchParams ile ülke tab seçimi (?tab=US|UK|EU|CA|AU|ZA).
+ * Sevkiyat artık ülke-bazlı konteyner; içindeki item'lar farklı destinasyona
+ * gidebilir (US gemisi içinde US FBA + NJ Depo + CG Depo karma).
+ *
+ * "Bekleyen Havuzlar" kartı için /api/shipments/pools?country=... ayrıca client'tan
+ * fetch ediliyor (real-time özet).
  */
 
 import { prisma } from '@/lib/db/prisma';
 import { getShipmentRole, canDoAction } from '@/lib/auth/shipmentPermission';
 import { getRscUser } from '@/lib/auth/rscUser';
-import { SHIPMENT_DESTINATIONS_BY_COUNTRY, SHIPMENT_COUNTRIES } from '@/lib/marketplaceRegions';
+import { SHIPMENT_COUNTRIES, type ShipmentCountry } from '@/lib/marketplaceRegions';
 import { ShipmentsClient, type ShipmentDTO } from './ShipmentsClient';
 
-const ALL_DESTINATIONS = SHIPMENT_COUNTRIES.flatMap(c => SHIPMENT_DESTINATIONS_BY_COUNTRY[c]);
-
-function parseDestination(raw: string | undefined): string {
-  if (raw && ALL_DESTINATIONS.includes(raw)) return raw;
-  return 'US_FBA'; // default
+function parseCountry(raw: string | undefined): ShipmentCountry {
+  if (raw && (SHIPMENT_COUNTRIES as readonly string[]).includes(raw)) return raw as ShipmentCountry;
+  // Geriye uyumluluk: eski destinasyon koduyla geldi ise ülkeye map
+  if (raw === 'US_FBA' || raw === 'NJ_DEPO' || raw === 'CG_DEPO') return 'US';
+  if (raw === 'UK_FBA' || raw === 'UK_DEPO') return 'UK';
+  if (raw === 'EU_FBA' || raw === 'NL_DEPO') return 'EU';
+  if (raw === 'CA_FBA') return 'CA';
+  if (raw === 'AU_FBA') return 'AU';
+  if (raw === 'ZA_TAKEALOT') return 'ZA';
+  return 'US';
 }
 
 interface PageProps {
@@ -25,15 +33,15 @@ interface PageProps {
 
 export default async function ShipmentsPage({ searchParams }: PageProps) {
   const { tab: tabParam } = await searchParams;
-  const activeDestination = parseDestination(tabParam);
+  const activeCountry = parseCountry(tabParam);
 
   const user = await getRscUser();
 
   const shipments = await prisma.shipment.findMany({
-    where: { destinationTab: activeDestination },
+    where: { destinationTab: activeCountry },
     include: {
       items: {
-        select: { iwasku: true, quantity: true, desi: true, marketplaceId: true },
+        select: { iwasku: true, quantity: true, desi: true, marketplaceId: true, recommendedDestination: true },
       },
       _count: { select: { items: true } },
     },
@@ -44,6 +52,12 @@ export default async function ShipmentsPage({ searchParams }: PageProps) {
   const initialShipments: ShipmentDTO[] = shipments.map(s => {
     const totalQty = s.items.reduce((sum, i) => sum + i.quantity, 0);
     const totalDesi = s.items.reduce((sum, i) => sum + (i.desi ?? 0) * i.quantity, 0);
+    // Destinasyon dağılımı (item-level recommendedDestination'a göre)
+    const destBreakdown: Record<string, number> = {};
+    for (const item of s.items) {
+      const d = item.recommendedDestination ?? 'UNKNOWN';
+      destBreakdown[d] = (destBreakdown[d] ?? 0) + item.quantity;
+    }
     return {
       id: s.id,
       name: s.name,
@@ -58,17 +72,18 @@ export default async function ShipmentsPage({ searchParams }: PageProps) {
         totalQty,
         totalDesi: Math.round(totalDesi),
       },
+      destBreakdown,
     };
   });
 
   const userShipRole = user
-    ? await getShipmentRole(user.id, user.role, activeDestination)
+    ? await getShipmentRole(user.id, user.role, activeCountry)
     : null;
   const canCreate = canDoAction(userShipRole, 'createShipment');
 
   return (
     <ShipmentsClient
-      activeDestination={activeDestination}
+      activeCountry={activeCountry}
       initialShipments={initialShipments}
       canCreate={canCreate}
     />

@@ -542,6 +542,7 @@ model ShipmentItem {
   packed              Boolean   @default(false) // Depo: hazırlandı/paketlendi
   sentAt              DateTime? // Gönderildi tarihi (null = bekleyen)
   fnsku               String? // Manuel FNSKU girişi (sku_master'da yoksa)
+  recommendedDestination String? @db.VarChar(10) // Son sevkiyat hedefi: US_FBA/NJ_DEPO/CG_DEPO/UK_FBA/UK_DEPO/EU_FBA/NL_DEPO/CA_FBA/AU_FBA/ZA_TAKEALOT. Karma sevkiyat içinde item-level destinasyon.
 
   createdAt DateTime @default(now())
 
