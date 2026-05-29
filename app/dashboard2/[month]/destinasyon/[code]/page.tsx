@@ -18,7 +18,7 @@ import { parseMonthValue } from '@/lib/monthUtils';
 import { NewRequestModal } from '@/components/forms/NewRequestModal';
 import {
   regionForMarketplace, REGION_LABELS, destinationLabel,
-  SHIPMENT_DESTINATION_LABELS,
+  SHIPMENT_DESTINATION_LABELS, SHIPMENT_DESTINATION_STYLES,
 } from '@/lib/marketplaceRegions';
 
 const logger = createLogger('Dashboard2Destinasyon');
@@ -261,11 +261,15 @@ export default function DestinasyonDetailPage() {
                   <td className="px-3 py-1.5 font-mono text-xs text-cyan-700 whitespace-nowrap">{it.iwasku}</td>
                   <td className="px-3 py-1.5 text-xs text-slate-900 break-words" title={it.productName}>{it.productName}</td>
                   <td className="px-3 py-1.5 text-xs whitespace-nowrap">
-                    {it.recommendedDestination ? (
-                      <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 text-[11px] font-medium">
-                        {SHIPMENT_DESTINATION_LABELS[it.recommendedDestination] ?? it.recommendedDestination}
-                      </span>
-                    ) : (
+                    {it.recommendedDestination ? (() => {
+                      const style = SHIPMENT_DESTINATION_STYLES[it.recommendedDestination]
+                        ?? { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' };
+                      return (
+                        <span className={`px-1.5 py-0.5 rounded border text-[11px] font-medium ${style.bg} ${style.text} ${style.border}`}>
+                          {SHIPMENT_DESTINATION_LABELS[it.recommendedDestination] ?? it.recommendedDestination}
+                        </span>
+                      );
+                    })() : (
                       <span className="text-slate-400 text-[11px]">-</span>
                     )}
                   </td>

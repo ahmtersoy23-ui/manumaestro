@@ -73,6 +73,26 @@ export const SHIPMENT_DESTINATION_LABELS: Record<string, string> = {
   AU_FBA: 'AU FBA',
 };
 
+/**
+ * recommendedDestination → badge stil (Tailwind sınıfları).
+ * Mantık:
+ *   - FBA'lar (Amazon direkt): "soğuk" tonlar (yeşil/mavi/indigo/cyan/teal)
+ *   - Depolar: "sıcak/dikkat çekici" tonlar (amber/rose/pink/violet)
+ *   - Operatör hızlı taramada FBA ile Depo'yu ayırt edebilir; ayrıca her bölge
+ *     kendine özgü renge sahip (US FBA emerald, UK FBA sky, vs).
+ */
+export const SHIPMENT_DESTINATION_STYLES: Record<string, { bg: string; text: string; border: string }> = {
+  US_FBA:  { bg: 'bg-emerald-50',  text: 'text-emerald-700', border: 'border-emerald-200' },
+  UK_FBA:  { bg: 'bg-sky-50',      text: 'text-sky-700',     border: 'border-sky-200' },
+  EU_FBA:  { bg: 'bg-indigo-50',   text: 'text-indigo-700',  border: 'border-indigo-200' },
+  CA_FBA:  { bg: 'bg-cyan-50',     text: 'text-cyan-700',    border: 'border-cyan-200' },
+  AU_FBA:  { bg: 'bg-teal-50',     text: 'text-teal-700',    border: 'border-teal-200' },
+  NJ_DEPO: { bg: 'bg-amber-50',    text: 'text-amber-800',   border: 'border-amber-300' },
+  CG_DEPO: { bg: 'bg-rose-50',     text: 'text-rose-700',    border: 'border-rose-300' },
+  UK_DEPO: { bg: 'bg-pink-50',     text: 'text-pink-700',    border: 'border-pink-300' },
+  NL_DEPO: { bg: 'bg-violet-50',   text: 'text-violet-700',  border: 'border-violet-300' },
+};
+
 export function destinationLabel(code: string, fallback?: string): string {
   return DESTINATION_LABELS[code] ?? fallback ?? code;
 }
