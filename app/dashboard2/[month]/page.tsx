@@ -17,12 +17,14 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
   Calendar, Package, ShoppingCart, Factory, Plus,
-  Hammer, Sofa, ShoppingBag, Lock, RefreshCw, Truck, Camera, ArrowLeft,
+  Hammer, Sofa, ShoppingBag, Lock, RefreshCw, Truck, Camera, ArrowLeft, ChevronDown,
 } from 'lucide-react';
 import { notify } from '@/lib/ui/notify';
 import { createLogger } from '@/lib/logger';
 import { parseMonthValue } from '@/lib/monthUtils';
 import { NewRequestModal } from '@/components/forms/NewRequestModal';
+import { MarketplacePriority as MarketplacePriorityComponent } from '@/components/seasonal/MarketplacePriority';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   REGIONS, REGION_LABELS, DESTINATIONS_BY_REGION,
   DETAIL_CHANNELS_BY_DESTINATION, destinationLabel,
@@ -95,7 +97,9 @@ interface MarketplaceMeta {
 export default function Dashboard2MonthPage() {
   const params = useParams<{ month: string }>();
   const month = params?.month ?? '';
-  const [viewMode, setViewMode] = useState<'quantity' | 'desi'>('quantity');
+  const [viewMode, setViewMode] = useState<'quantity' | 'desi'>('desi');
+  const { role } = useAuth();
+  const [priorityOpen, setPriorityOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const [categories, setCategories] = useState<CategorySummary[]>([]);
@@ -625,6 +629,25 @@ export default function Dashboard2MonthPage() {
           })}
         </div>
       </div>
+
+      {/* Öncelik Sıralaması — admin only (V1'den taşındı, 2026-05-30) */}
+      {role === 'admin' && (
+        <div className="px-6 pb-10">
+          <button
+            onClick={() => setPriorityOpen(o => !o)}
+            className="flex items-center gap-3 mb-4 w-full text-left hover:opacity-80 transition-opacity"
+          >
+            <Factory className="w-6 h-6 text-purple-700" />
+            <h2 className="text-2xl font-semibold text-gray-900">Öncelik Sıralaması</h2>
+            <ChevronDown className={`w-5 h-5 text-gray-400 ml-auto transition-transform ${priorityOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {priorityOpen && (
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <MarketplacePriorityComponent month={month} />
+            </div>
+          )}
+        </div>
+      )}
 
       {newRequestRegion && (
         <NewRequestModal
