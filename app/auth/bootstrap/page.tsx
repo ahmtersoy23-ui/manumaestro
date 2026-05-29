@@ -7,7 +7,7 @@
  *   1. Portal redirect: https://manumaestro.../auth/bootstrap#token=eyJ...
  *   2. Client (bu sayfa): window.location.hash'tan token'ı al
  *   3. POST /api/auth/login → cookie set
- *   4. Hash temizle + /dashboard'a redirect
+ *   4. Hash temizle + /dashboard2'ye redirect (Dashboard 2 yeni varsayılan, 2026-05-29)
  *
  * Niye fragment?
  *   - Tarayıcı `#xxx` kısmını HTTP isteğinde server'a göndermez
@@ -30,7 +30,7 @@ export default function AuthBootstrapPage() {
       const hash = window.location.hash.replace(/^#/, '');
       const params = new URLSearchParams(hash);
       const token = params.get('token');
-      const next = params.get('next') || '/dashboard';
+      const next = params.get('next') || '/dashboard2';
 
       if (!token) {
         if (!cancelled) setError('Token bulunamadı. Yeniden giriş yapın.');
