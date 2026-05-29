@@ -48,6 +48,24 @@ const ROLE_CAN: Record<ShipmentRoleLevel, {
 export type ShipmentAction = keyof typeof ROLE_CAN['VIEWER'];
 
 /**
+ * Yeni destinasyon kodları (US_FBA, NJ_DEPO, CG_DEPO, ...) → eski yetki tab'ı
+ * (US/UK/EU/NL/AU/ZA/CA). UserShipmentPermission tablosu ülke-bazlı korunuyor;
+ * yeni destinasyonlar bu mapping üzerinden çözümleniyor.
+ *
+ * Geriye uyumlu: eski 'US'/'UK'/vs. doğrudan döner (passthrough).
+ */
+export function destinationToPermissionTab(destinationTab: string): string {
+  if (destinationTab === 'NL_DEPO') return 'NL';
+  if (['US_FBA', 'NJ_DEPO', 'CG_DEPO'].includes(destinationTab)) return 'US';
+  if (['UK_FBA', 'UK_DEPO'].includes(destinationTab)) return 'UK';
+  if (destinationTab === 'EU_FBA') return 'EU';
+  if (destinationTab === 'CA_FBA') return 'CA';
+  if (destinationTab === 'AU_FBA') return 'AU';
+  if (destinationTab === 'ZA_TAKEALOT') return 'ZA';
+  return destinationTab; // legacy US/UK/EU/NL/AU/ZA passthrough
+}
+
+/**
  * Kullanicinin belirli bir destinasyon icin sevkiyat rolunu getir
  * Admin her zaman MANAGER
  */
@@ -59,9 +77,12 @@ export async function getShipmentRole(
   // Admin = MANAGER (tum destinasyonlar)
   if (userRole === 'admin') return 'MANAGER';
 
+  // Yeni destinasyon kodlarını eski yetki tab'ına çevir
+  const permTab = destinationToPermissionTab(destinationTab);
+
   // Kullanici izinlerini kontrol et
   const permissions = await prisma.userShipmentPermission.findMany({
-    where: { userId, destinationTab: { in: [destinationTab, '*'] } },
+    where: { userId, destinationTab: { in: [permTab, '*'] } },
     select: { role: true },
   });
 

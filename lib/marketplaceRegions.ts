@@ -71,7 +71,36 @@ export const SHIPMENT_DESTINATION_LABELS: Record<string, string> = {
   NL_DEPO: 'NL Depo',
   CA_FBA: 'CA FBA',
   AU_FBA: 'AU FBA',
+  ZA_TAKEALOT: 'Takealot',
 };
+
+/**
+ * Sevkiyat sayfası için: üst country tab → alt destinasyon tab listesi.
+ * shipments.destinationTab field bu destinasyon kodlarını tutar.
+ */
+export type ShipmentCountry = 'US' | 'UK' | 'EU' | 'CA' | 'AU' | 'ZA';
+export const SHIPMENT_COUNTRIES: ShipmentCountry[] = ['US', 'UK', 'EU', 'CA', 'AU', 'ZA'];
+
+export const SHIPMENT_COUNTRY_LABELS: Record<ShipmentCountry, string> = {
+  US: '🇺🇸 US', UK: '🇬🇧 UK', EU: '🇪🇺 EU', CA: '🇨🇦 CA', AU: '🇦🇺 AU', ZA: '🇿🇦 ZA',
+};
+
+export const SHIPMENT_DESTINATIONS_BY_COUNTRY: Record<ShipmentCountry, string[]> = {
+  US: ['US_FBA', 'NJ_DEPO', 'CG_DEPO'],
+  UK: ['UK_FBA', 'UK_DEPO'],
+  EU: ['EU_FBA', 'NL_DEPO'],
+  CA: ['CA_FBA'],
+  AU: ['AU_FBA'],
+  ZA: ['ZA_TAKEALOT'],
+};
+
+/** destination code → country (üst tab) */
+export function countryForShipmentDestination(dest: string): ShipmentCountry | null {
+  for (const [c, dests] of Object.entries(SHIPMENT_DESTINATIONS_BY_COUNTRY)) {
+    if (dests.includes(dest)) return c as ShipmentCountry;
+  }
+  return null;
+}
 
 /**
  * recommendedDestination → badge stil (Tailwind sınıfları).
@@ -91,6 +120,7 @@ export const SHIPMENT_DESTINATION_STYLES: Record<string, { bg: string; text: str
   CG_DEPO: { bg: 'bg-rose-50',     text: 'text-rose-700',    border: 'border-rose-300' },
   UK_DEPO: { bg: 'bg-pink-50',     text: 'text-pink-700',    border: 'border-pink-300' },
   NL_DEPO: { bg: 'bg-violet-50',   text: 'text-violet-700',  border: 'border-violet-300' },
+  ZA_TAKEALOT: { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-300' },
 };
 
 export function destinationLabel(code: string, fallback?: string): string {

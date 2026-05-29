@@ -1,21 +1,22 @@
 /**
  * Shipments Dashboard — Server Component.
  *
- * URL searchParams ile tab seçimi (?tab=US|UK|EU|NL|AU|ZA). Prisma'dan
- * shipments + permission'ı server'da çeker, client component sadece
- * tab switching + create form için kalır.
+ * URL searchParams ile destinasyon seçimi (?tab=US_FBA|NJ_DEPO|CG_DEPO|...).
+ * Yeni yapı: 2-seviyeli tab (üst ülke + alt destinasyon). ShipmentsClient
+ * tab değişimini router.replace(?tab=...) ile tetikler, fresh RSC.
  */
 
 import { prisma } from '@/lib/db/prisma';
 import { getShipmentRole, canDoAction } from '@/lib/auth/shipmentPermission';
 import { getRscUser } from '@/lib/auth/rscUser';
-import { ShipmentsClient, type ShipmentDTO, type Tab } from './ShipmentsClient';
+import { SHIPMENT_DESTINATIONS_BY_COUNTRY, SHIPMENT_COUNTRIES } from '@/lib/marketplaceRegions';
+import { ShipmentsClient, type ShipmentDTO } from './ShipmentsClient';
 
-const TABS = ['US', 'UK', 'EU', 'NL', 'AU', 'ZA'] as const;
+const ALL_DESTINATIONS = SHIPMENT_COUNTRIES.flatMap(c => SHIPMENT_DESTINATIONS_BY_COUNTRY[c]);
 
-function parseTab(raw: string | undefined): Tab {
-  if (raw && (TABS as readonly string[]).includes(raw)) return raw as Tab;
-  return 'US';
+function parseDestination(raw: string | undefined): string {
+  if (raw && ALL_DESTINATIONS.includes(raw)) return raw;
+  return 'US_FBA'; // default
 }
 
 interface PageProps {
@@ -24,12 +25,12 @@ interface PageProps {
 
 export default async function ShipmentsPage({ searchParams }: PageProps) {
   const { tab: tabParam } = await searchParams;
-  const activeTab = parseTab(tabParam);
+  const activeDestination = parseDestination(tabParam);
 
   const user = await getRscUser();
 
   const shipments = await prisma.shipment.findMany({
-    where: { destinationTab: activeTab },
+    where: { destinationTab: activeDestination },
     include: {
       items: {
         select: { iwasku: true, quantity: true, desi: true, marketplaceId: true },
@@ -61,13 +62,13 @@ export default async function ShipmentsPage({ searchParams }: PageProps) {
   });
 
   const userShipRole = user
-    ? await getShipmentRole(user.id, user.role, activeTab)
+    ? await getShipmentRole(user.id, user.role, activeDestination)
     : null;
   const canCreate = canDoAction(userShipRole, 'createShipment');
 
   return (
     <ShipmentsClient
-      activeTab={activeTab}
+      activeDestination={activeDestination}
       initialShipments={initialShipments}
       canCreate={canCreate}
     />
