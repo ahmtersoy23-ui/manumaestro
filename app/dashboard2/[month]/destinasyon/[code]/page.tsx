@@ -252,16 +252,16 @@ export default function DestinasyonDetailPage() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
               <tr>
-                <th className="px-3 py-2 text-left text-xs font-medium">IWASKU</th>
+                <th className="px-3 py-2 text-left text-xs font-medium whitespace-nowrap">IWASKU</th>
                 <th className="px-3 py-2 text-left text-xs font-medium">Ürün</th>
-                <th className="px-3 py-2 text-left text-xs font-medium">Pazar Yeri</th>
-                <th className="px-3 py-2 text-left text-xs font-medium">Kategori</th>
-                <th className="px-3 py-2 text-right text-xs font-medium">Adet</th>
-                <th className="px-3 py-2 text-right text-xs font-medium">L30</th>
-                <th className="px-3 py-2 text-right text-xs font-medium">L90</th>
-                <th className="px-3 py-2 text-center text-xs font-medium">Source</th>
-                <th className="px-3 py-2 text-center text-xs font-medium">Durum</th>
-                <th className="px-3 py-2 text-center text-xs font-medium">İşlem</th>
+                <th className="px-3 py-2 text-left text-xs font-medium whitespace-nowrap">Pazar Yeri</th>
+                <th className="px-3 py-2 text-left text-xs font-medium whitespace-nowrap">Kategori</th>
+                <th className="px-3 py-2 text-right text-xs font-medium whitespace-nowrap">Adet</th>
+                <th className="px-3 py-2 text-right text-xs font-medium whitespace-nowrap">L30</th>
+                <th className="px-3 py-2 text-right text-xs font-medium whitespace-nowrap">L90</th>
+                <th className="px-3 py-2 text-center text-xs font-medium whitespace-nowrap">Source</th>
+                <th className="px-3 py-2 text-center text-xs font-medium whitespace-nowrap">Durum</th>
+                <th className="px-3 py-2 text-center text-xs font-medium whitespace-nowrap">İşlem</th>
               </tr>
             </thead>
             <tbody>
@@ -272,20 +272,20 @@ export default function DestinasyonDetailPage() {
               )}
               {filtered.map(it => (
                 <tr key={`${it.type}-${it.id}`} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="px-3 py-1.5 font-mono text-xs text-cyan-700">{it.iwasku}</td>
-                  <td className="px-3 py-1.5 max-w-[220px] truncate text-xs" title={it.productName}>{it.productName}</td>
-                  <td className="px-3 py-1.5 text-xs">
+                  <td className="px-3 py-1.5 font-mono text-xs text-cyan-700 whitespace-nowrap">{it.iwasku}</td>
+                  <td className="px-3 py-1.5 text-xs text-slate-900 break-words" title={it.productName}>{it.productName}</td>
+                  <td className="px-3 py-1.5 text-xs whitespace-nowrap">
                     <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px]">
                       {it.marketplaceName}
                     </span>
                   </td>
-                  <td className="px-3 py-1.5 text-xs text-slate-600">{it.productCategory}</td>
-                  <td className="px-3 py-1.5 text-right text-sm font-bold text-purple-700 tabular-nums">{it.quantity.toLocaleString('tr-TR')}</td>
-                  <td className="px-3 py-1.5 text-right text-xs tabular-nums text-slate-600">{it.l30 || '-'}</td>
-                  <td className="px-3 py-1.5 text-right text-xs tabular-nums text-slate-600">{it.l90 || '-'}</td>
-                  <td className="px-3 py-1.5 text-center">{sourceBadge(it.source)}</td>
-                  <td className="px-3 py-1.5 text-center">{statusBadge(it.status)}</td>
-                  <td className="px-3 py-1.5 text-center">
+                  <td className="px-3 py-1.5 text-xs text-slate-600 whitespace-nowrap">{it.productCategory}</td>
+                  <td className="px-3 py-1.5 text-right text-sm font-bold text-purple-700 tabular-nums whitespace-nowrap">{it.quantity.toLocaleString('tr-TR')}</td>
+                  <td className="px-3 py-1.5 text-right text-xs tabular-nums text-slate-600 whitespace-nowrap">{it.l30 || '-'}</td>
+                  <td className="px-3 py-1.5 text-right text-xs tabular-nums text-slate-600 whitespace-nowrap">{it.l90 || '-'}</td>
+                  <td className="px-3 py-1.5 text-center whitespace-nowrap">{sourceBadge(it.source)}</td>
+                  <td className="px-3 py-1.5 text-center whitespace-nowrap">{statusBadge(it.status)}</td>
+                  <td className="px-3 py-1.5 text-center whitespace-nowrap">
                     {it.type === 'request' && it.status !== 'COMPLETED' && it.status !== 'CANCELLED' && (
                       <button onClick={() => cancelRequest(it.id)}
                         className="px-2 py-0.5 text-rose-600 hover:bg-rose-50 rounded text-xs flex items-center gap-1 mx-auto"
