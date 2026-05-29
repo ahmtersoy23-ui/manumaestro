@@ -26,8 +26,15 @@ import { NewRequestModal } from '@/components/forms/NewRequestModal';
 import {
   REGIONS, REGION_LABELS, DESTINATIONS_BY_REGION,
   DETAIL_CHANNELS_BY_DESTINATION, destinationLabel,
-  type Region,
+  SHIPMENT_DESTINATIONS_BY_COUNTRY, SHIPMENT_DESTINATION_LABELS, SHIPMENT_DESTINATION_STYLES,
+  type Region, type ShipmentCountry,
 } from '@/lib/marketplaceRegions';
+
+// Region (US/UK/EU/OTHER) → ShipmentCountry listesi (havuz destinasyonları için).
+// OTHER bölgesi CA/AU/ZA içerir (her biri tek FBA destinasyon).
+const REGION_TO_COUNTRIES: Record<Region, ShipmentCountry[]> = {
+  US: ['US'], UK: ['UK'], EU: ['EU'], OTHER: ['CA', 'AU', 'ZA'],
+};
 
 const logger = createLogger('Dashboard2');
 
@@ -69,6 +76,15 @@ interface MarketplaceSummary {
   completedDesi: number;
 }
 
+interface DestinationSummary {
+  destination: string;
+  totalQuantity: number;
+  totalDesi: number;
+  requestCount: number;
+  completedQty: number;
+  completedDesi: number;
+}
+
 interface MarketplaceMeta {
   id: string;
   code: string;
@@ -84,6 +100,7 @@ export default function Dashboard2MonthPage() {
 
   const [categories, setCategories] = useState<CategorySummary[]>([]);
   const [marketplaceSummary, setMarketplaceSummary] = useState<MarketplaceSummary[]>([]);
+  const [destinationSummary, setDestinationSummary] = useState<DestinationSummary[]>([]);
   const [allMarketplaces, setAllMarketplaces] = useState<MarketplaceMeta[]>([]);
   const [monthStats, setMonthStats] = useState({ totalRequests: 0, totalQuantity: 0, totalDesi: 0 });
   const [iwaskuSummary, setIwaskuSummary] = useState<{iwasku: string; category: string; totalQty: number; desi: number}[]>([]);
@@ -141,6 +158,7 @@ export default function Dashboard2MonthPage() {
       if (monthly.success) {
         setCategories((monthly.data.summary || []).sort((a: CategorySummary, b: CategorySummary) => b.totalQuantity - a.totalQuantity));
         setMarketplaceSummary(monthly.data.marketplaceSummary || []);
+        setDestinationSummary(monthly.data.destinationSummary || []);
         setIwaskuSummary(monthly.data.iwaskuSummary || []);
         setMonthStats({
           totalRequests: monthly.data.totalRequests || 0,
@@ -508,6 +526,42 @@ export default function Dashboard2MonthPage() {
                     <Plus className="w-3 h-3" /> Talep
                   </button>
                 </div>
+
+                {/* Destinasyon stats bandı — bölgenin sevkiyat hedefi başına özet */}
+                {(() => {
+                  const countries = REGION_TO_COUNTRIES[region];
+                  const destCodes = countries.flatMap(c => SHIPMENT_DESTINATIONS_BY_COUNTRY[c]);
+                  const destStats = destCodes.map(d => destinationSummary.find(s => s.destination === d))
+                    .filter((s): s is DestinationSummary => !!s && s.requestCount > 0);
+                  if (destStats.length === 0) return null;
+                  return (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 mb-3 px-1">
+                      {destStats.map(s => {
+                        const style = SHIPMENT_DESTINATION_STYLES[s.destination]
+                          ?? { bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-200' };
+                        const label = SHIPMENT_DESTINATION_LABELS[s.destination] ?? s.destination;
+                        const display = viewMode === 'quantity' ? s.totalQuantity : Math.round(s.totalDesi);
+                        const completedDisplay = viewMode === 'quantity' ? s.completedQty : Math.round(s.completedDesi);
+                        const pct = display > 0 ? Math.round((completedDisplay / display) * 100) : 0;
+                        return (
+                          <div key={s.destination}
+                            className={`rounded-lg border px-3 py-2 ${style.bg} ${style.border}`}>
+                            <div className={`text-[10px] font-semibold uppercase ${style.text}`}>{label}</div>
+                            <div className="mt-1 flex items-baseline gap-1.5">
+                              <span className={`text-lg font-bold ${style.text}`}>{display.toLocaleString('tr-TR')}</span>
+                              <span className="text-[9px] text-slate-500">
+                                {viewMode === 'quantity' ? 'adet' : 'desi'} · {s.requestCount} talep
+                              </span>
+                            </div>
+                            <div className="text-[9px] text-slate-500 mt-0.5">
+                              Tamamlanan: %{pct}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
 
                 {/* Destinasyon kartları — büyük kart, tıkla detay sayfasına git */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">

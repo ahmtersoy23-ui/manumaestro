@@ -55,6 +55,7 @@ export const GET = withRoute(
         quantity: true,
         producedQuantity: true,
         status: true,
+        recommendedDestination: true,
         marketplace: {
           select: {
             id: true,
@@ -186,6 +187,42 @@ export const GET = withRoute(
 
     const marketplaceSummary = Array.from(marketplaceMap.values());
 
+    // Destinasyon bazlı özet (recommendedDestination groupBy)
+    // UI'da bölge başlığının altında 'US FBA / NJ Depo / CG Depo' özet kartları için.
+    const destinationMap = new Map<string, {
+      destination: string;
+      totalQuantity: number;
+      totalDesi: number;
+      requestCount: number;
+      completedQty: number;
+      completedDesi: number;
+    }>();
+    requests.forEach(request => {
+      const dest = request.recommendedDestination ?? 'UNKNOWN';
+      const reqDesi = (request.productSize || 0) * request.quantity;
+      const isCompleted = request.status === 'COMPLETED';
+      const existing = destinationMap.get(dest);
+      if (existing) {
+        existing.totalQuantity += request.quantity;
+        existing.totalDesi += reqDesi;
+        existing.requestCount += 1;
+        if (isCompleted) {
+          existing.completedQty += request.quantity;
+          existing.completedDesi += reqDesi;
+        }
+      } else {
+        destinationMap.set(dest, {
+          destination: dest,
+          totalQuantity: request.quantity,
+          totalDesi: reqDesi,
+          requestCount: 1,
+          completedQty: isCompleted ? request.quantity : 0,
+          completedDesi: isCompleted ? reqDesi : 0,
+        });
+      }
+    });
+    const destinationSummary = Array.from(destinationMap.values());
+
     // Calculate total desi (sum across all requests)
     const totalDesi = requests.reduce((sum, r) => sum + ((r.productSize || 0) * r.quantity), 0);
 
@@ -230,6 +267,7 @@ export const GET = withRoute(
         missingDesiItems,
         summary,
         marketplaceSummary,
+        destinationSummary,
         iwaskuSummary,
       },
       {
