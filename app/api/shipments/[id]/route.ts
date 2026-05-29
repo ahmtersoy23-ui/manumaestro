@@ -220,6 +220,8 @@ const AddItemSchema = z.object({
     desi: z.number().optional(),
     marketplaceId: z.string().max(50).optional(),
     reserveId: z.string().max(50).optional(),
+    productionRequestId: z.string().max(50).optional(),
+    recommendedDestination: z.string().max(10).optional(),
   })).min(1).max(500),
 });
 
@@ -266,7 +268,12 @@ export const POST = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'writ
       const unitDesi = sizeMap.get(item.iwasku);
       return {
         shipmentId: id,
-        ...item,
+        iwasku: item.iwasku,
+        quantity: item.quantity,
+        marketplaceId: item.marketplaceId,
+        reserveId: item.reserveId,
+        productionRequestId: item.productionRequestId,
+        recommendedDestination: item.recommendedDestination,
         desi: item.desi ?? (unitDesi ? Math.round(unitDesi * 100) / 100 : undefined),
       };
     }),

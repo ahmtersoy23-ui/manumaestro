@@ -15,6 +15,7 @@ import { ExitItemsModal } from '@/components/shipments/ExitItemsModal';
 import { SPExportModal } from '@/components/shipments/SPExportModal';
 import { EditShipmentForm } from '@/components/shipments/EditShipmentForm';
 import { AddItemForm } from '@/components/shipments/AddItemForm';
+import { PoolItemsModal } from '@/components/shipments/PoolItemsModal';
 import { MissingFnskuWarning } from '@/components/shipments/MissingFnskuWarning';
 import { PendingItemsTable } from '@/components/shipments/PendingItemsTable';
 import { SentItemsTab } from '@/components/shipments/SentItemsTab';
@@ -96,6 +97,7 @@ export default function ShipmentDetailPage() {
     showSPExport, setShowSPExport,
     editing, setEditing,
   } = useModalToggles();
+  const [showPoolModal, setShowPoolModal] = useState(false);
 
   // Track printed box IDs (DB'den başlat)
   const printedBoxIds = useMemo(() => new Set(boxes.filter(b => b.labelPrinted).map(b => b.id)), [boxes]);
@@ -1141,6 +1143,11 @@ export default function ShipmentDetailPage() {
                 <Plus className="w-4 h-4" /> Ürün Ekle
               </button>
             )}
+            {isActive && canRoute && (
+              <button onClick={() => setShowPoolModal(true)} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700">
+                <Plus className="w-4 h-4" /> Havuzdan Ekle
+              </button>
+            )}
             <button onClick={handleExportItems} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 border">
               <Download className="w-4 h-4" /> Excel
             </button>
@@ -1191,6 +1198,17 @@ export default function ShipmentDetailPage() {
               adding={adding}
               onChange={setAddForm}
               onSubmit={handleAddItem}
+            />
+          )}
+
+          {showPoolModal && shipment && (
+            <PoolItemsModal
+              shipmentId={shipment.id}
+              shipmentName={shipment.name}
+              country={shipment.destinationTab}
+              marketplaceIdByCode={new Map(allMarketplaces.map(m => [m.code, m.id]))}
+              onClose={() => setShowPoolModal(false)}
+              onSuccess={() => { setShowPoolModal(false); fetchShipment(); }}
             />
           )}
 
