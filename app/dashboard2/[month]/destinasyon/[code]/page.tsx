@@ -56,7 +56,10 @@ export default function DestinasyonDetailPage() {
   const [allMarketplaces, setAllMarketplaces] = useState<MarketplaceMeta[]>([]);
   const [items, setItems] = useState<PipelineItem[]>([]);
   const [loading, setLoading] = useState(true);
+  // V1 tarzı chip durum filter: '' (Tümü) | 'REQUESTED' | 'PARTIALLY_PRODUCED' | 'COMPLETED'
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [destFilter, setDestFilter] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('');
   const [q, setQ] = useState('');
   const [newReqOpen, setNewReqOpen] = useState(false);
 
@@ -93,17 +96,56 @@ export default function DestinasyonDetailPage() {
 
   useEffect(() => { loadAll(); }, [month, destCode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Filter (marketplace zaten tek — sayfa marketplaceCode'a göre)
+  // Unique destinasyon ve kategori listeleri (dropdown'lar için)
+  const availableDestinations = useMemo(() => {
+    const set = new Set<string>();
+    for (const it of items) if (it.recommendedDestination) set.add(it.recommendedDestination);
+    return [...set].sort();
+  }, [items]);
+  const availableCategories = useMemo(() => {
+    const set = new Set<string>();
+    for (const it of items) if (it.productCategory) set.add(it.productCategory);
+    return [...set].sort();
+  }, [items]);
+
+  // Filter (marketplace zaten tek — sayfa marketplaceCode'a göre).
+  // statusFilter='REQUESTED' chipi REQUESTED + IN_PRODUCTION birleşik (operatör için "Talep" tek grup).
+  const matchesStatus = (status: string, filter: string) => {
+    if (!filter) return true;
+    if (filter === 'REQUESTED') return status === 'REQUESTED' || status === 'IN_PRODUCTION';
+    return status === filter;
+  };
   const filtered = useMemo(() => {
     return items.filter(it => {
-      if (statusFilter && it.status !== statusFilter) return false;
+      if (!matchesStatus(it.status, statusFilter)) return false;
+      if (destFilter && it.recommendedDestination !== destFilter) return false;
+      if (categoryFilter && it.productCategory !== categoryFilter) return false;
       if (q) {
         const ql = q.toLowerCase();
         if (!it.iwasku.toLowerCase().includes(ql) && !it.productName.toLowerCase().includes(ql)) return false;
       }
       return true;
     });
-  }, [items, statusFilter, q]);
+  }, [items, statusFilter, destFilter, categoryFilter, q]);
+
+  // Durum chip sayıları (filter dışı kalanlar dahil sayım — operatör hızlı görsün)
+  const statusCounts = useMemo(() => {
+    const base = items.filter(it => {
+      if (destFilter && it.recommendedDestination !== destFilter) return false;
+      if (categoryFilter && it.productCategory !== categoryFilter) return false;
+      if (q) {
+        const ql = q.toLowerCase();
+        if (!it.iwasku.toLowerCase().includes(ql) && !it.productName.toLowerCase().includes(ql)) return false;
+      }
+      return true;
+    });
+    return {
+      all: base.length,
+      REQUESTED: base.filter(it => it.status === 'REQUESTED' || it.status === 'IN_PRODUCTION').length,
+      PARTIALLY_PRODUCED: base.filter(it => it.status === 'PARTIALLY_PRODUCED').length,
+      COMPLETED: base.filter(it => it.status === 'COMPLETED').length,
+    };
+  }, [items, destFilter, categoryFilter, q]);
 
   const monthLabel = useMemo(() => {
     try { return parseMonthValue(month).toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' }); }
@@ -210,16 +252,46 @@ export default function DestinasyonDetailPage() {
 
       {/* Filter bar */}
       <div className="bg-white border border-slate-200 rounded-lg p-3 flex flex-wrap gap-3 items-end">
-        <div>
+        {/* Durum chip butonlar (V1 tarzı) */}
+        <div className="flex-1 min-w-[280px]">
           <label className="block text-[10px] uppercase text-slate-500 mb-1">Durum</label>
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+          <div className="flex gap-1 flex-wrap">
+            {[
+              { key: '', label: 'Tümü', count: statusCounts.all, bg: 'bg-slate-100', text: 'text-slate-700', active: 'bg-slate-700 text-white' },
+              { key: 'REQUESTED', label: 'Talep Edildi', count: statusCounts.REQUESTED, bg: 'bg-sky-50', text: 'text-sky-700', active: 'bg-sky-600 text-white' },
+              { key: 'PARTIALLY_PRODUCED', label: 'Kısmen', count: statusCounts.PARTIALLY_PRODUCED, bg: 'bg-amber-50', text: 'text-amber-700', active: 'bg-amber-600 text-white' },
+              { key: 'COMPLETED', label: 'Tamamlandı', count: statusCounts.COMPLETED, bg: 'bg-emerald-50', text: 'text-emerald-700', active: 'bg-emerald-600 text-white' },
+            ].map(chip => {
+              const isActive = statusFilter === chip.key;
+              return (
+                <button key={chip.key} onClick={() => setStatusFilter(chip.key)}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                    isActive ? chip.active : `${chip.bg} ${chip.text} hover:opacity-80`
+                  }`}>
+                  {chip.label} <span className="opacity-70">({chip.count})</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase text-slate-500 mb-1">Destinasyon</label>
+          <select value={destFilter} onChange={e => setDestFilter(e.target.value)}
             className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm w-36">
             <option value="">Tümü</option>
-            <option value="PENDING">Bekleyen Öneri</option>
-            <option value="REQUESTED">Talep</option>
-            <option value="IN_PRODUCTION">Üretimde</option>
-            <option value="PARTIALLY_PRODUCED">Kısmi</option>
-            <option value="COMPLETED">Tamamlandı</option>
+            {availableDestinations.map(d => (
+              <option key={d} value={d}>{SHIPMENT_DESTINATION_LABELS[d] ?? d}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase text-slate-500 mb-1">Kategori</label>
+          <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
+            className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm w-40">
+            <option value="">Tümü</option>
+            {availableCategories.map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
           </select>
         </div>
         <div className="flex-1 min-w-[160px]">
