@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { EntryType, RequestStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
+import { ensureWarehouseProducts } from '@/lib/warehouse/ensureWarehouseProducts';
 import { checkMarketplacePermission, isSuperAdmin } from '@/lib/auth/verify';
 import { successResponse } from '@/lib/api/response';
 import { withRoute } from '@/lib/api/withRoute';
@@ -81,6 +82,9 @@ export const POST = withRoute<{ id: string }>(
       },
       select: { id: true, quantity: true },
     });
+
+    // Ankara depo SKU listesi: PR yaratılacak iwasku warehouse_products'a ekle (yoksa).
+    await ensureWarehouseProducts([suggestion.iwasku]);
 
     const request_ = await prisma.$transaction(async (tx) => {
       let pr;

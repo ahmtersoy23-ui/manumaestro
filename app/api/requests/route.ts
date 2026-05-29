@@ -7,6 +7,7 @@
 import { NextResponse } from 'next/server';
 import { Prisma, EntryType, RequestStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
+import { ensureWarehouseProducts } from '@/lib/warehouse/ensureWarehouseProducts';
 import { enrichProductSize } from '@/lib/db/enrichProductSize';
 import { checkMarketplacePermission, isSuperAdmin } from '@/lib/auth/verify';
 import { ProductionRequestSchema, formatValidationError } from '@/lib/validation/schemas';
@@ -51,6 +52,9 @@ export const POST = withRoute(
         );
       }
     }
+
+    // Ankara depo SKU listesi: PR yaratılacak iwasku warehouse_products'a ekle (yoksa).
+    await ensureWarehouseProducts([iwasku]);
 
     // Upsert: ayni (iwasku, marketplace, productionMonth) varsa miktar + oncelik + notes guncelle
     const existingReq = await prisma.productionRequest.findFirst({

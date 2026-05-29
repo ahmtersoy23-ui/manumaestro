@@ -6,6 +6,7 @@
 import { NextResponse } from 'next/server';
 import { Prisma, EntryType, RequestStatus } from '@prisma/client';
 import { prisma, queryProductDb } from '@/lib/db/prisma';
+import { ensureWarehouseProducts } from '@/lib/warehouse/ensureWarehouseProducts';
 import { BulkRequestSchema, formatValidationError } from '@/lib/validation/schemas';
 import { checkMarketplacePermission, isSuperAdmin } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
@@ -130,6 +131,9 @@ export const POST = withRoute(
 
     // Batch create
     if ((toCreate as unknown[]).length > 0) {
+      // Ankara depo SKU listesi: yarat tüm iwasku'lar için warehouse_products kaydı (yoksa).
+      const newIwaskus = (toCreate as Array<{ iwasku: string }>).map(c => c.iwasku);
+      await ensureWarehouseProducts(newIwaskus);
       await prisma.productionRequest.createMany({ data: toCreate as never });
     }
     // Batch update (transaction icinde, paralel)

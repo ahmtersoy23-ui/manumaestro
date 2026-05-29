@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
+import { ensureWarehouseProducts } from '@/lib/warehouse/ensureWarehouseProducts';
 import { requireServiceToken } from '@/lib/auth/verify';
 import { errorResponse, successResponse } from '@/lib/api/response';
 import { createLogger } from '@/lib/logger';
@@ -105,6 +106,11 @@ export async function POST(request: NextRequest) {
     const now = new Date();
 
     if (validRows.length > 0) {
+      // Ankara depo SKU listesi: PR yaratılacak tüm iwasku'lar warehouse_products'a
+      // ekle (yoksa). Snapshot regenerate olunca bu SKU'lar warehouseStock=0 olarak
+      // görünür, "-" yerine. Depo operatörüne kolaylık.
+      await ensureWarehouseProducts(validRows.map(s => s.iwasku));
+
       // Batch raw SQL: tek query'de tüm satırları INSERT ... ON CONFLICT.
       // Çakışma kuralı: entryType=STOCKPULSE ise quantity update, diğer (MANUAL/EXCEL/COMPLETED/CANCELLED) DOKUNMAZ.
       const CHUNK = 500;
