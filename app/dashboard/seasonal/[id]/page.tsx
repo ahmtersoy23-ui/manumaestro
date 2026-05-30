@@ -87,17 +87,13 @@ const statusColors: Record<string, string> = {
   CANCELLED: 'bg-red-100 text-red-600',
 };
 
-// Production months from haftalik-is-gunleri-2026.xlsx
-// Haz: 20g normal + 5g tatil = 480avg, Eyl: 10g tatil + 10g normal = 450avg
+// Sezona dahil aylar. workingDays + desiPerDay artık MonthlyCapacity tablosundan
+// (Sezon → Ayarlar tab'ı) okunuyor — frontend body'de göndermez, backend doldurur.
+// Kaynak: haftalik-is-gunleri-2026.xlsx (Nisan 23×500, Mayıs 16×500, Haziran 25×480,
+// Temmuz 19×400, Ağustos 25×400, Eylül 20×450, Ekim 19×500, Kasım 20×500).
 const DEFAULT_MONTHS = [
-  { month: '2026-04', workingDays: 23, desiPerDay: 500 },
-  { month: '2026-05', workingDays: 16, desiPerDay: 500 },
-  { month: '2026-06', workingDays: 25, desiPerDay: 480 },
-  { month: '2026-07', workingDays: 19, desiPerDay: 400 },
-  { month: '2026-08', workingDays: 25, desiPerDay: 400 },
-  { month: '2026-09', workingDays: 20, desiPerDay: 450 },
-  { month: '2026-10', workingDays: 19, desiPerDay: 500 },
-  { month: '2026-11', workingDays: 20, desiPerDay: 500 },
+  { month: '2026-04' }, { month: '2026-05' }, { month: '2026-06' }, { month: '2026-07' },
+  { month: '2026-08' }, { month: '2026-09' }, { month: '2026-10' }, { month: '2026-11' },
 ];
 
 const MONTH_LABELS: Record<string, string> = {
