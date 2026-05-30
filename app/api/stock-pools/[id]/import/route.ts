@@ -39,10 +39,12 @@ const ImportItemSchema = z.object({
 
 const ImportSchema = z.object({
   items: z.array(ImportItemSchema).min(1).max(5000),
+  // months capacity opsiyonel — eksikse MonthlyCapacity tablosundan okunur
+  // (Sezon → Ayarlar tab'ında girilen değerler).
   months: z.array(z.object({
     month: z.string().regex(/^\d{4}-\d{2}$/),
-    workingDays: z.number().int().positive(),
-    desiPerDay: z.number().positive(),
+    workingDays: z.number().int().positive().optional(),
+    desiPerDay: z.number().positive().optional(),
   })).min(1),
   autoAllocate: z.boolean().default(true),
 });
@@ -255,13 +257,28 @@ export const POST = withRoute<{ id: string }>(
     let allocations: { iwasku: string; month: string; plannedQty: number; plannedDesi: number }[] = [];
 
     if (autoAllocate && months.length > 0) {
-      const monthCapacities: MonthCapacity[] = months.map(m => ({
-        month: m.month,
-        workingDays: m.workingDays,
-        desiPerDay: m.desiPerDay,
-        totalDesi: m.workingDays * m.desiPerDay,
-        weight: 0, // Will be calculated
-      }));
+      // MonthlyCapacity'den default'ları çek (body'de eksikse fallback).
+      const monthKeys = months.map(m => m.month);
+      const capacityRows = await prisma.monthlyCapacity.findMany({
+        where: { month: { in: monthKeys } },
+        select: { month: true, dailyDesi: true, workingDays: true },
+      });
+      const capacityMap = new Map(capacityRows.map(c => [c.month, c]));
+      const DEFAULT_DAILY = 500;
+      const DEFAULT_WORKING = 22;
+
+      const monthCapacities: MonthCapacity[] = months.map(m => {
+        const cap = capacityMap.get(m.month);
+        const wd = m.workingDays ?? cap?.workingDays ?? DEFAULT_WORKING;
+        const dpd = m.desiPerDay ?? cap?.dailyDesi ?? DEFAULT_DAILY;
+        return {
+          month: m.month,
+          workingDays: wd,
+          desiPerDay: dpd,
+          totalDesi: wd * dpd,
+          weight: 0, // Will be calculated
+        };
+      });
 
       allocations = allocateReserves(reserveInputs, monthCapacities);
 

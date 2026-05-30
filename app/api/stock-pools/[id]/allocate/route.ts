@@ -29,11 +29,14 @@ import { z } from 'zod';
 import { withRoute } from '@/lib/api/withRoute';
 import { successResponse } from '@/lib/api/response';
 
+// Body capacity opsiyonel — eksikse MonthlyCapacity tablosundan okunur.
+// Operatör frontend'de Sezon Ayarlar tab'ından girdiği değerler default olarak gelir;
+// bu çağrıda override etmek istenirse body'de workingDays/desiPerDay verilebilir.
 const AllocateSchema = z.object({
   months: z.array(z.object({
     month: z.string().regex(/^\d{4}-\d{2}$/),
-    workingDays: z.number().int().positive(),
-    desiPerDay: z.number().positive(),
+    workingDays: z.number().int().positive().optional(),
+    desiPerDay: z.number().positive().optional(),
   })).min(1),
   approve: z.boolean().default(false),
   // true: Kilitli ayın plannedQty'si "karşılanmış" sayılır (eksikler yeni aylara girmez)
@@ -80,7 +83,27 @@ export const POST = withRoute<{ id: string }>(
       );
     }
 
-    const { months, approve, includeMissedFromLocked } = validation.data;
+    const { months: inputMonths, approve, includeMissedFromLocked } = validation.data;
+
+    // Aylık kapasite default'larını DB'den çek (Sezon Ayarları tab'ından girilen değerler).
+    // Body'de workingDays/desiPerDay verilmemişse DB'deki kayıt kullanılır; verildiyse override.
+    const monthKeys = inputMonths.map(m => m.month);
+    const capacityRows = await prisma.monthlyCapacity.findMany({
+      where: { month: { in: monthKeys } },
+      select: { month: true, dailyDesi: true, workingDays: true },
+    });
+    const capacityMap = new Map(capacityRows.map(c => [c.month, c]));
+    // Tablo eksik ise fallback default (eski hardcoded değerler)
+    const DEFAULT_DAILY = 500;
+    const DEFAULT_WORKING = 22;
+    const months = inputMonths.map(m => {
+      const cap = capacityMap.get(m.month);
+      return {
+        month: m.month,
+        workingDays: m.workingDays ?? cap?.workingDays ?? DEFAULT_WORKING,
+        desiPerDay: m.desiPerDay ?? cap?.dailyDesi ?? DEFAULT_DAILY,
+      };
+    });
 
     // ── Determine locked months (actualQty > 0 = production started) ──────────
     // A month is locked if ANY reserve has an allocation for it with actualQty > 0
