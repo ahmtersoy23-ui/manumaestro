@@ -15,7 +15,7 @@ import { getAccessibleWarehouses, getShelfRole } from '@/lib/auth/shelfPermissio
 import { getRscUser } from '@/lib/auth/rscUser';
 import { getAnkaraTotals } from '@/lib/warehouse/ankaraTotals';
 
-const ADMIN_WAREHOUSES = ['ANKARA', 'NJ', 'SHOWROOM'];
+const ADMIN_WAREHOUSES = ['ANKARA', 'NJ', 'SHOWROOM', 'NL'];
 
 type WarehouseCard = {
   code: string;
