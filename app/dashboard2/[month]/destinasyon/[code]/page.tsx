@@ -173,6 +173,37 @@ export default function DestinasyonDetailPage() {
     } catch (err) { notify.error('İptal edilemedi', err); }
   };
 
+  // Bulk delete: bu marketplace + bu üretim ayı için tüm STOCKPULSE talepleri sil.
+  // Manuel/Excel + COMPLETED/CANCELLED dokunulmaz. Süper-admin only (backend gate).
+  const bulkDeleteStockpulse = async () => {
+    if (!destMp) return;
+    // Hedef: STOCKPULSE entryType + status NOT IN (COMPLETED, CANCELLED)
+    const targets = items.filter(it =>
+      (it.source === 'AUTO' || it.source === 'AUTO_ACCEPTED') &&
+      it.status !== 'COMPLETED' && it.status !== 'CANCELLED',
+    );
+    if (targets.length === 0) {
+      notify.error('Silinecek STOCKPULSE talebi yok');
+      return;
+    }
+    const confirmed = confirm(
+      `${destMp.code} (${monthLabel}) için ${targets.length} STOCKPULSE talebi SİLİNECEK.\n` +
+      `Manuel girilen veya tamamlanmış kayıtlar korunur. Devam edilsin mi?`,
+    );
+    if (!confirmed) return;
+    try {
+      const res = await fetch('/api/requests/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ marketplaceId: destMp.id, productionMonth: month }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error?.message ?? data.error ?? 'Hata');
+      notify.success(`${data.deleted} talep silindi`);
+      loadAll();
+    } catch (err) { notify.error('Toplu silme başarısız', err); }
+  };
+
   const sourceBadge = (source: PipelineItem['source']) => {
     const map: Record<string, { bg: string; text: string; label: string }> = {
       AUTO:          { bg: 'bg-blue-100',    text: 'text-blue-800',    label: 'AUTO' },
@@ -226,6 +257,14 @@ export default function DestinasyonDetailPage() {
           <button onClick={loadAll} disabled={loading}
             className="px-3 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 flex items-center gap-1">
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Yenile
+          </button>
+          <button
+            onClick={bulkDeleteStockpulse}
+            disabled={loading}
+            title="Bu marketplace + ay için tüm STOCKPULSE (AUTO) taleplerini sil. Manuel/Excel + tamamlanmış kayıtlar korunur."
+            className="px-3 py-2 border border-rose-300 text-rose-700 rounded-lg text-sm hover:bg-rose-50 flex items-center gap-1 disabled:opacity-50"
+          >
+            <Trash2 className="w-3.5 h-3.5" /> Toplu Sil (AUTO)
           </button>
           <button onClick={() => setNewReqOpen(true)}
             className="px-3 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 flex items-center gap-1">
