@@ -9,6 +9,7 @@
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { RequestStatus, EntryType } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { requireSuperAdmin } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
@@ -41,8 +42,8 @@ export const POST = withRoute(
     const where = {
       marketplaceId,
       productionMonth,
-      entryType: 'STOCKPULSE' as const,
-      status: { notIn: ['COMPLETED', 'CANCELLED'] as const },
+      entryType: EntryType.STOCKPULSE,
+      status: { notIn: [RequestStatus.COMPLETED, RequestStatus.CANCELLED] },
     };
 
     const targets = await prisma.productionRequest.findMany({
