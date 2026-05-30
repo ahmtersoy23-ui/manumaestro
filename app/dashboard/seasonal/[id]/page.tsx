@@ -19,8 +19,9 @@ import { isSeasonalEligibleCategory } from '@/lib/seasonal/config';
 import {
   Upload, Package, TrendingUp, Truck, AlertCircle,
   Loader2, CheckCircle2, XCircle, BarChart3, Calendar, FileSpreadsheet,
-  CalendarRange, Eye, ThumbsUp, Lock, Send, Edit2, X, Warehouse, Trash2,
+  CalendarRange, Eye, ThumbsUp, Lock, Send, Edit2, X, Warehouse, Trash2, Settings,
 } from 'lucide-react';
+import { CapacitySettingsTab } from './CapacitySettingsTab';
 const loadXLSX = () => import('xlsx');
 
 interface Reserve {
@@ -111,7 +112,7 @@ export default function PoolDetailPage() {
   const router = useRouter();
   const [pool, setPool] = useState<PoolDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'reserves' | 'allocations' | 'production'>('reserves');
+  const [tab, setTab] = useState<'reserves' | 'allocations' | 'production' | 'settings'>('reserves');
   const [statUnit, setStatUnit] = useState<'unit' | 'desi'>('unit');
   const [importing, setImporting] = useState(false);
   const [importJson, setImportJson] = useState('');
@@ -906,7 +907,18 @@ export default function PoolDetailPage() {
           <TrendingUp className="w-4 h-4 inline mr-1" />
           Aylık Üretim
         </button>
+        {isAdmin && (
+          <button
+            onClick={() => setTab('settings')}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${tab === 'settings' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            <Settings className="w-4 h-4 inline mr-1" />
+            Ayarlar
+          </button>
+        )}
       </div>
+
+      {tab === 'settings' && <CapacitySettingsTab />}
 
       {/* Reserves Tab */}
       {tab === 'reserves' && (() => {

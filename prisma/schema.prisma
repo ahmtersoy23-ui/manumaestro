@@ -24,14 +24,15 @@ model User {
   updatedAt    DateTime @updatedAt
 
   // Relations
-  permissions         UserMarketplacePermission[]
-  categoryPermissions UserCategoryPermission[]
-  stockPermission     UserStockPermission?
-  shipmentPermissions UserShipmentPermission[]
-  requests            ProductionRequest[]
-  decidedSuggestions  ProductionSuggestion[]
-  createdMarketplaces Marketplace[]               @relation("CreatedBy")
-  auditLogs           AuditLog[]
+  permissions               UserMarketplacePermission[]
+  categoryPermissions       UserCategoryPermission[]
+  stockPermission           UserStockPermission?
+  shipmentPermissions       UserShipmentPermission[]
+  requests                  ProductionRequest[]
+  decidedSuggestions        ProductionSuggestion[]
+  createdMarketplaces       Marketplace[]               @relation("CreatedBy")
+  auditLogs                 AuditLog[]
+  monthlyCapacityUpdates    MonthlyCapacity[]           @relation("MonthlyCapacityUpdatedBy")
 
   @@index([role])
   @@index([isActive])
@@ -1004,4 +1005,21 @@ model ProductSerialCounter {
   updatedAt  DateTime @updatedAt
 
   @@map("product_serial_counters")
+}
+
+// Aylık üretim kapasitesi — sezon allocator + ileride üst sınır kriteri için.
+// İleride: günlük desi × çalışma günü = ayın tavan üretim desisi.
+// Sezonsal SKU önerileri bu rakamı aşamayacak şekilde önceliklendirilir.
+model MonthlyCapacity {
+  id           String   @id @default(uuid())
+  month        String   @unique // 'YYYY-MM'
+  dailyDesi    Int      @default(500) // günlük üretim kapasitesi (desi)
+  workingDays  Int      @default(22)  // ayın çalışma günü sayısı
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  updatedById  String?
+  updatedBy    User?    @relation("MonthlyCapacityUpdatedBy", fields: [updatedById], references: [id])
+
+  @@map("monthly_capacity")
 }
