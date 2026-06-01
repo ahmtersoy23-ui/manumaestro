@@ -126,7 +126,13 @@ const ROLE_CAN: Record<ShelfRoleLevel, {
 
 export type ShelfAction = keyof typeof ROLE_CAN['VIEWER'];
 
-export const ALL_WAREHOUSES = ['ANKARA', 'NJ', 'SHOWROOM'] as const;
+export const ALL_WAREHOUSES = ['ANKARA', 'NJ', 'SHOWROOM', 'NL'] as const;
+
+// Public warehouses — özel permission gerekmez, herkes VIEWER olarak görür.
+// Edit/COUNTER/EDITOR yetkisi isteyen kullanıcılar yine user_shelf_permissions
+// üzerinden eklenmeli. 2026-05-30: NL Depo genel kullanıma açıldı (SHELF_PRIMARY
+// + sadece POOL raf — operatörlerin görmesi yeterli).
+export const PUBLIC_WAREHOUSES = ['NL'] as const;
 
 /**
  * Kullanıcının belirli bir depo için raf rolünü getir.
@@ -144,7 +150,10 @@ export async function getShelfRole(
     select: { role: true },
   });
 
-  if (permissions.length === 0) return null;
+  // Public warehouse: özel kayıt yoksa VIEWER varsayılan (örn. NL).
+  if (permissions.length === 0) {
+    return (PUBLIC_WAREHOUSES as readonly string[]).includes(warehouseCode) ? 'VIEWER' : null;
+  }
 
   let best: ShelfRoleLevel = 'VIEWER';
   for (const p of permissions) {
@@ -172,5 +181,6 @@ export async function getAccessibleWarehouses(userId: string, userSsoRole: strin
 
   const codes = permissions.map((p) => p.warehouseCode);
   if (codes.includes('*')) return [...ALL_WAREHOUSES];
-  return [...new Set(codes)];
+  // Public warehouse'lar (NL) her zaman dahil — özel permission gerekmez.
+  return [...new Set([...codes, ...PUBLIC_WAREHOUSES])];
 }
