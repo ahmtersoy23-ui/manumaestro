@@ -11,6 +11,7 @@ import { prisma } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
 import { getMarketplaceAccess, canEditMarketplace } from '@/lib/auth/marketplaceAccess';
+import { getUsAvailability, outboundBlockMessage, type UsWarehouse } from '@/lib/wms/usWarehouseStock';
 import type { Prisma } from '@prisma/client';
 import { withRoute } from '@/lib/api/withRoute';
 import { createdResponse } from '@/lib/api/response';
@@ -159,6 +160,29 @@ export const POST = withRoute<{ code: string }>(
         { success: false, error: 'En az 1 ürün satırı girin' },
         { status: 400 }
       );
+    }
+
+    // Stok kuralı (SINGLE): kalem ancak doğru US deposundan girilebilir.
+    // Fairfield (SHOWROOM) önceliği — yanlış depodan giriş veya hiçbir yerde
+    // olmayan ürün bloklanır. (FBA_PICKUP koli-bazlı, detayda kontrol edilir.)
+    if (orderType === 'SINGLE' && items && items.length > 0) {
+      const qtyByIwasku = new Map<string, number>();
+      for (const it of items) {
+        qtyByIwasku.set(it.iwasku, (qtyByIwasku.get(it.iwasku) ?? 0) + it.quantity);
+      }
+      const avail = await getUsAvailability([...qtyByIwasku.keys()]);
+      const problems: string[] = [];
+      for (const [iwasku, qty] of qtyByIwasku) {
+        const a = avail.get(iwasku) ?? { NJ: 0, SHOWROOM: 0 };
+        const msg = outboundBlockMessage(upperCode as UsWarehouse, iwasku, qty, a);
+        if (msg) problems.push(msg);
+      }
+      if (problems.length > 0) {
+        return NextResponse.json(
+          { success: false, error: problems.join('\n') },
+          { status: 400 }
+        );
+      }
     }
 
     // Aynı (warehouse, marketplace, orderNumber) zaten DRAFT/SHIPPED ise hata

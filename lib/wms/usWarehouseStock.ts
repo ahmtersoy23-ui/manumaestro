@@ -1,0 +1,112 @@
+/**
+ * US depoları (Somerset=NJ + Fairfield=SHOWROOM) için sipariş çıkış stok kuralı.
+ *
+ * Sipariş çıkış girilirken bir ürünün hangi depodan sevk edilmesi gerektiğini
+ * belirler. Öncelik FAIRFIELD (SHOWROOM): bir kalem ancak doğru depodan
+ * girilebilir, yanlış depodan giriş bloklanır.
+ *
+ * Kural (istenen adet = qty, kullanılabilir = quantity - reservedQty):
+ *   1. İki depoda da kullanılabilir stok yok → hiçbir yerde yok (tamamen blok).
+ *   2. Fairfield'da qty kadar var → doğru depo Fairfield.
+ *   3. Değilse Somerset'te qty kadar var → doğru depo Somerset.
+ *   4. İkisi de tek başına yetmiyor → en çok stoğu olan (eşitlik → Fairfield);
+ *      "yetersiz" işaretiyle yine de izin verilir (ikaz).
+ */
+
+import { prisma } from '@/lib/db/prisma';
+import { warehouseLabel } from '@/lib/warehouseLabels';
+
+export const US_OUTBOUND_WAREHOUSES = ['NJ', 'SHOWROOM'] as const;
+export type UsWarehouse = (typeof US_OUTBOUND_WAREHOUSES)[number];
+
+export interface UsAvailability {
+  NJ: number;
+  SHOWROOM: number;
+}
+
+export interface OutboundResolution {
+  /** Bu kalemin girilmesi gereken depo; null = hiçbir US deposunda stok yok. */
+  correct: UsWarehouse | null;
+  /** correct depo, istenen adedi tek başına karşılıyor mu? */
+  sufficient: boolean;
+}
+
+/**
+ * Verilen iwasku'lar için NJ + SHOWROOM kullanılabilir stoğu (quantity - reservedQty)
+ * tek sorguda toplar. Boş koliler (EMPTY) hariç. Negatif değerler 0'a sabitlenir.
+ */
+export async function getUsAvailability(
+  iwaskus: string[]
+): Promise<Map<string, UsAvailability>> {
+  const result = new Map<string, UsAvailability>();
+  const unique = [...new Set(iwaskus.map((s) => s.trim()).filter(Boolean))];
+  if (unique.length === 0) return result;
+  for (const iwasku of unique) result.set(iwasku, { NJ: 0, SHOWROOM: 0 });
+
+  const [stocks, boxes] = await Promise.all([
+    prisma.shelfStock.findMany({
+      where: { warehouseCode: { in: [...US_OUTBOUND_WAREHOUSES] }, iwasku: { in: unique } },
+      select: { warehouseCode: true, iwasku: true, quantity: true, reservedQty: true },
+    }),
+    prisma.shelfBox.findMany({
+      where: {
+        warehouseCode: { in: [...US_OUTBOUND_WAREHOUSES] },
+        iwasku: { in: unique },
+        status: { not: 'EMPTY' },
+      },
+      select: { warehouseCode: true, iwasku: true, quantity: true, reservedQty: true },
+    }),
+  ]);
+
+  const add = (iwasku: string, code: string, available: number) => {
+    const entry = result.get(iwasku);
+    if (!entry || (code !== 'NJ' && code !== 'SHOWROOM')) return;
+    entry[code] += Math.max(0, available);
+  };
+  for (const s of stocks) add(s.iwasku, s.warehouseCode, s.quantity - s.reservedQty);
+  for (const b of boxes) add(b.iwasku, b.warehouseCode, b.quantity - b.reservedQty);
+
+  return result;
+}
+
+/** Fairfield önceliğiyle bir kalemin hangi depoya gireceğini çözer. */
+export function resolveOutboundWarehouse(
+  avail: UsAvailability,
+  qty: number
+): OutboundResolution {
+  const f = avail.SHOWROOM; // Fairfield — öncelik
+  const s = avail.NJ; // Somerset
+  if (f <= 0 && s <= 0) return { correct: null, sufficient: false };
+  if (f >= qty) return { correct: 'SHOWROOM', sufficient: true };
+  if (s >= qty) return { correct: 'NJ', sufficient: true };
+  // İkisi de tek başına yetmiyor → en çok stoğu olan (eşitlik → Fairfield)
+  return { correct: f >= s ? 'SHOWROOM' : 'NJ', sufficient: false };
+}
+
+/**
+ * Hedef depoya bu kalemi girmek serbest mi?
+ * Döner: null → serbest (doğru depo); aksi halde operatörü yönlendiren blok mesajı.
+ * Not: "yetersiz ama doğru depo" durumu serbesttir (blok değil) — yalnızca ikaz frontend'de.
+ */
+export function outboundBlockMessage(
+  target: UsWarehouse,
+  iwasku: string,
+  qty: number,
+  avail: UsAvailability,
+  resolution: OutboundResolution = resolveOutboundWarehouse(avail, qty)
+): string | null {
+  const { correct } = resolution;
+  if (correct === null) {
+    return `${iwasku}: Hiçbir US deposunda (Somerset/Fairfield) stok yok.`;
+  }
+  if (correct === target) return null;
+
+  const correctLabel = warehouseLabel(correct);
+  const correctQty = avail[correct];
+  if (correct === 'SHOWROOM') {
+    // Yanlış depo Somerset'e giriliyor, doğrusu Fairfield (öncelik)
+    return `${iwasku}: Öncelik Fairfield — Fairfield'da ${correctQty} adet var, bu siparişi ${correctLabel} deposundan girin.`;
+  }
+  // correct === 'NJ': Fairfield'da yeterli yok, Somerset'te var
+  return `${iwasku}: Fairfield'da yeterli stok yok (${avail.SHOWROOM} adet); Somerset'te ${correctQty} adet var — ${correctLabel} deposundan girin.`;
+}

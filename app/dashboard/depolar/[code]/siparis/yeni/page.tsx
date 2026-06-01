@@ -13,10 +13,67 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ChevronLeft, AlertCircle, Box as BoxIcon, Plus, Trash2 } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
-import { slugToCode, codeToSlug } from '@/lib/warehouseLabels';
+import { slugToCode, codeToSlug, warehouseLabel } from '@/lib/warehouseLabels';
 import { ProductSearch, type ProductHit as PSProductHit } from '@/components/wms/ProductSearch';
 
 const logger = createLogger('YeniSiparis');
+
+interface UsAvail {
+  NJ: number;
+  SHOWROOM: number;
+}
+
+type RowStatus =
+  | { kind: 'neutral'; text: string }
+  | { kind: 'loading' }
+  | { kind: 'ok'; text: string }
+  | { kind: 'warn'; text: string }
+  | { kind: 'block'; text: string };
+
+/**
+ * Bir ürün satırının US depo stok durumu — Fairfield (SHOWROOM) önceliği.
+ * Backend lib/wms/usWarehouseStock.ts kuralının frontend aynası (canlı ikaz/blok).
+ * Asıl zorlama backend create endpoint'inde; bu sadece operatöre önden bilgi.
+ */
+function rowStatus(
+  code: string,
+  iwasku: string,
+  qty: number,
+  avail: UsAvail | null
+): RowStatus {
+  if (!iwasku || (code !== 'NJ' && code !== 'SHOWROOM')) return { kind: 'neutral', text: '' };
+  if (avail === null) return { kind: 'loading' };
+  const f = avail.SHOWROOM; // Fairfield — öncelik
+  const s = avail.NJ; // Somerset
+  if (!qty || qty <= 0) {
+    return { kind: 'neutral', text: `Fairfield ${f} · Somerset ${s}` };
+  }
+  if (f <= 0 && s <= 0) return { kind: 'block', text: 'Hiçbir US deposunda stok yok' };
+
+  let correct: 'NJ' | 'SHOWROOM';
+  let sufficient: boolean;
+  if (f >= qty) {
+    correct = 'SHOWROOM';
+    sufficient = true;
+  } else if (s >= qty) {
+    correct = 'NJ';
+    sufficient = true;
+  } else {
+    correct = f >= s ? 'SHOWROOM' : 'NJ';
+    sufficient = false;
+  }
+
+  if (correct !== code) {
+    return correct === 'SHOWROOM'
+      ? { kind: 'block', text: `Öncelik Fairfield — Fairfield'da ${f} adet var, Fairfield deposundan girin` }
+      : { kind: 'block', text: `Fairfield'da yeterli stok yok (${f}); Somerset'te ${s} adet var — Somerset deposundan girin` };
+  }
+  const here = code === 'SHOWROOM' ? f : s;
+  const label = warehouseLabel(code);
+  return sufficient
+    ? { kind: 'ok', text: `${label}'da ${here} adet kullanılabilir` }
+    : { kind: 'warn', text: `${label}'da yeterli stok yok (${here}/${qty}) — yine de en çok burada` };
+}
 
 interface Marketplace {
   code: string;
@@ -63,6 +120,8 @@ export default function YeniSiparisPage({
   const [items, setItems] = useState<ItemRow[]>([newRow()]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // iwasku → US depo kullanılabilir stok (stok-check), satır rozeti için cache.
+  const [availByIwasku, setAvailByIwasku] = useState<Record<string, UsAvail>>({});
 
   // SINGLE'da en az 1 ürün satırı eksiksiz olmalı (iwasku + qty>0).
   const hasValidItems =
@@ -70,6 +129,46 @@ export default function YeniSiparisPage({
     items.some(
       (r) => r.iwasku.trim().length > 0 && typeof r.quantity === 'number' && r.quantity > 0
     );
+
+  // Seçili ürünlerin US stoğunu çek (yalnız NJ/SHOWROOM; her iwasku bir kez).
+  useEffect(() => {
+    if (orderType !== 'SINGLE' || (code !== 'NJ' && code !== 'SHOWROOM')) return;
+    const needed = [...new Set(items.map((r) => r.iwasku).filter(Boolean))].filter(
+      (iw) => !(iw in availByIwasku)
+    );
+    if (needed.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      needed.map((iw) =>
+        fetch(`/api/depolar/${code}/siparis/stock-check?iwasku=${encodeURIComponent(iw)}`, {
+          credentials: 'include',
+        })
+          .then((r) => r.json())
+          .then((d) => (d.success ? ([iw, { NJ: d.data.NJ, SHOWROOM: d.data.SHOWROOM }] as const) : null))
+          .catch((e) => {
+            logger.error('stock-check', e);
+            return null;
+          })
+      )
+    ).then((pairs) => {
+      if (cancelled) return;
+      const add: Record<string, UsAvail> = {};
+      for (const p of pairs) if (p) add[p[0]] = p[1];
+      if (Object.keys(add).length) setAvailByIwasku((prev) => ({ ...prev, ...add }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [items, code, orderType, availByIwasku]);
+
+  // Yanlış depo / hiç stok olmayan satır varsa sipariş yaratma engellenir.
+  const anyBlocked =
+    orderType === 'SINGLE' &&
+    items.some((r) => {
+      if (!r.iwasku.trim()) return false;
+      const q = typeof r.quantity === 'number' ? r.quantity : 0;
+      return rowStatus(code, r.iwasku, q, availByIwasku[r.iwasku] ?? null).kind === 'block';
+    });
 
   useEffect(() => {
     let cancelled = false;
@@ -252,6 +351,12 @@ export default function YeniSiparisPage({
                   key={row.id}
                   row={row}
                   canRemove={items.length > 1}
+                  status={rowStatus(
+                    code,
+                    row.iwasku,
+                    typeof row.quantity === 'number' ? row.quantity : 0,
+                    availByIwasku[row.iwasku] ?? null
+                  )}
                   onChange={(patch) => updateRow(row.id, patch)}
                   onRemove={() => removeRow(row.id)}
                 />
@@ -311,11 +416,13 @@ export default function YeniSiparisPage({
           </Link>
           <button
             onClick={handleSubmit}
-            disabled={submitting || !marketplaceCode || !orderNumber.trim() || !hasValidItems}
+            disabled={submitting || !marketplaceCode || !orderNumber.trim() || !hasValidItems || anyBlocked}
             title={
-              !hasValidItems && orderType === 'SINGLE'
-                ? 'En az 1 ürün ve adet girilmeli'
-                : undefined
+              anyBlocked
+                ? 'Bir veya daha fazla satır yanlış depo / stok yok — düzeltin'
+                : !hasValidItems && orderType === 'SINGLE'
+                  ? 'En az 1 ürün ve adet girilmeli'
+                  : undefined
             }
             className={`px-3 py-1.5 text-sm text-white rounded-md disabled:opacity-50 ${
               orderType === 'FBA_PICKUP'
@@ -334,43 +441,67 @@ export default function YeniSiparisPage({
 interface ItemRowInputProps {
   row: ItemRow;
   canRemove: boolean;
+  status: RowStatus;
   onChange: (patch: Partial<ItemRow>) => void;
   onRemove: () => void;
 }
 
-function ItemRowInput({ row, canRemove, onChange, onRemove }: ItemRowInputProps) {
+const STATUS_STYLES: Record<'ok' | 'warn' | 'block' | 'neutral', string> = {
+  ok: 'text-green-700',
+  warn: 'text-amber-700',
+  block: 'text-red-700',
+  neutral: 'text-gray-400',
+};
+
+function ItemRowInput({ row, canRemove, status, onChange, onRemove }: ItemRowInputProps) {
   // ProductSearch interface ile uyumlu adapter:
   const selected: ProductHit | null = row.iwasku
     ? { iwasku: row.iwasku, name: row.display.split(' — ')[1] ?? '', category: null }
     : null;
 
   return (
-    <div className="flex gap-2 items-start">
-      <div className="flex-1">
-        <ProductSearch
-          selected={selected}
-          onSelect={(p) => onChange({ iwasku: p.iwasku, display: `${p.iwasku} — ${p.name}` })}
-          onClear={() => onChange({ iwasku: '', display: '' })}
-          compact
+    <div>
+      <div className="flex gap-2 items-start">
+        <div className="flex-1">
+          <ProductSearch
+            selected={selected}
+            onSelect={(p) => onChange({ iwasku: p.iwasku, display: `${p.iwasku} — ${p.name}` })}
+            onClear={() => onChange({ iwasku: '', display: '' })}
+            compact
+          />
+        </div>
+        <input
+          type="number"
+          min="1"
+          value={row.quantity}
+          onChange={(e) => onChange({ quantity: e.target.value === '' ? '' : Number(e.target.value) })}
+          placeholder="Adet"
+          className="w-24 px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400 text-gray-900"
         />
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={!canRemove}
+          title={canRemove ? 'Satırı sil' : ''}
+          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
       </div>
-      <input
-        type="number"
-        min="1"
-        value={row.quantity}
-        onChange={(e) => onChange({ quantity: e.target.value === '' ? '' : Number(e.target.value) })}
-        placeholder="Adet"
-        className="w-24 px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400 text-gray-900"
-      />
-      <button
-        type="button"
-        onClick={onRemove}
-        disabled={!canRemove}
-        title={canRemove ? 'Satırı sil' : ''}
-        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md disabled:opacity-40 disabled:cursor-not-allowed"
-      >
-        <Trash2 className="w-4 h-4" />
-      </button>
+      {row.iwasku && (
+        <div className="mt-1 ml-1 text-[11px] flex items-center gap-1">
+          {status.kind === 'loading' ? (
+            <span className="text-gray-400">Stok kontrol ediliyor…</span>
+          ) : (
+            status.text && (
+              <span className={`flex items-center gap-1 ${STATUS_STYLES[status.kind]}`}>
+                {status.kind === 'block' && <AlertCircle className="w-3 h-3" />}
+                {status.text}
+              </span>
+            )
+          )}
+        </div>
+      )}
     </div>
   );
 }
