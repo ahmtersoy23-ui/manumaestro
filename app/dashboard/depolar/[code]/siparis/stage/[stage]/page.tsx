@@ -42,6 +42,7 @@ interface OrderRow {
   addressNote: string | null;
   status: 'DRAFT' | 'SHIPPED' | 'CANCELLED';
   itemCount: number;
+  items: { iwasku: string; name: string | null; fnsku: string | null; quantity: number }[];
   hasShippingLabel: boolean;
   createdAt: string;
   shippedAt: string | null;
@@ -127,6 +128,12 @@ export default function StagePage({
     return (
       o.orderNumber.toLowerCase().includes(q) ||
       o.marketplaceCode.toLowerCase().includes(q) ||
+      o.items.some(
+        (it) =>
+          it.iwasku.toLowerCase().includes(q) ||
+          (it.name ?? '').toLowerCase().includes(q) ||
+          (it.fnsku ?? '').toLowerCase().includes(q)
+      ) ||
       (o.description ?? '').toLowerCase().includes(q) ||
       (o.addressNote ?? '').toLowerCase().includes(q)
     );
@@ -175,7 +182,7 @@ export default function StagePage({
           type="text"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Sipariş no / pazaryeri / adres"
+          placeholder="Sipariş no / pazaryeri / ürün"
           className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400"
         />
       </div>
@@ -200,8 +207,8 @@ export default function StagePage({
               <tr>
                 <th className="text-left px-4 py-2">Pazaryeri</th>
                 <th className="text-left px-4 py-2">Sipariş No</th>
-                <th className="text-left px-4 py-2">Adres</th>
-                <th className="text-right px-4 py-2">Ürün</th>
+                <th className="text-left px-4 py-2">Ürün</th>
+                <th className="text-left px-4 py-2">FNSKU</th>
                 <th className="text-left px-4 py-2">Tarih</th>
               </tr>
             </thead>
@@ -224,10 +231,38 @@ export default function StagePage({
                       {o.orderNumber}
                     </Link>
                   </td>
-                  <td className="px-4 py-2 text-xs text-gray-600 truncate max-w-[280px]">
-                    {o.addressNote ?? o.description ?? '—'}
+                  <td className="px-4 py-2 text-xs text-gray-600 max-w-[360px]">
+                    {o.items.length === 0 ? (
+                      <span className="text-gray-400">—</span>
+                    ) : (
+                      <div className="space-y-0.5">
+                        {o.items.map((it, idx) => (
+                          <div key={idx} className="truncate">
+                            <span className="text-gray-800">{it.name ?? it.iwasku}</span>
+                            <span className="text-gray-400"> ×{it.quantity}</span>
+                            {it.name && (
+                              <span className="ml-1.5 font-mono text-[10px] text-gray-400">
+                                {it.iwasku}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </td>
-                  <td className="px-4 py-2 text-right">{o.itemCount}</td>
+                  <td className="px-4 py-2 text-xs">
+                    {o.items.length === 0 ? (
+                      <span className="text-gray-400">—</span>
+                    ) : (
+                      <div className="space-y-0.5">
+                        {o.items.map((it, idx) => (
+                          <div key={idx} className="font-mono text-[11px] text-gray-600">
+                            {it.fnsku ?? '—'}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-2 text-xs text-gray-500">
                     {new Date(o.createdAt).toLocaleDateString('tr-TR')}
                   </td>

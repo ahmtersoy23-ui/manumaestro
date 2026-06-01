@@ -12,6 +12,7 @@ import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
 import { getMarketplaceAccess, canEditMarketplace } from '@/lib/auth/marketplaceAccess';
 import { getUsAvailability, outboundBlockMessage, type UsWarehouse } from '@/lib/wms/usWarehouseStock';
+import { getProductsByIwasku } from '@/lib/products/lookup';
 import type { Prisma } from '@prisma/client';
 import { withRoute } from '@/lib/api/withRoute';
 import { createdResponse } from '@/lib/api/response';
@@ -73,6 +74,7 @@ export const GET = withRoute<{ code: string }>(
       take: 200,
       include: {
         _count: { select: { items: true } },
+        items: { select: { iwasku: true, quantity: true } },
         labels: {
           where: { type: 'SHIPPING', archivedAt: null },
           select: { id: true },
@@ -80,6 +82,10 @@ export const GET = withRoute<{ code: string }>(
         },
       },
     });
+
+    // Liste kalemleri için ürün adlarını topluca çöz (iwasku → name)
+    const allIwaskus = [...new Set(orders.flatMap((o) => o.items.map((i) => i.iwasku)))];
+    const productMap = allIwaskus.length > 0 ? await getProductsByIwasku(allIwaskus) : new Map();
 
     const counts = await prisma.outboundOrder.groupBy({
       by: ['status', 'orderType'],
@@ -107,6 +113,12 @@ export const GET = withRoute<{ code: string }>(
           addressNote: o.addressNote,
           status: o.status,
           itemCount: o._count.items,
+          items: o.items.map((i) => ({
+            iwasku: i.iwasku,
+            name: productMap.get(i.iwasku)?.name ?? null,
+            fnsku: productMap.get(i.iwasku)?.fnsku ?? null,
+            quantity: i.quantity,
+          })),
           hasShippingLabel: o.labels.length > 0,
           createdAt: o.createdAt,
           shippedAt: o.shippedAt,

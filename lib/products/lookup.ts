@@ -10,6 +10,7 @@ export interface ProductInfo {
   name: string | null;
   category: string | null;
   asin: string | null; // sku_master'dan distinct asin (varsa ilki)
+  fnsku: string | null; // sku_master'dan distinct fnsku(lar), virgülle (varsa)
 }
 
 export async function getProductsByIwasku(iwaskus: string[]): Promise<Map<string, ProductInfo>> {
@@ -27,31 +28,35 @@ export async function getProductsByIwasku(iwaskus: string[]): Promise<Map<string
       unique
     ),
     queryProductDb(
-      `SELECT iwasku, MIN(asin) AS asin
+      `SELECT iwasku,
+              MIN(asin) FILTER (WHERE asin IS NOT NULL) AS asin,
+              string_agg(DISTINCT fnsku, ', ') FILTER (WHERE fnsku IS NOT NULL) AS fnsku
        FROM sku_master
-       WHERE iwasku IN (${placeholders}) AND asin IS NOT NULL
+       WHERE iwasku IN (${placeholders})
        GROUP BY iwasku`,
       unique
     ),
   ]);
 
-  const asinMap = new Map<string, string>();
-  for (const r of asinRows as Array<{ iwasku: string; asin: string }>) {
-    asinMap.set(r.iwasku, r.asin);
+  const skuMap = new Map<string, { asin: string | null; fnsku: string | null }>();
+  for (const r of asinRows as Array<{ iwasku: string; asin: string | null; fnsku: string | null }>) {
+    skuMap.set(r.iwasku, { asin: r.asin, fnsku: r.fnsku });
   }
 
   for (const r of productRows as Array<{ iwasku: string; name: string | null; category: string | null }>) {
+    const sku = skuMap.get(r.iwasku);
     map.set(r.iwasku, {
       iwasku: r.iwasku,
       name: r.name,
       category: r.category,
-      asin: asinMap.get(r.iwasku) ?? null,
+      asin: sku?.asin ?? null,
+      fnsku: sku?.fnsku ?? null,
     });
   }
   // products'ta olmayan ama sku_master'da olanlar için entry
-  for (const [iwasku, asin] of asinMap.entries()) {
+  for (const [iwasku, sku] of skuMap.entries()) {
     if (!map.has(iwasku)) {
-      map.set(iwasku, { iwasku, name: null, category: null, asin });
+      map.set(iwasku, { iwasku, name: null, category: null, asin: sku.asin, fnsku: sku.fnsku });
     }
   }
   return map;
