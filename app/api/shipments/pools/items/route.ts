@@ -31,10 +31,13 @@ export const GET = withRoute(
     const destinations = SHIPMENT_DESTINATIONS_BY_COUNTRY[country];
     const targetDestinations = destFilter && destinations.includes(destFilter) ? [destFilter] : destinations;
 
-    // Bu ülkedeki sevkiyatların item iwasku'ları (zaten ekli olanlar)
+    // Bu ülkedeki sevkiyatların item iwasku'ları (zaten ekli olanlar).
+    // Her ay yeni sistem: yalnız hazırlanmakta olan (henüz yola çıkmamış)
+    // sevkiyatlar "alınmış" sayılır; IN_TRANSIT/DELIVERED eski gönderiler
+    // havuzu bloklamaz.
     const takenItems = await prisma.shipmentItem.findMany({
       where: {
-        shipment: { destinationTab: country },
+        shipment: { destinationTab: country, status: { in: ['PLANNING', 'LOADING'] } },
       },
       select: { iwasku: true },
     });
