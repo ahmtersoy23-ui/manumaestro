@@ -7,7 +7,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
-import { getProductsByIwasku } from '@/lib/products/lookup';
+import { getProductsByIwasku, usDimensions } from '@/lib/products/lookup';
 import { withRoute } from '@/lib/api/withRoute';
 import { successResponse } from '@/lib/api/response';
 
@@ -80,6 +80,7 @@ export const GET = withRoute<{ code: string; id: string }>(
           id: item.id,
           iwasku: item.iwasku,
           productName: productMap.get(item.iwasku)?.name ?? null,
+          dims: usDimensions(productMap.get(item.iwasku)),
           quantity: item.quantity,
           shelfId: item.shelfId,
           shelfCode: item.shelfId ? shelfMap.get(item.shelfId)?.code ?? null : box ? boxShelfMap.get(box.shelfId) ?? null : null,

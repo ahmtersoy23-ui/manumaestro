@@ -22,6 +22,12 @@ interface Item {
   id: string;
   iwasku: string;
   productName: string | null;
+  dims: {
+    lengthIn: number | null;
+    widthIn: number | null;
+    heightIn: number | null;
+    weightLb: number | null;
+  } | null;
   quantity: number;
   shelfId: string | null;
   shelfCode: string | null;
@@ -320,6 +326,7 @@ export default function SiparisDetayPage({
               <tr>
                 <th className="text-left px-4 py-2">SKU</th>
                 <th className="text-left px-4 py-2">Ürün</th>
+                <th className="text-left px-4 py-2">Ölçü (inç/lb)</th>
                 <th className="text-left px-4 py-2">Kaynak</th>
                 <th className="text-right px-4 py-2">Adet</th>
                 {data.order.status === 'DRAFT' && <th className="text-right px-4 py-2 w-20">İşlem</th>}
@@ -330,6 +337,24 @@ export default function SiparisDetayPage({
                 <tr key={item.id} className="text-gray-700">
                   <td className="px-4 py-2 font-mono text-xs">{item.iwasku}</td>
                   <td className="px-4 py-2 text-xs truncate max-w-[260px]">{item.productName ?? '—'}</td>
+                  <td className="px-4 py-2 text-xs whitespace-nowrap text-gray-600">
+                    {item.dims ? (
+                      <>
+                        {item.dims.lengthIn != null &&
+                          item.dims.widthIn != null &&
+                          item.dims.heightIn != null && (
+                            <span>
+                              {item.dims.lengthIn}×{item.dims.widthIn}×{item.dims.heightIn} in
+                            </span>
+                          )}
+                        {item.dims.weightLb != null && (
+                          <span className="text-gray-400"> · {item.dims.weightLb} lb</span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-2 text-xs">
                     {item.shelfBoxId ? (
                       <span className="inline-flex items-center gap-1">
