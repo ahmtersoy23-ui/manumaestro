@@ -39,9 +39,17 @@ export const GET = withRoute(
       where: {
         shipment: { destinationTab: country, status: { in: ['PLANNING', 'LOADING'] } },
       },
-      select: { iwasku: true },
+      select: { iwasku: true, recommendedDestination: true },
     });
-    const takenIwaskus = new Set(takenItems.map(it => it.iwasku));
+    // Destinasyon-bazlı "alınmış": aynı iwasku farklı destinasyonlarda (örn.
+    // Amazon US_FBA + Wayfair CG_DEPO) bağımsızdır; biri eklenince diğeri
+    // havuzdan düşmez (karma sevkiyat).
+    const takenByDest = new Map<string, Set<string>>();
+    for (const it of takenItems) {
+      const dest = it.recommendedDestination ?? 'UNKNOWN';
+      if (!takenByDest.has(dest)) takenByDest.set(dest, new Set());
+      takenByDest.get(dest)!.add(it.iwasku);
+    }
 
     // COMPLETED PR'lar
     const prs = await prisma.productionRequest.findMany({
@@ -56,7 +64,7 @@ export const GET = withRoute(
     });
 
     const pending = prs
-      .filter(p => !takenIwaskus.has(p.iwasku))
+      .filter(p => !takenByDest.get(p.recommendedDestination ?? 'UNKNOWN')?.has(p.iwasku))
       .map(p => ({
         id: p.id,
         iwasku: p.iwasku,
