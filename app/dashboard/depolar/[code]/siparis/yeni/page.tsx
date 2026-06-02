@@ -111,6 +111,7 @@ export default function YeniSiparisPage({
     | 'FBA_PICKUP';
   const prefilledMarketplace = searchParams.get('marketplace') ?? '';
   const returnTo = searchParams.get('returnTo') ?? '';
+  const editId = searchParams.get('edit'); // dolu ise düzenleme modu (DRAFT SINGLE)
 
   const [marketplaces, setMarketplaces] = useState<Marketplace[]>([]);
   const [marketplaceCode, setMarketplaceCode] = useState(prefilledMarketplace);
@@ -160,6 +161,35 @@ export default function YeniSiparisPage({
       cancelled = true;
     };
   }, [items, code, orderType, availByIwasku]);
+
+  // Edit modu: mevcut DRAFT siparişi yükle, formu doldur.
+  useEffect(() => {
+    if (!editId) return;
+    let cancelled = false;
+    fetch(`/api/depolar/${code}/siparis/${editId}`, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled || !d.success) return;
+        const o = d.data.order;
+        setMarketplaceCode(o.marketplaceCode);
+        setOrderNumber(o.orderNumber);
+        setAddressNote(o.addressNote ?? '');
+        setDescription(o.description ?? '');
+        const rows: ItemRow[] = (d.data.items ?? []).map(
+          (it: { iwasku: string; productName: string | null; quantity: number }) => ({
+            id: Math.random().toString(36).slice(2),
+            iwasku: it.iwasku,
+            display: `${it.iwasku}${it.productName ? ` — ${it.productName}` : ''}`,
+            quantity: it.quantity,
+          })
+        );
+        if (rows.length > 0) setItems(rows);
+      })
+      .catch((e) => logger.error('Edit yükleme', e));
+    return () => {
+      cancelled = true;
+    };
+  }, [editId, code]);
 
   // Yanlış depo / hiç stok olmayan satır varsa sipariş yaratma engellenir.
   const anyBlocked =
@@ -218,26 +248,31 @@ export default function YeniSiparisPage({
 
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/depolar/${code}/siparis`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderType,
-          marketplaceCode,
-          orderNumber: orderNumber.trim(),
-          description: description.trim() || undefined,
-          addressNote: addressNote.trim() || undefined,
-          items: itemsPayload,
-        }),
-      });
+      const res = await fetch(
+        editId ? `/api/depolar/${code}/siparis/${editId}` : `/api/depolar/${code}/siparis`,
+        {
+          method: editId ? 'PUT' : 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderType,
+            marketplaceCode,
+            orderNumber: orderNumber.trim(),
+            description: description.trim() || undefined,
+            addressNote: addressNote.trim() || undefined,
+            items: itemsPayload,
+          }),
+        }
+      );
       const data = await res.json();
       if (!res.ok || !data.success) {
-        setError(data.error || 'Sipariş yaratılamadı');
+        setError(data.error || (editId ? 'Sipariş güncellenemedi' : 'Sipariş yaratılamadı'));
         return;
       }
-      // SINGLE: marketplace alt sayfasına geri dön (kargo sekmesi); FBA_PICKUP: detaya git
-      if (orderType === 'FBA_PICKUP') {
+      // Edit modu: sipariş detayına dön
+      if (editId) {
+        router.push(`/dashboard/depolar/${codeToSlug(code)}/siparis/${editId}`);
+      } else if (orderType === 'FBA_PICKUP') {
         router.push(`/dashboard/depolar/${codeToSlug(code)}/siparis/${data.data.id}`);
       } else if (returnTo === 'marketplace' && marketplaceCode) {
         router.push(
@@ -265,7 +300,9 @@ export default function YeniSiparisPage({
 
       <div>
         <h1 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-          {orderType === 'FBA_PICKUP' ? (
+          {editId ? (
+            'Sipariş Düzenle'
+          ) : orderType === 'FBA_PICKUP' ? (
             <>
               <BoxIcon className="w-5 h-5 text-orange-500" /> Yeni FBA Pick-up
             </>
@@ -430,7 +467,15 @@ export default function YeniSiparisPage({
                 : 'bg-blue-600 hover:bg-blue-700'
             }`}
           >
-            {submitting ? 'Yaratılıyor…' : orderType === 'FBA_PICKUP' ? 'Sipariş Yarat (DRAFT)' : 'Sipariş Yarat'}
+            {submitting
+              ? editId
+                ? 'Kaydediliyor…'
+                : 'Yaratılıyor…'
+              : editId
+                ? 'Kaydet'
+                : orderType === 'FBA_PICKUP'
+                  ? 'Sipariş Yarat (DRAFT)'
+                  : 'Sipariş Yarat'}
           </button>
         </div>
       </div>

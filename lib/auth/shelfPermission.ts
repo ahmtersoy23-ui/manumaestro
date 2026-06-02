@@ -74,7 +74,7 @@ const ROLE_CAN: Record<ShelfRoleLevel, {
     createOutbound: true, shipOutbound: true, cancelOutbound: true,
     undoOwnRecent: false, undoAny: false,
     resolveUnmatched: false,
-    uploadLabel: true, printLabel: true, deleteLabel: false,
+    uploadLabel: true, printLabel: true, deleteLabel: true, // yanlış kargo etiketini sil/değiştir
     cycleCountPerform: true, cycleCountResolve: false, cycleCountGenerate: false,
     managePermissions: false, manageWarehouseSettings: false,
     deleteStock: false,

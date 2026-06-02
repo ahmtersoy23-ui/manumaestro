@@ -8,7 +8,7 @@ import { useEffect, useState, use } from 'react';
 import { notify } from '@/lib/ui/notify';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import Link from 'next/link';
-import { ChevronLeft, AlertCircle, Truck, X, PackageOpen, Box as BoxIcon } from 'lucide-react';
+import { ChevronLeft, AlertCircle, Truck, X, PackageOpen, Box as BoxIcon, Pencil } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { slugToCode, codeToSlug } from '@/lib/warehouseLabels';
 import { SingleOrderItemAdder } from '@/components/wms/SingleOrderItemAdder';
@@ -193,6 +193,11 @@ export default function SiparisDetayPage({
   const canShip = ['PACKER', 'OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role) && data.order.status === 'DRAFT' && data.items.length > 0;
   const canCancel = ['PACKER', 'OPERATOR', 'MANAGER', 'ADMIN'].includes(data.role) && data.order.status === 'DRAFT';
   const canRevert = data.role === 'ADMIN' && data.order.status === 'SHIPPED';
+  // Düzenleme: DRAFT + SINGLE, createOutbound yetkisi (PACKER/MANAGER/ADMIN)
+  const canEdit =
+    ['PACKER', 'MANAGER', 'ADMIN'].includes(data.role) &&
+    data.order.status === 'DRAFT' &&
+    data.order.orderType === 'SINGLE';
   const totalQty = data.items.reduce((s, x) => s + x.quantity, 0);
 
   return (
@@ -243,6 +248,14 @@ export default function SiparisDetayPage({
           </div>
 
           <div className="flex gap-2">
+            {canEdit && (
+              <Link
+                href={`/dashboard/depolar/${codeToSlug(code)}/siparis/yeni?type=SINGLE&edit=${data.order.id}`}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md"
+              >
+                <Pencil className="w-4 h-4" /> Düzenle
+              </Link>
+            )}
             {canCancel && (
               <button
                 onClick={cancel}

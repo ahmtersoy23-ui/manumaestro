@@ -1,6 +1,6 @@
 /**
  * Sipariş etiket yöneticisi — kargo PDF / FNSKU / diğer etiketleri yükle, listele, bas, sil.
- * Kullanıcı rolü: PACKER+ yükleyebilir/basabilir, MANAGER+ silebilir.
+ * Kullanıcı rolü: PACKER+ yükleyebilir/basabilir/silebilir (yanlış etiket düzeltme).
  */
 
 'use client';
@@ -70,7 +70,8 @@ export function LabelUploader({ warehouseCode, orderId, role }: Props) {
 
   const canUpload = ['PACKER', 'OPERATOR', 'MANAGER', 'ADMIN'].includes(role);
   const canPrint = canUpload;
-  const canDelete = ['MANAGER', 'ADMIN'].includes(role);
+  // PACKER de yanlış kargo etiketini silebilir/değiştirebilir (yükleyen düzeltsin)
+  const canDelete = ['PACKER', 'MANAGER', 'ADMIN'].includes(role);
 
   useEffect(() => {
     let cancelled = false;
