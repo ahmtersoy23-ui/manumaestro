@@ -63,22 +63,45 @@ export const GET = withRoute(
       orderBy: [{ recommendedDestination: 'asc' }, { iwasku: 'asc' }],
     });
 
-    const pending = prs
-      .filter(p => !takenByDest.get(p.recommendedDestination ?? 'UNKNOWN')?.has(p.iwasku))
-      .map(p => ({
-        id: p.id,
-        iwasku: p.iwasku,
-        productName: p.productName,
-        productCategory: p.productCategory,
-        productSize: p.productSize,
-        quantity: p.quantity,
-        producedQuantity: p.producedQuantity,
-        marketplaceCode: p.marketplace.code,
-        marketplaceName: p.marketplace.name,
-        recommendedDestination: p.recommendedDestination,
-        productionMonth: p.productionMonth,
-      }));
+    // (iwasku, destinasyon) bazında BİRLEŞTİR: aynı ürün+destinasyon için tüm
+    // pazaryeri PR'larının miktarı toplanır → havuzda tek satır. Pazaryeri ayrımı
+    // depoya vardıktan sonra (POOL raf) yapılır.
+    const visible = prs.filter(
+      p => !takenByDest.get(p.recommendedDestination ?? 'UNKNOWN')?.has(p.iwasku)
+    );
 
-    return successResponse({ country, destination: destFilter, items: pending });
+    interface Agg {
+      id: string;
+      iwasku: string;
+      productName: string;
+      productCategory: string;
+      productSize: number | null;
+      recommendedDestination: string | null;
+      quantity: number;
+      marketplaces: { code: string; name: string; quantity: number }[];
+    }
+    const aggMap = new Map<string, Agg>();
+    for (const p of visible) {
+      const key = `${p.iwasku}|${p.recommendedDestination ?? ''}`;
+      const mp = { code: p.marketplace.code, name: p.marketplace.name, quantity: p.quantity };
+      const cur = aggMap.get(key);
+      if (cur) {
+        cur.quantity += p.quantity;
+        cur.marketplaces.push(mp);
+      } else {
+        aggMap.set(key, {
+          id: key,
+          iwasku: p.iwasku,
+          productName: p.productName,
+          productCategory: p.productCategory,
+          productSize: p.productSize,
+          recommendedDestination: p.recommendedDestination,
+          quantity: p.quantity,
+          marketplaces: [mp],
+        });
+      }
+    }
+
+    return successResponse({ country, destination: destFilter, items: [...aggMap.values()] });
   },
 );

@@ -20,29 +20,25 @@ import {
 } from '@/lib/marketplaceRegions';
 
 interface PoolItem {
-  id: string;
+  id: string; // `${iwasku}|${recommendedDestination}` — birleştirilmiş satır anahtarı
   iwasku: string;
   productName: string;
   productCategory: string;
   productSize: number | null;
-  quantity: number;
-  producedQuantity: number | null;
-  marketplaceCode: string;
-  marketplaceName: string;
+  quantity: number; // tüm pazaryerlerinin toplamı
   recommendedDestination: string;
-  productionMonth: string;
+  marketplaces: { code: string; name: string; quantity: number }[];
 }
 
 interface Props {
   shipmentId: string;
   shipmentName: string;
   country: string; // US / UK / EU / ...
-  marketplaceIdByCode: Map<string, string>; // PR.marketplaceCode → marketplace.id (eklerken gerek)
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export function PoolItemsModal({ shipmentId, shipmentName, country, marketplaceIdByCode, onClose, onSuccess }: Props) {
+export function PoolItemsModal({ shipmentId, shipmentName, country, onClose, onSuccess }: Props) {
   const [items, setItems] = useState<PoolItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -107,13 +103,13 @@ export function PoolItemsModal({ shipmentId, shipmentName, country, marketplaceI
     if (totalSelected === 0) return;
     setAdding(true);
     try {
+      // Birleştirilmiş satır → tek shipment_item (toplam miktar, destinasyon).
+      // Pazaryeri/PR ayrımı taşınmaz; depoda (POOL raf) dağıtılır.
       const toSend = items
         .filter(it => selected.has(it.id))
         .map(it => ({
           iwasku: it.iwasku,
           quantity: it.quantity,
-          marketplaceId: marketplaceIdByCode.get(it.marketplaceCode),
-          productionRequestId: it.id,
           recommendedDestination: it.recommendedDestination,
         }));
 
@@ -205,8 +201,12 @@ export function PoolItemsModal({ shipmentId, shipmentName, country, marketplaceI
                         className="w-4 h-4" />
                       <span className="font-mono text-cyan-700 w-28 truncate">{it.iwasku}</span>
                       <span className="flex-1 truncate text-slate-900">{it.productName}</span>
-                      <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px]">
-                        {it.marketplaceName}
+                      <span className="flex gap-1 flex-wrap justify-end max-w-[40%]">
+                        {it.marketplaces.map(m => (
+                          <span key={m.code} className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] whitespace-nowrap">
+                            {m.name} ({m.quantity})
+                          </span>
+                        ))}
                       </span>
                       <span className="w-16 text-right font-bold text-purple-700 tabular-nums">{it.quantity}</span>
                     </label>

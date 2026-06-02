@@ -80,7 +80,9 @@ export const GET = withRoute(
         label: SHIPMENT_DESTINATION_LABELS[dest] ?? dest,
         totalCompletedPRs: stats?._count.id ?? 0,
         totalCompletedQty: stats?._sum.quantity ?? 0,
-        pendingPRs: pending.length,
+        // Modal (iwasku+dest bazlı birleştirilmiş) ile tutarlı: PR adedi değil,
+        // bekleyen DISTINCT iwasku sayısı.
+        pendingPRs: new Set(pending.map(p => p.iwasku)).size,
         pendingQty: pending.reduce((s, p) => s + p.quantity, 0),
       };
     });

@@ -1206,7 +1206,6 @@ export default function ShipmentDetailPage() {
               shipmentId={shipment.id}
               shipmentName={shipment.name}
               country={shipment.destinationTab}
-              marketplaceIdByCode={new Map(allMarketplaces.map(m => [m.code, m.id]))}
               onClose={() => setShowPoolModal(false)}
               onSuccess={() => { setShowPoolModal(false); fetchShipment(); }}
             />
