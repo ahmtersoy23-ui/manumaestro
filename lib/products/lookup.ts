@@ -30,7 +30,7 @@ export async function getProductsByIwasku(iwaskus: string[]): Promise<Map<string
     queryProductDb(
       `SELECT iwasku,
               MIN(asin) FILTER (WHERE asin IS NOT NULL) AS asin,
-              string_agg(DISTINCT fnsku, ', ') FILTER (WHERE fnsku IS NOT NULL) AS fnsku
+              string_agg(DISTINCT fnsku, ', ') FILTER (WHERE fnsku IS NOT NULL AND country_code = 'US') AS fnsku
        FROM sku_master
        WHERE iwasku IN (${placeholders})
        GROUP BY iwasku`,

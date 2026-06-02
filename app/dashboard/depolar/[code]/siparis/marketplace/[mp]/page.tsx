@@ -25,6 +25,7 @@ const logger = createLogger('OutboundMarketplace');
 
 const MARKETPLACE_LABELS: Record<string, string> = {
   AMZN_US: 'Amazon US',
+  CUSTOM_01: 'Amazon Citi',
   WAYFAIR_US: 'Wayfair US',
   CUSTOM_05: 'Walmart',
   CUSTOM_04: 'eBay',

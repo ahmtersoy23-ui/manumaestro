@@ -18,6 +18,7 @@ const logger = createLogger('OutboundLobby');
 
 const US_MARKETPLACES = [
   { code: 'AMZN_US',    label: 'Amazon US' },
+  { code: 'CUSTOM_01',  label: 'Amazon Citi' },
   { code: 'WAYFAIR_US', label: 'Wayfair US' },
   { code: 'CUSTOM_05',  label: 'Walmart' },
   { code: 'CUSTOM_04',  label: 'eBay' },
