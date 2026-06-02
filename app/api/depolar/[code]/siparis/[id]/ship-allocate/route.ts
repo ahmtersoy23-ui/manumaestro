@@ -155,11 +155,11 @@ export const POST = withRoute<{ code: string; id: string }>(
               const totalInBox = box.quantity;
               assertNonNegative(`Koli ${box.boxNumber} pick`, totalInBox - p.qty);
 
-              // 1) Kutuyu boşalt
-              await tx.shelfBox.update({
-                where: { id: box.id },
-                data: { quantity: 0, reservedQty: 0, status: 'EMPTY' },
-              });
+              // 1) Koli boşalır → boş kabuk RAFTAN SİLİNİR (çıkış sonrası otomatik
+              //    cleanup). İçerik tekil stoğa aktarılıyor; audit movement'lar
+              //    box.id'yi referans tutar (FK yok), revert shelfId üzerinden
+              //    geri yükler — koli kaydına ihtiyaç yok.
+              await tx.shelfBox.delete({ where: { id: box.id } });
               // 2) Audit: BOX_OPEN
               await tx.shelfMovement.create({
                 data: {
