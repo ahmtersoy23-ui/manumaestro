@@ -79,6 +79,18 @@ export const PATCH = withRoute<{ code: string; id: string; labelId: string }>(
       return successResponse(updated);
     }
 
+    if (body.action === 'updateNotes') {
+      const auth = await requireShelfAction(request, loaded.upperCode, 'uploadLabel');
+      if (auth instanceof NextResponse) return auth;
+      const n = typeof body.notes === 'string' ? body.notes.trim().slice(0, 200) : '';
+      const updated = await prisma.orderLabel.update({
+        where: { id: labelId },
+        data: { notes: n.length > 0 ? n : null },
+        select: { id: true, notes: true },
+      });
+      return successResponse(updated);
+    }
+
     return NextResponse.json({ success: false, error: 'Geçersiz aksiyon' }, { status: 400 });
   }
 );

@@ -7,7 +7,12 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { readLabelFile, LabelStorageError } from '@/lib/wms/labelStorage';
+import { stampLabelPdf, buildLabelCodes } from '@/lib/wms/labelStamp';
+import { getProductsByIwasku } from '@/lib/products/lookup';
+import { createLogger } from '@/lib/logger';
 import { withRoute } from '@/lib/api/withRoute';
+
+const logger = createLogger('LabelDownload');
 
 // requireShelfAction depo-bazlı özel yetki — handler içinde tutuluyor.
 export const GET = withRoute<{ id: string }>(
@@ -42,13 +47,32 @@ export const GET = withRoute<{ id: string }>(
       throw err;
     }
 
-    return new NextResponse(new Uint8Array(buffer), {
+    // SHIPPING PDF + siparişe bağlıysa: üste iwasku (+FNSKU) + not şeridi bas.
+    let outBytes: Uint8Array = new Uint8Array(buffer);
+    if (label.type === 'SHIPPING' && label.mimeType === 'application/pdf' && label.outboundOrderId) {
+      try {
+        const items = await prisma.outboundOrderItem.findMany({
+          where: { outboundOrderId: label.outboundOrderId },
+          select: { iwasku: true },
+        });
+        const productMap = await getProductsByIwasku(items.map((i) => i.iwasku));
+        const codes = buildLabelCodes(
+          items.map((i) => ({ iwasku: i.iwasku, fnsku: productMap.get(i.iwasku)?.fnsku ?? null }))
+        );
+        outBytes = await stampLabelPdf(buffer, { codes, note: label.notes });
+      } catch (e) {
+        logger.error('Etiket stamp başarısız — ham servis edilir', { labelId: id, e });
+        outBytes = new Uint8Array(buffer);
+      }
+    }
+
+    return new NextResponse(outBytes as BodyInit, {
       status: 200,
       headers: {
         'Content-Type': label.mimeType,
-        'Content-Length': String(label.fileSize),
+        'Content-Length': String(outBytes.byteLength),
         'Content-Disposition': `inline; filename="${encodeURIComponent(label.fileName)}"`,
-        'Cache-Control': 'private, max-age=3600',
+        'Cache-Control': 'private, no-store',
       },
     });
   }

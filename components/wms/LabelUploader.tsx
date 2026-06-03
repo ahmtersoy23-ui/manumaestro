@@ -63,10 +63,13 @@ export function LabelUploader({ warehouseCode, orderId, role }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [uploadType, setUploadType] = useState<LabelType>('SHIPPING');
   const [uploadTracking, setUploadTracking] = useState<string>('');
+  const [uploadNote, setUploadNote] = useState<string>('');
   const [uploading, setUploading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [editingTrackingId, setEditingTrackingId] = useState<string | null>(null);
   const [editingTrackingValue, setEditingTrackingValue] = useState<string>('');
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteValue, setEditingNoteValue] = useState<string>('');
 
   const canUpload = ['PACKER', 'OPERATOR', 'MANAGER', 'ADMIN'].includes(role);
   const canPrint = canUpload;
@@ -112,6 +115,7 @@ export function LabelUploader({ warehouseCode, orderId, role }: Props) {
       fd.append('file', file);
       fd.append('type', uploadType);
       if (uploadTracking.trim().length > 0) fd.append('trackingNumber', uploadTracking.trim());
+      if (uploadNote.trim().length > 0) fd.append('notes', uploadNote.trim());
       const res = await fetch(`/api/depolar/${warehouseCode}/siparis/${orderId}/labels`, {
         method: 'POST',
         body: fd,
@@ -123,6 +127,7 @@ export function LabelUploader({ warehouseCode, orderId, role }: Props) {
         return;
       }
       setUploadTracking('');
+      setUploadNote('');
       setRefreshKey((k) => k + 1);
     } catch (e) {
       logger.error('Label upload', e);
@@ -153,6 +158,31 @@ export function LabelUploader({ warehouseCode, orderId, role }: Props) {
       setRefreshKey((k) => k + 1);
     } catch (e) {
       logger.error('Update tracking', e);
+      notify.error('Sunucu hatası', e);
+    }
+  }
+
+  async function saveNote(labelId: string, value: string) {
+    try {
+      const res = await fetch(
+        `/api/depolar/${warehouseCode}/siparis/${orderId}/labels/${labelId}`,
+        {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'updateNotes', notes: value }),
+        }
+      );
+      const d = await res.json();
+      if (!res.ok || !d.success) {
+        notify.error(d.error || 'Not güncellenemedi');
+        return;
+      }
+      setEditingNoteId(null);
+      setEditingNoteValue('');
+      setRefreshKey((k) => k + 1);
+    } catch (e) {
+      logger.error('Update note', e);
       notify.error('Sunucu hatası', e);
     }
   }
@@ -229,14 +259,24 @@ export function LabelUploader({ warehouseCode, orderId, role }: Props) {
             <option value="OTHER">Diğer</option>
           </select>
           {uploadType === 'SHIPPING' && (
-            <input
-              type="text"
-              value={uploadTracking}
-              onChange={(e) => setUploadTracking(e.target.value)}
-              disabled={uploading}
-              placeholder="Tracking no (ops.)"
-              className="w-44 text-sm border border-gray-300 rounded-md px-2 py-1.5 font-mono bg-white"
-            />
+            <>
+              <input
+                type="text"
+                value={uploadTracking}
+                onChange={(e) => setUploadTracking(e.target.value)}
+                disabled={uploading}
+                placeholder="Tracking no (ops.)"
+                className="w-44 text-sm border border-gray-300 rounded-md px-2 py-1.5 font-mono bg-white"
+              />
+              <input
+                type="text"
+                value={uploadNote}
+                onChange={(e) => setUploadNote(e.target.value)}
+                disabled={uploading}
+                placeholder="Not (ops.) — etikete basılır"
+                className="w-56 text-sm border border-gray-300 rounded-md px-2 py-1.5 bg-white"
+              />
+            </>
           )}
           <label
             className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md cursor-pointer ${
@@ -352,6 +392,52 @@ export function LabelUploader({ warehouseCode, orderId, role }: Props) {
                         disabled={!canUpload}
                       >
                         {label.trackingNumber ? `📦 ${label.trackingNumber}` : (canUpload ? '+ Tracking ekle' : '')}
+                      </button>
+                    )}
+                  </div>
+                )}
+                {/* Not — etikete basılır, PACKER+ ekler/düzeltir */}
+                {label.type === 'SHIPPING' && (
+                  <div className="mt-1 flex items-center gap-2">
+                    {editingNoteId === label.id ? (
+                      <>
+                        <input
+                          type="text"
+                          autoFocus
+                          value={editingNoteValue}
+                          onChange={(e) => setEditingNoteValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') saveNote(label.id, editingNoteValue);
+                            if (e.key === 'Escape') { setEditingNoteId(null); setEditingNoteValue(''); }
+                          }}
+                          placeholder="Not (etikete basılır)"
+                          className="text-xs border border-gray-300 rounded px-1.5 py-0.5 w-64"
+                        />
+                        <button
+                          onClick={() => saveNote(label.id, editingNoteValue)}
+                          className="text-[10px] px-1.5 py-0.5 bg-green-600 text-white rounded hover:bg-green-700"
+                        >
+                          Kaydet
+                        </button>
+                        <button
+                          onClick={() => { setEditingNoteId(null); setEditingNoteValue(''); }}
+                          className="text-[10px] px-1.5 py-0.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                        >
+                          İptal
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!canUpload) return;
+                          setEditingNoteId(label.id);
+                          setEditingNoteValue(label.notes ?? '');
+                        }}
+                        className={`text-[11px] ${label.notes ? 'text-gray-700' : 'text-blue-600 italic'} ${canUpload ? 'hover:underline cursor-pointer' : 'cursor-default'}`}
+                        disabled={!canUpload}
+                      >
+                        {label.notes ? `📝 ${label.notes}` : (canUpload ? '+ Not ekle' : '')}
                       </button>
                     )}
                   </div>
