@@ -7,6 +7,7 @@
 
 import { Search, X, Package, Loader2, CheckSquare, Square, Ship } from 'lucide-react';
 import type { ShipmentItem } from '@/lib/shipments/types';
+import { SHIPMENT_DESTINATION_LABELS } from '@/lib/marketplaceRegions';
 import { DateMultiFilter } from './DateMultiFilter';
 
 interface Props {
@@ -142,7 +143,7 @@ export function SentItemsTab({
                   <td className="px-3 py-3 font-mono text-sm text-gray-600">{item.fnsku || '—'}</td>
                   <td className="px-3 py-3 text-xs text-gray-700 line-clamp-1">{item.productName || '—'}</td>
                   <td className="px-3 py-3 text-sm text-gray-600">{item.productCategory || '—'}</td>
-                  <td className="px-3 py-3 text-sm text-gray-600">{item.marketplace?.name ?? '—'}</td>
+                  <td className="px-3 py-3 text-sm text-gray-600">{item.marketplace?.name ?? (item.recommendedDestination ? SHIPMENT_DESTINATION_LABELS[item.recommendedDestination] ?? item.recommendedDestination : '—')}</td>
                   <td className="px-3 py-3 text-xs text-gray-500">
                     {new Date(item.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}
                   </td>

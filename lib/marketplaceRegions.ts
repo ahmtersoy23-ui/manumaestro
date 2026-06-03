@@ -75,6 +75,20 @@ export const SHIPMENT_DESTINATION_LABELS: Record<string, string> = {
 };
 
 /**
+ * FBA destinasyonu → Amazon pazaryeri kodu (1:1). Havuzdan eklenen FBA item'ları
+ * marketplace'siz geldiğinde bu eşlemeyle marketplaceId set edilir → kolonda
+ * "Amazon US" görünür + FNSKU lookup (marketplace.code → ülke) çalışır.
+ * Depo destinasyonları (NJ_DEPO/CG_DEPO/NL_DEPO/UK_DEPO) çok-pazaryeri → eşlenmez.
+ */
+export const FBA_DESTINATION_TO_MARKETPLACE: Record<string, string> = {
+  US_FBA: 'AMZN_US',
+  UK_FBA: 'AMZN_UK',
+  EU_FBA: 'AMZN_EU',
+  CA_FBA: 'AMZN_CA',
+  AU_FBA: 'AMZN_AU',
+};
+
+/**
  * Sevkiyat sayfası için: üst country tab → alt destinasyon tab listesi.
  * shipments.destinationTab field bu destinasyon kodlarını tutar.
  */

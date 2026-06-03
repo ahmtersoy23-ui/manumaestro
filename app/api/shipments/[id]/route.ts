@@ -11,6 +11,7 @@ import { prisma, queryProductDb } from '@/lib/db/prisma';
 import { requireShipmentView, requireShipmentAction } from '@/lib/auth/requireShipmentRole';
 import { requireSuperAdmin } from '@/lib/auth/verify';
 import { getShipmentRole, canDoAction, ShipmentAction } from '@/lib/auth/shipmentPermission';
+import { FBA_DESTINATION_TO_MARKETPLACE } from '@/lib/marketplaceRegions';
 import { logAction } from '@/lib/auditLog';
 import { withRoute } from '@/lib/api/withRoute';
 import { successResponse } from '@/lib/api/response';
@@ -263,14 +264,33 @@ export const POST = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'writ
     }
   }
 
+  // Havuzdan eklenen FBA item'ları marketplace'siz gelir → recommendedDestination'dan
+  // Amazon pazaryeri türet (US_FBA→AMZN_US...). Kolonda "Amazon US" + FNSKU lookup çalışsın.
+  const fbaCodes = [...new Set(
+    validation.data.items
+      .filter(it => !it.marketplaceId && it.recommendedDestination && FBA_DESTINATION_TO_MARKETPLACE[it.recommendedDestination])
+      .map(it => FBA_DESTINATION_TO_MARKETPLACE[it.recommendedDestination!])
+  )];
+  const codeToMktId = new Map<string, string>();
+  if (fbaCodes.length > 0) {
+    const mkts = await prisma.marketplace.findMany({
+      where: { code: { in: fbaCodes } },
+      select: { id: true, code: true },
+    });
+    for (const m of mkts) codeToMktId.set(m.code, m.id);
+  }
+
   const created = await prisma.shipmentItem.createMany({
     data: validation.data.items.map(item => {
       const unitDesi = sizeMap.get(item.iwasku);
+      const fbaMktId = item.recommendedDestination
+        ? codeToMktId.get(FBA_DESTINATION_TO_MARKETPLACE[item.recommendedDestination] ?? '')
+        : undefined;
       return {
         shipmentId: id,
         iwasku: item.iwasku,
         quantity: item.quantity,
-        marketplaceId: item.marketplaceId,
+        marketplaceId: item.marketplaceId ?? fbaMktId,
         reserveId: item.reserveId,
         productionRequestId: item.productionRequestId,
         recommendedDestination: item.recommendedDestination,

@@ -24,6 +24,7 @@ export interface ShipmentItem {
   desi: number | null;
   marketplaceId: string | null;
   marketplace: { id: string; name: string; code: string } | null;
+  recommendedDestination: string | null;
   productName: string;
   productCategory: string;
   fnsku: string | null;

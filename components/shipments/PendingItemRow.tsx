@@ -11,6 +11,7 @@ import {
 import { InlineFnskuInput } from './InlineFnskuInput';
 import { BoxEntryPanel } from './BoxEntryPanel';
 import { useInputDialog } from '@/components/ui/InputDialog';
+import { SHIPMENT_DESTINATION_LABELS } from '@/lib/marketplaceRegions';
 import type { BoxFormData, ShipmentItem, ShipmentBox } from '@/lib/shipments/types';
 
 interface Props {
@@ -84,7 +85,7 @@ export function PendingItemRow({
         </td>
         <td className="px-3 py-3"><div className={`text-xs leading-tight line-clamp-2 ${item.packed ? 'text-green-700' : 'text-gray-700'}`}>{item.productName || '—'}</div></td>
         <td className={`px-3 py-3 text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.productCategory || '—'}</td>
-        <td className={`px-3 py-3 text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.marketplace?.name ?? '—'}</td>
+        <td className={`px-3 py-3 text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.marketplace?.name ?? (item.recommendedDestination ? SHIPMENT_DESTINATION_LABELS[item.recommendedDestination] ?? item.recommendedDestination : '—')}</td>
         <td className={`px-3 py-3 text-xs ${item.packed ? 'text-green-600' : 'text-gray-500'}`}>
           {new Date(item.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}
         </td>
