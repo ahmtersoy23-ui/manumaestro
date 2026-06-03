@@ -11,7 +11,7 @@ import { prisma, queryProductDb } from '@/lib/db/prisma';
 import { requireShipmentView, requireShipmentAction } from '@/lib/auth/requireShipmentRole';
 import { requireSuperAdmin } from '@/lib/auth/verify';
 import { getShipmentRole, canDoAction, ShipmentAction } from '@/lib/auth/shipmentPermission';
-import { FBA_DESTINATION_TO_MARKETPLACE } from '@/lib/marketplaceRegions';
+import { FBA_DESTINATION_TO_MARKETPLACE, shipmentDestinationLabel } from '@/lib/marketplaceRegions';
 import { logAction } from '@/lib/auditLog';
 import { withRoute } from '@/lib/api/withRoute';
 import { successResponse } from '@/lib/api/response';
@@ -110,9 +110,17 @@ export const GET = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'read'
     const skuMasterFnsku = cc ? fnskuMap.get(`${item.iwasku}|${cc}`) ?? null : null;
     // ShipmentItem.fnsku (manuel giris) oncelikli, sonra sku_master lookup
     const fnsku = item.fnsku || skuMasterFnsku;
+    // Kolon = fiziksel destinasyon (bölge-genel): recommendedDestination öncelikli,
+    // yoksa marketplace'ten türetilir (mevcut/legacy satırlar dahil otomatik).
+    const destinationLabel = shipmentDestinationLabel(
+      shipment.destinationTab,
+      mkt?.code,
+      item.recommendedDestination
+    );
     return {
       ...item,
       marketplace: mkt,
+      destinationLabel,
       productName: pr?.productName ?? fallback?.name ?? '',
       productCategory: pr?.productCategory ?? fallback?.category ?? '',
       fnsku,

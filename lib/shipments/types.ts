@@ -25,6 +25,7 @@ export interface ShipmentItem {
   marketplaceId: string | null;
   marketplace: { id: string; name: string; code: string } | null;
   recommendedDestination: string | null;
+  destinationLabel: string; // kolon gösterimi: fiziksel destinasyon (Amazon US / CG Depo / NJ Depo)
   productName: string;
   productCategory: string;
   fnsku: string | null;

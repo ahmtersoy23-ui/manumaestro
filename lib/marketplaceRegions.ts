@@ -88,6 +88,51 @@ export const FBA_DESTINATION_TO_MARKETPLACE: Record<string, string> = {
   AU_FBA: 'AMZN_AU',
 };
 
+/** Sevkiyat item kolon gösterimi: destinasyon etiketi (FBA → "Amazon X", depo → "X Depo"). */
+const COLUMN_DEST_LABELS: Record<string, string> = {
+  US_FBA: 'Amazon US',
+  UK_FBA: 'Amazon UK',
+  EU_FBA: 'Amazon EU',
+  CA_FBA: 'Amazon CA',
+  AU_FBA: 'Amazon AU',
+  NJ_DEPO: 'NJ Depo',
+  CG_DEPO: 'CG Depo',
+  NL_DEPO: 'NL Depo',
+  UK_DEPO: 'UK Depo',
+  ZA_TAKEALOT: 'Takealot',
+};
+
+const AMAZON_LABELS: Record<string, string> = {
+  AMZN_US: 'Amazon US',
+  AMZN_UK: 'Amazon UK',
+  AMZN_EU: 'Amazon EU',
+  AMZN_CA: 'Amazon CA',
+  AMZN_AU: 'Amazon AU',
+};
+
+const REGION_DEPOT_LABEL: Record<string, string> = { US: 'NJ Depo', EU: 'NL Depo', UK: 'UK Depo' };
+
+/**
+ * Bir shipment_item'ın kolon etiketi = fiziksel destinasyon (bölge-genel).
+ * recommendedDestination öncelikli (havuzdan eklenen yeni item'lar bunu taşır);
+ * yoksa marketplace'ten türetilir (legacy satırlar):
+ *   Amazon → "Amazon US/UK/EU/CA/AU" (FBA), Wayfair US → "CG Depo",
+ *   diğer kanallar → bölgenin deposu (US→NJ, EU→NL, UK→UK Depo).
+ */
+export function shipmentDestinationLabel(
+  destinationTab: string,
+  marketplaceCode: string | null | undefined,
+  recommendedDestination: string | null | undefined
+): string {
+  if (recommendedDestination && COLUMN_DEST_LABELS[recommendedDestination]) {
+    return COLUMN_DEST_LABELS[recommendedDestination];
+  }
+  if (marketplaceCode && AMAZON_LABELS[marketplaceCode]) return AMAZON_LABELS[marketplaceCode];
+  if (marketplaceCode === 'WAYFAIR_US') return 'CG Depo';
+  if (marketplaceCode) return REGION_DEPOT_LABEL[destinationTab] ?? marketplaceCode;
+  return '—';
+}
+
 /**
  * Sevkiyat sayfası için: üst country tab → alt destinasyon tab listesi.
  * shipments.destinationTab field bu destinasyon kodlarını tutar.
