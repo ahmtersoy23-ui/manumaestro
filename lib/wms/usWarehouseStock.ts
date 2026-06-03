@@ -36,7 +36,8 @@ export interface OutboundResolution {
  * tek sorguda toplar. Boş koliler (EMPTY) hariç. Negatif değerler 0'a sabitlenir.
  */
 export async function getUsAvailability(
-  iwaskus: string[]
+  iwaskus: string[],
+  opts: { subtractPendingDraft?: boolean; excludeOrderId?: string } = {}
 ): Promise<Map<string, UsAvailability>> {
   const result = new Map<string, UsAvailability>();
   const unique = [...new Set(iwaskus.map((s) => s.trim()).filter(Boolean))];
@@ -65,6 +66,33 @@ export async function getUsAvailability(
   };
   for (const s of stocks) add(s.iwasku, s.warehouseCode, s.quantity - s.reservedQty);
   for (const b of boxes) add(b.iwasku, b.warehouseCode, b.quantity - b.reservedQty);
+
+  // Sipariş-bazlı yumuşak rezerve: bekleyen DRAFT SINGLE sipariş miktarları
+  // available'dan düşülür → over-commit engellenir. Stok tablosuna dokunmaz;
+  // sipariş SHIPPED/CANCELLED/silinince otomatik serbest kalır.
+  // excludeOrderId: düzenlenen siparişin kendi miktarını sayma (self-count önle).
+  if (opts.subtractPendingDraft) {
+    const pendingOrders = await prisma.outboundOrder.findMany({
+      where: {
+        status: 'DRAFT',
+        orderType: 'SINGLE',
+        warehouseCode: { in: [...US_OUTBOUND_WAREHOUSES] },
+        ...(opts.excludeOrderId ? { id: { not: opts.excludeOrderId } } : {}),
+        items: { some: { iwasku: { in: unique } } },
+      },
+      select: {
+        warehouseCode: true,
+        items: { where: { iwasku: { in: unique } }, select: { iwasku: true, quantity: true } },
+      },
+    });
+    for (const o of pendingOrders) {
+      if (o.warehouseCode !== 'NJ' && o.warehouseCode !== 'SHOWROOM') continue;
+      for (const it of o.items) {
+        const entry = result.get(it.iwasku);
+        if (entry) entry[o.warehouseCode] = Math.max(0, entry[o.warehouseCode] - it.quantity);
+      }
+    }
+  }
 
   return result;
 }

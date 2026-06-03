@@ -182,7 +182,7 @@ export const POST = withRoute<{ code: string }>(
       for (const it of items) {
         qtyByIwasku.set(it.iwasku, (qtyByIwasku.get(it.iwasku) ?? 0) + it.quantity);
       }
-      const avail = await getUsAvailability([...qtyByIwasku.keys()]);
+      const avail = await getUsAvailability([...qtyByIwasku.keys()], { subtractPendingDraft: true });
       const problems: string[] = [];
       for (const [iwasku, qty] of qtyByIwasku) {
         const a = avail.get(iwasku) ?? { NJ: 0, SHOWROOM: 0 };

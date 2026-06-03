@@ -141,9 +141,10 @@ export default function YeniSiparisPage({
     let cancelled = false;
     Promise.all(
       needed.map((iw) =>
-        fetch(`/api/depolar/${code}/siparis/stock-check?iwasku=${encodeURIComponent(iw)}`, {
-          credentials: 'include',
-        })
+        fetch(
+          `/api/depolar/${code}/siparis/stock-check?iwasku=${encodeURIComponent(iw)}${editId ? `&excludeOrderId=${encodeURIComponent(editId)}` : ''}`,
+          { credentials: 'include' }
+        )
           .then((r) => r.json())
           .then((d) => (d.success ? ([iw, { NJ: d.data.NJ, SHOWROOM: d.data.SHOWROOM }] as const) : null))
           .catch((e) => {
@@ -160,7 +161,7 @@ export default function YeniSiparisPage({
     return () => {
       cancelled = true;
     };
-  }, [items, code, orderType, availByIwasku]);
+  }, [items, code, orderType, availByIwasku, editId]);
 
   // Edit modu: mevcut DRAFT siparişi yükle, formu doldur.
   useEffect(() => {

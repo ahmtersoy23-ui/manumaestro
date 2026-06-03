@@ -27,12 +27,15 @@ export const GET = withRoute<{ code: string }>(
     const auth = await requireShelfAction(request, upperCode, 'view');
     if (auth instanceof NextResponse) return auth;
 
-    const iwasku = new URL(request.url).searchParams.get('iwasku')?.trim();
+    const sp = new URL(request.url).searchParams;
+    const iwasku = sp.get('iwasku')?.trim();
+    const excludeOrderId = sp.get('excludeOrderId')?.trim() || undefined;
     if (!iwasku) {
       return NextResponse.json({ success: false, error: 'iwasku gerekli' }, { status: 400 });
     }
 
-    const avail = await getUsAvailability([iwasku]);
+    // Bekleyen DRAFT miktarları düşülür (yumuşak rezerve); edit modunda kendi sipariş hariç.
+    const avail = await getUsAvailability([iwasku], { subtractPendingDraft: true, excludeOrderId });
     const a = avail.get(iwasku) ?? { NJ: 0, SHOWROOM: 0 };
 
     return successResponse({ iwasku, NJ: a.NJ, SHOWROOM: a.SHOWROOM });

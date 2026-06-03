@@ -176,7 +176,10 @@ export const PUT = withRoute<{ code: string; id: string }>(
     // Stok kuralı (create ile aynı): doğru US deposu + Fairfield önceliği
     const qtyByIwasku = new Map<string, number>();
     for (const it of items) qtyByIwasku.set(it.iwasku, (qtyByIwasku.get(it.iwasku) ?? 0) + it.quantity);
-    const avail = await getUsAvailability([...qtyByIwasku.keys()]);
+    const avail = await getUsAvailability([...qtyByIwasku.keys()], {
+      subtractPendingDraft: true,
+      excludeOrderId: id,
+    });
     const problems: string[] = [];
     for (const [iwasku, qty] of qtyByIwasku) {
       const a = avail.get(iwasku) ?? { NJ: 0, SHOWROOM: 0 };
