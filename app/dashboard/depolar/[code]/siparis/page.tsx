@@ -10,7 +10,7 @@
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { ClipboardList, Truck, AlertCircle, ArrowLeftRight } from 'lucide-react';
+import { ClipboardList, Truck, AlertCircle } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { slugToCode, codeToSlug } from '@/lib/warehouseLabels';
 
@@ -33,18 +33,10 @@ interface MarketplaceStats {
   shipped: number;
 }
 
-interface TransferSuggestion {
-  iwasku: string;
-  name: string | null;
-  somerset: number;
-  lastShippedAt: string;
-}
-
 interface LobbyData {
   role: string;
   totals: { kargoBekleyen: number; cikisBekleyen: number };
   byMarketplace: MarketplaceStats[];
-  transferSuggestions?: TransferSuggestion[];
   access: { allMarketplaces: boolean; viewable: string[]; editable: string[] };
 }
 
@@ -137,48 +129,6 @@ export default function SiparisLobbyPage({ params }: { params: Promise<{ code: s
               </Link>
             </div>
           </div>
-
-          {/* Transfer önerisi — Fairfield'da çıkışla biten, Somerset'te olan ürünler */}
-          {data.transferSuggestions && data.transferSuggestions.length > 0 && (
-            <div className="bg-white border border-indigo-200 rounded-lg overflow-hidden">
-              <div className="flex items-center gap-2 bg-indigo-50 text-indigo-800 text-xs font-medium px-4 py-2.5">
-                <ArrowLeftRight className="w-4 h-4" />
-                Transfer önerisi ({data.transferSuggestions.length})
-                <span className="font-normal text-indigo-600">
-                  {"— Fairfield'da çıkışla bitti, Somerset'te mevcut → Somerset'ten transfer önerilir"}
-                </span>
-              </div>
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-[11px] text-gray-500">
-                  <tr>
-                    <th className="text-left px-4 py-1.5">Ürün</th>
-                    <th className="text-right px-4 py-1.5">Somerset stok</th>
-                    <th className="text-left px-4 py-1.5">Son Fairfield çıkışı</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {data.transferSuggestions.map((t) => (
-                    <tr key={t.iwasku} className="text-gray-700">
-                      <td className="px-4 py-1.5">
-                        <span className="text-gray-800">{t.name ?? t.iwasku}</span>
-                        {t.name && (
-                          <span className="ml-1.5 font-mono text-[10px] text-gray-400">
-                            {t.iwasku}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-1.5 text-right font-medium text-indigo-700">
-                        {t.somerset}
-                      </td>
-                      <td className="px-4 py-1.5 text-xs text-gray-500">
-                        {new Date(t.lastShippedAt).toLocaleDateString('tr-TR')}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
 
           {/* Pazaryeri kartları — sadece kullanıcının canView yetkisi olanlar */}
           <div className="bg-white border border-gray-200 rounded-lg p-4">

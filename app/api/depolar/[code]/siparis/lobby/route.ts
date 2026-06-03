@@ -10,14 +10,8 @@ import { prisma } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
 import { getMarketplaceAccess } from '@/lib/auth/marketplaceAccess';
-import { getUsAvailability } from '@/lib/wms/usWarehouseStock';
-import { getProductsByIwasku } from '@/lib/products/lookup';
 import { withRoute } from '@/lib/api/withRoute';
 import { successResponse } from '@/lib/api/response';
-
-// Fairfield'dan son N günde çıkışı yapılan kalemler tarandı; bu pencereyi aşan
-// eski sevkiyatlar transfer önerisinde gösterilmez.
-const TRANSFER_LOOKBACK_DAYS = 90;
 
 const SHELF_PRIMARY = new Set(['NJ', 'SHOWROOM']);
 
@@ -88,59 +82,10 @@ export const GET = withRoute<{ code: string }>(
       ...stats,
     }));
 
-    // Transfer önerisi (yalnız Fairfield/SHOWROOM lobisinde):
-    // Son TRANSFER_LOOKBACK_DAYS gün içinde Fairfield'dan çıkışı yapılmış,
-    // şu an Fairfield'da stoğu sıfıra düşmüş ama Somerset'te (NJ) hâlâ olan
-    // ürünler → Somerset'ten Fairfield'a transfer önerilir.
-    let transferSuggestions: {
-      iwasku: string;
-      name: string | null;
-      somerset: number;
-      lastShippedAt: string;
-    }[] = [];
-
-    if (upperCode === 'SHOWROOM') {
-      const cutoff = new Date(Date.now() - TRANSFER_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
-      const shippedOrders = await prisma.outboundOrder.findMany({
-        where: { warehouseCode: 'SHOWROOM', status: 'SHIPPED', shippedAt: { gte: cutoff } },
-        select: { shippedAt: true, items: { select: { iwasku: true } } },
-      });
-
-      const lastShipByIwasku = new Map<string, Date>();
-      for (const o of shippedOrders) {
-        if (!o.shippedAt) continue;
-        for (const it of o.items) {
-          const prev = lastShipByIwasku.get(it.iwasku);
-          if (!prev || o.shippedAt > prev) lastShipByIwasku.set(it.iwasku, o.shippedAt);
-        }
-      }
-
-      const shippedIwaskus = [...lastShipByIwasku.keys()];
-      if (shippedIwaskus.length > 0) {
-        const avail = await getUsAvailability(shippedIwaskus);
-        const lowIwaskus = shippedIwaskus.filter((iw) => {
-          const a = avail.get(iw) ?? { NJ: 0, SHOWROOM: 0 };
-          return a.SHOWROOM <= 0 && a.NJ > 0; // Fairfield bitti, Somerset'te var
-        });
-        if (lowIwaskus.length > 0) {
-          const productMap = await getProductsByIwasku(lowIwaskus);
-          transferSuggestions = lowIwaskus
-            .map((iw) => ({
-              iwasku: iw,
-              name: productMap.get(iw)?.name ?? null,
-              somerset: avail.get(iw)?.NJ ?? 0,
-              lastShippedAt: lastShipByIwasku.get(iw)!.toISOString(),
-            }))
-            .sort((a, b) => b.lastShippedAt.localeCompare(a.lastShippedAt));
-        }
-      }
-    }
-
     return successResponse({
       role: auth.shelfRole,
       totals,
       byMarketplace,
-      transferSuggestions,
       access: {
         allMarketplaces: mpAccess.allAccess,
         viewable: Array.from(mpAccess.viewableCodes),

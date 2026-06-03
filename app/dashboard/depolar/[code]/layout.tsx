@@ -10,7 +10,7 @@
 import { ReactNode, use, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, LayoutGrid, PackageOpen, ChevronRight, ClipboardCheck, History, Camera } from 'lucide-react';
+import { LayoutDashboard, LayoutGrid, PackageOpen, ChevronRight, ClipboardCheck, History, Camera, ArrowLeftRight } from 'lucide-react';
 import {
   warehouseLabelLong,
   slugToCode,
@@ -56,6 +56,9 @@ export default function DepoDetayLayout({
     { href: `${baseHref}/raf`, label: 'Depo İşlem', icon: LayoutGrid, exact: false },
     ...(showOutbound
       ? [{ href: `${baseHref}/siparis`, label: 'Sipariş Çıkış', icon: PackageOpen, exact: false }]
+      : []),
+    ...(code === 'NJ'
+      ? [{ href: `${baseHref}/transfer`, label: 'Transfer', icon: ArrowLeftRight, exact: false }]
       : []),
     { href: `${baseHref}/sayim`, label: 'Sayım', icon: ClipboardCheck, exact: false },
     { href: `${baseHref}/hareketler`, label: 'Hareketler', icon: History, exact: false },
