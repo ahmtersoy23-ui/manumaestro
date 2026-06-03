@@ -22,6 +22,7 @@ import {
   Anchor, Truck as TruckIcon, Plane, ChevronDown, Calendar, Package,
 } from 'lucide-react';
 import { notify } from '@/lib/ui/notify';
+import { seaEtaBadge } from '@/lib/shipments/eta';
 import {
   SHIPMENT_COUNTRIES, SHIPMENT_COUNTRY_LABELS,
   SHIPMENT_DESTINATION_LABELS, SHIPMENT_DESTINATION_STYLES,
@@ -41,6 +42,7 @@ export interface ShipmentDTO {
   shippingMethod: string;
   plannedDate: string;
   actualDate: string | null;
+  etaDate: string | null;
   status: string;
   notes: string | null;
   stats: ShipmentStats;
@@ -279,6 +281,7 @@ function ShipmentCard({ shipment }: { shipment: ShipmentDTO }) {
   const MethodIcon = methodIcons[shipment.shippingMethod] ?? Anchor;
   const label = methodLabels[shipment.shippingMethod] ?? '';
   const date = shipment.plannedDate ? new Date(shipment.plannedDate).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
+  const eta = seaEtaBadge(shipment.etaDate, shipment.shippingMethod, shipment.status);
   const destEntries = Object.entries(shipment.destBreakdown).filter(([d]) => d !== 'UNKNOWN');
 
   return (
@@ -287,7 +290,14 @@ function ShipmentCard({ shipment }: { shipment: ShipmentDTO }) {
       <div className="flex items-center gap-3">
         <MethodIcon className="w-5 h-5 text-gray-400" />
         <div className="flex-1">
-          <h3 className="font-semibold text-gray-900">{shipment.name}</h3>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-semibold text-gray-900">{shipment.name}</h3>
+            {eta && (
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${eta.tone === 'red' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>
+                ⚓ {eta.text}
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-3 text-xs text-gray-500 mt-1 flex-wrap">
             <span>{label}</span>
             {date && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{date}</span>}

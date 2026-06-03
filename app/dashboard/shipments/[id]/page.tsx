@@ -14,6 +14,7 @@ import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { ExitItemsModal } from '@/components/shipments/ExitItemsModal';
 import { SPExportModal } from '@/components/shipments/SPExportModal';
 import { EditShipmentForm } from '@/components/shipments/EditShipmentForm';
+import { seaEtaBadge } from '@/lib/shipments/eta';
 import { AddItemForm } from '@/components/shipments/AddItemForm';
 import { PoolItemsModal } from '@/components/shipments/PoolItemsModal';
 import { MissingFnskuWarning } from '@/components/shipments/MissingFnskuWarning';
@@ -270,6 +271,7 @@ export default function ShipmentDetailPage() {
   const MethodIcon = methodIcons[shipment.shippingMethod] ?? Anchor;
   const isActive = shipment.status === 'PLANNING' || shipment.status === 'LOADING';
   const isSea = BOX_ENTRY_METHODS.has(shipment.shippingMethod);
+  const etaBadge = seaEtaBadge(shipment.etaDate, shipment.shippingMethod, shipment.status);
 
   // Permission shortcuts
   const canRoute = perms.routeItems ?? false;
@@ -1039,6 +1041,11 @@ export default function ShipmentDetailPage() {
                 <button onClick={startEdit} className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded" title="Düzenle">
                   <Pencil className="w-4 h-4" />
                 </button>
+              )}
+              {etaBadge && (
+                <span className={`px-2 py-0.5 rounded text-xs font-semibold ${etaBadge.tone === 'red' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>
+                  ⚓ {etaBadge.text}
+                </span>
               )}
             </div>
             <div className="flex items-center gap-3 text-sm text-gray-500">

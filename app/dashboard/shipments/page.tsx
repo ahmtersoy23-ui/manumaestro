@@ -65,6 +65,7 @@ export default async function ShipmentsPage({ searchParams }: PageProps) {
       shippingMethod: s.shippingMethod,
       plannedDate: s.plannedDate ? s.plannedDate.toISOString() : '',
       actualDate: s.actualDate ? s.actualDate.toISOString() : null,
+      etaDate: s.etaDate ? s.etaDate.toISOString() : null,
       status: s.status,
       notes: s.notes,
       stats: {
