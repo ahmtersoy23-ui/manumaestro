@@ -28,7 +28,7 @@ type RowStatus =
   | { kind: 'loading' }
   | { kind: 'ok'; text: string }
   | { kind: 'warn'; text: string }
-  | { kind: 'block'; text: string };
+  | { kind: 'block'; text: string; targetCode?: 'NJ' | 'SHOWROOM' };
 
 /**
  * Bir ürün satırının US depo stok durumu — Fairfield (SHOWROOM) önceliği.
@@ -65,8 +65,8 @@ function rowStatus(
 
   if (correct !== code) {
     return correct === 'SHOWROOM'
-      ? { kind: 'block', text: `Öncelik Fairfield — Fairfield'da ${f} adet var, Fairfield deposundan girin` }
-      : { kind: 'block', text: `Fairfield'da yeterli stok yok (${f}); Somerset'te ${s} adet var — Somerset deposundan girin` };
+      ? { kind: 'block', text: `Öncelik Fairfield — Fairfield'da ${f} adet var, Fairfield deposundan girin`, targetCode: 'SHOWROOM' }
+      : { kind: 'block', text: `Fairfield'da yeterli stok yok (${f}); Somerset'te ${s} adet var — Somerset deposundan girin`, targetCode: 'NJ' };
   }
   const here = code === 'SHOWROOM' ? f : s;
   const label = warehouseLabel(code);
@@ -389,6 +389,7 @@ export default function YeniSiparisPage({
                   key={row.id}
                   row={row}
                   canRemove={items.length > 1}
+                  marketplaceCode={marketplaceCode}
                   status={rowStatus(
                     code,
                     row.iwasku,
@@ -488,6 +489,7 @@ interface ItemRowInputProps {
   row: ItemRow;
   canRemove: boolean;
   status: RowStatus;
+  marketplaceCode: string;
   onChange: (patch: Partial<ItemRow>) => void;
   onRemove: () => void;
 }
@@ -499,7 +501,7 @@ const STATUS_STYLES: Record<'ok' | 'warn' | 'block' | 'neutral', string> = {
   neutral: 'text-gray-400',
 };
 
-function ItemRowInput({ row, canRemove, status, onChange, onRemove }: ItemRowInputProps) {
+function ItemRowInput({ row, canRemove, status, marketplaceCode, onChange, onRemove }: ItemRowInputProps) {
   // ProductSearch interface ile uyumlu adapter:
   const selected: ProductHit | null = row.iwasku
     ? { iwasku: row.iwasku, name: row.display.split(' — ')[1] ?? '', category: null }
@@ -540,9 +542,19 @@ function ItemRowInput({ row, canRemove, status, onChange, onRemove }: ItemRowInp
             <span className="text-gray-400">Stok kontrol ediliyor…</span>
           ) : (
             status.text && (
-              <span className={`flex items-center gap-1 ${STATUS_STYLES[status.kind]}`}>
+              <span className={`flex items-center gap-1 flex-wrap ${STATUS_STYLES[status.kind]}`}>
                 {status.kind === 'block' && <AlertCircle className="w-3 h-3" />}
                 {status.text}
+                {status.kind === 'block' && status.targetCode && (
+                  <Link
+                    href={`/dashboard/depolar/${codeToSlug(status.targetCode)}/siparis/yeni?type=SINGLE${
+                      marketplaceCode ? `&marketplace=${encodeURIComponent(marketplaceCode)}` : ''
+                    }`}
+                    className="ml-1 text-blue-600 underline hover:text-blue-800"
+                  >
+                    → {warehouseLabel(status.targetCode)} sipariş sayfası
+                  </Link>
+                )}
               </span>
             )
           )}
