@@ -32,7 +32,7 @@ interface Item {
   id: string; iwasku: string; name: string | null; quantity: number;
   placed: number; remaining: number; recommendedDestination: string | null; marketplaceCode: string | null;
 }
-interface Data { role: string; containers: Container[]; items: Item[] }
+interface Data { role: string; canManage: boolean; containers: Container[]; items: Item[] }
 
 export function ConsolidationTab({ shipmentId, onChange }: { shipmentId: string; onChange: () => void }) {
   const [data, setData] = useState<Data | null>(null);
@@ -89,7 +89,7 @@ export function ConsolidationTab({ shipmentId, onChange }: { shipmentId: string;
   if (error) return <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">{error}</div>;
   if (!data) return <div className="text-center py-10 text-gray-500 text-sm">Yükleniyor…</div>;
 
-  const canManage = ['PACKER', 'MANAGER'].includes(data.role);
+  const canManage = data.canManage;
   const openItems = data.items.filter((i) => i.remaining > 0);
   const totalRemaining = openItems.reduce((s, i) => s + i.remaining, 0);
 

@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { requireShipmentView, requireShipmentAction } from '@/lib/auth/requireShipmentRole';
+import { getShipmentRole, canDoAction } from '@/lib/auth/shipmentPermission';
 import { getProductsByIwasku } from '@/lib/products/lookup';
 import { withRoute } from '@/lib/api/withRoute';
 import { successResponse, createdResponse } from '@/lib/api/response';
@@ -29,6 +30,14 @@ export const GET = withRoute<{ id: string }>(
     if (auth instanceof NextResponse) return auth;
 
     const { id } = params;
+
+    // requireShipmentView non-admin'e generic VIEWER döndürür; UI gating için
+    // bu destinasyondaki GERÇEK rolü hesapla (PACKER/MANAGER → manageBoxes).
+    const shipmentMeta = await prisma.shipment.findUnique({ where: { id }, select: { destinationTab: true } });
+    if (!shipmentMeta) return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadı' }, { status: 404 });
+    const realRole = await getShipmentRole(auth.user.id, auth.user.role, shipmentMeta.destinationTab);
+    const canManage = canDoAction(realRole, 'manageBoxes');
+
     const [containers, items] = await Promise.all([
       prisma.shipmentContainer.findMany({
         where: { shipmentId: id },
@@ -59,7 +68,8 @@ export const GET = withRoute<{ id: string }>(
     const mpCode = new Map(mps.map((m) => [m.id, m.code]));
 
     return successResponse({
-      role: auth.shipmentRole,
+      role: realRole,
+      canManage,
       containers: containers.map((c) => ({
         id: c.id,
         type: c.type,
