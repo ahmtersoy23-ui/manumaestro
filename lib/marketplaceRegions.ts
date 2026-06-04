@@ -64,7 +64,7 @@ export const DESTINATION_LABELS: Record<string, string> = {
 export const SHIPMENT_DESTINATION_LABELS: Record<string, string> = {
   US_FBA: 'US FBA',
   CITI_FBA: 'Citi FBA',
-  NJ_DEPO: 'NJ Depo',
+  NJ_DEPO: 'Fairfield',
   CG_DEPO: 'CG Depo',
   UK_FBA: 'UK FBA',
   UK_DEPO: 'UK Depo',
@@ -98,7 +98,7 @@ const COLUMN_DEST_LABELS: Record<string, string> = {
   EU_FBA: 'Amazon EU',
   CA_FBA: 'Amazon CA',
   AU_FBA: 'Amazon AU',
-  NJ_DEPO: 'NJ Depo',
+  NJ_DEPO: 'Fairfield',
   CG_DEPO: 'CG Depo',
   NL_DEPO: 'NL Depo',
   UK_DEPO: 'UK Depo',
@@ -116,7 +116,7 @@ const AMAZON_LABELS: Record<string, string> = {
   CUSTOM_01: 'Amazon Citi',
 };
 
-const REGION_DEPOT_LABEL: Record<string, string> = { US: 'NJ Depo', EU: 'NL Depo', UK: 'UK Depo' };
+const REGION_DEPOT_LABEL: Record<string, string> = { US: 'Fairfield', EU: 'NL Depo', UK: 'UK Depo' };
 
 /**
  * Bir shipment_item'ın kolon etiketi = fiziksel destinasyon (bölge-genel).

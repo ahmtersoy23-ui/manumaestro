@@ -17,7 +17,7 @@ const DEST_BADGE: Record<string, string> = {
   NJ_DEPO: 'bg-amber-100 text-amber-700',
   CG_DEPO: 'bg-pink-100 text-pink-700',
 };
-const DEST_LABEL: Record<string, string> = { NJ_DEPO: 'NJ Depo', CG_DEPO: 'CG Depo' };
+const DEST_LABEL: Record<string, string> = { NJ_DEPO: 'Fairfield', CG_DEPO: 'CG Depo' };
 
 interface Line { id: string; shipmentItemId: string; iwasku: string; name: string | null; quantity: number }
 interface Container { id: string; type: string; code: string; labelPrinted: boolean; lines: Line[] }
@@ -86,7 +86,7 @@ export function ConsolidationTab({ shipmentId, onChange }: { shipmentId: string;
   if (data.items.length === 0) {
     return (
       <div className="bg-white border border-gray-200 rounded-lg px-4 py-10 text-sm text-gray-400 text-center">
-        Bu sevkiyatta NJ Depo / CG Depo hedefli kalem yok — konsolidasyon gerekmez.
+        Bu sevkiyatta Fairfield / CG Depo hedefli kalem yok — konsolidasyon gerekmez.
       </div>
     );
   }

@@ -59,7 +59,7 @@ export const POST = withRoute<{ id: string; containerId: string }>(
         const item = await tx.shipmentItem.findUnique({ where: { id: shipmentItemId } });
         if (!item || item.shipmentId !== id) throw new Error('Kalem bu sevkiyatta değil');
         if (!item.recommendedDestination || !DEPOT_DESTINATIONS.includes(item.recommendedDestination)) {
-          throw new Error('Sadece NJ Depo / CG Depo kalemleri konsolide edilir');
+          throw new Error('Sadece Fairfield / CG Depo kalemleri konsolide edilir');
         }
 
         const agg = await tx.shipmentContainerLine.aggregate({
