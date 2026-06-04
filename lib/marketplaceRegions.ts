@@ -63,6 +63,7 @@ export const DESTINATION_LABELS: Record<string, string> = {
 /** recommendedDestination → Türkçe gösterim etiketi (sevkiyat hedefi). */
 export const SHIPMENT_DESTINATION_LABELS: Record<string, string> = {
   US_FBA: 'US FBA',
+  CITI_FBA: 'Citi FBA',
   NJ_DEPO: 'NJ Depo',
   CG_DEPO: 'CG Depo',
   UK_FBA: 'UK FBA',
@@ -82,6 +83,7 @@ export const SHIPMENT_DESTINATION_LABELS: Record<string, string> = {
  */
 export const FBA_DESTINATION_TO_MARKETPLACE: Record<string, string> = {
   US_FBA: 'AMZN_US',
+  CITI_FBA: 'CUSTOM_01', // Amazon Citi — Amazon US DEĞİL; havuzdan eklenince Citi marketplace'i set edilir
   UK_FBA: 'AMZN_UK',
   EU_FBA: 'AMZN_EU',
   CA_FBA: 'AMZN_CA',
@@ -91,6 +93,7 @@ export const FBA_DESTINATION_TO_MARKETPLACE: Record<string, string> = {
 /** Sevkiyat item kolon gösterimi: destinasyon etiketi (FBA → "Amazon X", depo → "X Depo"). */
 const COLUMN_DEST_LABELS: Record<string, string> = {
   US_FBA: 'Amazon US',
+  CITI_FBA: 'Amazon Citi',
   UK_FBA: 'Amazon UK',
   EU_FBA: 'Amazon EU',
   CA_FBA: 'Amazon CA',
@@ -148,7 +151,7 @@ export const SHIPMENT_COUNTRY_LABELS: Record<ShipmentCountry, string> = {
 };
 
 export const SHIPMENT_DESTINATIONS_BY_COUNTRY: Record<ShipmentCountry, string[]> = {
-  US: ['US_FBA', 'NJ_DEPO', 'CG_DEPO'],
+  US: ['US_FBA', 'CITI_FBA', 'NJ_DEPO', 'CG_DEPO'],
   UK: ['UK_FBA', 'UK_DEPO'],
   EU: ['EU_FBA', 'NL_DEPO'],
   CA: ['CA_FBA'],
@@ -174,6 +177,7 @@ export function countryForShipmentDestination(dest: string): ShipmentCountry | n
  */
 export const SHIPMENT_DESTINATION_STYLES: Record<string, { bg: string; text: string; border: string }> = {
   US_FBA:  { bg: 'bg-emerald-50',  text: 'text-emerald-700', border: 'border-emerald-200' },
+  CITI_FBA: { bg: 'bg-lime-50',    text: 'text-lime-700',    border: 'border-lime-200' },
   UK_FBA:  { bg: 'bg-sky-50',      text: 'text-sky-700',     border: 'border-sky-200' },
   EU_FBA:  { bg: 'bg-indigo-50',   text: 'text-indigo-700',  border: 'border-indigo-200' },
   CA_FBA:  { bg: 'bg-cyan-50',     text: 'text-cyan-700',    border: 'border-cyan-200' },
