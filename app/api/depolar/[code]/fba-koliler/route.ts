@@ -1,9 +1,12 @@
 /**
  * GET /api/depolar/[code]/fba-koliler
- * FBA Pick-up için uygun koliler:
+ * Pickup (koli-bazlı çıkış) için uygun koliler:
  *   - status=SEALED (mühürlü, dokunulmamış)
  *   - reservedQty=0 (başka siparişe ayrılmamış)
- *   - marketplaceCode LIKE 'AMZN_%'
+ *
+ * Hedef (Amazon US/Citi, CG Depo) pickup'ta operatör seçer; koli marketplace'ine
+ * göre kısıtlamayız — tüm uygun koliler listelenir, opsiyonel marketplaceCode
+ * filtresi + arama ile daraltılır.
  *
  * Query: q (boxNumber/iwasku/fnsku contains), shelfCode, marketplaceCode
  */
@@ -39,7 +42,7 @@ export const GET = withRoute<{ code: string }>(
       warehouseCode: upperCode,
       status: 'SEALED',
       reservedQty: 0,
-      marketplaceCode: marketplaceFilter || { startsWith: 'AMZN_' },
+      ...(marketplaceFilter ? { marketplaceCode: marketplaceFilter } : {}),
     };
     if (q) {
       where.OR = [

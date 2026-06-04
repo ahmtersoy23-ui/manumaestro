@@ -158,13 +158,17 @@ export const POST = withRoute<{ code: string }>(
     }
     const { orderType, marketplaceCode, orderNumber, description, addressNote, items } = parsed.data;
 
-    // Marketplace edit yetkisi: SINGLE için zorunlu (FBA_PICKUP da aynı kural)
-    const mpAccess = await getMarketplaceAccess(auth.user.id, auth.user.role);
-    if (!canEditMarketplace(mpAccess, marketplaceCode)) {
-      return NextResponse.json(
-        { success: false, error: `${marketplaceCode} pazaryerinde sipariş yaratma yetkiniz yok` },
-        { status: 403 }
-      );
+    // Marketplace edit yetkisi: yalnız SINGLE (müşteri siparişi). FBA_PICKUP
+    // koli-bazlı depo çıkışı; hedef (Amazon US/Citi, CG_DEPO) bir satış
+    // pazaryeri değil → createOutbound shelf rolü yeterli, marketplace-edit aranmaz.
+    if (orderType === 'SINGLE') {
+      const mpAccess = await getMarketplaceAccess(auth.user.id, auth.user.role);
+      if (!canEditMarketplace(mpAccess, marketplaceCode)) {
+        return NextResponse.json(
+          { success: false, error: `${marketplaceCode} pazaryerinde sipariş yaratma yetkiniz yok` },
+          { status: 403 }
+        );
+      }
     }
 
     if (orderType === 'SINGLE' && (!items || items.length === 0)) {

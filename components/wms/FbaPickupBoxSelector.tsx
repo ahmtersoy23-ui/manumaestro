@@ -1,6 +1,8 @@
 /**
- * FBA Pick-up için koli seçim paneli — sipariş detay sayfasında render edilir.
- * NJ'de SEALED + reservedQty=0 + AMZN_* koli grid; tek tıkla siparişe ekler (tam koli).
+ * Pickup için koli seçim paneli — sipariş detay sayfasında render edilir.
+ * NJ'de SEALED + reservedQty=0 koli grid; tek tıkla siparişe ekler (tam koli).
+ * Hedef (Amazon US/Citi, CG Depo) pickup'ta seçilir; koliler marketplace'e göre
+ * kısıtlanmaz, operatör arama/filtreyle uygun koliyi seçer.
  */
 
 'use client';
@@ -105,10 +107,10 @@ export function FbaPickupBoxSelector({ warehouseCode, orderId, onSuccess, alread
     <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h3 className="text-sm font-medium text-orange-900 flex items-center gap-2">
-          <BoxIcon className="w-4 h-4" /> FBA Pick-up için Koli Seç
+          <BoxIcon className="w-4 h-4" /> Pickup için Koli Seç
         </h3>
         <div className="text-xs text-orange-800">
-          {boxes.length} uygun koli (SEALED + AMZN_*)
+          {boxes.length} uygun koli (SEALED + rezervesiz)
         </div>
       </div>
 
@@ -154,7 +156,7 @@ export function FbaPickupBoxSelector({ warehouseCode, orderId, onSuccess, alread
         <div className="text-center py-6 text-gray-500 text-sm bg-white rounded">
           {search || marketplaceFilter
             ? 'Filtreyle eşleşen uygun koli yok.'
-            : 'Bu depoda FBA pick-up için uygun koli yok (SEALED + AMZN_* + rezervesiz).'}
+            : 'Bu depoda pickup için uygun koli yok (SEALED + rezervesiz).'}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">

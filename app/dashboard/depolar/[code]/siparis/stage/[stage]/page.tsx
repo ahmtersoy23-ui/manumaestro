@@ -91,7 +91,7 @@ export default function StagePage({
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/depolar/${code}/siparis?status=DRAFT`, { credentials: 'include' })
+    fetch(`/api/depolar/${code}/siparis?status=DRAFT&orderType=SINGLE`, { credentials: 'include' })
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return;

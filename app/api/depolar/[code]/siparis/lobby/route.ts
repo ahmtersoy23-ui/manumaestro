@@ -36,8 +36,9 @@ export const GET = withRoute<{ code: string }>(
 
     const mpAccess = await getMarketplaceAccess(auth.user.id, auth.user.role);
 
+    // Yalnız SINGLE — FBA_PICKUP (koli bazlı çıkış) ayrı Pickup sekmesinde.
     const orders = await prisma.outboundOrder.findMany({
-      where: { warehouseCode: upperCode },
+      where: { warehouseCode: upperCode, orderType: 'SINGLE' },
       orderBy: { createdAt: 'desc' },
       take: 1000,
       select: {

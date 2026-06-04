@@ -90,7 +90,7 @@ export default function MarketplaceOrderPage({
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/depolar/${code}/siparis?marketplaceCode=${encodeURIComponent(mp)}`, {
+    fetch(`/api/depolar/${code}/siparis?marketplaceCode=${encodeURIComponent(mp)}&orderType=SINGLE`, {
       credentials: 'include',
     })
       .then((r) => r.json())

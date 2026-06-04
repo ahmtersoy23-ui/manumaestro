@@ -18,6 +18,13 @@ import { ProductSearch, type ProductHit as PSProductHit } from '@/components/wms
 
 const logger = createLogger('YeniSiparis');
 
+// Pickup (FBA_PICKUP) hedefleri — operatör seçer; marketplaceCode olarak saklanır.
+const PICKUP_DESTINATIONS = [
+  { code: 'AMZN_US', name: 'Amazon US (FBA)' },
+  { code: 'CUSTOM_01', name: 'Amazon Citi (FBA)' },
+  { code: 'CG_DEPO', name: 'CG Depo' },
+];
+
 interface UsAvail {
   NJ: number;
   SHOWROOM: number;
@@ -202,18 +209,17 @@ export default function YeniSiparisPage({
     });
 
   useEffect(() => {
+    // FBA_PICKUP: hedef sabit liste (Amazon US/Citi, CG Depo) — API'ye gitme.
+    if (orderType === 'FBA_PICKUP') {
+      setMarketplaces(PICKUP_DESTINATIONS);
+      return;
+    }
     let cancelled = false;
     fetch('/api/marketplaces?limit=200', { credentials: 'include' })
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return;
-        if (d.success) {
-          let list = (d.data || []) as Marketplace[];
-          if (orderType === 'FBA_PICKUP') {
-            list = list.filter((m) => m.code.startsWith('AMZN_') || m.marketplaceType === 'AMAZON');
-          }
-          setMarketplaces(list);
-        }
+        if (d.success) setMarketplaces((d.data || []) as Marketplace[]);
       })
       .catch((e) => logger.error('Marketplaces fetch', e));
     return () => {
@@ -293,10 +299,10 @@ export default function YeniSiparisPage({
   return (
     <div className="space-y-4 max-w-2xl">
       <Link
-        href={`/dashboard/depolar/${codeToSlug(code)}/siparis`}
+        href={`/dashboard/depolar/${codeToSlug(code)}/${orderType === 'FBA_PICKUP' ? 'pickup' : 'siparis'}`}
         className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
       >
-        <ChevronLeft className="w-4 h-4" /> Sipariş Çıkış
+        <ChevronLeft className="w-4 h-4" /> {orderType === 'FBA_PICKUP' ? 'Pickup' : 'Sipariş Çıkış'}
       </Link>
 
       <div>
@@ -305,7 +311,7 @@ export default function YeniSiparisPage({
             'Sipariş Düzenle'
           ) : orderType === 'FBA_PICKUP' ? (
             <>
-              <BoxIcon className="w-5 h-5 text-orange-500" /> Yeni FBA Pick-up
+              <BoxIcon className="w-5 h-5 text-orange-500" /> Yeni Pickup
             </>
           ) : (
             'Yeni Tekil Sipariş'
@@ -313,7 +319,7 @@ export default function YeniSiparisPage({
         </h1>
         <p className="text-xs text-gray-500 mt-1">
           {orderType === 'FBA_PICKUP'
-            ? 'Amazon FBA için koli bazlı pick-up. Önce sipariş yarat, sonra kolileri listeden ekle.'
+            ? 'Koli bazlı çıkış (Amazon US/Citi FBA veya CG Depo). Önce hedefi seç + pickup yarat, sonra kolileri listeden ekle.'
             : 'Sipariş no + ürün/miktar + adres notu. Yaratıldıktan sonra "Kargo etiketi bekleyen" kovasına düşer.'}
         </p>
       </div>
@@ -322,7 +328,7 @@ export default function YeniSiparisPage({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
-              {orderType === 'FBA_PICKUP' ? 'Pazaryeri (Amazon)' : 'Pazaryeri'}
+              {orderType === 'FBA_PICKUP' ? 'Hedef' : 'Pazaryeri'}
             </label>
             {prefilledMarketplace && returnTo === 'marketplace' ? (
               // Pazaryeri sayfasından geldi — değiştirilemez, salt-okunur rozet
@@ -341,13 +347,10 @@ export default function YeniSiparisPage({
                 <option value="">Seçin…</option>
                 {marketplaces.map((m) => (
                   <option key={m.code} value={m.code}>
-                    {m.code} — {m.name}
+                    {orderType === 'FBA_PICKUP' ? m.name : `${m.code} — ${m.name}`}
                   </option>
                 ))}
               </select>
-            )}
-            {orderType === 'FBA_PICKUP' && marketplaces.length === 0 && (
-              <p className="text-[11px] text-amber-700 mt-1">Amazon pazaryeri bulunamadı.</p>
             )}
           </div>
 
@@ -445,9 +448,11 @@ export default function YeniSiparisPage({
         <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
           <Link
             href={
-              returnTo === 'marketplace' && marketplaceCode
-                ? `/dashboard/depolar/${codeToSlug(code)}/siparis/marketplace/${marketplaceCode}`
-                : `/dashboard/depolar/${codeToSlug(code)}/siparis`
+              orderType === 'FBA_PICKUP'
+                ? `/dashboard/depolar/${codeToSlug(code)}/pickup`
+                : returnTo === 'marketplace' && marketplaceCode
+                  ? `/dashboard/depolar/${codeToSlug(code)}/siparis/marketplace/${marketplaceCode}`
+                  : `/dashboard/depolar/${codeToSlug(code)}/siparis`
             }
             className="px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
           >

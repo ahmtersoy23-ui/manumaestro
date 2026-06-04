@@ -203,10 +203,10 @@ export default function SiparisDetayPage({
   return (
     <div className="space-y-5">
       <Link
-        href={`/dashboard/depolar/${codeToSlug(code)}/siparis`}
+        href={`/dashboard/depolar/${codeToSlug(code)}/${data.order.orderType === 'FBA_PICKUP' ? 'pickup' : 'siparis'}`}
         className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
       >
-        <ChevronLeft className="w-4 h-4" /> Sipariş Çıkış
+        <ChevronLeft className="w-4 h-4" /> {data.order.orderType === 'FBA_PICKUP' ? 'Pickup' : 'Sipariş Çıkış'}
       </Link>
 
       {/* Header */}
@@ -219,7 +219,7 @@ export default function SiparisDetayPage({
                   ? 'bg-orange-100 text-orange-700'
                   : 'bg-blue-100 text-blue-700'
               }`}>
-                {data.order.orderType === 'FBA_PICKUP' ? 'FBA Pick-up' : 'Tekil Sipariş'}
+                {data.order.orderType === 'FBA_PICKUP' ? 'Pickup' : 'Tekil Sipariş'}
               </span>
               <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded ${STATUS_BADGE[data.order.status]}`}>
                 {data.order.status}
