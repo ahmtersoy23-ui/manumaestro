@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
             marketplaceId: s.marketplaceId,
             productionMonth: s.productionMonth,
           },
-          select: { id: true, entryType: true, status: true, quantity: true, recommendedDestination: true },
+          select: { id: true, entryType: true, status: true, quantity: true, recommendedDestination: true, productCategory: true, productName: true, productSize: true },
         });
 
         if (!existing) {
@@ -198,9 +198,17 @@ export async function POST(request: NextRequest) {
           await prisma.productionRequest.delete({ where: { id: existing.id } });
           deleted++;
         } else {
-          // STOCKPULSE varlığı güncelle (qty veya destinasyon değiştiyse)
+          // STOCKPULSE varlığı güncelle (qty, destinasyon veya katalog metadata değiştiyse).
+          // Katalog metadata (kategori/isim/boyut) tek başına değişse de güncelle —
+          // Wisersell'de kategori değişimi qty değişmeden de PR'a yansısın (tek kaynak).
           const newDest = s.recommendedDestination ?? null;
-          if (existing.quantity !== s.suggestedQty || existing.recommendedDestination !== newDest) {
+          const qtyOrDestChanged =
+            existing.quantity !== s.suggestedQty || existing.recommendedDestination !== newDest;
+          const metaChanged =
+            existing.productCategory !== s.productCategory ||
+            existing.productName !== s.productName ||
+            existing.productSize !== (s.productSize ?? null);
+          if (qtyOrDestChanged || metaChanged) {
             await prisma.productionRequest.update({
               where: { id: existing.id },
               data: {
