@@ -49,9 +49,17 @@ export const GET = withRoute<{ code: string }>(
     const auth = await requireShelfAction(request, upperCode, 'printLabel');
     if (auth instanceof NextResponse) return auth;
 
+    // Opsiyonel: belirli sipariş id'leri (Sipariş tab'ından seçili/depo-münhasır toplu yazdır).
+    // Yoksa eski davranış: tüm "çıkış bekleyen" (DRAFT + SHIPPING label).
+    const idsParam = new URL(request.url).searchParams.get('orderIds');
+    const orderIdFilter = idsParam ? idsParam.split(',').map((s) => s.trim()).filter(Boolean) : null;
+
     // "Çıkış bekleyen" = DRAFT && SHIPPING label var
     const orders = await prisma.outboundOrder.findMany({
-      where: { warehouseCode: upperCode, status: 'DRAFT', orderType: 'SINGLE' },
+      where: {
+        warehouseCode: upperCode, status: 'DRAFT', orderType: 'SINGLE',
+        ...(orderIdFilter && orderIdFilter.length ? { id: { in: orderIdFilter } } : {}),
+      },
       include: {
         items: true,
         labels: {

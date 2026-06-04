@@ -132,6 +132,7 @@ export async function GET(request: NextRequest) {
       addressNote: o.addressNote,
       items: o.items,
       trackingNumber: shippingLabel?.trackingNumber ?? null,
+      labelId: shippingLabel?.id ?? null,
       status: o.status,
       createdAt: o.createdAt,
       shippedAt: o.shippedAt,
