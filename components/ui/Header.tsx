@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Bell, User, LogOut, FileText, Shield, Menu, X, Warehouse, CalendarRange, Ship, Home, Printer } from 'lucide-react';
+import { Bell, User, LogOut, FileText, Shield, Menu, X, Warehouse, CalendarRange, Ship, Home, Printer, ShoppingCart } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 export function Header() {
@@ -93,6 +93,17 @@ export function Header() {
               <Printer className="w-4 h-4" />
               <span className="hidden lg:inline">Etiket</span>
             </Link>
+
+            {role === 'admin' && (
+              <Link
+                href="/dashboard/siparis"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Sipariş (Wisersell otomasyonu)"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                <span className="hidden lg:inline">Sipariş</span>
+              </Link>
+            )}
 
             {role === 'admin' && (
               <>

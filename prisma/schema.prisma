@@ -804,6 +804,10 @@ model OutboundOrder {
   description     String?
   addressNote     String? // Adres ve serbest açıklama — SINGLE entry sırasında
   status          OutboundStatus @default(DRAFT)
+  source          OutboundSource @default(MANUAL) // MANUAL = elle; WISERSELL_AUTO = Sipariş otomasyonu
+  wisersellOrderId Int?          @unique // Wisersell internal order id (otomasyon) — idempotency + external-close anahtarı
+  wisersellReadyAt DateTime?     // Wisersell "Kargoya Hazır" (status/update) başarıyla yazıldıysa; null = ready-pending (retry)
+  wisersellClosedAt DateTime?    // external-close başarıyla yazıldıysa (Kapandı)
   createdById     String
   createdAt       DateTime       @default(now())
   shippedById     String?
@@ -864,6 +868,11 @@ enum OutboundStatus {
   DRAFT // Hazırlanıyor, rezerve var, stok düşmedi
   SHIPPED // Onaylandı ve gönderildi, stok düştü
   CANCELLED // İptal edildi, rezerveler serbest
+}
+
+enum OutboundSource {
+  MANUAL // Operatör elle oluşturdu (mevcut per-warehouse akış)
+  WISERSELL_AUTO // Sipariş otomasyonu (Wisersell aday → onay) oluşturdu
 }
 
 // Depo bazlı yetki — UserShipmentPermission paterniyle aynı (FK yok, "*" wildcard saklanabilir)
