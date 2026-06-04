@@ -24,6 +24,8 @@ interface CandidateItem {
   product_code: string | null;
   marketplace_sku: string | null;
   product_name: string | null;
+  title?: string | null;
+  physical?: boolean;
   resolved_by: string | null;
 }
 
@@ -87,9 +89,13 @@ export async function GET(request: NextRequest) {
   const eslesmeGerek: Array<Record<string, unknown>> = [];
   let stokYok = 0;
   for (const c of pendingCandidates) {
-    const its = c.orderitems ?? [];
+    const all = c.orderitems ?? [];
+    // Fiziksel ürün kalemleri (özel/ödeme-linki satırları hariç). physical alanı yoksa
+    // (eski kayıt) herhangi bir kimlik varsa fiziksel say.
+    const its = all.filter((i) => i.physical ?? !!(i.iwasku || i.product_code || i.marketplace_sku || i.product_name));
+    if (its.length === 0) continue; // sadece özel/ödeme → karşılanamaz, board'da gösterme
     const mp = marketplaceByStore.get(Number(c.store_id)) ?? (c.store_id != null ? `store ${c.store_id}` : null);
-    // iwasku eşleşmemiş kalem → "Eşleşme Gerek" (mapping talebi GÖRÜNÜR, gizlenmez)
+    // iwasku eşleşmemiş fiziksel kalem → "Eşleşme Gerek" (mapping talebi GÖRÜNÜR)
     if (its.some((i) => !i.iwasku)) {
       eslesmeGerek.push({
         wisersellOrderId: c.wisersell_order_id,
@@ -99,7 +105,7 @@ export async function GET(request: NextRequest) {
         warehouse: null,
         shipAddress: c.ship_address,
         items: its,
-        unresolved: its.filter((i) => !i.iwasku).map((i) => ({ product_code: i.product_code, marketplace_sku: i.marketplace_sku, product_name: i.product_name })),
+        unresolved: its.filter((i) => !i.iwasku).map((i) => ({ product_code: i.product_code, marketplace_sku: i.marketplace_sku, title: i.title ?? i.product_name })),
         createdAt: c.created_at_ws,
       });
       continue;
@@ -115,7 +121,7 @@ export async function GET(request: NextRequest) {
       warehouse: wh,
       marketplaceCode: mp,
       shipAddress: c.ship_address,
-      items: c.orderitems,
+      items: its,
       createdAt: c.created_at_ws,
     });
   }

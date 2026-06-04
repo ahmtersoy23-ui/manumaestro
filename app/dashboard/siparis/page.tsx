@@ -47,7 +47,7 @@ interface Row {
   labelId?: string | null;
   readyPending?: boolean;
   items?: ItemLite[];
-  unresolved?: Array<{ product_code?: string | null; marketplace_sku?: string | null; product_name?: string | null }>;
+  unresolved?: Array<{ product_code?: string | null; marketplace_sku?: string | null; title?: string | null }>;
 }
 interface BoardData {
   counts: Record<string, number>;
@@ -275,7 +275,7 @@ export default function SiparisPage() {
                     </td>
                     <td className="px-3 py-2.5 text-gray-700">
                       {tab === 'eslesmeGerek'
-                        ? <div className="text-xs text-orange-700">{(r.unresolved ?? []).map((u, ix) => <div key={ix}>{u.product_code || u.marketplace_sku || u.product_name || '?'}</div>)}</div>
+                        ? <div className="text-xs text-orange-700">{(r.unresolved ?? []).map((u, ix) => <div key={ix} className="truncate max-w-[280px]" title={[u.title, u.product_code, u.marketplace_sku].filter(Boolean).join(' · ')}>{u.title || u.product_code || u.marketplace_sku || '?'}</div>)}</div>
                         : <div className="space-y-0.5">{(r.items ?? []).map((i, ix) => <div key={ix} className="truncate max-w-[280px]">{i.name ?? i.product_name ?? i.iwasku ?? '?'}</div>)}</div>}
                     </td>
                     <td className="px-3 py-2.5 text-center text-gray-500">
@@ -313,7 +313,7 @@ export default function SiparisPage() {
                   <div className="font-semibold flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> iwasku eşleşmesi yok — mapping gerekli</div>
                   <div className="mt-1 text-xs">Bu siparişin ürünü iwasku ile eşleşmiyor. DataBridge <code className="bg-orange-100 px-1 rounded">wisersell_sku_mappings</code>&apos;e eşleme eklenince otomatik Onay Bekliyor&apos;a düşer. Eşleşmeyen:</div>
                   <ul className="mt-1 text-xs font-mono space-y-0.5">
-                    {(detailRow.unresolved ?? []).map((u, ix) => <li key={ix}>{u.product_code || '—'} {u.marketplace_sku ? `· ${u.marketplace_sku}` : ''} {u.product_name ? `· ${u.product_name}` : ''}</li>)}
+                    {(detailRow.unresolved ?? []).map((u, ix) => <li key={ix}>{u.title || '—'} {u.product_code ? `· ${u.product_code}` : ''} {u.marketplace_sku ? `· ${u.marketplace_sku}` : ''}</li>)}
                   </ul>
                 </div>
               )}

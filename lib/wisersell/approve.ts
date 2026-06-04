@@ -21,6 +21,12 @@ interface CandItem {
   qty: number;
   product_code: string | null;
   product_name: string | null;
+  title?: string | null;
+  physical?: boolean;
+}
+
+function physicalItems(its: CandItem[]): CandItem[] {
+  return (its ?? []).filter((i) => i.physical ?? !!(i.iwasku || i.product_code || i.product_name));
 }
 interface Cand {
   wisersell_order_id: number;
@@ -71,13 +77,17 @@ export async function getEligibleCandidateIds(region: string): Promise<number[]>
   const avail = allIwaskus.length ? await getUsAvailability(allIwaskus, { subtractPendingDraft: true }) : new Map();
 
   return pending
-    .filter((c) => resolveOrderWarehouse((c.orderitems ?? []).map((i) => ({ iwasku: i.iwasku, qty: i.qty })), avail) !== null)
+    .filter((c) => {
+      const phys = physicalItems(c.orderitems);
+      if (!phys.length || phys.some((i) => !i.iwasku)) return false; // özel/ödeme veya eşleşmemiş → onaya hazır değil
+      return resolveOrderWarehouse(phys.map((i) => ({ iwasku: i.iwasku, qty: i.qty })), avail) !== null;
+    })
     .map((c) => c.wisersell_order_id);
 }
 
 function buildAddressNote(c: Cand, labelPrefix: string | null): string {
   const labelBase = `${labelPrefix ?? ''}${c.label_no ?? ''}`.trim();
-  const productNames = c.orderitems.map((i) => i.product_name).filter(Boolean) as string[];
+  const productNames = physicalItems(c.orderitems).map((i) => i.product_name ?? i.title).filter(Boolean) as string[];
   return [labelBase, c.recipient_name ?? '', c.ship_address ?? '', ...productNames].filter(Boolean).join('\n');
 }
 
@@ -119,7 +129,7 @@ export async function approveWisersellCandidates(ids: number[], userId: string):
       results.push({ wisersellOrderId: c.wisersell_order_id, ok: false, status: 'error', message: `store_map eksik (store ${c.store_id})` });
       continue;
     }
-    const items = (c.orderitems ?? []).map((i) => ({ iwasku: i.iwasku, qty: i.qty }));
+    const items = physicalItems(c.orderitems).map((i) => ({ iwasku: i.iwasku, qty: i.qty }));
     const wh = resolveOrderWarehouse(items, avail);
     if (!wh) {
       results.push({ wisersellOrderId: c.wisersell_order_id, ok: false, status: 'skipped', message: 'Tek depodan tam karşılanmıyor (stok/iwasku)' });
