@@ -21,6 +21,7 @@ import { MissingFnskuWarning } from '@/components/shipments/MissingFnskuWarning'
 import { PendingItemsTable } from '@/components/shipments/PendingItemsTable';
 import { SentItemsTab } from '@/components/shipments/SentItemsTab';
 import { BoxesTab } from '@/components/shipments/BoxesTab';
+import { ConsolidationTab } from '@/components/shipments/ConsolidationTab';
 import { useShipmentFilters } from '@/lib/shipments/useShipmentFilters';
 import { DateMultiFilter } from '@/components/shipments/DateMultiFilter';
 import { useModalToggles } from '@/lib/shipments/useModalToggles';
@@ -58,7 +59,7 @@ export default function ShipmentDetailPage() {
   const [shipment, setShipment] = useState<ShipmentDetail | null>(null);
   const [boxes, setBoxes] = useState<ShipmentBox[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'pending' | 'sent' | 'boxes'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'sent' | 'boxes' | 'konsolidasyon'>('pending');
   const [addForm, setAddForm] = useState({ iwasku: '', quantity: '', marketplaceId: '' });
   const [allMarketplaces, setAllMarketplaces] = useState<{ id: string; name: string; code: string }[]>([]);
   const [adding, setAdding] = useState(false);
@@ -1139,7 +1140,18 @@ export default function ShipmentDetailPage() {
             Koliler ({boxes.length})
           </button>
         )}
+        {isSea && (
+          <button onClick={() => setActiveTab('konsolidasyon')}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'konsolidasyon' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            Konsolidasyon
+          </button>
+        )}
       </div>
+
+      {/* === KONSOLIDASYON TAB (depo karışık koli/palet) === */}
+      {activeTab === 'konsolidasyon' && isSea && (
+        <ConsolidationTab shipmentId={id} onChange={fetchShipment} />
+      )}
 
       {/* === PENDING TAB === */}
       {activeTab === 'pending' && (

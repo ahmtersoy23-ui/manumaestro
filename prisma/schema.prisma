@@ -523,8 +523,9 @@ model Shipment {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  items ShipmentItem[]
-  boxes ShipmentBox[]
+  items      ShipmentItem[]
+  boxes      ShipmentBox[]
+  containers ShipmentContainer[]
 
   @@index([destinationTab])
   @@index([status])
@@ -579,6 +580,42 @@ model ShipmentBox {
   @@index([shipmentId])
   @@index([boxNumber])
   @@map("shipment_boxes")
+}
+
+// Depo (NJ_DEPO/CG_DEPO) konsolidasyon birimi: tek seviye KOLI veya PALET,
+// içinde FARKLI ürünler (karışık). FBA tek-SKU ShipmentBox'tan ayrı.
+// Varışta (Gemi 71 sonrası fazı) satırlar tekil ShelfStock'a patlatılacak.
+model ShipmentContainer {
+  id           String   @id @default(uuid())
+  shipmentId   String
+  type         String // "KOLI" | "PALET"
+  code         String // oto-numara: "72-K01" / "72-P02"
+  width        Float? // cm
+  height       Float? // cm
+  depth        Float? // cm
+  weight       Float? // kg
+  labelPrinted Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  shipment Shipment                @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  lines    ShipmentContainerLine[]
+
+  @@index([shipmentId])
+  @@map("shipment_containers")
+}
+
+model ShipmentContainerLine {
+  id             String @id @default(uuid())
+  containerId    String
+  shipmentItemId String // hangi ShipmentItem'dan (kalan miktar takibi için)
+  iwasku         String // display/label kopyası
+  quantity       Int
+
+  container ShipmentContainer @relation(fields: [containerId], references: [id], onDelete: Cascade)
+
+  @@index([containerId])
+  @@index([shipmentItemId])
+  @@map("shipment_container_lines")
 }
 
 model ShipmentBoxArchive {
