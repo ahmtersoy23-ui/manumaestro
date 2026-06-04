@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
 
   // ── 1. Adaylar (DataBridge) ───────────────────────────────────────────────
   const candidates = await queryDataBridge(
-    `SELECT wisersell_order_id, order_code, store_id, recipient_name, label_no, region,
+    `SELECT wisersell_order_id::int AS wisersell_order_id, order_code, store_id, recipient_name, label_no, region,
             orderitems, created_at_ws
      FROM wisersell_routing_candidates
      WHERE region = $1 AND gone_at IS NULL

@@ -52,7 +52,7 @@ export interface ApproveResult {
  */
 export async function getEligibleCandidateIds(region: string): Promise<number[]> {
   const candidates = (await queryDataBridge(
-    `SELECT wisersell_order_id, orderitems FROM wisersell_routing_candidates
+    `SELECT wisersell_order_id::int AS wisersell_order_id, orderitems FROM wisersell_routing_candidates
      WHERE region = $1 AND gone_at IS NULL`,
     [region],
   )) as Array<{ wisersell_order_id: number; orderitems: CandItem[] }>;
@@ -84,7 +84,7 @@ export async function approveWisersellCandidates(ids: number[], userId: string):
   if (!ids.length) return [];
 
   const candidates = (await queryDataBridge(
-    `SELECT wisersell_order_id, order_code, store_id, recipient_name, label_no, region, orderitems
+    `SELECT wisersell_order_id::int AS wisersell_order_id, order_code, store_id, recipient_name, label_no, region, orderitems
      FROM wisersell_routing_candidates
      WHERE wisersell_order_id = ANY($1::bigint[]) AND region IS NOT NULL AND gone_at IS NULL`,
     [ids.map(String)],
