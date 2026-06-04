@@ -84,21 +84,36 @@ export async function GET(request: NextRequest) {
   const avail = allIwaskus.length ? await getUsAvailability(allIwaskus, { subtractPendingDraft: true }) : new Map();
 
   const onayBekliyor: Array<Record<string, unknown>> = [];
-  let bekleyenStokYok = 0;
+  const eslesmeGerek: Array<Record<string, unknown>> = [];
+  let stokYok = 0;
   for (const c of pendingCandidates) {
-    const items = (c.orderitems ?? []).map((i) => ({ iwasku: i.iwasku, qty: i.qty }));
-    const wh = resolveOrderWarehouse(items, avail);
-    if (!wh) {
-      bekleyenStokYok++;
-      continue; // TAM karşılanmıyor / iwasku yok → pas geç (gösterme)
+    const its = c.orderitems ?? [];
+    const mp = marketplaceByStore.get(Number(c.store_id)) ?? (c.store_id != null ? `store ${c.store_id}` : null);
+    // iwasku eşleşmemiş kalem → "Eşleşme Gerek" (mapping talebi GÖRÜNÜR, gizlenmez)
+    if (its.some((i) => !i.iwasku)) {
+      eslesmeGerek.push({
+        wisersellOrderId: c.wisersell_order_id,
+        orderCode: c.order_code,
+        recipientName: c.recipient_name,
+        marketplaceCode: mp,
+        warehouse: null,
+        shipAddress: c.ship_address,
+        items: its,
+        unresolved: its.filter((i) => !i.iwasku).map((i) => ({ product_code: i.product_code, marketplace_sku: i.marketplace_sku, product_name: i.product_name })),
+        createdAt: c.created_at_ws,
+      });
+      continue;
     }
+    // iwasku tamam ama tek depodan tam karşılanmıyor → stok yok (gizle, sadece say)
+    const wh = resolveOrderWarehouse(its.map((i) => ({ iwasku: i.iwasku, qty: i.qty })), avail);
+    if (!wh) { stokYok++; continue; }
     onayBekliyor.push({
       wisersellOrderId: c.wisersell_order_id,
       orderCode: c.order_code,
       recipientName: c.recipient_name,
       labelNo: c.label_no,
       warehouse: wh,
-      marketplaceCode: marketplaceByStore.get(Number(c.store_id)) ?? (c.store_id != null ? `store ${c.store_id}` : null),
+      marketplaceCode: mp,
       shipAddress: c.ship_address,
       items: c.orderitems,
       createdAt: c.created_at_ws,
@@ -170,15 +185,16 @@ export async function GET(request: NextRequest) {
     region,
     counts: {
       onayBekliyor: onayBekliyor.length,
+      eslesmeGerek: eslesmeGerek.length,
       etiketBekliyor: etiketBekliyor.length,
       cikisBekliyor: cikisBekliyor.length,
       kapatmaBekliyor: kapatmaBekliyor.length,
       kapandi: kapandi.length,
-      bekleyenStokYok,
+      stokYok,
     },
     warehouseStats: {
       onayBekliyor: warehouseCounts(onayBekliyor),
     },
-    data: { onayBekliyor, etiketBekliyor, cikisBekliyor, kapatmaBekliyor, kapandi },
+    data: { onayBekliyor, eslesmeGerek, etiketBekliyor, cikisBekliyor, kapatmaBekliyor, kapandi },
   });
 }

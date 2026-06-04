@@ -12,16 +12,17 @@ import { RefreshCw, Zap, CheckCircle2, PackageCheck, Truck, Send, Archive, Alert
 import { LabelUploader } from '@/components/wms/LabelUploader';
 import { ShipModal } from '@/components/wms/ShipModal';
 
-type StatusKey = 'onayBekliyor' | 'etiketBekliyor' | 'cikisBekliyor' | 'kapatmaBekliyor' | 'kapandi';
+type StatusKey = 'onayBekliyor' | 'eslesmeGerek' | 'etiketBekliyor' | 'cikisBekliyor' | 'kapatmaBekliyor' | 'kapandi';
 
 const STATUS_META: Record<StatusKey, { label: string; desc: string; icon: typeof CheckCircle2; accent: string; ring: string; dot: string }> = {
   onayBekliyor:   { label: 'Onay Bekliyor',    desc: 'US stoğu teyitli, onay bekliyor', icon: CheckCircle2, accent: 'text-emerald-700', ring: 'ring-emerald-500 bg-emerald-50', dot: 'bg-emerald-500' },
+  eslesmeGerek:   { label: 'Eşleşme Gerek',    desc: 'iwasku eşleşmiyor — mapping gerek', icon: AlertTriangle, accent: 'text-orange-700', ring: 'ring-orange-500 bg-orange-50', dot: 'bg-orange-500' },
   etiketBekliyor: { label: 'Etiket Bekliyor',  desc: 'Onaylandı, kargo etiketi bekliyor', icon: PackageCheck, accent: 'text-amber-700',  ring: 'ring-amber-500 bg-amber-50',   dot: 'bg-amber-500' },
   cikisBekliyor:  { label: 'Çıkış Bekliyor',   desc: 'Etiketli, fiziksel çıkış bekliyor', icon: Truck,        accent: 'text-sky-700',    ring: 'ring-sky-500 bg-sky-50',       dot: 'bg-sky-500' },
   kapatmaBekliyor:{ label: 'Kapatma Bekliyor', desc: 'Kargolandı, Wisersell kapatma',   icon: Send,         accent: 'text-rose-700',   ring: 'ring-rose-500 bg-rose-50',     dot: 'bg-rose-500' },
   kapandi:        { label: 'Kapandı',          desc: 'Wisersell external-close yazıldı', icon: Archive,      accent: 'text-slate-600',  ring: 'ring-slate-400 bg-slate-50',   dot: 'bg-slate-400' },
 };
-const STATUS_ORDER: StatusKey[] = ['onayBekliyor', 'etiketBekliyor', 'cikisBekliyor', 'kapatmaBekliyor', 'kapandi'];
+const STATUS_ORDER: StatusKey[] = ['onayBekliyor', 'eslesmeGerek', 'etiketBekliyor', 'cikisBekliyor', 'kapatmaBekliyor', 'kapandi'];
 
 const WH = {
   SHOWROOM: { label: 'Fairfield', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -46,6 +47,7 @@ interface Row {
   labelId?: string | null;
   readyPending?: boolean;
   items?: ItemLite[];
+  unresolved?: Array<{ product_code?: string | null; marketplace_sku?: string | null; product_name?: string | null }>;
 }
 interface BoardData {
   counts: Record<string, number>;
@@ -136,8 +138,12 @@ export default function SiparisPage() {
     for (const [wh, ids] of byWh) window.open(`/api/depolar/${wh}/labels/merge?orderIds=${ids.join(',')}`, '_blank');
   };
 
-  const itemsText = (items?: ItemLite[]) =>
-    (items ?? []).map((i) => `${i.name ?? i.product_name ?? i.iwasku ?? '?'} ×${i.qty ?? i.quantity ?? 0}`).join(', ');
+  // Tabloda kısa konum: adres metnindeki "STATE ZIP" satırı (eyalet+zip) + ülke. Tam adres modalde.
+  const shortLoc = (r: Row): string => {
+    const src = r.shipAddress ?? r.addressNote ?? '';
+    const m = src.split('\n').find((l) => /[A-Z]{2}\s+\d{5}/.test(l));
+    return m ? `${m.trim()} · US` : '';
+  };
 
   return (
     <div className="p-4 md:p-6 max-w-[1500px] mx-auto">
@@ -161,7 +167,7 @@ export default function SiparisPage() {
       </div>
 
       {/* Durum kartları (birincil navigasyon) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
         {STATUS_ORDER.map((k) => {
           const m = STATUS_META[k]; const Icon = m.icon; const active = tab === k;
           return (
@@ -196,9 +202,9 @@ export default function SiparisPage() {
           </select>
         )}
         <div className="flex-1" />
-        {counts.bekleyenStokYok ? (
-          <span className="inline-flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
-            <AlertTriangle className="w-3.5 h-3.5" /> {counts.bekleyenStokYok} aday stok/iwasku eksik (gizli)
+        {counts.stokYok ? (
+          <span className="inline-flex items-center gap-1.5 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5" title="iwasku eşleşti ama US deposunda yeterli stok yok — stok gelince görünür">
+            <AlertTriangle className="w-3.5 h-3.5" /> {counts.stokYok} aday US stoğu yok (gizli)
           </span>
         ) : null}
       </div>
@@ -239,17 +245,18 @@ export default function SiparisPage() {
                 <th className="px-3 py-2.5">Sipariş No</th>
                 <th className="px-3 py-2.5">Pazar Yeri</th>
                 <th className="px-3 py-2.5">Depo</th>
-                <th className="px-3 py-2.5">Alıcı / Adres</th>
-                <th className="px-3 py-2.5">Ürünler</th>
-                {tab !== 'onayBekliyor' && <th className="px-3 py-2.5">Tracking</th>}
+                <th className="px-3 py-2.5">Alıcı / Konum</th>
+                <th className="px-3 py-2.5">Ürün</th>
+                <th className="px-3 py-2.5 text-center w-16">Adet</th>
+                {tab !== 'onayBekliyor' && tab !== 'eslesmeGerek' && <th className="px-3 py-2.5">Tracking</th>}
                 <th className="px-3 py-2.5 w-8"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={8} className="px-3 py-12 text-center text-gray-400">Yükleniyor…</td></tr>
+                <tr><td colSpan={9} className="px-3 py-12 text-center text-gray-400">Yükleniyor…</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={8} className="px-3 py-12 text-center text-gray-400">Bu durumda kayıt yok.</td></tr>
+                <tr><td colSpan={9} className="px-3 py-12 text-center text-gray-400">Bu durumda kayıt yok.</td></tr>
               ) : rows.map((r) => {
                 const key = rowKey(r);
                 const sel = selected.has(key);
@@ -258,24 +265,23 @@ export default function SiparisPage() {
                     {selectable && <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}><input type="checkbox" className="rounded" checked={sel} onChange={() => toggle(key)} /></td>}
                     <td className="px-3 py-2.5">
                       <div className="font-semibold text-gray-900">{r.orderCode ?? r.orderNumber}</div>
-                      {r.labelNo && <div className="text-[11px] text-gray-400">etiket {r.labelNo}</div>}
                       {r.readyPending && <span className="mt-0.5 inline-block text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">ready-pending</span>}
                     </td>
                     <td className="px-3 py-2.5"><span className="inline-block text-xs font-medium px-2 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-100">{r.marketplaceCode ?? '—'}</span></td>
-                    <td className="px-3 py-2.5"><span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-md border ${whBadge(r.warehouse)}`}>{whLabel(r.warehouse)}</span></td>
-                    <td className="px-3 py-2.5 max-w-xs">
+                    <td className="px-3 py-2.5">{r.warehouse ? <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-md border ${whBadge(r.warehouse)}`}>{whLabel(r.warehouse)}</span> : <span className="text-gray-300">—</span>}</td>
+                    <td className="px-3 py-2.5">
                       <div className="font-medium text-gray-800">{r.recipientName ?? (r.addressNote ? r.addressNote.split('\n')[1] ?? '' : '—')}</div>
-                      {(r.shipAddress || r.addressNote) && (
-                        <div className="text-[11px] text-gray-500 whitespace-pre-line leading-snug flex items-start gap-1 mt-0.5">
-                          <MapPin className="w-3 h-3 mt-0.5 shrink-0 text-gray-400" />
-                          <span>{r.shipAddress ?? r.addressNote}</span>
-                        </div>
-                      )}
+                      <div className="text-[11px] text-gray-500">{shortLoc(r)}</div>
                     </td>
-                    <td className="px-3 py-2.5 text-gray-600 max-w-sm">
-                      <span className="line-clamp-2" title={itemsText(r.items)}>{itemsText(r.items)}</span>
+                    <td className="px-3 py-2.5 text-gray-700">
+                      {tab === 'eslesmeGerek'
+                        ? <div className="text-xs text-orange-700">{(r.unresolved ?? []).map((u, ix) => <div key={ix}>{u.product_code || u.marketplace_sku || u.product_name || '?'}</div>)}</div>
+                        : <div className="space-y-0.5">{(r.items ?? []).map((i, ix) => <div key={ix} className="truncate max-w-[280px]">{i.name ?? i.product_name ?? i.iwasku ?? '?'}</div>)}</div>}
                     </td>
-                    {tab !== 'onayBekliyor' && <td className="px-3 py-2.5 font-mono text-xs text-gray-600">{r.trackingNumber ?? '—'}</td>}
+                    <td className="px-3 py-2.5 text-center text-gray-500">
+                      <div className="space-y-0.5">{(r.items ?? []).map((i, ix) => <div key={ix}>{i.qty ?? i.quantity ?? 0}</div>)}</div>
+                    </td>
+                    {tab !== 'onayBekliyor' && tab !== 'eslesmeGerek' && <td className="px-3 py-2.5 font-mono text-xs text-gray-600">{r.trackingNumber ?? '—'}</td>}
                     <td className="px-3 py-2.5 text-right text-gray-300"><ChevronRight className="w-4 h-4 inline" /></td>
                   </tr>
                 );
@@ -302,6 +308,15 @@ export default function SiparisPage() {
             </div>
 
             <div className="p-5 max-h-[72vh] overflow-y-auto space-y-4">
+              {tab === 'eslesmeGerek' && (
+                <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-800">
+                  <div className="font-semibold flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> iwasku eşleşmesi yok — mapping gerekli</div>
+                  <div className="mt-1 text-xs">Bu siparişin ürünü iwasku ile eşleşmiyor. DataBridge <code className="bg-orange-100 px-1 rounded">wisersell_sku_mappings</code>&apos;e eşleme eklenince otomatik Onay Bekliyor&apos;a düşer. Eşleşmeyen:</div>
+                  <ul className="mt-1 text-xs font-mono space-y-0.5">
+                    {(detailRow.unresolved ?? []).map((u, ix) => <li key={ix}>{u.product_code || '—'} {u.marketplace_sku ? `· ${u.marketplace_sku}` : ''} {u.product_name ? `· ${u.product_name}` : ''}</li>)}
+                  </ul>
+                </div>
+              )}
               {/* Üst bilgi şeridi */}
               <div className="grid grid-cols-3 gap-3 text-sm">
                 <div><div className="text-[11px] text-gray-400 uppercase">Pazar Yeri</div><span className="inline-block mt-0.5 text-xs font-medium px-2 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-100">{detailRow.marketplaceCode ?? '—'}</span></div>
