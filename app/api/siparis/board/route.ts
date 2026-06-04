@@ -67,6 +67,13 @@ export async function GET(request: NextRequest) {
 
   const pendingCandidates = candidates.filter((c) => !approvedSet.has(c.wisersell_order_id));
 
+  // store_id → marketplace etiketi (pazar yeri kolonu)
+  const storeMapRows = await queryDataBridge(
+    `SELECT store_id, marketplace_code, COALESCE(NULLIF(label_prefix,''), marketplace_code) AS label FROM wisersell_store_map WHERE region = $1`,
+    [region],
+  ) as Array<{ store_id: number; marketplace_code: string | null; label: string | null }>;
+  const marketplaceByStore = new Map(storeMapRows.map((s) => [Number(s.store_id), s.marketplace_code || s.label || `store ${s.store_id}`]));
+
   // Stok teyidi: tüm iwasku'lar için availability
   const allIwaskus = [
     ...new Set(
@@ -90,6 +97,7 @@ export async function GET(request: NextRequest) {
       recipientName: c.recipient_name,
       labelNo: c.label_no,
       warehouse: wh,
+      marketplaceCode: marketplaceByStore.get(Number(c.store_id)) ?? (c.store_id != null ? `store ${c.store_id}` : null),
       items: c.orderitems,
       createdAt: c.created_at_ws,
     });

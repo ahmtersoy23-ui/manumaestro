@@ -193,6 +193,7 @@ export default function SiparisPage() {
                   <th className="px-3 py-2 w-8"><input type="checkbox" checked={selected.size === rows.length && rows.length > 0} onChange={toggleAll} /></th>
                 )}
                 <th className="px-3 py-2">Sipariş No</th>
+                <th className="px-3 py-2">Pazar Yeri</th>
                 <th className="px-3 py-2">Alıcı / Adres</th>
                 <th className="px-3 py-2">Depo</th>
                 <th className="px-3 py-2">Ürünler</th>
@@ -212,7 +213,8 @@ export default function SiparisPage() {
                       {r.orderCode ?? r.orderNumber}
                       {r.readyPending && <span className="ml-2 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1">ready-pending</span>}
                     </td>
-                    <td className="px-3 py-2 text-gray-600">{r.recipientName ?? (r.items && '—')}</td>
+                    <td className="px-3 py-2 text-gray-600">{r.marketplaceCode ?? '—'}</td>
+                    <td className="px-3 py-2 text-gray-600">{r.recipientName ?? '—'}</td>
                     <td className="px-3 py-2">{WAREHOUSE_LABEL[r.warehouse ?? ''] ?? r.warehouse ?? '—'}</td>
                     <td className="px-3 py-2 text-gray-600 max-w-md truncate" title={itemsText(r.items)}>{itemsText(r.items)}</td>
                     {tab !== 'onayBekliyor' && <td className="px-3 py-2 text-gray-600">{r.trackingNumber ?? '—'}</td>}
