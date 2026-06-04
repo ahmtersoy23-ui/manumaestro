@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Zap, CheckCircle2, PackageCheck, Truck, Send, Archive, AlertTriangle, MapPin, Upload, Printer, FileText, X } from 'lucide-react';
+import { RefreshCw, Zap, CheckCircle2, PackageCheck, Truck, Send, Archive, AlertTriangle, MapPin, Printer, FileText, X, ChevronRight } from 'lucide-react';
 import { LabelUploader } from '@/components/wms/LabelUploader';
 import { ShipModal } from '@/components/wms/ShipModal';
 
@@ -63,7 +63,7 @@ export default function SiparisPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [labelOrder, setLabelOrder] = useState<Row | null>(null);
+  const [detailRow, setDetailRow] = useState<Row | null>(null);
   const [shipOrder, setShipOrder] = useState<Row | null>(null);
 
   const load = useCallback(async () => {
@@ -101,7 +101,6 @@ export default function SiparisPage() {
   ), [tabRows, whFilter, mpFilter]);
 
   const selectable = tab === 'onayBekliyor' || tab === 'cikisBekliyor' || tab === 'kapatmaBekliyor';
-  const hasRowAction = tab === 'etiketBekliyor' || tab === 'cikisBekliyor' || tab === 'kapatmaBekliyor';
   const rowKey = useCallback((r: Row) => (tab === 'onayBekliyor' ? String(r.wisersellOrderId) : String(r.id)), [tab]);
 
   const toggle = (k: string) => setSelected((p) => { const n = new Set(p); if (n.has(k)) n.delete(k); else n.add(k); return n; });
@@ -118,6 +117,8 @@ export default function SiparisPage() {
     } catch (e) { setMsg(e instanceof Error ? e.message : 'Hata'); } finally { setBusy(false); }
   }
   const doApprove = () => runAction('/api/siparis/approve', { wisersellOrderIds: [...selected].map(Number).filter(Boolean) }, (j) => `${j.approved} sipariş onaylandı.`);
+  const approveOne = async (id?: number) => { if (!id) return; await runAction('/api/siparis/approve', { wisersellOrderIds: [id] }, (j) => `${j.approved} onaylandı.`); setDetailRow(null); };
+  const closeOne = async (id?: string) => { if (!id) return; await runAction('/api/siparis/close', { orderIds: [id] }, (j) => `${j.closed} kapatıldı.`); setDetailRow(null); };
   const doClose = () => runAction('/api/siparis/close', { orderIds: [...selected] }, (j) => {
     const failed = ((j.results as { ok: boolean; message?: string }[]) || []).filter((r) => !r.ok);
     return `${j.closed} kapatıldı.${failed.length ? ` ${failed.length} başarısız: ${failed.map((f) => f.message).join('; ')}` : ''}`;
@@ -241,7 +242,7 @@ export default function SiparisPage() {
                 <th className="px-3 py-2.5">Alıcı / Adres</th>
                 <th className="px-3 py-2.5">Ürünler</th>
                 {tab !== 'onayBekliyor' && <th className="px-3 py-2.5">Tracking</th>}
-                {hasRowAction && <th className="px-3 py-2.5 text-right">İşlem</th>}
+                <th className="px-3 py-2.5 w-8"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -253,8 +254,8 @@ export default function SiparisPage() {
                 const key = rowKey(r);
                 const sel = selected.has(key);
                 return (
-                  <tr key={key} className={`hover:bg-gray-50/70 ${sel ? 'bg-emerald-50/40' : ''}`}>
-                    {selectable && <td className="px-3 py-2.5"><input type="checkbox" className="rounded" checked={sel} onChange={() => toggle(key)} /></td>}
+                  <tr key={key} onClick={() => setDetailRow(r)} className={`cursor-pointer hover:bg-gray-50/70 ${sel ? 'bg-emerald-50/40' : ''}`}>
+                    {selectable && <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}><input type="checkbox" className="rounded" checked={sel} onChange={() => toggle(key)} /></td>}
                     <td className="px-3 py-2.5">
                       <div className="font-semibold text-gray-900">{r.orderCode ?? r.orderNumber}</div>
                       {r.labelNo && <div className="text-[11px] text-gray-400">etiket {r.labelNo}</div>}
@@ -275,28 +276,7 @@ export default function SiparisPage() {
                       <span className="line-clamp-2" title={itemsText(r.items)}>{itemsText(r.items)}</span>
                     </td>
                     {tab !== 'onayBekliyor' && <td className="px-3 py-2.5 font-mono text-xs text-gray-600">{r.trackingNumber ?? '—'}</td>}
-                    {hasRowAction && (
-                      <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                        <div className="inline-flex items-center gap-1.5">
-                          {r.labelId && (
-                            <a href={`/api/labels/${r.labelId}/download`} target="_blank" rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50" title="Etiketi görüntüle/yazdır">
-                              <FileText className="w-3.5 h-3.5" /> Etiket
-                            </a>
-                          )}
-                          {tab === 'etiketBekliyor' && (
-                            <button onClick={() => setLabelOrder(r)} className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-amber-600 text-white hover:bg-amber-700">
-                              <Upload className="w-3.5 h-3.5" /> Etiket Yükle
-                            </button>
-                          )}
-                          {tab === 'cikisBekliyor' && (
-                            <button onClick={() => setShipOrder(r)} className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-sky-600 text-white hover:bg-sky-700">
-                              <Truck className="w-3.5 h-3.5" /> Çıkış Yap
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    )}
+                    <td className="px-3 py-2.5 text-right text-gray-300"><ChevronRight className="w-4 h-4 inline" /></td>
                   </tr>
                 );
               })}
@@ -305,27 +285,87 @@ export default function SiparisPage() {
         </div>
       </div>
 
-      {/* Etiket yükleme modalı (mevcut LabelUploader — per-warehouse API'sini kullanır) */}
-      {labelOrder && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 overflow-y-auto" onClick={() => { setLabelOrder(null); load(); }}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mt-10" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200">
-              <div>
-                <div className="font-semibold text-gray-900">Etiket Yükle · {labelOrder.orderNumber ?? labelOrder.orderCode}</div>
-                <div className="text-xs text-gray-500">{whLabel(labelOrder.warehouse)} · {labelOrder.marketplaceCode}</div>
+      {/* Genel sipariş detay modalı (Cargolens tarzı): tüm bilgi + etiket + aksiyon tek yerde */}
+      {detailRow && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 overflow-y-auto" onClick={() => { setDetailRow(null); load(); }}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl my-8" onClick={(e) => e.stopPropagation()}>
+            {/* Başlık */}
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-200">
+              <div className="flex items-center gap-2.5">
+                <span className={`w-2.5 h-2.5 rounded-full ${STATUS_META[tab].dot}`} />
+                <div>
+                  <div className="font-bold text-gray-900">{detailRow.orderCode ?? detailRow.orderNumber}</div>
+                  <div className="text-xs text-gray-500">{STATUS_META[tab].label}</div>
+                </div>
               </div>
-              <button onClick={() => { setLabelOrder(null); load(); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"><X className="w-5 h-5" /></button>
+              <button onClick={() => { setDetailRow(null); load(); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-5 max-h-[70vh] overflow-y-auto">
-              {labelOrder.warehouse && labelOrder.id && (
-                <LabelUploader warehouseCode={labelOrder.warehouse} orderId={labelOrder.id} role="ADMIN" />
+
+            <div className="p-5 max-h-[72vh] overflow-y-auto space-y-4">
+              {/* Üst bilgi şeridi */}
+              <div className="grid grid-cols-3 gap-3 text-sm">
+                <div><div className="text-[11px] text-gray-400 uppercase">Pazar Yeri</div><span className="inline-block mt-0.5 text-xs font-medium px-2 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-100">{detailRow.marketplaceCode ?? '—'}</span></div>
+                <div><div className="text-[11px] text-gray-400 uppercase">Depo</div><span className={`inline-block mt-0.5 text-xs font-medium px-2 py-0.5 rounded-md border ${whBadge(detailRow.warehouse)}`}>{whLabel(detailRow.warehouse)}</span></div>
+                <div><div className="text-[11px] text-gray-400 uppercase">Tracking</div><div className="mt-0.5 font-mono text-xs text-gray-700">{detailRow.trackingNumber ?? '—'}</div></div>
+              </div>
+
+              {/* Alıcı / adres */}
+              <div className="rounded-lg border border-gray-100 bg-gray-50/60 p-3">
+                <div className="text-[11px] text-gray-400 uppercase mb-1">Alıcı / Adres</div>
+                <div className="font-medium text-gray-800">{detailRow.recipientName ?? (detailRow.addressNote ? detailRow.addressNote.split('\n')[1] ?? '' : '—')}</div>
+                {(detailRow.shipAddress || detailRow.addressNote) && (
+                  <div className="text-xs text-gray-600 whitespace-pre-line leading-snug flex items-start gap-1 mt-1">
+                    <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0 text-gray-400" /><span>{detailRow.shipAddress ?? detailRow.addressNote}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Ürünler */}
+              <div>
+                <div className="text-[11px] text-gray-400 uppercase mb-1">Ürünler</div>
+                <ul className="text-sm text-gray-700 space-y-0.5">
+                  {(detailRow.items ?? []).map((i, ix) => (
+                    <li key={ix} className="flex justify-between gap-3 border-b border-gray-50 py-1">
+                      <span>{i.name ?? i.product_name ?? i.iwasku}</span>
+                      <span className="text-gray-400 shrink-0">×{i.qty ?? i.quantity ?? 0}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Etiket (outbound siparişlerde) — yükle/görüntüle/yazdır */}
+              {tab !== 'onayBekliyor' && detailRow.warehouse && detailRow.id && (
+                <div className="rounded-lg border border-gray-100 p-3">
+                  <div className="text-[11px] text-gray-400 uppercase mb-2 flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> Kargo Etiketi</div>
+                  <LabelUploader warehouseCode={detailRow.warehouse} orderId={detailRow.id} role="ADMIN" />
+                </div>
+              )}
+            </div>
+
+            {/* Aksiyon footer — duruma göre */}
+            <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-200 bg-gray-50/50">
+              <button onClick={() => { setDetailRow(null); load(); }} className="text-sm px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700">Kapat</button>
+              {tab === 'onayBekliyor' && (
+                <button onClick={() => approveOne(detailRow.wisersellOrderId)} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">
+                  <CheckCircle2 className="w-4 h-4" /> Onayla
+                </button>
+              )}
+              {tab === 'cikisBekliyor' && (
+                <button onClick={() => setShipOrder(detailRow)} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50">
+                  <Truck className="w-4 h-4" /> Çıkış Yap (FIFO)
+                </button>
+              )}
+              {tab === 'kapatmaBekliyor' && (
+                <button onClick={() => closeOne(detailRow.id)} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50">
+                  <Send className="w-4 h-4" /> Wisersell&apos;de Kapat
+                </button>
               )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Çıkış (ShipModal — FIFO tahsis + SHIPPED) */}
+      {/* Çıkış (ShipModal — FIFO tahsis + SHIPPED), detay modalinden tetiklenir */}
       {shipOrder?.warehouse && shipOrder.id && (
         <ShipModal
           isOpen
@@ -333,7 +373,7 @@ export default function SiparisPage() {
           orderId={shipOrder.id}
           orderNumber={shipOrder.orderNumber ?? shipOrder.orderCode ?? ''}
           onClose={() => setShipOrder(null)}
-          onSuccess={() => { setShipOrder(null); load(); }}
+          onSuccess={() => { setShipOrder(null); setDetailRow(null); load(); }}
         />
       )}
     </div>
