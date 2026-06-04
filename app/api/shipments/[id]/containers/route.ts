@@ -65,6 +65,10 @@ export const GET = withRoute<{ id: string }>(
         type: c.type,
         code: c.code,
         labelPrinted: c.labelPrinted,
+        width: c.width,
+        height: c.height,
+        depth: c.depth,
+        weight: c.weight,
         lines: c.lines.map((l) => ({
           id: l.id,
           shipmentItemId: l.shipmentItemId,

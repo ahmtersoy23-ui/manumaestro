@@ -32,6 +32,7 @@ export const GET = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'read'
           shipment: false,
         },
       },
+      containers: { select: { width: true, height: true, depth: true } },
     },
   });
 
@@ -132,7 +133,16 @@ export const GET = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'read'
   const actions: ShipmentAction[] = ['view', 'createShipment', 'routeItems', 'deleteItems', 'setDestination', 'manageBoxes', 'packItems', 'sendItems', 'unsendItems', 'closeShipment'];
   const permissions = Object.fromEntries(actions.map(a => [a, canDoAction(userRole, a)]));
 
-  return successResponse({ ...shipment, items: enrichedItems }, { permissions });
+  // Konsolidasyon (Fairfield Toplu Gönderim) konteyner desi'si — stat'a dahil.
+  const containerDesi = shipment.containers.reduce(
+    (s, c) => s + ((c.width && c.depth && c.height) ? (c.width * c.depth * c.height) / 5000 : 0),
+    0
+  );
+
+  return successResponse(
+    { ...shipment, items: enrichedItems, containerDesi, containerCount: shipment.containers.length },
+    { permissions }
+  );
 });
 
 // --- PATCH: Update status/dates ---

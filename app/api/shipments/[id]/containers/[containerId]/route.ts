@@ -4,10 +4,50 @@
  */
 
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { requireShipmentAction } from '@/lib/auth/requireShipmentRole';
 import { withRoute } from '@/lib/api/withRoute';
 import { successResponse } from '@/lib/api/response';
+
+const DimSchema = z.object({
+  width: z.number().positive().nullable().optional(),
+  height: z.number().positive().nullable().optional(),
+  depth: z.number().positive().nullable().optional(),
+  weight: z.number().positive().nullable().optional(),
+});
+
+export const PATCH = withRoute<{ id: string; containerId: string }>(
+  { skipAuth: true, rateLimit: 'write', fallbackMessage: 'Ölçü güncellenemedi' },
+  async ({ request, params }) => {
+    const { id, containerId } = params;
+    const shipment = await prisma.shipment.findUnique({ where: { id } });
+    if (!shipment) return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadı' }, { status: 404 });
+
+    const auth = await requireShipmentAction(request, shipment.destinationTab, 'manageBoxes');
+    if (auth instanceof NextResponse) return auth;
+
+    let body: unknown;
+    try { body = await request.json(); } catch {
+      return NextResponse.json({ success: false, error: 'Geçersiz JSON' }, { status: 400 });
+    }
+    const parsed = DimSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ success: false, error: 'Geçersiz ölçü' }, { status: 400 });
+    }
+
+    const container = await prisma.shipmentContainer.findUnique({ where: { id: containerId } });
+    if (!container || container.shipmentId !== id) {
+      return NextResponse.json({ success: false, error: 'Konteyner bulunamadı' }, { status: 404 });
+    }
+
+    const updated = await prisma.shipmentContainer.update({
+      where: { id: containerId },
+      data: parsed.data,
+    });
+    return successResponse(updated);
+  }
+);
 
 export const DELETE = withRoute<{ id: string; containerId: string }>(
   { skipAuth: true, rateLimit: 'write', fallbackMessage: 'Konteyner silinemedi' },

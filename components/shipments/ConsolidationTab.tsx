@@ -20,7 +20,14 @@ const DEST_BADGE: Record<string, string> = {
 const DEST_LABEL: Record<string, string> = { NJ_DEPO: 'Fairfield', CG_DEPO: 'CG Depo' };
 
 interface Line { id: string; shipmentItemId: string; iwasku: string; name: string | null; quantity: number }
-interface Container { id: string; type: string; code: string; labelPrinted: boolean; lines: Line[] }
+interface Container {
+  id: string; type: string; code: string; labelPrinted: boolean;
+  width: number | null; height: number | null; depth: number | null; weight: number | null;
+  lines: Line[];
+}
+
+const containerDesi = (c: Container): number =>
+  (c.width && c.depth && c.height) ? (c.width * c.depth * c.height) / 5000 : 0;
 interface Item {
   id: string; iwasku: string; name: string | null; quantity: number;
   placed: number; remaining: number; recommendedDestination: string | null; marketplaceCode: string | null;
@@ -72,6 +79,9 @@ export function ConsolidationTab({ shipmentId, onChange }: { shipmentId: string;
   const addLine = async (cid: string, shipmentItemId: string, quantity: number) => {
     if (await call(`/api/shipments/${shipmentId}/containers/${cid}/lines`, 'POST', { shipmentItemId, quantity })) refresh();
   };
+  const saveDims = async (cid: string, dims: { width?: number | null; height?: number | null; depth?: number | null; weight?: number | null }) => {
+    if (await call(`/api/shipments/${shipmentId}/containers/${cid}`, 'PATCH', dims)) refresh();
+  };
   const removeLine = async (cid: string, lineId: string) => {
     if (await call(`/api/shipments/${shipmentId}/containers/${cid}/lines?lineId=${lineId}`, 'DELETE')) refresh();
   };
@@ -91,8 +101,21 @@ export function ConsolidationTab({ shipmentId, onChange }: { shipmentId: string;
     );
   }
 
+  const totalContainerDesi = data.containers.reduce((s, c) => s + containerDesi(c), 0);
+
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+          <Boxes className="w-4 h-4 text-indigo-500" /> Fairfield Toplu Gönderim
+        </h2>
+        {totalContainerDesi > 0 && (
+          <span className="text-xs text-gray-500">
+            {data.containers.length} koli/palet · {Math.round(totalContainerDesi).toLocaleString('tr-TR')} desi
+          </span>
+        )}
+      </div>
+
       {/* Paketlenecek depo kalemleri */}
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <div className="bg-gray-50 px-4 py-2 text-xs font-medium text-gray-700 flex items-center gap-2">
@@ -161,13 +184,26 @@ export function ConsolidationTab({ shipmentId, onChange }: { shipmentId: string;
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">{c.type}</span>
                 <span className="text-gray-400 text-xs">{c.lines.length} ürün · {c.lines.reduce((s, l) => s + l.quantity, 0)} adet</span>
               </span>
-              {canManage && (
-                <button onClick={() => deleteContainer(c.id)} disabled={busy}
-                  title="Konteyneri sil" className="text-gray-400 hover:text-red-600 p-1 rounded hover:bg-red-50">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              )}
+              <div className="flex items-center gap-3">
+                {containerDesi(c) > 0 && (
+                  <span className="text-xs text-indigo-600 font-medium">{containerDesi(c).toFixed(1)} desi</span>
+                )}
+                {canManage && (
+                  <button onClick={() => deleteContainer(c.id)} disabled={busy}
+                    title="Konteyneri sil" className="text-gray-400 hover:text-red-600 p-1 rounded hover:bg-red-50">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
+            {canManage && (
+              <ContainerDims
+                key={`${c.id}-${c.width}-${c.depth}-${c.height}-${c.weight}`}
+                container={c}
+                disabled={busy}
+                onSave={(dims) => saveDims(c.id, dims)}
+              />
+            )}
             {c.lines.length > 0 && (
               <table className="w-full text-sm">
                 <tbody className="divide-y divide-gray-100">
@@ -195,6 +231,38 @@ export function ConsolidationTab({ shipmentId, onChange }: { shipmentId: string;
           </div>
         ))
       )}
+    </div>
+  );
+}
+
+function ContainerDims({
+  container, disabled, onSave,
+}: {
+  container: Container;
+  disabled: boolean;
+  onSave: (dims: { width: number | null; height: number | null; depth: number | null; weight: number | null }) => void;
+}) {
+  // State props'tan başlatılır; kaydedince parent refresh → key değişir → remount
+  // (sync useEffect yerine "key ile uncontrolled" pattern).
+  const [w, setW] = useState<number | ''>(container.width ?? '');
+  const [d, setD] = useState<number | ''>(container.depth ?? '');
+  const [h, setH] = useState<number | ''>(container.height ?? '');
+  const [kg, setKg] = useState<number | ''>(container.weight ?? '');
+
+  const num = (v: number | '') => (v === '' ? null : Number(v));
+  const save = () => onSave({ width: num(w), depth: num(d), height: num(h), weight: num(kg) });
+  const cell = 'w-16 px-2 py-1 border border-gray-200 rounded text-sm text-right focus:outline-none focus:border-indigo-400';
+
+  return (
+    <div className="px-4 py-2 border-t border-gray-100 bg-gray-50/40 flex items-center gap-2 text-xs text-gray-500">
+      <span>Ölçü (cm):</span>
+      <input type="number" min={1} value={w} onChange={(e) => setW(e.target.value === '' ? '' : Number(e.target.value))} onBlur={save} disabled={disabled} placeholder="En" className={cell} />
+      <span>×</span>
+      <input type="number" min={1} value={d} onChange={(e) => setD(e.target.value === '' ? '' : Number(e.target.value))} onBlur={save} disabled={disabled} placeholder="Boy" className={cell} />
+      <span>×</span>
+      <input type="number" min={1} value={h} onChange={(e) => setH(e.target.value === '' ? '' : Number(e.target.value))} onBlur={save} disabled={disabled} placeholder="Yük" className={cell} />
+      <span className="ml-2">Ağırlık (kg):</span>
+      <input type="number" min={0} step="0.1" value={kg} onChange={(e) => setKg(e.target.value === '' ? '' : Number(e.target.value))} onBlur={save} disabled={disabled} placeholder="kg" className={cell} />
     </div>
   );
 }
