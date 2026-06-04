@@ -36,6 +36,7 @@ interface CandidateRow {
   region: string | null;
   orderitems: CandidateItem[];
   created_at_ws: string | null;
+  ship_address: string | null;
 }
 
 export async function GET(request: NextRequest) {
@@ -47,7 +48,7 @@ export async function GET(request: NextRequest) {
   // ── 1. Adaylar (DataBridge) ───────────────────────────────────────────────
   const candidates = await queryDataBridge(
     `SELECT wisersell_order_id::int AS wisersell_order_id, order_code, store_id, recipient_name, label_no, region,
-            orderitems, created_at_ws
+            orderitems, created_at_ws, ship_address
      FROM wisersell_routing_candidates
      WHERE region = $1 AND gone_at IS NULL
      ORDER BY created_at_ws DESC NULLS LAST
@@ -98,6 +99,7 @@ export async function GET(request: NextRequest) {
       labelNo: c.label_no,
       warehouse: wh,
       marketplaceCode: marketplaceByStore.get(Number(c.store_id)) ?? (c.store_id != null ? `store ${c.store_id}` : null),
+      shipAddress: c.ship_address,
       items: c.orderitems,
       createdAt: c.created_at_ws,
     });

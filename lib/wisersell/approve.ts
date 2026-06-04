@@ -30,6 +30,7 @@ interface Cand {
   label_no: string | null;
   region: string | null;
   orderitems: CandItem[];
+  ship_address: string | null;
 }
 interface StoreMap {
   store_id: number;
@@ -77,14 +78,14 @@ export async function getEligibleCandidateIds(region: string): Promise<number[]>
 function buildAddressNote(c: Cand, labelPrefix: string | null): string {
   const labelBase = `${labelPrefix ?? ''}${c.label_no ?? ''}`.trim();
   const productNames = c.orderitems.map((i) => i.product_name).filter(Boolean) as string[];
-  return [labelBase, c.recipient_name ?? '', ...productNames].filter(Boolean).join('\n');
+  return [labelBase, c.recipient_name ?? '', c.ship_address ?? '', ...productNames].filter(Boolean).join('\n');
 }
 
 export async function approveWisersellCandidates(ids: number[], userId: string): Promise<ApproveResult[]> {
   if (!ids.length) return [];
 
   const candidates = (await queryDataBridge(
-    `SELECT wisersell_order_id::int AS wisersell_order_id, order_code, store_id, recipient_name, label_no, region, orderitems
+    `SELECT wisersell_order_id::int AS wisersell_order_id, order_code, store_id, recipient_name, label_no, region, orderitems, ship_address
      FROM wisersell_routing_candidates
      WHERE wisersell_order_id = ANY($1::bigint[]) AND region IS NOT NULL AND gone_at IS NULL`,
     [ids.map(String)],

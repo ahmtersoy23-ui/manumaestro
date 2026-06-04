@@ -28,6 +28,8 @@ interface Row {
   orderCode?: string;
   orderNumber?: string;
   recipientName?: string | null;
+  shipAddress?: string | null;
+  addressNote?: string | null;
   labelNo?: string | null;
   warehouse?: string;
   marketplaceCode?: string;
@@ -214,7 +216,9 @@ export default function SiparisPage() {
                       {r.readyPending && <span className="ml-2 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1">ready-pending</span>}
                     </td>
                     <td className="px-3 py-2 text-gray-600">{r.marketplaceCode ?? '—'}</td>
-                    <td className="px-3 py-2 text-gray-600">{r.recipientName ?? '—'}</td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-pre-line max-w-xs">
+                      {[r.recipientName, r.shipAddress].filter(Boolean).join('\n') || r.addressNote || '—'}
+                    </td>
                     <td className="px-3 py-2">{WAREHOUSE_LABEL[r.warehouse ?? ''] ?? r.warehouse ?? '—'}</td>
                     <td className="px-3 py-2 text-gray-600 max-w-md truncate" title={itemsText(r.items)}>{itemsText(r.items)}</td>
                     {tab !== 'onayBekliyor' && <td className="px-3 py-2 text-gray-600">{r.trackingNumber ?? '—'}</td>}
