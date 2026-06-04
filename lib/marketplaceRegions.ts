@@ -108,6 +108,9 @@ const AMAZON_LABELS: Record<string, string> = {
   AMZN_EU: 'Amazon EU',
   AMZN_CA: 'Amazon CA',
   AMZN_AU: 'Amazon AU',
+  // Amazon Citi (CUSTOM_01): FBA verisi elde yok → hedef boş bırakılır, operatör
+  // pickup'ta US FBA / NJ Depo manuel seçer. Kolonda depoya düşmesin, "Amazon Citi" görünsün.
+  CUSTOM_01: 'Amazon Citi',
 };
 
 const REGION_DEPOT_LABEL: Record<string, string> = { US: 'NJ Depo', EU: 'NL Depo', UK: 'UK Depo' };

@@ -16,6 +16,7 @@ describe('shipmentDestinationLabel — kolon = fiziksel destinasyon', () => {
     expect(shipmentDestinationLabel('US', 'WAYFAIR_US', null)).toBe('CG Depo');
     expect(shipmentDestinationLabel('US', 'CUSTOM_05', null)).toBe('NJ Depo'); // Walmart → NJ Depo
     expect(shipmentDestinationLabel('US', 'CUSTOM_07', null)).toBe('NJ Depo'); // Shopify
+    expect(shipmentDestinationLabel('US', 'CUSTOM_01', null)).toBe('Amazon Citi'); // Citi → pickup, depoya düşmez
     expect(shipmentDestinationLabel('EU', 'CUSTOM_02', null)).toBe('NL Depo'); // Bol/Kaufland → NL Depo
     expect(shipmentDestinationLabel('EU', 'AMZN_EU', null)).toBe('Amazon EU');
     expect(shipmentDestinationLabel('UK', 'AMZN_UK', null)).toBe('Amazon UK');
