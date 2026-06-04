@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
     `SELECT store_id, marketplace_code, COALESCE(NULLIF(label_prefix,''), marketplace_code) AS label FROM wisersell_store_map WHERE region = $1`,
     [region],
   ) as Array<{ store_id: number; marketplace_code: string | null; label: string | null }>;
-  const marketplaceByStore = new Map(storeMapRows.map((s) => [Number(s.store_id), s.marketplace_code || s.label || `store ${s.store_id}`]));
+  const marketplaceByStore = new Map(storeMapRows.map((s) => [Number(s.store_id), s.label || s.marketplace_code || `store ${s.store_id}`]));
 
   // Stok teyidi: tüm iwasku'lar için availability
   const allIwaskus = [
