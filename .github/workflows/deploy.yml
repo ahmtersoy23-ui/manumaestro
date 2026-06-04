@@ -76,6 +76,15 @@ jobs:
           port: 2222
           command_timeout: 10m
           script: |
+            # set -e: migrate deploy (veya herhangi bir adim) basarisizsa SCRIPT DURUR ve
+            # pm2 reload ATLANIR. Boylece DB ile uyumsuz yeni build CANLIYA CIKMAZ; eski
+            # calisan build ayakta kalir, deploy KIRMIZI olur. (2026-06-04: migrate deploy
+            # sessizce fail edip uyumsuz Prisma client'i shipleyince prod down oldu — bir daha olmasin.)
+            # Not: tablolar postgres-owned; owner gerektiren migration'lari ONCE elle uygula:
+            #   ssh ... "sudo -u postgres psql -d manumaestro_db -f /tmp/<mig>.sql"
+            #   cd /var/www/manumaestro && npx prisma migrate resolve --applied <migration_name>
+            # sonra deploy migrate deploy => "No pending" (yesil).
+            set -eo pipefail
             cd /var/www/manumaestro
             npm ci --omit=dev --ignore-scripts
             npx prisma generate
