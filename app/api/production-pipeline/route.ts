@@ -150,10 +150,13 @@ export const GET = withRoute(
       take: 2000,
     });
 
-    // 2. Requests (açık olanlar — COMPLETED/CANCELLED hariç)
+    // 2. Requests (CANCELLED hariç — COMPLETED dahil).
+    // COMPLETED talepler de gösterilir: destinasyon detay sayfasının "Tamamlandı"
+    // chip'i + "Tamam" badge'i bunlara dayanır. Üretimi biten ama henüz sevkiyat
+    // havuzunda bekleyen PR'lar (örn. tamamlanmış US FBA) aksi halde listeden düşerdi.
     const requestsWhere: Prisma.ProductionRequestWhereInput = {
       marketplaceId: { in: effectiveMarketplaceIds },
-      status: { notIn: ['COMPLETED', 'CANCELLED'] },
+      status: { not: 'CANCELLED' },
     };
     if (productionMonth) requestsWhere.productionMonth = productionMonth;
     if (status === 'REQUESTED' || status === 'IN_PRODUCTION' || status === 'PARTIALLY_PRODUCED') {
