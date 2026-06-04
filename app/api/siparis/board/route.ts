@@ -16,7 +16,7 @@ import { queryDataBridge } from '@/lib/db/prisma';
 import { requireSuperAdmin } from '@/lib/auth/verify';
 import { getUsAvailability } from '@/lib/wms/usWarehouseStock';
 import { resolveOrderWarehouse } from '@/lib/wisersell/orderRouting';
-import { getProductsByIwasku } from '@/lib/products/lookup';
+import { getProductsByIwasku, usDimensions } from '@/lib/products/lookup';
 
 interface CandidateItem {
   iwasku: string | null;
@@ -171,14 +171,29 @@ export async function GET(request: NextRequest) {
     // CANCELLED → board'da gösterme
   }
 
-  // Ürün adları (Onay Bekliyor kalemleri için)
-  const productMap = allIwaskus.length ? await getProductsByIwasku(allIwaskus) : new Map();
-  for (const row of onayBekliyor) {
-    const items = row.items as CandidateItem[];
-    row.items = items.map((i) => ({
-      ...i,
-      name: i.product_name ?? (i.iwasku ? productMap.get(i.iwasku)?.name ?? null : null),
-    }));
+  // ── 3. Ürün adı + ölçü zenginleştirmesi (tüm koleksiyonlar) ───────────────
+  // Aday + outbound tüm iwasku'lar tek lookup'ta — her durumda standart name +
+  // katalog ölçüsü (inç/lb) görünür (etiket/çıkış vs. eskiden sadece iwasku idi).
+  const autoIwaskus = autoOrders.flatMap((o) => o.items.map((i) => i.iwasku).filter((x): x is string => !!x));
+  const lookupIwaskus = [...new Set([...allIwaskus, ...autoIwaskus])];
+  const productMap = lookupIwaskus.length ? await getProductsByIwasku(lookupIwaskus) : new Map();
+
+  const enrichCand = (i: CandidateItem) => ({
+    ...i,
+    name: i.product_name ?? (i.iwasku ? productMap.get(i.iwasku)?.name ?? null : null),
+    dims: i.iwasku ? usDimensions(productMap.get(i.iwasku)) : null,
+  });
+  const enrichAuto = (i: { iwasku: string | null; quantity: number }) => ({
+    iwasku: i.iwasku,
+    quantity: i.quantity,
+    name: i.iwasku ? productMap.get(i.iwasku)?.name ?? null : null,
+    dims: i.iwasku ? usDimensions(productMap.get(i.iwasku)) : null,
+  });
+
+  for (const row of onayBekliyor) row.items = (row.items as CandidateItem[]).map(enrichCand);
+  for (const row of eslesmeGerek) row.items = (row.items as CandidateItem[]).map(enrichCand);
+  for (const coll of [etiketBekliyor, cikisBekliyor, kapatmaBekliyor, kapandi]) {
+    for (const row of coll) row.items = (row.items as Array<{ iwasku: string | null; quantity: number }>).map(enrichAuto);
   }
 
   const warehouseCounts = (rows: Array<Record<string, unknown>>) => ({

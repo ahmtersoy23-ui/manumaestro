@@ -7,8 +7,8 @@
  * region: ülke-genişletilebilir (şimdi US).
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Zap, CheckCircle2, PackageCheck, Truck, Send, Archive, AlertTriangle, MapPin, Printer, FileText, X, ChevronRight } from 'lucide-react';
+import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { RefreshCw, Zap, CheckCircle2, PackageCheck, Truck, Send, Archive, AlertTriangle, MapPin, Printer, FileText, X, ChevronRight, Copy, Check } from 'lucide-react';
 import { LabelUploader } from '@/components/wms/LabelUploader';
 import { ShipModal } from '@/components/wms/ShipModal';
 
@@ -22,7 +22,8 @@ const STATUS_META: Record<StatusKey, { label: string; desc: string; icon: typeof
   kapatmaBekliyor:{ label: 'Kapatma Bekliyor', desc: 'Kargolandı, Wisersell kapatma',   icon: Send,         accent: 'text-rose-700',   ring: 'ring-rose-500 bg-rose-50',     dot: 'bg-rose-500' },
   kapandi:        { label: 'Kapandı',          desc: 'Wisersell external-close yazıldı', icon: Archive,      accent: 'text-slate-600',  ring: 'ring-slate-400 bg-slate-50',   dot: 'bg-slate-400' },
 };
-const STATUS_ORDER: StatusKey[] = ['onayBekliyor', 'eslesmeGerek', 'etiketBekliyor', 'cikisBekliyor', 'kapatmaBekliyor', 'kapandi'];
+// 'eslesmeGerek' kart değil — stokYok gibi bir istisna durumu, filtre barında rozet (STATUS_META'da kalır: modal/dot kullanır).
+const STATUS_ORDER: StatusKey[] = ['onayBekliyor', 'etiketBekliyor', 'cikisBekliyor', 'kapatmaBekliyor', 'kapandi'];
 
 const WH = {
   SHOWROOM: { label: 'Fairfield', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -31,7 +32,34 @@ const WH = {
 function whLabel(w?: string) { return w && w in WH ? WH[w as keyof typeof WH].label : (w ?? '—'); }
 function whBadge(w?: string) { return w && w in WH ? WH[w as keyof typeof WH].badge : 'bg-gray-50 text-gray-600 border-gray-200'; }
 
-interface ItemLite { iwasku: string | null; qty?: number; quantity?: number; name?: string | null; product_name?: string | null; }
+/** Tek tıkla kopyalanabilir etiketli alan (detay modalinde alıcı/adres). */
+function CopyField({ label, value, icon, multiline }: { label: string; value?: string | null; icon?: ReactNode; multiline?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const text = (value ?? '').trim();
+  const copy = async () => {
+    if (!text) return;
+    try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* clipboard izni yok */ }
+  };
+  return (
+    <div className="rounded-lg border border-gray-100 bg-gray-50/60 p-3">
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <div className="text-[11px] text-gray-400 uppercase">{label}</div>
+        {text && (
+          <button onClick={copy} className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-400 hover:text-gray-700 transition-colors">
+            {copied ? <><Check className="w-3 h-3 text-emerald-600" /> Kopyalandı</> : <><Copy className="w-3 h-3" /> Kopyala</>}
+          </button>
+        )}
+      </div>
+      <div className={`text-sm text-gray-800 flex items-start gap-1 ${multiline ? 'leading-snug' : 'font-medium'}`}>
+        {icon && <span className="mt-0.5 shrink-0 text-gray-400">{icon}</span>}
+        <span className={multiline ? 'whitespace-pre-line' : ''}>{text || '—'}</span>
+      </div>
+    </div>
+  );
+}
+
+interface Dims { lengthIn: number | null; widthIn: number | null; heightIn: number | null; weightLb: number | null; }
+interface ItemLite { iwasku: string | null; qty?: number; quantity?: number; name?: string | null; product_name?: string | null; dims?: Dims | null; }
 interface Row {
   id?: string;
   wisersellOrderId?: number;
@@ -167,7 +195,7 @@ export default function SiparisPage() {
       </div>
 
       {/* Durum kartları (birincil navigasyon) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
         {STATUS_ORDER.map((k) => {
           const m = STATUS_META[k]; const Icon = m.icon; const active = tab === k;
           return (
@@ -202,6 +230,13 @@ export default function SiparisPage() {
           </select>
         )}
         <div className="flex-1" />
+        {counts.eslesmeGerek ? (
+          <button onClick={() => setTab('eslesmeGerek')}
+            title="iwasku eşleşmiyor — mapping gerek. Eşleme eklenince otomatik Onay Bekliyor'a düşer."
+            className={`inline-flex items-center gap-1.5 text-xs font-medium rounded-lg px-2.5 py-1.5 border transition-colors ${tab === 'eslesmeGerek' ? 'bg-orange-500 text-white border-orange-500' : 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100'}`}>
+            <AlertTriangle className="w-3.5 h-3.5" /> {counts.eslesmeGerek} eşleşme gerek
+          </button>
+        ) : null}
         {counts.stokYok ? (
           <span className="inline-flex items-center gap-1.5 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5" title="iwasku eşleşti ama US deposunda yeterli stok yok — stok gelince görünür">
             <AlertTriangle className="w-3.5 h-3.5" /> {counts.stokYok} aday US stoğu yok (gizli)
@@ -248,7 +283,7 @@ export default function SiparisPage() {
                 <th className="px-3 py-2.5">Alıcı / Konum</th>
                 <th className="px-3 py-2.5">Ürün</th>
                 <th className="px-3 py-2.5 text-center w-16">Adet</th>
-                {tab !== 'onayBekliyor' && tab !== 'eslesmeGerek' && <th className="px-3 py-2.5">Tracking</th>}
+                {tab !== 'onayBekliyor' && tab !== 'eslesmeGerek' && <th className="px-3 py-2.5">TRACKING</th>}
                 <th className="px-3 py-2.5 w-8"></th>
               </tr>
             </thead>
@@ -275,8 +310,8 @@ export default function SiparisPage() {
                     </td>
                     <td className="px-3 py-2.5 text-gray-700">
                       {tab === 'eslesmeGerek'
-                        ? <div className="text-xs text-orange-700">{(r.unresolved ?? []).map((u, ix) => <div key={ix} className="truncate max-w-[280px]" title={[u.title, u.product_code, u.marketplace_sku].filter(Boolean).join(' · ')}>{u.title || u.product_code || u.marketplace_sku || '?'}</div>)}</div>
-                        : <div className="space-y-0.5">{(r.items ?? []).map((i, ix) => <div key={ix} className="truncate max-w-[280px]">{i.name ?? i.product_name ?? i.iwasku ?? '?'}</div>)}</div>}
+                        ? <div className="text-xs text-orange-700 space-y-1">{(r.unresolved ?? []).map((u, ix) => { const t = u.title || u.product_code || u.marketplace_sku || '?'; return <div key={ix} className="line-clamp-3 max-w-[300px] leading-snug" title={[u.title, u.product_code, u.marketplace_sku].filter(Boolean).join(' · ')}>{t}</div>; })}</div>
+                        : <div className="space-y-1">{(r.items ?? []).map((i, ix) => { const nm = i.name ?? i.product_name ?? i.iwasku ?? '?'; return <div key={ix} className="line-clamp-3 max-w-[300px] leading-snug" title={nm}>{nm}</div>; })}</div>}
                     </td>
                     <td className="px-3 py-2.5 text-center text-gray-500">
                       <div className="space-y-0.5">{(r.items ?? []).map((i, ix) => <div key={ix}>{i.qty ?? i.quantity ?? 0}</div>)}</div>
@@ -324,27 +359,35 @@ export default function SiparisPage() {
                 <div><div className="text-[11px] text-gray-400 uppercase">Tracking</div><div className="mt-0.5 font-mono text-xs text-gray-700">{detailRow.trackingNumber ?? '—'}</div></div>
               </div>
 
-              {/* Alıcı / adres */}
-              <div className="rounded-lg border border-gray-100 bg-gray-50/60 p-3">
-                <div className="text-[11px] text-gray-400 uppercase mb-1">Alıcı / Adres</div>
-                <div className="font-medium text-gray-800">{detailRow.recipientName ?? (detailRow.addressNote ? detailRow.addressNote.split('\n')[1] ?? '' : '—')}</div>
-                {(detailRow.shipAddress || detailRow.addressNote) && (
-                  <div className="text-xs text-gray-600 whitespace-pre-line leading-snug flex items-start gap-1 mt-1">
-                    <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0 text-gray-400" /><span>{detailRow.shipAddress ?? detailRow.addressNote}</span>
-                  </div>
-                )}
+              {/* Alıcı + Adres — ayrı alanlar, tek tıkla kopyala */}
+              <div className="grid gap-2 sm:grid-cols-2">
+                <CopyField label="Alıcı" value={detailRow.recipientName ?? (detailRow.addressNote ? detailRow.addressNote.split('\n')[1] : null)} />
+                <CopyField label="Adres" value={detailRow.shipAddress ?? detailRow.addressNote} icon={<MapPin className="w-3.5 h-3.5" />} multiline />
               </div>
 
               {/* Ürünler */}
               <div>
                 <div className="text-[11px] text-gray-400 uppercase mb-1">Ürünler</div>
-                <ul className="text-sm text-gray-700 space-y-0.5">
-                  {(detailRow.items ?? []).map((i, ix) => (
-                    <li key={ix} className="flex justify-between gap-3 border-b border-gray-50 py-1">
-                      <span>{i.name ?? i.product_name ?? i.iwasku}</span>
-                      <span className="text-gray-400 shrink-0">×{i.qty ?? i.quantity ?? 0}</span>
-                    </li>
-                  ))}
+                <ul className="text-sm text-gray-700 space-y-1.5">
+                  {(detailRow.items ?? []).map((i, ix) => {
+                    const nm = i.name ?? i.product_name ?? i.iwasku;
+                    const d = i.dims;
+                    const hasSize = d && d.lengthIn != null && d.widthIn != null && d.heightIn != null;
+                    return (
+                      <li key={ix} className="flex justify-between gap-3 border-b border-gray-50 py-1.5">
+                        <div className="min-w-0">
+                          <div className="leading-snug">{nm}</div>
+                          {d && (hasSize || d.weightLb != null) && (
+                            <div className="text-[11px] text-gray-400 mt-0.5 whitespace-nowrap">
+                              {hasSize && <span>{d.lengthIn}×{d.widthIn}×{d.heightIn} in</span>}
+                              {d.weightLb != null && <span>{hasSize ? ' · ' : ''}{d.weightLb} lb</span>}
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-gray-400 shrink-0">×{i.qty ?? i.quantity ?? 0}</span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
 
