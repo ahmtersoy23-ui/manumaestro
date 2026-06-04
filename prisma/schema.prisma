@@ -1023,3 +1023,17 @@ model MonthlyCapacity {
 
   @@map("monthly_capacity")
 }
+
+// Somerset→Fairfield transfer önerisini "yok say" işaretleri.
+// dismissedAt, o ürünün son tetikleyici olayından (Fairfield çıkışı / koli kırma)
+// sonra ise öneri gizlenir. Yeni bir olay olursa lastEvent ileri kayar ve öneri
+// tekrar belirir → kalıcı gizlemenin "bir daha görünmez" riski yok. FK yok
+// (UserShelfPermission pattern'i).
+model TransferDismissal {
+  id            String   @id @default(uuid())
+  iwasku        String   @unique
+  dismissedAt   DateTime @default(now())
+  dismissedById String
+
+  @@map("transfer_dismissals")
+}

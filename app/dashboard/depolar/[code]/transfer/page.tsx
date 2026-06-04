@@ -9,7 +9,9 @@
 
 import { useEffect, useState, use, useCallback } from 'react';
 import { redirect } from 'next/navigation';
-import { ArrowLeftRight, AlertCircle, RefreshCw } from 'lucide-react';
+import { ArrowLeftRight, AlertCircle, RefreshCw, EyeOff } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import { notify } from '@/lib/ui/notify';
 import { createLogger } from '@/lib/logger';
 import { slugToCode, codeToSlug } from '@/lib/warehouseLabels';
 import { TransferToFairfieldModal } from '@/components/wms/TransferToFairfieldModal';
@@ -66,6 +68,57 @@ export default function TransferTabPage({ params }: { params: Promise<{ code: st
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const undismiss = useCallback(
+    (iwasku: string) => {
+      fetch(`/api/depolar/${code}/transfer/dismiss`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ iwasku }),
+      })
+        .then(() => fetchData())
+        .catch((e) => logger.error('undismiss', e));
+    },
+    [code, fetchData]
+  );
+
+  const dismiss = useCallback(
+    async (iwasku: string) => {
+      try {
+        const res = await fetch(`/api/depolar/${code}/transfer/dismiss`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ iwasku }),
+        });
+        const d = await res.json();
+        if (!res.ok || !d.success) {
+          notify.error(d.error || 'Yok sayılamadı');
+          return;
+        }
+        fetchData();
+        toast((t) => (
+          <span className="flex items-center gap-3 text-sm">
+            Öneri yok sayıldı
+            <button
+              onClick={() => {
+                toast.dismiss(t.id);
+                undismiss(iwasku);
+              }}
+              className="text-indigo-600 font-medium hover:underline"
+            >
+              Geri al
+            </button>
+          </span>
+        ));
+      } catch (e) {
+        logger.error('dismiss', e);
+        notify.error('Sunucu hatası');
+      }
+    },
+    [code, fetchData, undismiss]
+  );
 
   if (loading && !data) return <div className="text-center py-12 text-gray-500">Yükleniyor…</div>;
   if (error) return <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">{error}</div>;
@@ -142,16 +195,26 @@ export default function TransferTabPage({ params }: { params: Promise<{ code: st
                     {new Date(it.lastEvent).toLocaleDateString('tr-TR')}
                   </td>
                   <td className="px-4 py-2 text-right">
-                    {data.canTransfer && data.destination ? (
-                      <button
-                        onClick={() => setModal({ iwasku: it.iwasku, name: it.name })}
-                        className="text-[11px] text-white bg-indigo-600 hover:bg-indigo-700 px-2.5 py-1 rounded"
-                      >
-                        Fairfield&apos;a Transfer Et
-                      </button>
-                    ) : (
-                      <span className="text-[11px] text-gray-400">—</span>
-                    )}
+                    <div className="flex items-center justify-end gap-2">
+                      {data.canTransfer && data.destination && (
+                        <button
+                          onClick={() => setModal({ iwasku: it.iwasku, name: it.name })}
+                          className="text-[11px] text-white bg-indigo-600 hover:bg-indigo-700 px-2.5 py-1 rounded"
+                        >
+                          Fairfield&apos;a Transfer Et
+                        </button>
+                      )}
+                      {data.canTransfer && (
+                        <button
+                          onClick={() => dismiss(it.iwasku)}
+                          title="Bu öneriyi yok say (yeni bir hareket olursa tekrar belirir)"
+                          className="text-gray-400 hover:text-gray-700 p-1 rounded hover:bg-gray-100"
+                        >
+                          <EyeOff className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {!data.canTransfer && <span className="text-[11px] text-gray-400">—</span>}
+                    </div>
                   </td>
                 </tr>
               ))}

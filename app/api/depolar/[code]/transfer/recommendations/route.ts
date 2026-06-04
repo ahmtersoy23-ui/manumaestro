@@ -87,8 +87,24 @@ export const GET = withRoute<{ code: string }>(
         return a.SHOWROOM <= 0 && a.NJ > 0;
       });
       if (eligible.length > 0) {
+        // Yok sayılanlar: dismissedAt son olaydan SONRAYSA gizle (yeni olay → tekrar belirir)
+        const dismissals = await prisma.transferDismissal.findMany({
+          where: { iwasku: { in: eligible } },
+          select: { iwasku: true, dismissedAt: true },
+        });
+        const dismissedAt = new Map(dismissals.map((d) => [d.iwasku, d.dismissedAt]));
+
         const productMap = await getProductsByIwasku(eligible);
         items = eligible
+          .filter((iw) => {
+            const d = dismissedAt.get(iw);
+            if (!d) return true;
+            const lastEvent = Math.max(
+              c1Last.get(iw)?.getTime() ?? 0,
+              c2Last.get(iw)?.getTime() ?? 0
+            );
+            return d.getTime() < lastEvent; // dismiss sonrası yeni olay olduysa göster
+          })
           .map((iw) => {
             const reasons: ('SHOWROOM_OUT' | 'BOX_OPEN')[] = [];
             if (c1Last.has(iw)) reasons.push('SHOWROOM_OUT');
