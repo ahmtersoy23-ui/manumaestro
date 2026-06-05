@@ -214,7 +214,7 @@ export default function SiparisPage() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={load} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 disabled:opacity-50">
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Yenile
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Sayfayı Yenile
           </button>
           <button onClick={() => setManualOpen(true)} title="Wisersell'de olmayan, etiketi başka platformdan alınan siparişi elle ekle" className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700">
             <Plus className="w-4 h-4" /> Manuel Giriş
