@@ -135,8 +135,8 @@ export default function SiparisPage() {
     (mpFilter === 'ALL' || r.marketplaceCode === mpFilter)
   ), [tabRows, whFilter, mpFilter]);
 
-  // Çıkış (etiket yazdırma) operasyonel → herkes; onay/kapatma Wisersell otomasyonu → Manager+.
-  const selectable = tab === 'cikisBekliyor' || ((tab === 'onayBekliyor' || tab === 'kapatmaBekliyor') && canManage);
+  // İlk onay (bootstrap) + çıkış etiket yazdırma → herkes; kapatma (Wisersell) → Manager+.
+  const selectable = tab === 'onayBekliyor' || tab === 'cikisBekliyor' || (tab === 'kapatmaBekliyor' && canManage);
   const rowKey = useCallback((r: Row) => (tab === 'onayBekliyor' ? String(r.wisersellOrderId) : String(r.id)), [tab]);
 
   const toggle = (k: string) => setSelected((p) => { const n = new Set(p); if (n.has(k)) n.delete(k); else n.add(k); return n; });
@@ -421,7 +421,7 @@ export default function SiparisPage() {
             {/* Aksiyon footer — duruma göre */}
             <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-200 bg-gray-50/50">
               <button onClick={() => { setDetailRow(null); load(); }} className="text-sm px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700">Kapat</button>
-              {tab === 'onayBekliyor' && canManage && (
+              {tab === 'onayBekliyor' && (
                 <button onClick={() => approveOne(detailRow.wisersellOrderId)} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">
                   <CheckCircle2 className="w-4 h-4" /> Onayla
                 </button>
