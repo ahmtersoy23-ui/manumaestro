@@ -89,6 +89,10 @@ jobs:
             npm ci --omit=dev --ignore-scripts
             npx prisma generate
             npx prisma migrate deploy
+            # .next'i (ozellikle .next/cache) iwaapps'e ver: scp, build kullanicisinin (uid 1001)
+            # sahipligini tasiyabiliyor → PM2 iwaapps(999) prerender/fetch-cache yazamiyor
+            # (EACCES mkdir .next/cache/fetch-cache, 2026-06-05). Reload oncesi duzelt.
+            chown -R iwaapps:iwaapps /var/www/manumaestro/.next
             # startOrReload + --update-env: .env'de yeni env vars eklendiyse reload'da yansisin.
             # Sade `pm2 restart` env cache'ini guncellemez.
             sudo -u iwaapps -H PM2_HOME=/home/iwaapps/.pm2 pm2 startOrReload /var/www/manumaestro/ecosystem.config.js --update-env

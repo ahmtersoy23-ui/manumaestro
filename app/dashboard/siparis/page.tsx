@@ -35,6 +35,12 @@ const WH = {
 } as const;
 function whLabel(w?: string) { return w && w in WH ? WH[w as keyof typeof WH].label : (w ?? '—'); }
 function whBadge(w?: string) { return w && w in WH ? WH[w as keyof typeof WH].badge : 'bg-gray-50 text-gray-600 border-gray-200'; }
+/** Sipariş tarihi (kısa, tr) — yaş fikri versin. */
+function fmtDate(d?: string | null): string {
+  if (!d) return '';
+  const dt = new Date(d);
+  return isNaN(dt.getTime()) ? '' : dt.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
 
 /** Tek tıkla kopyalanabilir etiketli alan (detay modalinde alıcı/adres). */
 function CopyField({ label, value, icon, multiline }: { label: string; value?: string | null; icon?: ReactNode; multiline?: boolean }) {
@@ -80,6 +86,7 @@ interface Row {
   trackingNumber?: string | null;
   labelId?: string | null;
   readyPending?: boolean;
+  createdAt?: string | null;
   items?: ItemLite[];
   unresolved?: Array<{ product_code?: string | null; marketplace_sku?: string | null; title?: string | null }>;
 }
@@ -328,6 +335,7 @@ export default function SiparisPage() {
                     {selectable && <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}><input type="checkbox" className="rounded" checked={sel} onChange={() => toggle(key)} /></td>}
                     <td className="px-3 py-2.5">
                       <div className="font-semibold text-gray-900">{r.orderCode ?? r.orderNumber}</div>
+                      {r.createdAt && <div className="text-[11px] text-gray-400 mt-0.5">{fmtDate(r.createdAt)}</div>}
                       <div className="flex flex-wrap items-center gap-1 mt-0.5">
                         {r.source === 'MANUAL' && <span className="inline-block text-[10px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-1.5 py-0.5">manuel giriş</span>}
                         {r.readyPending && <span className="inline-block text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">ready-pending</span>}
@@ -369,6 +377,7 @@ export default function SiparisPage() {
                   <div className="font-bold text-gray-900">{detailRow.orderCode ?? detailRow.orderNumber}</div>
                   <div className="text-xs text-gray-500 flex items-center gap-1.5">
                     {STATUS_META[tab].label}
+                    {detailRow.createdAt && <span className="text-gray-400">· {fmtDate(detailRow.createdAt)}</span>}
                     {detailRow.source === 'MANUAL' && <span className="inline-block text-[10px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-1.5 py-0.5">manuel giriş</span>}
                   </div>
                 </div>
