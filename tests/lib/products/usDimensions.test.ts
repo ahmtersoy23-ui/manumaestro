@@ -11,6 +11,7 @@ const base: ProductInfo = {
   heightCm: null,
   lengthCm: null,
   weightKg: null,
+  desi: null,
 };
 
 describe('usDimensions — cm/kg → inç/libre', () => {

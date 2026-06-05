@@ -15,8 +15,9 @@ import { prisma } from '@/lib/db/prisma';
 import { queryDataBridge } from '@/lib/db/prisma';
 import { requireBoardUser, isBoardManager } from '@/lib/auth/boardAuth';
 import { getUsAvailability } from '@/lib/wms/usWarehouseStock';
+import { getCgAvailability, type CgAvailability } from '@/lib/wms/cgStock';
 import { resolveOrderWarehouse } from '@/lib/wisersell/orderRouting';
-import { getProductsByIwasku, usDimensions } from '@/lib/products/lookup';
+import { getProductsByIwasku, usDimensions, type ProductInfo } from '@/lib/products/lookup';
 
 interface CandidateItem {
   iwasku: string | null;
@@ -96,7 +97,12 @@ export async function GET(request: NextRequest) {
       pendingCandidates.flatMap((c) => (c.orderitems ?? []).map((i) => i.iwasku).filter((x): x is string => !!x)),
     ),
   ];
-  const avail = allIwaskus.length ? await getUsAvailability(allIwaskus, { subtractPendingDraft: true }) : new Map();
+  // Stok teyidi: US depo + CG (Shukran/MDN) + ürün bilgisi (desi/kategori → heavy routing) paralel.
+  const [avail, cgAvail, productMap] = await Promise.all([
+    allIwaskus.length ? getUsAvailability(allIwaskus, { subtractPendingDraft: true }) : Promise.resolve(new Map<string, { NJ: number; SHOWROOM: number }>()),
+    allIwaskus.length ? getCgAvailability(allIwaskus) : Promise.resolve(new Map<string, CgAvailability>()),
+    allIwaskus.length ? getProductsByIwasku(allIwaskus) : Promise.resolve(new Map<string, ProductInfo>()),
+  ]);
 
   const onayBekliyor: Array<Record<string, unknown>> = [];
   const eslesmeGerek: Array<Record<string, unknown>> = [];
@@ -123,8 +129,11 @@ export async function GET(request: NextRequest) {
       });
       continue;
     }
-    // iwasku tamam ama tek depodan tam karşılanmıyor → stok yok (gizle, sadece say)
-    const wh = resolveOrderWarehouse(its.map((i) => ({ iwasku: i.iwasku, qty: i.qty })), avail);
+    // iwasku tamam → routing (heavy/CG → Shukran/MDN; sonra Fairfield/Somerset). Hiçbiri → stok yok (gizle).
+    const wh = resolveOrderWarehouse(
+      its.map((i) => ({ iwasku: i.iwasku, qty: i.qty, desi: i.iwasku ? productMap.get(i.iwasku)?.desi ?? null : null, category: i.iwasku ? productMap.get(i.iwasku)?.category ?? null : null })),
+      avail, cgAvail,
+    );
     if (!wh) { stokYok++; continue; }
     onayBekliyor.push({
       wisersellOrderId: c.wisersell_order_id,
@@ -152,8 +161,11 @@ export async function GET(request: NextRequest) {
 
   const etiketBekliyor: Array<Record<string, unknown>> = [];
   const cikisBekliyor: Array<Record<string, unknown>> = [];
+  const cgBekliyor: Array<Record<string, unknown>> = [];
   const kapatmaBekliyor: Array<Record<string, unknown>> = [];
   const kapandi: Array<Record<string, unknown>> = [];
+
+  const isCgWarehouse = (w?: string | null) => w === 'CG_SHUKRAN' || w === 'CG_MDN';
 
   for (const o of autoOrders) {
     const shippingLabel = o.labels[0];
@@ -185,18 +197,22 @@ export async function GET(request: NextRequest) {
       if (o.source === 'MANUAL' || o.wisersellClosedAt) kapandi.push(base);
       else kapatmaBekliyor.push(base);
     } else if (o.status === 'DRAFT') {
-      if (shippingLabel && shippingLabel.trackingNumber) cikisBekliyor.push(base);
+      // CG'de shelf/etiket yok → kendi kovası (MCF + manuel tracking bekler).
+      if (isCgWarehouse(o.warehouseCode)) cgBekliyor.push(base);
+      else if (shippingLabel && shippingLabel.trackingNumber) cikisBekliyor.push(base);
       else etiketBekliyor.push(base);
     }
     // CANCELLED → board'da gösterme
   }
 
   // ── 3. Ürün adı + ölçü zenginleştirmesi (tüm koleksiyonlar) ───────────────
-  // Aday + outbound tüm iwasku'lar tek lookup'ta — her durumda standart name +
-  // katalog ölçüsü (inç/lb) görünür (etiket/çıkış vs. eskiden sadece iwasku idi).
-  const autoIwaskus = autoOrders.flatMap((o) => o.items.map((i) => i.iwasku).filter((x): x is string => !!x));
-  const lookupIwaskus = [...new Set([...allIwaskus, ...autoIwaskus])];
-  const productMap = lookupIwaskus.length ? await getProductsByIwasku(lookupIwaskus) : new Map();
+  // productMap aday iwasku'larıyla erken kuruldu (routing için); outbound-only iwasku'ları ekle.
+  const autoIwaskus = [...new Set(autoOrders.flatMap((o) => o.items.map((i) => i.iwasku).filter((x): x is string => !!x)))];
+  const missingIwaskus = autoIwaskus.filter((iw) => !productMap.has(iw));
+  if (missingIwaskus.length) {
+    const extra = await getProductsByIwasku(missingIwaskus);
+    for (const [k, v] of extra) productMap.set(k, v);
+  }
 
   const enrichCand = (i: CandidateItem) => ({
     ...i,
@@ -214,7 +230,7 @@ export async function GET(request: NextRequest) {
 
   for (const row of onayBekliyor) row.items = (row.items as CandidateItem[]).map(enrichCand);
   for (const row of eslesmeGerek) row.items = (row.items as CandidateItem[]).map(enrichCand);
-  for (const coll of [etiketBekliyor, cikisBekliyor, kapatmaBekliyor, kapandi]) {
+  for (const coll of [etiketBekliyor, cikisBekliyor, cgBekliyor, kapatmaBekliyor, kapandi]) {
     for (const row of coll) row.items = (row.items as Array<{ iwasku: string | null; quantity: number }>).map(enrichAuto);
   }
 
@@ -222,7 +238,7 @@ export async function GET(request: NextRequest) {
   // marketplaceCode → bizim Marketplace tablosundaki ad. Wisersell store kodları
   // (Ama_US, Etsy_BMU, S_UPPUS vb.) tabloda yoksa olduğu gibi kalır → Wisersell ile
   // uyumlu; bizim CUSTOM_xx kodlar friendly ada çevrilir (Shopify/Etsy/Walmart…).
-  const allCollections = [onayBekliyor, eslesmeGerek, etiketBekliyor, cikisBekliyor, kapatmaBekliyor, kapandi];
+  const allCollections = [onayBekliyor, eslesmeGerek, etiketBekliyor, cikisBekliyor, cgBekliyor, kapatmaBekliyor, kapandi];
   const mpCodes = [...new Set(allCollections.flat().map((r) => r.marketplaceCode).filter(Boolean) as string[])];
   const mpNameByCode = new Map<string, string>();
   if (mpCodes.length) {
@@ -236,6 +252,8 @@ export async function GET(request: NextRequest) {
   const warehouseCounts = (rows: Array<Record<string, unknown>>) => ({
     SHOWROOM: rows.filter((r) => r.warehouse === 'SHOWROOM').length,
     NJ: rows.filter((r) => r.warehouse === 'NJ').length,
+    CG_SHUKRAN: rows.filter((r) => r.warehouse === 'CG_SHUKRAN').length,
+    CG_MDN: rows.filter((r) => r.warehouse === 'CG_MDN').length,
   });
 
   return NextResponse.json({
@@ -247,6 +265,7 @@ export async function GET(request: NextRequest) {
       eslesmeGerek: eslesmeGerek.length,
       etiketBekliyor: etiketBekliyor.length,
       cikisBekliyor: cikisBekliyor.length,
+      cgBekliyor: cgBekliyor.length,
       kapatmaBekliyor: kapatmaBekliyor.length,
       kapandi: kapandi.length,
       stokYok,
@@ -254,6 +273,6 @@ export async function GET(request: NextRequest) {
     warehouseStats: {
       onayBekliyor: warehouseCounts(onayBekliyor),
     },
-    data: { onayBekliyor, eslesmeGerek, etiketBekliyor, cikisBekliyor, kapatmaBekliyor, kapandi },
+    data: { onayBekliyor, eslesmeGerek, etiketBekliyor, cikisBekliyor, cgBekliyor, kapatmaBekliyor, kapandi },
   });
 }

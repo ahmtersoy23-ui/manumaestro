@@ -10,6 +10,8 @@
 import { prisma } from '@/lib/db/prisma';
 import { queryDataBridge } from '@/lib/db/prisma';
 import { getUsAvailability } from '@/lib/wms/usWarehouseStock';
+import { getCgAvailability } from '@/lib/wms/cgStock';
+import { getProductsByIwasku } from '@/lib/products/lookup';
 import { resolveOrderWarehouse } from '@/lib/wisersell/orderRouting';
 import { markWisersellReady } from '@/lib/wisersell/databridgeClient';
 import { createLogger } from '@/lib/logger';
@@ -74,13 +76,18 @@ export async function getEligibleCandidateIds(region: string): Promise<number[]>
   const pending = candidates.filter((c) => !approvedSet.has(c.wisersell_order_id));
 
   const allIwaskus = [...new Set(pending.flatMap((c) => (c.orderitems ?? []).map((i) => i.iwasku).filter((x): x is string => !!x)))];
-  const avail = allIwaskus.length ? await getUsAvailability(allIwaskus, { subtractPendingDraft: true }) : new Map();
+  const [avail, cgAvail, productMap] = await Promise.all([
+    allIwaskus.length ? getUsAvailability(allIwaskus, { subtractPendingDraft: true }) : Promise.resolve(new Map()),
+    allIwaskus.length ? getCgAvailability(allIwaskus) : Promise.resolve(new Map()),
+    allIwaskus.length ? getProductsByIwasku(allIwaskus) : Promise.resolve(new Map()),
+  ]);
 
   return pending
     .filter((c) => {
       const phys = physicalItems(c.orderitems);
       if (!phys.length || phys.some((i) => !i.iwasku)) return false; // özel/ödeme veya eşleşmemiş → onaya hazır değil
-      return resolveOrderWarehouse(phys.map((i) => ({ iwasku: i.iwasku, qty: i.qty })), avail) !== null;
+      const items = phys.map((i) => ({ iwasku: i.iwasku, qty: i.qty, desi: i.iwasku ? productMap.get(i.iwasku)?.desi ?? null : null, category: i.iwasku ? productMap.get(i.iwasku)?.category ?? null : null }));
+      return resolveOrderWarehouse(items, avail, cgAvail) !== null;
     })
     .map((c) => c.wisersell_order_id);
 }
@@ -113,7 +120,11 @@ export async function approveWisersellCandidates(ids: number[], userId: string):
   const allIwaskus = [
     ...new Set(candidates.flatMap((c) => (c.orderitems ?? []).map((i) => i.iwasku).filter((x): x is string => !!x))),
   ];
-  const avail = allIwaskus.length ? await getUsAvailability(allIwaskus, { subtractPendingDraft: true }) : new Map();
+  const [avail, cgAvail, productMap] = await Promise.all([
+    allIwaskus.length ? getUsAvailability(allIwaskus, { subtractPendingDraft: true }) : Promise.resolve(new Map()),
+    allIwaskus.length ? getCgAvailability(allIwaskus) : Promise.resolve(new Map()),
+    allIwaskus.length ? getProductsByIwasku(allIwaskus) : Promise.resolve(new Map()),
+  ]);
 
   const results: ApproveResult[] = [];
   const foundIds = new Set(candidates.map((c) => c.wisersell_order_id));
@@ -129,8 +140,8 @@ export async function approveWisersellCandidates(ids: number[], userId: string):
       results.push({ wisersellOrderId: c.wisersell_order_id, ok: false, status: 'error', message: `store_map eksik (store ${c.store_id})` });
       continue;
     }
-    const items = physicalItems(c.orderitems).map((i) => ({ iwasku: i.iwasku, qty: i.qty }));
-    const wh = resolveOrderWarehouse(items, avail);
+    const items = physicalItems(c.orderitems).map((i) => ({ iwasku: i.iwasku, qty: i.qty, desi: i.iwasku ? productMap.get(i.iwasku)?.desi ?? null : null, category: i.iwasku ? productMap.get(i.iwasku)?.category ?? null : null }));
+    const wh = resolveOrderWarehouse(items, avail, cgAvail);
     if (!wh) {
       results.push({ wisersellOrderId: c.wisersell_order_id, ok: false, status: 'skipped', message: 'Tek depodan tam karşılanmıyor (stok/iwasku)' });
       continue;

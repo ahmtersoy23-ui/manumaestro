@@ -16,10 +16,22 @@ export interface ProductInfo {
   heightCm: number | null;
   lengthCm: number | null;
   weightKg: number | null;
+  desi: number | null; // products COALESCE(manual_size, size)
 }
 
 const CM_PER_INCH = 2.54;
 const LB_PER_KG = 2.20462;
+
+/**
+ * Ağır ürün mü (CastleGate'te tutulan)? Mobilya/Alsat ≥4 desi, diğerleri ≥7 desi.
+ * desi yoksa false (heavy kabul etme → normal US depo routing).
+ */
+const HEAVY_LOW_CATEGORIES = new Set(['mobilya', 'alsat']);
+export function isHeavyItem(category: string | null | undefined, desi: number | null | undefined): boolean {
+  if (desi == null) return false;
+  const threshold = category && HEAVY_LOW_CATEGORIES.has(category.trim().toLowerCase()) ? 4 : 7;
+  return desi >= threshold;
+}
 
 /** Katalog ölçülerini US birimine çevirir (inç + libre); hiç veri yoksa null. */
 export function usDimensions(
@@ -44,7 +56,8 @@ export async function getProductsByIwasku(iwaskus: string[]): Promise<Map<string
 
   const [productRows, asinRows] = await Promise.all([
     queryProductDb(
-      `SELECT product_sku AS iwasku, name, category, width, height, length, weight
+      `SELECT product_sku AS iwasku, name, category, width, height, length, weight,
+              COALESCE(manual_size, size) AS desi
        FROM products
        WHERE product_sku IN (${placeholders})`,
       unique
@@ -74,6 +87,7 @@ export async function getProductsByIwasku(iwaskus: string[]): Promise<Map<string
     height: unknown;
     length: unknown;
     weight: unknown;
+    desi: unknown;
   }>) {
     const sku = skuMap.get(r.iwasku);
     map.set(r.iwasku, {
@@ -86,6 +100,7 @@ export async function getProductsByIwasku(iwaskus: string[]): Promise<Map<string
       heightCm: num(r.height),
       lengthCm: num(r.length),
       weightKg: num(r.weight),
+      desi: num(r.desi),
     });
   }
   // products'ta olmayan ama sku_master'da olanlar için entry (ölçü yok)
@@ -101,6 +116,7 @@ export async function getProductsByIwasku(iwaskus: string[]): Promise<Map<string
         heightCm: null,
         lengthCm: null,
         weightKg: null,
+        desi: null,
       });
     }
   }

@@ -8,27 +8,30 @@
  */
 
 import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Zap, CheckCircle2, PackageCheck, Truck, Send, Archive, AlertTriangle, MapPin, Printer, FileText, X, ChevronRight, Copy, Check, Plus } from 'lucide-react';
+import { RefreshCw, Zap, CheckCircle2, PackageCheck, Truck, Send, Archive, AlertTriangle, MapPin, Printer, FileText, X, ChevronRight, Copy, Check, Plus, Warehouse } from 'lucide-react';
 import { LabelUploader } from '@/components/wms/LabelUploader';
 import { ShipModal } from '@/components/wms/ShipModal';
 import { ManualOrderModal } from '@/components/siparis/ManualOrderModal';
 
-type StatusKey = 'onayBekliyor' | 'eslesmeGerek' | 'etiketBekliyor' | 'cikisBekliyor' | 'kapatmaBekliyor' | 'kapandi';
+type StatusKey = 'onayBekliyor' | 'eslesmeGerek' | 'etiketBekliyor' | 'cikisBekliyor' | 'cgBekliyor' | 'kapatmaBekliyor' | 'kapandi';
 
 const STATUS_META: Record<StatusKey, { label: string; desc: string; icon: typeof CheckCircle2; accent: string; ring: string; dot: string }> = {
   onayBekliyor:   { label: 'Onay Bekliyor',    desc: 'US stoğu teyitli, onay bekliyor', icon: CheckCircle2, accent: 'text-emerald-700', ring: 'ring-emerald-500 bg-emerald-50', dot: 'bg-emerald-500' },
   eslesmeGerek:   { label: 'Eşleşme Gerek',    desc: 'iwasku eşleşmiyor — mapping gerek', icon: AlertTriangle, accent: 'text-orange-700', ring: 'ring-orange-500 bg-orange-50', dot: 'bg-orange-500' },
   etiketBekliyor: { label: 'Etiket Bekliyor',  desc: 'Onaylandı, kargo etiketi bekliyor', icon: PackageCheck, accent: 'text-amber-700',  ring: 'ring-amber-500 bg-amber-50',   dot: 'bg-amber-500' },
   cikisBekliyor:  { label: 'Çıkış Bekliyor',   desc: 'Etiketli, fiziksel çıkış bekliyor', icon: Truck,        accent: 'text-sky-700',    ring: 'ring-sky-500 bg-sky-50',       dot: 'bg-sky-500' },
+  cgBekliyor:     { label: 'CG Bekliyor',      desc: 'CastleGate — MCF/tracking bekliyor', icon: Warehouse,  accent: 'text-teal-700',   ring: 'ring-teal-500 bg-teal-50',     dot: 'bg-teal-500' },
   kapatmaBekliyor:{ label: 'Kapatma Bekliyor', desc: 'Kargolandı, Wisersell kapatma',   icon: Send,         accent: 'text-rose-700',   ring: 'ring-rose-500 bg-rose-50',     dot: 'bg-rose-500' },
   kapandi:        { label: 'Kapandı',          desc: 'Wisersell external-close yazıldı', icon: Archive,      accent: 'text-slate-600',  ring: 'ring-slate-400 bg-slate-50',   dot: 'bg-slate-400' },
 };
 // 'eslesmeGerek' kart değil — stokYok gibi bir istisna durumu, filtre barında rozet (STATUS_META'da kalır: modal/dot kullanır).
-const STATUS_ORDER: StatusKey[] = ['onayBekliyor', 'etiketBekliyor', 'cikisBekliyor', 'kapatmaBekliyor', 'kapandi'];
+const STATUS_ORDER: StatusKey[] = ['onayBekliyor', 'etiketBekliyor', 'cikisBekliyor', 'cgBekliyor', 'kapatmaBekliyor', 'kapandi'];
 
 const WH = {
-  SHOWROOM: { label: 'Fairfield', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  NJ:       { label: 'Somerset',  badge: 'bg-sky-50 text-sky-700 border-sky-200' },
+  SHOWROOM:   { label: 'Fairfield',  badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  NJ:         { label: 'Somerset',   badge: 'bg-sky-50 text-sky-700 border-sky-200' },
+  CG_SHUKRAN: { label: 'Shukran CG', badge: 'bg-teal-50 text-teal-700 border-teal-200' },
+  CG_MDN:     { label: 'MDN CG',     badge: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
 } as const;
 function whLabel(w?: string) { return w && w in WH ? WH[w as keyof typeof WH].label : (w ?? '—'); }
 function whBadge(w?: string) { return w && w in WH ? WH[w as keyof typeof WH].badge : 'bg-gray-50 text-gray-600 border-gray-200'; }
@@ -90,7 +93,7 @@ export default function SiparisPage() {
   const [region] = useState('US');
   const [board, setBoard] = useState<BoardData | null>(null);
   const [tab, setTab] = useState<StatusKey>('onayBekliyor');
-  const [whFilter, setWhFilter] = useState<'ALL' | 'SHOWROOM' | 'NJ'>('ALL');
+  const [whFilter, setWhFilter] = useState<'ALL' | 'SHOWROOM' | 'NJ' | 'CG_SHUKRAN' | 'CG_MDN'>('ALL');
   const [mpFilter, setMpFilter] = useState<string>('ALL');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -125,8 +128,13 @@ export default function SiparisPage() {
 
   // Warehouse sayıları (aktif tab) + marketplace seçenekleri — client-side
   const whCounts = useMemo(() => {
-    const c = { ALL: tabRows.length, SHOWROOM: 0, NJ: 0 };
-    for (const r of tabRows) { if (r.warehouse === 'SHOWROOM') c.SHOWROOM++; else if (r.warehouse === 'NJ') c.NJ++; }
+    const c = { ALL: tabRows.length, SHOWROOM: 0, NJ: 0, CG_SHUKRAN: 0, CG_MDN: 0 };
+    for (const r of tabRows) {
+      if (r.warehouse === 'SHOWROOM') c.SHOWROOM++;
+      else if (r.warehouse === 'NJ') c.NJ++;
+      else if (r.warehouse === 'CG_SHUKRAN') c.CG_SHUKRAN++;
+      else if (r.warehouse === 'CG_MDN') c.CG_MDN++;
+    }
     return c;
   }, [tabRows]);
   const mpOptions = useMemo(() => [...new Set(tabRows.map((r) => r.marketplaceCode).filter(Boolean) as string[])].sort(), [tabRows]);
@@ -213,7 +221,7 @@ export default function SiparisPage() {
       </div>
 
       {/* Durum kartları (birincil navigasyon) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
         {STATUS_ORDER.map((k) => {
           const m = STATUS_META[k]; const Icon = m.icon; const active = tab === k;
           return (
@@ -233,12 +241,14 @@ export default function SiparisPage() {
       {/* Alt filtreler: depo + pazar yeri + stok-eksik */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5">
-          {(['ALL', 'SHOWROOM', 'NJ'] as const).map((w) => (
-            <button key={w} onClick={() => setWhFilter(w)}
-              className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${whFilter === w ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
-              {w === 'ALL' ? 'Tüm Depolar' : whLabel(w)} <span className="opacity-70">({whCounts[w]})</span>
-            </button>
-          ))}
+          {(['ALL', 'SHOWROOM', 'NJ', 'CG_SHUKRAN', 'CG_MDN'] as const)
+            .filter((w) => w === 'ALL' || w === 'SHOWROOM' || w === 'NJ' || whCounts[w] > 0)
+            .map((w) => (
+              <button key={w} onClick={() => setWhFilter(w)}
+                className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${whFilter === w ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
+                {w === 'ALL' ? 'Tüm Depolar' : whLabel(w)} <span className="opacity-70">({whCounts[w]})</span>
+              </button>
+            ))}
         </div>
         {mpOptions.length > 0 && (
           <select value={mpFilter} onChange={(e) => setMpFilter(e.target.value)}
@@ -376,6 +386,12 @@ export default function SiparisPage() {
                   </ul>
                 </div>
               )}
+              {tab === 'cgBekliyor' && (
+                <div className="rounded-lg border border-teal-200 bg-teal-50 p-3 text-sm text-teal-800">
+                  <div className="font-semibold flex items-center gap-1.5"><Warehouse className="w-4 h-4" /> CastleGate (Wayfair MCF)</div>
+                  <div className="mt-1 text-xs">Bu sipariş CG&apos;de — etiket/shelf çıkışı yok. Toplu MCF Excel çıktısı + manuel tracking girişi + Wisersell kapatma <strong>sonraki aşamada</strong> (Faz 3) eklenecek.</div>
+                </div>
+              )}
               {/* Üst bilgi şeridi */}
               <div className="grid grid-cols-3 gap-3 text-sm">
                 <div><div className="text-[11px] text-gray-400 uppercase">Pazar Yeri</div><span title={detailRow.marketplaceCode} className="inline-block mt-0.5 text-xs font-medium px-2 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-100">{detailRow.marketplaceLabel || detailRow.marketplaceCode || '—'}</span></div>
@@ -417,7 +433,7 @@ export default function SiparisPage() {
               </div>
 
               {/* Etiket (outbound siparişlerde) — yükle/görüntüle/yazdır */}
-              {tab !== 'onayBekliyor' && detailRow.warehouse && detailRow.id && (
+              {tab !== 'onayBekliyor' && (detailRow.warehouse === 'NJ' || detailRow.warehouse === 'SHOWROOM') && detailRow.id && (
                 <div className="rounded-lg border border-gray-100 p-3">
                   <div className="text-[11px] text-gray-400 uppercase mb-2 flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> Kargo Etiketi</div>
                   <LabelUploader warehouseCode={detailRow.warehouse} orderId={detailRow.id} role="ADMIN" />
