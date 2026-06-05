@@ -185,7 +185,7 @@ export function ManualOrderModal({ onClose, onSuccess }: { onClose: () => void; 
               <select value={marketplaceCode} onChange={(e) => setMarketplaceCode(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-400">
                 <option value="">Seçin…</option>
-                {marketplaces.map((m) => <option key={m.code} value={m.code}>{m.code} — {m.name}</option>)}
+                {marketplaces.map((m) => <option key={m.code} value={m.code}>{m.name} · {m.code}</option>)}
               </select>
             </div>
             <div>

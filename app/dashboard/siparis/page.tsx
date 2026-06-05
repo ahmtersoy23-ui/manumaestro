@@ -72,6 +72,7 @@ interface Row {
   labelNo?: string | null;
   warehouse?: string;
   marketplaceCode?: string;
+  marketplaceLabel?: string | null;
   source?: 'MANUAL' | 'WISERSELL_AUTO';
   trackingNumber?: string | null;
   labelId?: string | null;
@@ -129,6 +130,12 @@ export default function SiparisPage() {
     return c;
   }, [tabRows]);
   const mpOptions = useMemo(() => [...new Set(tabRows.map((r) => r.marketplaceCode).filter(Boolean) as string[])].sort(), [tabRows]);
+  // marketplaceCode → dostça ad (Wisersell kodu tabloda yoksa kodun kendisi)
+  const mpLabelByCode = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of tabRows) if (r.marketplaceCode) m.set(r.marketplaceCode, r.marketplaceLabel || r.marketplaceCode);
+    return m;
+  }, [tabRows]);
 
   const rows = useMemo(() => tabRows.filter((r) =>
     (whFilter === 'ALL' || r.warehouse === whFilter) &&
@@ -237,7 +244,7 @@ export default function SiparisPage() {
           <select value={mpFilter} onChange={(e) => setMpFilter(e.target.value)}
             className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-700">
             <option value="ALL">Tüm Pazar Yerleri</option>
-            {mpOptions.map((mp) => <option key={mp} value={mp}>{mp}</option>)}
+            {mpOptions.map((mp) => <option key={mp} value={mp}>{mpLabelByCode.get(mp) ?? mp}</option>)}
           </select>
         )}
         <div className="flex-1" />
@@ -316,7 +323,7 @@ export default function SiparisPage() {
                         {r.readyPending && <span className="inline-block text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">ready-pending</span>}
                       </div>
                     </td>
-                    <td className="px-3 py-2.5"><span className="inline-block text-xs font-medium px-2 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-100">{r.marketplaceCode ?? '—'}</span></td>
+                    <td className="px-3 py-2.5"><span title={r.marketplaceCode} className="inline-block text-xs font-medium px-2 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-100">{r.marketplaceLabel || r.marketplaceCode || '—'}</span></td>
                     <td className="px-3 py-2.5">{r.warehouse ? <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-md border ${whBadge(r.warehouse)}`}>{whLabel(r.warehouse)}</span> : <span className="text-gray-300">—</span>}</td>
                     <td className="px-3 py-2.5">
                       <div className="font-medium text-gray-800">{r.recipientName ?? (r.addressNote ? r.addressNote.split('\n')[1] ?? '' : '—')}</div>
@@ -325,7 +332,7 @@ export default function SiparisPage() {
                     <td className="px-3 py-2.5 text-gray-700">
                       {tab === 'eslesmeGerek'
                         ? <div className="text-xs text-orange-700 space-y-1">{(r.unresolved ?? []).map((u, ix) => { const t = u.title || u.product_code || u.marketplace_sku || '?'; return <div key={ix} className="line-clamp-3 max-w-[300px] leading-snug" title={[u.title, u.product_code, u.marketplace_sku].filter(Boolean).join(' · ')}>{t}</div>; })}</div>
-                        : <div className="space-y-1">{(r.items ?? []).map((i, ix) => { const nm = i.name ?? i.product_name ?? i.iwasku ?? '?'; return <div key={ix} className="max-w-[300px]"><div className="line-clamp-3 leading-snug" title={nm}>{nm}</div>{i.fnsku && <div className="text-[10px] font-mono text-gray-400 leading-tight">{i.fnsku}</div>}</div>; })}</div>}
+                        : <div className="space-y-1">{(r.items ?? []).map((i, ix) => { const nm = i.name ?? i.product_name ?? i.iwasku ?? '?'; return <div key={ix} className="max-w-[300px]"><div className="line-clamp-3 leading-snug" title={nm}>{nm}</div>{i.fnsku && <div className="text-[11px] font-mono text-gray-500 leading-tight">{i.fnsku}</div>}</div>; })}</div>}
                     </td>
                     <td className="px-3 py-2.5 text-center text-gray-500">
                       <div className="space-y-0.5">{(r.items ?? []).map((i, ix) => <div key={ix}>{i.qty ?? i.quantity ?? 0}</div>)}</div>
@@ -371,7 +378,7 @@ export default function SiparisPage() {
               )}
               {/* Üst bilgi şeridi */}
               <div className="grid grid-cols-3 gap-3 text-sm">
-                <div><div className="text-[11px] text-gray-400 uppercase">Pazar Yeri</div><span className="inline-block mt-0.5 text-xs font-medium px-2 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-100">{detailRow.marketplaceCode ?? '—'}</span></div>
+                <div><div className="text-[11px] text-gray-400 uppercase">Pazar Yeri</div><span title={detailRow.marketplaceCode} className="inline-block mt-0.5 text-xs font-medium px-2 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-100">{detailRow.marketplaceLabel || detailRow.marketplaceCode || '—'}</span></div>
                 <div><div className="text-[11px] text-gray-400 uppercase">Depo</div><span className={`inline-block mt-0.5 text-xs font-medium px-2 py-0.5 rounded-md border ${whBadge(detailRow.warehouse)}`}>{whLabel(detailRow.warehouse)}</span></div>
                 <div><div className="text-[11px] text-gray-400 uppercase">Tracking</div><div className="mt-0.5 font-mono text-xs text-gray-700">{detailRow.trackingNumber ?? '—'}</div></div>
               </div>

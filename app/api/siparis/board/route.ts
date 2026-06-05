@@ -218,6 +218,21 @@ export async function GET(request: NextRequest) {
     for (const row of coll) row.items = (row.items as Array<{ iwasku: string | null; quantity: number }>).map(enrichAuto);
   }
 
+  // ── 4. Pazar yeri dostça adı ──────────────────────────────────────────────
+  // marketplaceCode → bizim Marketplace tablosundaki ad. Wisersell store kodları
+  // (Ama_US, Etsy_BMU, S_UPPUS vb.) tabloda yoksa olduğu gibi kalır → Wisersell ile
+  // uyumlu; bizim CUSTOM_xx kodlar friendly ada çevrilir (Shopify/Etsy/Walmart…).
+  const allCollections = [onayBekliyor, eslesmeGerek, etiketBekliyor, cikisBekliyor, kapatmaBekliyor, kapandi];
+  const mpCodes = [...new Set(allCollections.flat().map((r) => r.marketplaceCode).filter(Boolean) as string[])];
+  const mpNameByCode = new Map<string, string>();
+  if (mpCodes.length) {
+    const mpRows = await prisma.marketplace.findMany({ where: { code: { in: mpCodes } }, select: { code: true, name: true } });
+    for (const m of mpRows) mpNameByCode.set(m.code, m.name);
+  }
+  for (const coll of allCollections) {
+    for (const row of coll) row.marketplaceLabel = mpNameByCode.get(row.marketplaceCode as string) ?? null;
+  }
+
   const warehouseCounts = (rows: Array<Record<string, unknown>>) => ({
     SHOWROOM: rows.filter((r) => r.warehouse === 'SHOWROOM').length,
     NJ: rows.filter((r) => r.warehouse === 'NJ').length,
