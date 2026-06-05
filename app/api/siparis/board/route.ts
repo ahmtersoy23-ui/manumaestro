@@ -41,6 +41,18 @@ interface CandidateRow {
   ship_address: string | null;
 }
 
+/**
+ * MANUAL sipariş addressNote'u (eski depolar akışı; pipe'lı serbest metin
+ * "Ad | adres | tel | email | kargo tracking") → tablo için alıcı + konum.
+ */
+function parseManualAddress(note: string | null): { recipient: string | null; location: string | null } {
+  if (!note) return { recipient: null, location: null };
+  const parts = note.split(/[\n|]/).map((s) => s.trim()).filter(Boolean);
+  const recipient = parts[0] ?? null;
+  const location = parts.find((p) => /[A-Z]{2}\s+\d{5}/.test(p)) ?? parts[1] ?? null;
+  return { recipient, location };
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireBoardUser(request);
   if (auth instanceof NextResponse) return auth;
@@ -145,6 +157,8 @@ export async function GET(request: NextRequest) {
 
   for (const o of autoOrders) {
     const shippingLabel = o.labels[0];
+    // MANUAL siparişlerde alıcı/adres addressNote'ta serbest metin (pipe'lı) → parse et.
+    const manual = o.source === 'MANUAL' ? parseManualAddress(o.addressNote) : null;
     const base = {
       id: o.id,
       wisersellOrderId: o.wisersellOrderId,
@@ -152,6 +166,8 @@ export async function GET(request: NextRequest) {
       marketplaceCode: o.marketplaceCode,
       warehouse: o.warehouseCode,
       source: o.source,
+      recipientName: manual?.recipient ?? null,
+      shipAddress: manual?.location ?? null,
       addressNote: o.addressNote,
       items: o.items,
       trackingNumber: shippingLabel?.trackingNumber ?? null,
@@ -161,7 +177,8 @@ export async function GET(request: NextRequest) {
       shippedAt: o.shippedAt,
       wisersellReadyAt: o.wisersellReadyAt,
       wisersellClosedAt: o.wisersellClosedAt,
-      readyPending: !o.wisersellReadyAt, // mark-ready başarısız/eksik → retry gerek
+      // ready-pending Wisersell mark-ready kavramı → yalnız AUTO. MANUAL'da anlamsız.
+      readyPending: o.source === 'WISERSELL_AUTO' && !o.wisersellReadyAt,
     };
     if (o.status === 'SHIPPED') {
       // MANUAL siparişler Wisersell'de yok → kapama adımı yok; depodan çıkış = kapandı.
@@ -184,12 +201,14 @@ export async function GET(request: NextRequest) {
   const enrichCand = (i: CandidateItem) => ({
     ...i,
     name: i.product_name ?? (i.iwasku ? productMap.get(i.iwasku)?.name ?? null : null),
+    fnsku: i.iwasku ? productMap.get(i.iwasku)?.fnsku ?? null : null,
     dims: i.iwasku ? usDimensions(productMap.get(i.iwasku)) : null,
   });
   const enrichAuto = (i: { iwasku: string | null; quantity: number }) => ({
     iwasku: i.iwasku,
     quantity: i.quantity,
     name: i.iwasku ? productMap.get(i.iwasku)?.name ?? null : null,
+    fnsku: i.iwasku ? productMap.get(i.iwasku)?.fnsku ?? null : null,
     dims: i.iwasku ? usDimensions(productMap.get(i.iwasku)) : null,
   });
 

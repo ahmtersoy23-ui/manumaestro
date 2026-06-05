@@ -21,7 +21,7 @@ const WH_OPTIONS: { code: WhCode; label: string }[] = [
   { code: 'NJ', label: 'Somerset' },
 ];
 
-interface UsAvail { NJ: number; SHOWROOM: number; }
+interface UsAvail { NJ: number; SHOWROOM: number; fnsku?: string | null; }
 
 type RowStatus =
   | { kind: 'neutral'; text: string }
@@ -96,7 +96,7 @@ export function ManualOrderModal({ onClose, onSuccess }: { onClose: () => void; 
       needed.map((iw) =>
         fetch(`/api/depolar/${warehouseCode}/siparis/stock-check?iwasku=${encodeURIComponent(iw)}`, { credentials: 'include' })
           .then((r) => r.json())
-          .then((d) => (d.success ? ([iw, { NJ: d.data.NJ, SHOWROOM: d.data.SHOWROOM }] as const) : null))
+          .then((d) => (d.success ? ([iw, { NJ: d.data.NJ, SHOWROOM: d.data.SHOWROOM, fnsku: d.data.fnsku ?? null }] as const) : null))
           .catch((e) => { logger.error('stock-check', e); return null; }),
       ),
     ).then((pairs) => {
@@ -211,6 +211,7 @@ export function ManualOrderModal({ onClose, onSuccess }: { onClose: () => void; 
                   row={row}
                   canRemove={items.length > 1}
                   status={rowStatus(warehouseCode, row.iwasku, typeof row.quantity === 'number' ? row.quantity : 0, availByIwasku[row.iwasku] ?? null)}
+                  fnsku={availByIwasku[row.iwasku]?.fnsku ?? null}
                   onSwitchWarehouse={(c) => setWarehouseCode(c)}
                   onChange={(patch) => updateRow(row.id, patch)}
                   onRemove={() => removeRow(row.id)}
@@ -251,12 +252,13 @@ interface ItemRowInputProps {
   row: ItemRow;
   canRemove: boolean;
   status: RowStatus;
+  fnsku: string | null;
   onSwitchWarehouse: (code: WhCode) => void;
   onChange: (patch: Partial<ItemRow>) => void;
   onRemove: () => void;
 }
 
-function ItemRowInput({ row, canRemove, status, onSwitchWarehouse, onChange, onRemove }: ItemRowInputProps) {
+function ItemRowInput({ row, canRemove, status, fnsku, onSwitchWarehouse, onChange, onRemove }: ItemRowInputProps) {
   const selected: ProductHit | null = row.iwasku
     ? { iwasku: row.iwasku, name: row.display.split(' — ')[1] ?? '', category: null }
     : null;
@@ -281,6 +283,9 @@ function ItemRowInput({ row, canRemove, status, onSwitchWarehouse, onChange, onR
           <Trash2 className="w-4 h-4" />
         </button>
       </div>
+      {row.iwasku && fnsku && (
+        <div className="mt-1 ml-1 text-[11px] font-mono text-gray-400">FNSKU: {fnsku}</div>
+      )}
       {row.iwasku && (
         <div className="mt-1 ml-1 text-[11px] flex items-center gap-1">
           {status.kind === 'loading' ? (

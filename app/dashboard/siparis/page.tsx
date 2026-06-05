@@ -60,7 +60,7 @@ function CopyField({ label, value, icon, multiline }: { label: string; value?: s
 }
 
 interface Dims { lengthIn: number | null; widthIn: number | null; heightIn: number | null; weightLb: number | null; }
-interface ItemLite { iwasku: string | null; qty?: number; quantity?: number; name?: string | null; product_name?: string | null; dims?: Dims | null; }
+interface ItemLite { iwasku: string | null; qty?: number; quantity?: number; name?: string | null; product_name?: string | null; fnsku?: string | null; dims?: Dims | null; }
 interface Row {
   id?: string;
   wisersellOrderId?: number;
@@ -325,7 +325,7 @@ export default function SiparisPage() {
                     <td className="px-3 py-2.5 text-gray-700">
                       {tab === 'eslesmeGerek'
                         ? <div className="text-xs text-orange-700 space-y-1">{(r.unresolved ?? []).map((u, ix) => { const t = u.title || u.product_code || u.marketplace_sku || '?'; return <div key={ix} className="line-clamp-3 max-w-[300px] leading-snug" title={[u.title, u.product_code, u.marketplace_sku].filter(Boolean).join(' · ')}>{t}</div>; })}</div>
-                        : <div className="space-y-1">{(r.items ?? []).map((i, ix) => { const nm = i.name ?? i.product_name ?? i.iwasku ?? '?'; return <div key={ix} className="line-clamp-3 max-w-[300px] leading-snug" title={nm}>{nm}</div>; })}</div>}
+                        : <div className="space-y-1">{(r.items ?? []).map((i, ix) => { const nm = i.name ?? i.product_name ?? i.iwasku ?? '?'; return <div key={ix} className="max-w-[300px]"><div className="line-clamp-3 leading-snug" title={nm}>{nm}</div>{i.fnsku && <div className="text-[10px] font-mono text-gray-400 leading-tight">{i.fnsku}</div>}</div>; })}</div>}
                     </td>
                     <td className="px-3 py-2.5 text-center text-gray-500">
                       <div className="space-y-0.5">{(r.items ?? []).map((i, ix) => <div key={ix}>{i.qty ?? i.quantity ?? 0}</div>)}</div>
@@ -394,6 +394,7 @@ export default function SiparisPage() {
                       <li key={ix} className="flex justify-between gap-3 border-b border-gray-50 py-1.5">
                         <div className="min-w-0">
                           <div className="leading-snug">{nm}</div>
+                          {i.fnsku && <div className="text-[11px] font-mono text-gray-400 mt-0.5">FNSKU: {i.fnsku}</div>}
                           {d && (hasSize || d.weightLb != null) && (
                             <div className="text-[11px] text-gray-400 mt-0.5 whitespace-nowrap">
                               {hasSize && <span>{d.lengthIn}×{d.widthIn}×{d.heightIn} in</span>}

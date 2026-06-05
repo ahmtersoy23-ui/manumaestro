@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
 import { getUsAvailability } from '@/lib/wms/usWarehouseStock';
+import { getProductsByIwasku } from '@/lib/products/lookup';
 import { withRoute } from '@/lib/api/withRoute';
 import { successResponse } from '@/lib/api/response';
 
@@ -35,9 +36,13 @@ export const GET = withRoute<{ code: string }>(
     }
 
     // Bekleyen DRAFT miktarları düşülür (yumuşak rezerve); edit modunda kendi sipariş hariç.
-    const avail = await getUsAvailability([iwasku], { subtractPendingDraft: true, excludeOrderId });
+    const [avail, productMap] = await Promise.all([
+      getUsAvailability([iwasku], { subtractPendingDraft: true, excludeOrderId }),
+      getProductsByIwasku([iwasku]),
+    ]);
     const a = avail.get(iwasku) ?? { NJ: 0, SHOWROOM: 0 };
+    const fnsku = productMap.get(iwasku)?.fnsku ?? null;
 
-    return successResponse({ iwasku, NJ: a.NJ, SHOWROOM: a.SHOWROOM });
+    return successResponse({ iwasku, NJ: a.NJ, SHOWROOM: a.SHOWROOM, fnsku });
   }
 );
