@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Bell, User, LogOut, FileText, Shield, Menu, X, Warehouse, CalendarRange, Ship, Home, Printer, ShoppingCart } from 'lucide-react';
+import { Bell, User, LogOut, FileText, Shield, Menu, X, Warehouse, CalendarRange, Ship, Home, Printer, ShoppingCart, Boxes } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 export function Header() {
@@ -66,6 +66,17 @@ export function Header() {
               >
                 <Warehouse className="w-4 h-4" />
                 <span className="hidden lg:inline">Depolar</span>
+              </Link>
+            )}
+
+            {canViewStock && (
+              <Link
+                href="/dashboard/stok-haritasi"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Stok Haritası"
+              >
+                <Boxes className="w-4 h-4" />
+                <span className="hidden lg:inline">Stok Haritası</span>
               </Link>
             )}
 

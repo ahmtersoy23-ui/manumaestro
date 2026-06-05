@@ -97,6 +97,39 @@ export async function getUsAvailability(
   return result;
 }
 
+/**
+ * Ham ON-HAND stok (NJ + SHOWROOM) — reservedQty düşülmez, bekleyen sipariş sayılmaz.
+ * Stok haritası gibi "fiziksel ne var" görünümleri için. iwasku verilmezse TÜM US depo
+ * stoğunu döndürür. Boş koliler (EMPTY) hariç.
+ */
+export async function getUsOnHand(iwaskus?: string[]): Promise<Map<string, UsAvailability>> {
+  const result = new Map<string, UsAvailability>();
+  const unique = iwaskus ? [...new Set(iwaskus.map((s) => s.trim()).filter(Boolean))] : null;
+  if (unique && unique.length === 0) return result;
+  const iwaskuFilter = unique ? { iwasku: { in: unique } } : {};
+
+  const [stocks, boxes] = await Promise.all([
+    prisma.shelfStock.findMany({
+      where: { warehouseCode: { in: [...US_OUTBOUND_WAREHOUSES] }, ...iwaskuFilter },
+      select: { warehouseCode: true, iwasku: true, quantity: true },
+    }),
+    prisma.shelfBox.findMany({
+      where: { warehouseCode: { in: [...US_OUTBOUND_WAREHOUSES] }, status: { not: 'EMPTY' }, ...iwaskuFilter },
+      select: { warehouseCode: true, iwasku: true, quantity: true },
+    }),
+  ]);
+
+  const add = (iwasku: string, code: string, qty: number) => {
+    let entry = result.get(iwasku);
+    if (!entry) { entry = { NJ: 0, SHOWROOM: 0 }; result.set(iwasku, entry); }
+    if (code === 'NJ' || code === 'SHOWROOM') entry[code] += Math.max(0, qty);
+  };
+  for (const s of stocks) add(s.iwasku, s.warehouseCode, s.quantity);
+  for (const b of boxes) add(b.iwasku, b.warehouseCode, b.quantity);
+
+  return result;
+}
+
 /** Fairfield önceliğiyle bir kalemin hangi depoya gireceğini çözer. */
 export function resolveOutboundWarehouse(
   avail: UsAvailability,
