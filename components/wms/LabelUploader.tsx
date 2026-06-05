@@ -126,6 +126,13 @@ export function LabelUploader({ warehouseCode, orderId, role }: Props) {
         setError(d.error || 'Yükleme başarısız');
         return;
       }
+      // 4×6 normalize geri bildirimi
+      const norm = d.data?.normalize as { kind?: string; message?: string } | undefined;
+      if (norm?.kind === 'unknown') {
+        notify.error(norm.message || 'Etiket 4×6 değil, otomatik düzeltilemedi — elle kontrol edin.');
+      } else if (norm?.kind === 'fixed') {
+        notify.success(norm.message || 'Etiket otomatik 4×6 formatına çevrildi.');
+      }
       setUploadTracking('');
       setUploadNote('');
       setRefreshKey((k) => k + 1);

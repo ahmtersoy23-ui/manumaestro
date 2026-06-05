@@ -10,6 +10,7 @@
  */
 
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { normalizeLabelPdf } from './labelNormalize';
 
 const winAnsiSafe = (s: string): string =>
   s.replace(/[şŞğĞıİ]/g, (c) => ({ ş: 's', Ş: 'S', ğ: 'g', Ğ: 'G', ı: 'i', İ: 'I' }[c] ?? c));
@@ -29,7 +30,11 @@ export async function stampLabelPdf(
   srcBytes: Uint8Array | Buffer,
   info: LabelStampInfo
 ): Promise<Uint8Array> {
-  const src = await PDFDocument.load(srcBytes, { ignoreEncryption: true });
+  // Yan/boş gelen etiketleri (FedEx Letter arşivi gibi) önce dik 4×6'ya çevir.
+  // Zaten düzgün gelen 4×6 etiketler aynen korunur.
+  const { bytes: normalized } = await normalizeLabelPdf(srcBytes);
+
+  const src = await PDFDocument.load(normalized, { ignoreEncryption: true });
   const out = await PDFDocument.create();
   const fontB = await out.embedFont(StandardFonts.HelveticaBold);
   const font = await out.embedFont(StandardFonts.Helvetica);

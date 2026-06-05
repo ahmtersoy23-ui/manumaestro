@@ -11,6 +11,7 @@ import { prisma } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
 import { saveLabelFile, LabelStorageError } from '@/lib/wms/labelStorage';
+import { analyzeLabelPdf } from '@/lib/wms/labelNormalize';
 import { withRoute } from '@/lib/api/withRoute';
 import { successResponse } from '@/lib/api/response';
 
@@ -93,6 +94,18 @@ export const POST = withRoute<{ code: string; id: string }>(
       },
     });
 
+    // Kargo PDF'i ise: 4×6 normalize durumunu tespit et (uyarı/bilgi için).
+    // Sadece tespit — gerçek dönüşüm basım/indirme anında stampLabelPdf içinde olur.
+    let normalize: { kind: string; message?: string } | undefined;
+    if (type === 'SHIPPING' && file.type === 'application/pdf') {
+      try {
+        const a = await analyzeLabelPdf(buffer);
+        if (a.kind !== 'ok') normalize = { kind: a.kind, message: a.message };
+      } catch {
+        // tespit başarısızsa sessiz geç — yükleme yine de başarılı
+      }
+    }
+
     return successResponse({
       id: label.id,
       type: label.type,
@@ -105,6 +118,7 @@ export const POST = withRoute<{ code: string; id: string }>(
       notes: label.notes,
       trackingNumber: label.trackingNumber,
       archivedAt: label.archivedAt,
+      normalize,
     });
   }
 );
