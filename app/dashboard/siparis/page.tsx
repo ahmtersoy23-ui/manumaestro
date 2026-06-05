@@ -8,9 +8,10 @@
  */
 
 import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Zap, CheckCircle2, PackageCheck, Truck, Send, Archive, AlertTriangle, MapPin, Printer, FileText, X, ChevronRight, Copy, Check } from 'lucide-react';
+import { RefreshCw, Zap, CheckCircle2, PackageCheck, Truck, Send, Archive, AlertTriangle, MapPin, Printer, FileText, X, ChevronRight, Copy, Check, Plus } from 'lucide-react';
 import { LabelUploader } from '@/components/wms/LabelUploader';
 import { ShipModal } from '@/components/wms/ShipModal';
+import { ManualOrderModal } from '@/components/siparis/ManualOrderModal';
 
 type StatusKey = 'onayBekliyor' | 'eslesmeGerek' | 'etiketBekliyor' | 'cikisBekliyor' | 'kapatmaBekliyor' | 'kapandi';
 
@@ -71,6 +72,7 @@ interface Row {
   labelNo?: string | null;
   warehouse?: string;
   marketplaceCode?: string;
+  source?: 'MANUAL' | 'WISERSELL_AUTO';
   trackingNumber?: string | null;
   labelId?: string | null;
   readyPending?: boolean;
@@ -80,6 +82,7 @@ interface Row {
 interface BoardData {
   counts: Record<string, number>;
   data: Record<StatusKey, Row[]>;
+  canManage?: boolean; // Wisersell otomasyon (onayla/kapat/auto-run) yetkisi
 }
 
 export default function SiparisPage() {
@@ -95,6 +98,7 @@ export default function SiparisPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [detailRow, setDetailRow] = useState<Row | null>(null);
   const [shipOrder, setShipOrder] = useState<Row | null>(null);
+  const [manualOpen, setManualOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -115,6 +119,7 @@ export default function SiparisPage() {
   useEffect(() => { setSelected(new Set()); setWhFilter('ALL'); setMpFilter('ALL'); }, [tab]);
 
   const counts = board?.counts ?? {};
+  const canManage = board?.canManage ?? false; // Wisersell otomasyon aksiyonları (Manager+)
   const tabRows = useMemo(() => board?.data[tab] ?? [], [board, tab]);
 
   // Warehouse sayıları (aktif tab) + marketplace seçenekleri — client-side
@@ -130,7 +135,8 @@ export default function SiparisPage() {
     (mpFilter === 'ALL' || r.marketplaceCode === mpFilter)
   ), [tabRows, whFilter, mpFilter]);
 
-  const selectable = tab === 'onayBekliyor' || tab === 'cikisBekliyor' || tab === 'kapatmaBekliyor';
+  // Çıkış (etiket yazdırma) operasyonel → herkes; onay/kapatma Wisersell otomasyonu → Manager+.
+  const selectable = tab === 'cikisBekliyor' || ((tab === 'onayBekliyor' || tab === 'kapatmaBekliyor') && canManage);
   const rowKey = useCallback((r: Row) => (tab === 'onayBekliyor' ? String(r.wisersellOrderId) : String(r.id)), [tab]);
 
   const toggle = (k: string) => setSelected((p) => { const n = new Set(p); if (n.has(k)) n.delete(k); else n.add(k); return n; });
@@ -188,9 +194,14 @@ export default function SiparisPage() {
           <button onClick={load} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 disabled:opacity-50">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Yenile
           </button>
-          <button onClick={doAutoRun} disabled={busy} title="WISERSELL_AUTO_APPROVE açıksa tüm uygun adayları onaylar" className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50">
-            <Zap className="w-4 h-4" /> Tümünü Onayla
+          <button onClick={() => setManualOpen(true)} title="Wisersell'de olmayan, etiketi başka platformdan alınan siparişi elle ekle" className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700">
+            <Plus className="w-4 h-4" /> Manuel Giriş
           </button>
+          {canManage && (
+            <button onClick={doAutoRun} disabled={busy} title="WISERSELL_AUTO_APPROVE açıksa tüm uygun adayları onaylar" className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50">
+              <Zap className="w-4 h-4" /> Tümünü Onayla
+            </button>
+          )}
         </div>
       </div>
 
@@ -300,7 +311,10 @@ export default function SiparisPage() {
                     {selectable && <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}><input type="checkbox" className="rounded" checked={sel} onChange={() => toggle(key)} /></td>}
                     <td className="px-3 py-2.5">
                       <div className="font-semibold text-gray-900">{r.orderCode ?? r.orderNumber}</div>
-                      {r.readyPending && <span className="mt-0.5 inline-block text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">ready-pending</span>}
+                      <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                        {r.source === 'MANUAL' && <span className="inline-block text-[10px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-1.5 py-0.5">manuel giriş</span>}
+                        {r.readyPending && <span className="inline-block text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">ready-pending</span>}
+                      </div>
                     </td>
                     <td className="px-3 py-2.5"><span className="inline-block text-xs font-medium px-2 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-100">{r.marketplaceCode ?? '—'}</span></td>
                     <td className="px-3 py-2.5">{r.warehouse ? <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-md border ${whBadge(r.warehouse)}`}>{whLabel(r.warehouse)}</span> : <span className="text-gray-300">—</span>}</td>
@@ -336,7 +350,10 @@ export default function SiparisPage() {
                 <span className={`w-2.5 h-2.5 rounded-full ${STATUS_META[tab].dot}`} />
                 <div>
                   <div className="font-bold text-gray-900">{detailRow.orderCode ?? detailRow.orderNumber}</div>
-                  <div className="text-xs text-gray-500">{STATUS_META[tab].label}</div>
+                  <div className="text-xs text-gray-500 flex items-center gap-1.5">
+                    {STATUS_META[tab].label}
+                    {detailRow.source === 'MANUAL' && <span className="inline-block text-[10px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-1.5 py-0.5">manuel giriş</span>}
+                  </div>
                 </div>
               </div>
               <button onClick={() => { setDetailRow(null); load(); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"><X className="w-5 h-5" /></button>
@@ -403,7 +420,7 @@ export default function SiparisPage() {
             {/* Aksiyon footer — duruma göre */}
             <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-200 bg-gray-50/50">
               <button onClick={() => { setDetailRow(null); load(); }} className="text-sm px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700">Kapat</button>
-              {tab === 'onayBekliyor' && (
+              {tab === 'onayBekliyor' && canManage && (
                 <button onClick={() => approveOne(detailRow.wisersellOrderId)} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">
                   <CheckCircle2 className="w-4 h-4" /> Onayla
                 </button>
@@ -413,7 +430,7 @@ export default function SiparisPage() {
                   <Truck className="w-4 h-4" /> Çıkış Yap (FIFO)
                 </button>
               )}
-              {tab === 'kapatmaBekliyor' && (
+              {tab === 'kapatmaBekliyor' && canManage && (
                 <button onClick={() => closeOne(detailRow.id)} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50">
                   <Send className="w-4 h-4" /> Wisersell&apos;de Kapat
                 </button>
@@ -432,6 +449,14 @@ export default function SiparisPage() {
           orderNumber={shipOrder.orderNumber ?? shipOrder.orderCode ?? ''}
           onClose={() => setShipOrder(null)}
           onSuccess={() => { setShipOrder(null); setDetailRow(null); load(); }}
+        />
+      )}
+
+      {/* Manuel sipariş girişi (Wisersell'de olmayan siparişler) */}
+      {manualOpen && (
+        <ManualOrderModal
+          onClose={() => setManualOpen(false)}
+          onSuccess={() => { setManualOpen(false); setTab('etiketBekliyor'); setMsg('Manuel sipariş oluşturuldu — Etiket Bekliyor.'); load(); }}
         />
       )}
     </div>

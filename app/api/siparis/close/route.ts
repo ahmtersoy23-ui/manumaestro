@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
-import { requireSuperAdmin } from '@/lib/auth/verify';
+import { requireBoardManager } from '@/lib/auth/boardAuth';
 import { closeWisersellExternal } from '@/lib/wisersell/databridgeClient';
 import { carrierIdFromTracking } from '@/lib/wisersell/carrierMap';
 import { createLogger } from '@/lib/logger';
@@ -28,7 +28,7 @@ interface CloseResult {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireSuperAdmin(request);
+  const auth = await requireBoardManager(request);
   if (auth instanceof NextResponse) return auth;
 
   let body: unknown;

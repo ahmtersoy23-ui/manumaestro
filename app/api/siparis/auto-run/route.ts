@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { requireSuperAdmin } from '@/lib/auth/verify';
+import { requireBoardManager } from '@/lib/auth/boardAuth';
 import { approveWisersellCandidates, getEligibleCandidateIds } from '@/lib/wisersell/approve';
 import { createLogger } from '@/lib/logger';
 
@@ -18,7 +18,7 @@ function autoApproveEnabled(): boolean {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireSuperAdmin(request);
+  const auth = await requireBoardManager(request);
   if (auth instanceof NextResponse) return auth;
 
   if (!autoApproveEnabled()) {

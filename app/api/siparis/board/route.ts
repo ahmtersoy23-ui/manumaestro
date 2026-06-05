@@ -13,7 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { queryDataBridge } from '@/lib/db/prisma';
-import { requireSuperAdmin } from '@/lib/auth/verify';
+import { requireBoardUser, isBoardManager } from '@/lib/auth/boardAuth';
 import { getUsAvailability } from '@/lib/wms/usWarehouseStock';
 import { resolveOrderWarehouse } from '@/lib/wisersell/orderRouting';
 import { getProductsByIwasku, usDimensions } from '@/lib/products/lookup';
@@ -42,8 +42,9 @@ interface CandidateRow {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await requireSuperAdmin(request);
+  const auth = await requireBoardUser(request);
   if (auth instanceof NextResponse) return auth;
+  const canManage = await isBoardManager(auth.user);
 
   const region = new URL(request.url).searchParams.get('region') || 'US';
 
@@ -128,7 +129,7 @@ export async function GET(request: NextRequest) {
 
   // ── 2. WISERSELL_AUTO outbound'lar ────────────────────────────────────────
   const autoOrders = await prisma.outboundOrder.findMany({
-    where: { source: 'WISERSELL_AUTO' },
+    where: { source: { in: ['WISERSELL_AUTO', 'MANUAL'] } },
     orderBy: { createdAt: 'desc' },
     take: 1000,
     include: {
@@ -150,6 +151,7 @@ export async function GET(request: NextRequest) {
       orderNumber: o.orderNumber,
       marketplaceCode: o.marketplaceCode,
       warehouse: o.warehouseCode,
+      source: o.source,
       addressNote: o.addressNote,
       items: o.items,
       trackingNumber: shippingLabel?.trackingNumber ?? null,
@@ -162,7 +164,8 @@ export async function GET(request: NextRequest) {
       readyPending: !o.wisersellReadyAt, // mark-ready başarısız/eksik → retry gerek
     };
     if (o.status === 'SHIPPED') {
-      if (o.wisersellClosedAt) kapandi.push(base);
+      // MANUAL siparişler Wisersell'de yok → kapama adımı yok; depodan çıkış = kapandı.
+      if (o.source === 'MANUAL' || o.wisersellClosedAt) kapandi.push(base);
       else kapatmaBekliyor.push(base);
     } else if (o.status === 'DRAFT') {
       if (shippingLabel && shippingLabel.trackingNumber) cikisBekliyor.push(base);
@@ -204,6 +207,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     success: true,
     region,
+    canManage, // Wisersell otomasyon (onayla/kapat/auto-run) yetkisi — UI buton gating
     counts: {
       onayBekliyor: onayBekliyor.length,
       eslesmeGerek: eslesmeGerek.length,
