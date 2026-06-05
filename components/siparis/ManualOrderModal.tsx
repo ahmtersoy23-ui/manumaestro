@@ -57,7 +57,7 @@ function rowStatus(code: string, iwasku: string, qty: number, avail: UsAvail | n
     : { kind: 'warn', text: `${label}'da yeterli stok yok (${here}/${qty}) — yine de en çok burada` };
 }
 
-interface Marketplace { code: string; name: string; }
+interface Marketplace { code: string; name: string; region?: string | null; }
 interface ItemRow { id: string; iwasku: string; display: string; quantity: number | ''; }
 const newRow = (): ItemRow => ({ id: Math.random().toString(36).slice(2), iwasku: '', display: '', quantity: '' });
 
@@ -81,7 +81,8 @@ export function ManualOrderModal({ onClose, onSuccess }: { onClose: () => void; 
     let cancelled = false;
     fetch('/api/marketplaces?limit=200', { credentials: 'include' })
       .then((r) => r.json())
-      .then((d) => { if (!cancelled && d.success) setMarketplaces((d.data || []) as Marketplace[]); })
+      // Sipariş board şimdilik US → pazar yerini US'lere daralt (gerekirse sonra kaldırılır).
+      .then((d) => { if (!cancelled && d.success) setMarketplaces(((d.data || []) as Marketplace[]).filter((m) => m.region === 'US')); })
       .catch((e) => logger.error('Marketplaces fetch', e));
     return () => { cancelled = true; };
   }, []);
