@@ -427,6 +427,36 @@ export default function Dashboard2MonthPage() {
                     <h3 className="text-lg font-semibold text-slate-800">{group.label}</h3>
                     <span className="text-xs text-slate-500">({group.cats.length} kategori)</span>
                   </div>
+                  {/* Grup stats bandı (Dashboard 1 ile aynı): Talep/Stok/Net/Üretilen/Kalan */}
+                  {hasStock && (() => {
+                    const suffix = viewMode === 'desi' ? ' desi' : '';
+                    const sum = group.cats.reduce((a: { talep: number; stok: number; net: number; uretilen: number; kalan: number }, cat) => {
+                      const cs = categoryStockMap.get(cat.productCategory);
+                      const talep = viewMode === 'quantity' ? cat.totalQuantity : cat.totalDesi;
+                      a.talep += talep;
+                      if (cs) {
+                        a.stok += viewMode === 'quantity' ? cs.coveredQty : cs.coveredDesi;
+                        a.net += viewMode === 'quantity' ? cs.netQty : cs.netDesi;
+                        a.uretilen += viewMode === 'quantity' ? cs.producedQty : cs.producedDesi;
+                        a.kalan += viewMode === 'quantity' ? cs.kalanQty : cs.kalanDesi;
+                      } else {
+                        a.net += talep;
+                        a.uretilen += viewMode === 'quantity' ? cat.totalProduced : cat.producedDesi;
+                      }
+                      return a;
+                    }, { talep: 0, stok: 0, net: 0, uretilen: 0, kalan: 0 });
+                    const fmt = (n: number) => Math.round(n).toLocaleString('tr-TR');
+                    const kalanZero = Math.round(sum.kalan) === 0;
+                    return (
+                      <div className="grid grid-cols-5 gap-2 mb-3 text-center text-xs">
+                        <div className="bg-slate-50 rounded-lg py-2"><p className="text-slate-500">Talep</p><p className="font-bold text-slate-900">{fmt(sum.talep)}{suffix}</p></div>
+                        <div className="bg-emerald-50 rounded-lg py-2"><p className="text-emerald-600">Stok</p><p className="font-bold text-emerald-700">{fmt(sum.stok)}{suffix}</p></div>
+                        <div className="bg-blue-50 rounded-lg py-2"><p className="text-blue-600">Net İhtiyaç</p><p className="font-bold text-blue-700">{fmt(sum.net)}{suffix}</p></div>
+                        <div className="bg-slate-50 rounded-lg py-2"><p className="text-slate-500">Üretilen</p><p className="font-bold text-slate-900">{fmt(sum.uretilen)}{suffix}</p></div>
+                        <div className={`${kalanZero ? 'bg-green-50' : 'bg-red-50'} rounded-lg py-2`}><p className={kalanZero ? 'text-green-600' : 'text-red-500'}>Kalan</p><p className={`font-bold ${kalanZero ? 'text-green-700' : 'text-red-600'}`}>{kalanZero ? '✓' : `${fmt(sum.kalan)}${suffix}`}</p></div>
+                      </div>
+                    );
+                  })()}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {group.cats.map(cat => {
                       const cs = categoryStockMap.get(cat.productCategory);
