@@ -9,7 +9,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Search, Download, ArrowUpDown } from 'lucide-react';
+import { RefreshCw, Search, Download, ArrowUpDown, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { rowsToCsv, downloadCsv } from '@/lib/wms/exportCsv';
 
@@ -78,6 +78,8 @@ export default function StokHaritasiPage() {
   const [cat, setCat] = useState('ALL');
   const [sortKey, setSortKey] = useState<SortKey>('total');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -115,6 +117,22 @@ export default function StokHaritasiPage() {
     });
   }, [rows, q, cat, sortKey, sortDir]);
 
+  // Sayfalama (client-side; veri zaten yüklü) + filtre/sort değişince başa dön
+  useEffect(() => { setPage(1); }, [q, cat, sortKey, sortDir, pageSize]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const paged = useMemo(
+    () => filtered.slice((safePage - 1) * pageSize, safePage * pageSize),
+    [filtered, safePage, pageSize],
+  );
+
+  // Filtrelenmiş set için kolon toplamları (footer)
+  const totals = useMemo(() => {
+    const t = Object.fromEntries(COLS.map((c) => [c.key, 0])) as Record<NumKey, number>;
+    for (const r of filtered) for (const c of COLS) t[c.key] += (r[c.key] as number) || 0;
+    return t;
+  }, [filtered]);
+
   const toggleSort = (k: SortKey) => {
     if (sortKey === k) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     else { setSortKey(k); setSortDir(k === 'iwasku' || k === 'name' || k === 'category' ? 'asc' : 'desc'); }
@@ -129,7 +147,8 @@ export default function StokHaritasiPage() {
     downloadCsv(rowsToCsv(headers, body), 'stok-haritasi.csv');
   };
 
-  const num = (v: number) => (v > 0 ? <span className="text-gray-800">{v}</span> : <span className="text-gray-300">0</span>);
+  const nf = (v: number) => v.toLocaleString('tr-TR');
+  const num = (v: number) => (v > 0 ? <span className="text-gray-800">{nf(v)}</span> : <span className="text-gray-300">0</span>);
   const groupBorder = (idx: number) => (idx === 0 || COLS[idx].group !== COLS[idx - 1].group ? GROUP_META[COLS[idx].group].border : '');
 
   return (
@@ -153,7 +172,12 @@ export default function StokHaritasiPage() {
         <div className="relative">
           <Search className="w-4 h-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="iwasku / ürün ara…"
-            className="pl-8 pr-3 py-1.5 text-sm rounded-lg border border-gray-200 bg-white text-gray-700 w-64" />
+            className="pl-8 pr-8 py-1.5 text-sm rounded-lg border border-gray-200 bg-white text-gray-700 w-64 focus:border-gray-400 focus:outline-none" />
+          {q && (
+            <button onClick={() => setQ('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700" title="Temizle">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
         <select value={cat} onChange={(e) => setCat(e.target.value)}
           className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-700">
@@ -199,23 +223,63 @@ export default function StokHaritasiPage() {
                 <tr><td colSpan={4 + COLS.length} className="px-3 py-12 text-center text-gray-400">Yükleniyor…</td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={4 + COLS.length} className="px-3 py-12 text-center text-gray-400">Kayıt yok.</td></tr>
-              ) : filtered.map((r) => (
-                <tr key={r.iwasku} className="hover:bg-gray-50/70">
+              ) : paged.map((r) => (
+                <tr key={r.iwasku} className="hover:bg-gray-50/70 even:bg-gray-50/30">
                   <td className="px-3 py-2 font-mono text-xs text-gray-600">{r.iwasku}</td>
                   <td className="px-3 py-2 w-[150px] max-w-[150px]"><div className="text-xs text-gray-800 line-clamp-2 leading-tight" title={r.name ?? ''}>{r.name ?? '—'}</div></td>
                   <td className="px-3 py-2 text-gray-600 text-xs">{r.category ?? '—'}</td>
                   <td className="px-3 py-2 text-right text-gray-600">{r.desi != null ? r.desi.toFixed(1) : '—'}</td>
                   {COLS.map((c, idx) => (
                     <td key={c.key} className={`px-3 py-2 text-right ${c.key === 'total' ? 'font-bold text-gray-900' : ''} ${groupBorder(idx)}`}>
-                      {c.key === 'total' ? r.total : num(r[c.key])}
+                      {c.key === 'total' ? nf(r.total) : num(r[c.key])}
                     </td>
                   ))}
                 </tr>
               ))}
             </tbody>
+            {!loading && filtered.length > 0 && (
+              <tfoot>
+                <tr className="bg-gray-50 border-t-2 border-gray-200 font-semibold text-gray-700">
+                  <td className="px-3 py-2.5 text-xs uppercase tracking-wide" colSpan={3}>Toplam ({nf(filtered.length)} ürün)</td>
+                  <td className="px-3 py-2.5"></td>
+                  {COLS.map((c, idx) => (
+                    <td key={c.key} className={`px-3 py-2.5 text-right ${c.key === 'total' ? 'font-bold text-gray-900' : ''} ${groupBorder(idx)}`}>
+                      {nf(totals[c.key])}
+                    </td>
+                  ))}
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
+
+      {/* Sayfalama */}
+      {!loading && filtered.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 mt-3 text-sm">
+          <div className="flex items-center gap-2 text-gray-500">
+            <span>Sayfa başı</span>
+            <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}
+              className="px-2 py-1 rounded-lg border border-gray-200 bg-white text-gray-700">
+              {[25, 50, 100, 250].map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+            <span className="text-gray-400">
+              {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filtered.length)} / {nf(filtered.length)}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}
+              className="p-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="px-2 text-gray-600">{safePage} / {pageCount}</span>
+            <button onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={safePage >= pageCount}
+              className="p-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
