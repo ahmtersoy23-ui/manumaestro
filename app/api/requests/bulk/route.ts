@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server';
 import { Prisma, EntryType, RequestStatus } from '@prisma/client';
 import { prisma, queryProductDb } from '@/lib/db/prisma';
 import { ensureWarehouseProducts } from '@/lib/warehouse/ensureWarehouseProducts';
+import { deriveRecommendedDestination } from '@/lib/shipments/deriveDestination';
 import { BulkRequestSchema, formatValidationError } from '@/lib/validation/schemas';
 import { checkMarketplacePermission, isSuperAdmin } from '@/lib/auth/verify';
 import { logAction } from '@/lib/auditLog';
@@ -35,6 +36,13 @@ export const POST = withRoute(
     }
 
     const { marketplaceId, productionMonth, requests } = validation.data;
+
+    // Pazar yeri kodu → manuel/Excel girişlerde recommendedDestination türetimi için.
+    const marketplaceForDest = await prisma.marketplace.findUnique({
+      where: { id: marketplaceId },
+      select: { code: true },
+    });
+    const marketplaceCode = marketplaceForDest?.code ?? null;
 
     // Yetkilendirme: süper-admin değilse, kilitli ay yasak + marketplace edit izni gerekli
     const userIsSuperAdmin = isSuperAdmin(user!.email);
@@ -125,6 +133,11 @@ export const POST = withRoute(
           entryType: EntryType.EXCEL,
           status: RequestStatus.REQUESTED,
           enteredById: user!.id,
+          recommendedDestination: deriveRecommendedDestination(
+            marketplaceCode,
+            product.category,
+            product.size != null ? parseFloat(String(product.size)) : null
+          ),
         });
       }
     }

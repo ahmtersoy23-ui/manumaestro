@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server';
 import { Prisma, EntryType, RequestStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { ensureWarehouseProducts } from '@/lib/warehouse/ensureWarehouseProducts';
+import { deriveRecommendedDestination } from '@/lib/shipments/deriveDestination';
 import { enrichProductSize } from '@/lib/db/enrichProductSize';
 import { checkMarketplacePermission, isSuperAdmin } from '@/lib/auth/verify';
 import { ProductionRequestSchema, formatValidationError } from '@/lib/validation/schemas';
@@ -79,6 +80,16 @@ export const POST = withRoute(
       });
       wasUpdated = true;
     } else {
+      // Pazar yeri + ağırlık → sevkiyat hedefi (manuel girişte dest boş kalmasın).
+      const marketplaceForDest = await prisma.marketplace.findUnique({
+        where: { id: marketplaceId },
+        select: { code: true },
+      });
+      const recommendedDestination = deriveRecommendedDestination(
+        marketplaceForDest?.code ?? null,
+        productCategory,
+        productSize ?? null
+      );
       productionRequest = await prisma.productionRequest.create({
         data: {
           iwasku,
@@ -94,6 +105,7 @@ export const POST = withRoute(
           entryType: EntryType.MANUAL,
           status: RequestStatus.REQUESTED,
           enteredById: user!.id,
+          recommendedDestination,
         },
         include: { marketplace: true },
       });
