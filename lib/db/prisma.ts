@@ -74,12 +74,35 @@ export async function queryDataBridge(query: string, params: (string | number | 
   }
 }
 
+// CargoLens database client (cargolens_db) — read-only.
+// Veeqo etiket modalı kıyas paneli: rate_cards (TR→US FedEx tarifesi) + us_shipments
+// (FedEx Izmir US-içi geçmiş maliyet).
+const cargolensPool = new Pool({
+  connectionString: process.env.CARGOLENS_DB_URL,
+  user: undefined,
+  database: undefined,
+  password: undefined,
+  host: undefined,
+  port: undefined,
+});
+
+export async function queryCargolens(query: string, params: (string | number | boolean | null)[] = []) {
+  const client = await cargolensPool.connect();
+  try {
+    const result = await client.query(query, params);
+    return result.rows;
+  } finally {
+    client.release();
+  }
+}
+
 // Graceful shutdown: close all connection pools (register once)
 if (!(globalThis as Record<string, unknown>).__dbCleanupRegistered) {
   (globalThis as Record<string, unknown>).__dbCleanupRegistered = true;
   const cleanup = async () => {
     await productPool.end().catch(() => {});
     await databridgePool.end().catch(() => {});
+    await cargolensPool.end().catch(() => {});
     await pool.end().catch(() => {});
   };
   process.on('SIGTERM', cleanup);

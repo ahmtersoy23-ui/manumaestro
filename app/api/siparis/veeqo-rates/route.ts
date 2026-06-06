@@ -14,6 +14,7 @@ import { prisma } from '@/lib/db/prisma';
 import { requireBoardManager } from '@/lib/auth/boardAuth';
 import { getVeeqoRates, type VeeqoParcelInput } from '@/lib/veeqo/databridgeClient';
 import { getProductsByIwasku, usDimensions } from '@/lib/products/lookup';
+import { getShippingBenchmark } from '@/lib/veeqo/benchmark';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('VeeqoRates');
@@ -27,25 +28,30 @@ const DEFAULT_PARCEL: VeeqoParcelInput = { weight: 2, weight_unit: 'lb', length:
  * Çok kalem: L/W = en büyük, H = Σ(yükseklik×adet) (üst üste), ağırlık = Σ(ağırlık×adet).
  * Eksik ölçü → o boyut atlanır (DEFAULT ile doldurulur).
  */
-async function deriveParcelFromCatalog(items: Array<{ iwasku: string; quantity: number }>): Promise<Partial<VeeqoParcelInput> | null> {
+async function deriveParcelFromCatalog(items: Array<{ iwasku: string; quantity: number }>): Promise<{ parcel: Partial<VeeqoParcelInput>; desi: number } | null> {
   const products = await getProductsByIwasku(items.map((i) => i.iwasku));
-  let maxL = 0, maxW = 0, sumH = 0, sumWt = 0, any = false;
+  let maxL = 0, maxW = 0, sumH = 0, sumWt = 0, sumDesi = 0, any = false;
   for (const it of items) {
-    const dim = usDimensions(products.get(it.iwasku));
+    const p = products.get(it.iwasku);
+    const dim = usDimensions(p);
+    const q = it.quantity || 1;
+    if (p?.desi) sumDesi += p.desi * q;
     if (!dim) continue;
     any = true;
-    const q = it.quantity || 1;
     if (dim.lengthIn) maxL = Math.max(maxL, dim.lengthIn);
     if (dim.widthIn) maxW = Math.max(maxW, dim.widthIn);
     if (dim.heightIn) sumH += dim.heightIn * q;
     if (dim.weightLb) sumWt += dim.weightLb * q;
   }
-  if (!any) return null;
+  if (!any && sumDesi === 0) return null;
   return {
-    weight: sumWt > 0 ? Math.round(sumWt * 10) / 10 : undefined,
-    length: maxL > 0 ? maxL : undefined,
-    width: maxW > 0 ? maxW : undefined,
-    height: sumH > 0 ? Math.round(sumH * 10) / 10 : undefined,
+    parcel: {
+      weight: sumWt > 0 ? Math.round(sumWt * 10) / 10 : undefined,
+      length: maxL > 0 ? maxL : undefined,
+      width: maxW > 0 ? maxW : undefined,
+      height: sumH > 0 ? Math.round(sumH * 10) / 10 : undefined,
+    },
+    desi: Math.round(sumDesi * 10) / 10,
   };
 }
 
@@ -85,14 +91,17 @@ export async function POST(request: NextRequest) {
   }
 
   // Koli ölçüsü: önce katalog (products), üstüne operatörün modalda düzenlediği değerler.
-  const catalogParcel = await deriveParcelFromCatalog(order.items);
-  const finalParcel: VeeqoParcelInput = { ...DEFAULT_PARCEL, ...(catalogParcel ?? {}), ...(parcel ?? {}) };
+  const catalog = await deriveParcelFromCatalog(order.items);
+  const finalParcel: VeeqoParcelInput = { ...DEFAULT_PARCEL, ...(catalog?.parcel ?? {}), ...(parcel ?? {}) };
 
   try {
-    const result = await getVeeqoRates(order.orderNumber, finalParcel, { contents: order.description || undefined, warehouse: order.warehouseCode });
+    const [result, benchmark] = await Promise.all([
+      getVeeqoRates(order.orderNumber, finalParcel, { contents: order.description || undefined, warehouse: order.warehouseCode }),
+      getShippingBenchmark({ desi: catalog?.desi ?? null, weightLb: finalParcel.weight ?? null }),
+    ]);
     logger.info(`rates OK: ${order.orderNumber} → ${result.quotes.length} quote (parcel ${finalParcel.weight}lb ${finalParcel.length}x${finalParcel.width}x${finalParcel.height})`);
-    // modalın ölçü kutularını doldurması için kullanılan parcel'ı + katalog kaynağını döndür
-    return NextResponse.json({ success: true, ...result, parcel: finalParcel, parcelFromCatalog: !!catalogParcel });
+    // modalın ölçü kutularını doldurması için kullanılan parcel'ı + katalog kaynağını + kıyas verisini döndür
+    return NextResponse.json({ success: true, ...result, parcel: finalParcel, parcelFromCatalog: !!catalog, benchmark });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Veeqo oran hatası';
     logger.error(`rates error: ${order.orderNumber}: ${msg}`);

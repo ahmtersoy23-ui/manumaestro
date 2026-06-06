@@ -23,11 +23,16 @@ interface Quote {
   options?: Record<string, string>;
   serviceOptions?: ServiceOption[];
 }
+interface Benchmark {
+  trUs: { desi: number; eco: number | null; pri: number | null } | null;
+  fedexIzmir: { avg: number; n: number; lowLb: number; highLb: number } | null;
+}
 interface RatesResp {
   remoteShipmentId: string;
   requestToken: string;
   expiresAt: string;
   quotes: Quote[];
+  benchmark?: Benchmark;
 }
 interface Parcel { weight: number; length: number; width: number; height: number }
 
@@ -68,7 +73,7 @@ export default function VeeqoLabelModal({ orderId, orderNumber, onClose, onSucce
       const j = await res.json();
       if (!res.ok || !j.success) throw new Error(j.error || `HTTP ${res.status}`);
       const sorted: Quote[] = [...(j.quotes ?? [])].sort((a, b) => parseFloat(a.total_charge) - parseFloat(b.total_charge));
-      setRates({ remoteShipmentId: j.remoteShipmentId, requestToken: j.requestToken, expiresAt: j.expiresAt, quotes: sorted });
+      setRates({ remoteShipmentId: j.remoteShipmentId, requestToken: j.requestToken, expiresAt: j.expiresAt, quotes: sorted, benchmark: j.benchmark });
       if (sorted[0]) setSelected(sorted[0].rate_id); // en ucuz otomatik seçili
       // ilk yanıtta kullanılan koliyi (katalogtan) ölçü kutularına yaz
       if (j.parcel) { setParcel({ weight: j.parcel.weight, length: j.parcel.length, width: j.parcel.width, height: j.parcel.height }); setFromCatalog(!!j.parcelFromCatalog); }
@@ -119,6 +124,19 @@ export default function VeeqoLabelModal({ orderId, orderNumber, onClose, onSucce
 
         <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="text-xs text-gray-500">Sipariş <span className="font-mono text-gray-700">{orderNumber}</span></div>
+
+          {/* Kıyas şeridi — Veeqo dışı referans maliyetler (CargoLens). Veeqo ucuzsa direkt al. */}
+          {(rates?.benchmark?.trUs || rates?.benchmark?.fedexIzmir) && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-2.5 text-xs text-amber-900 space-y-1">
+              <div className="text-[10px] font-semibold uppercase text-amber-700">Kıyas (referans — Veeqo değil)</div>
+              {rates.benchmark?.trUs && (
+                <div>🇹🇷→🇺🇸 FedEx (desi {rates.benchmark.trUs.desi}): {rates.benchmark.trUs.eco != null && <b>Eco ${rates.benchmark.trUs.eco.toFixed(2)}</b>}{rates.benchmark.trUs.pri != null && <> · Pri ${rates.benchmark.trUs.pri.toFixed(2)}</>}</div>
+              )}
+              {rates.benchmark?.fedexIzmir && (
+                <div>FedEx Izmir (US-içi, ~{rates.benchmark.fedexIzmir.lowLb}-{rates.benchmark.fedexIzmir.highLb} lb): ort <b>${rates.benchmark.fedexIzmir.avg.toFixed(2)}</b> <span className="text-amber-600">({rates.benchmark.fedexIzmir.n} geçmiş gönderi)</span></div>
+              )}
+            </div>
+          )}
 
           {/* Koli ölçüsü */}
           <div className="rounded-lg border border-gray-100 p-3">
