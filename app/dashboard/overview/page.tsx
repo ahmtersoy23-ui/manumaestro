@@ -12,7 +12,7 @@ import { Factory, Boxes, Ship, ShoppingCart, AlertTriangle, ChevronRight, Refres
 interface Overview {
   uretim: { month: string; requests: number; quantity: number; produced: number };
   stok: Array<{ warehouse: string; skus: number; qty: number }>;
-  sevkiyat: { active: number; pendingPools: number };
+  sevkiyat: { planning: number; loading: number; inTransit: number; pendingPools: number };
   siparis: { etiket: number; cikis: number; cg: number; kapatmaBekliyor: number; amazonCancelled: number };
 }
 
@@ -98,8 +98,19 @@ export default function OverviewPage() {
         <Card href="/dashboard/shipments" icon={Ship} title="Sevkiyat" accent="bg-sky-600">
           {data ? (
             <>
-              <div className="text-2xl font-bold text-gray-900">{nf(data.sevkiyat.active)} <span className="text-base font-medium text-gray-500">aktif</span></div>
-              <div className="text-sm text-gray-500 mt-1">{nf(data.sevkiyat.pendingPools)} bekleyen havuz</div>
+              <ul className="space-y-1 text-sm">
+                {([
+                  ['Planlama', data.sevkiyat.planning],
+                  ['Yükleme', data.sevkiyat.loading],
+                  ['Yolda', data.sevkiyat.inTransit],
+                  ['Bekleyen havuz', data.sevkiyat.pendingPools],
+                ] as const).map(([label, n]) => (
+                  <li key={label} className="flex justify-between gap-2">
+                    <span className="text-gray-600">{label}</span>
+                    <span className="text-gray-900 font-medium">{nf(n)}</span>
+                  </li>
+                ))}
+              </ul>
             </>
           ) : <div className="text-sm text-gray-400">{loading ? 'Yükleniyor…' : '—'}</div>}
         </Card>

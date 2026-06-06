@@ -19,7 +19,7 @@ export const GET = withRoute(
     const [
       prAgg,
       producedAgg,
-      activeShipments,
+      shipmentGroups,
       completedPr,
       shippedIwaskus,
       draftOrders,
@@ -35,8 +35,8 @@ export const GET = withRoute(
       }),
       // ÜRETİM — üretilen (MonthSnapshot.produced; dashboard ile aynı kaynak)
       prisma.monthSnapshot.aggregate({ where: { month: currentMonth }, _sum: { produced: true } }),
-      // SEVKİYAT — aktif sevkiyat
-      prisma.shipment.count({ where: { status: { in: ['PLANNING', 'LOADING', 'IN_TRANSIT'] } } }),
+      // SEVKİYAT — duruma göre kırılım
+      prisma.shipment.groupBy({ by: ['status'], _count: { _all: true } }),
       // SEVKİYAT — bekleyen havuz (COMPLETED PR, henüz sevkiyata eklenmemiş)
       prisma.productionRequest.findMany({ where: { status: 'COMPLETED' }, select: { iwasku: true }, distinct: ['iwasku'] }),
       prisma.shipmentItem.findMany({ select: { iwasku: true }, distinct: ['iwasku'] }),
@@ -60,6 +60,8 @@ export const GET = withRoute(
     const shippedSet = new Set(shippedIwaskus.map((s) => s.iwasku));
     const pendingPools = completedPr.filter((c) => !shippedSet.has(c.iwasku)).length;
 
+    const shipBy = Object.fromEntries(shipmentGroups.map((g) => [g.status, g._count._all]));
+
     // Kanban aşamaları (OutboundOrder tarafı; onay/eşleşme aday tarafı board'da)
     const isCg = (w: string) => w === 'CG_SHUKRAN' || w === 'CG_MDN';
     let etiket = 0, cikis = 0, cg = 0;
@@ -77,7 +79,12 @@ export const GET = withRoute(
         produced: producedAgg._sum.produced ?? 0,
       },
       stok: stokRows.map((r) => ({ warehouse: r.wh, skus: r.skus, qty: r.qty })),
-      sevkiyat: { active: activeShipments, pendingPools },
+      sevkiyat: {
+        planning: shipBy.PLANNING ?? 0,
+        loading: shipBy.LOADING ?? 0,
+        inTransit: shipBy.IN_TRANSIT ?? 0,
+        pendingPools,
+      },
       siparis: { etiket, cikis, cg, kapatmaBekliyor, amazonCancelled },
     });
   },
