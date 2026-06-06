@@ -122,6 +122,12 @@ export async function POST(request: NextRequest) {
     };
   }));
 
-  logger.info(`cg-export: ${orders.length} sipariş → ${files.length} dosya (${files.map((f) => `${f.account}:${f.rowCount}`).join(', ')})`);
+  // Excel başarıyla üretildi → bu siparişleri "alındı" işaretle (tekrar export'a girmesinler).
+  await prisma.outboundOrder.updateMany({
+    where: { id: { in: orders.map((o) => o.id) } },
+    data: { cgExportedAt: new Date() },
+  });
+
+  logger.info(`cg-export: ${orders.length} sipariş → ${files.length} dosya (${files.map((f) => `${f.account}:${f.rowCount}`).join(', ')}); cgExportedAt işaretlendi`);
   return NextResponse.json({ success: true, files });
 }

@@ -809,6 +809,7 @@ model OutboundOrder {
   wisersellReadyAt DateTime?     // Wisersell "Kargoya Hazır" (status/update) başarıyla yazıldıysa; null = ready-pending (retry)
   wisersellClosedAt DateTime?    // external-close başarıyla yazıldıysa (Kapandı)
   manualTracking  String?        // CG/etiketsiz akış: operatörün Wayfair MCF raporundan elle girdiği tracking (SHIPPING etiketi yok)
+  cgExportedAt    DateTime?      // CG (CastleGate) MCF Excel'i alındıysa — tekrar export'a girmesin (çift MCF önleme)
   createdById     String
   createdAt       DateTime       @default(now())
   shippedById     String?

@@ -87,6 +87,7 @@ interface Row {
   trackingNumber?: string | null;
   manualTracking?: string | null;
   labelId?: string | null;
+  cgExportedAt?: string | null; // CG MCF Excel alındı mı
   readyPending?: boolean;
   createdAt?: string | null;
   items?: ItemLite[];
@@ -171,7 +172,12 @@ export default function SiparisPage() {
   const rowKey = useCallback((r: Row) => (tab === 'onayBekliyor' ? String(r.wisersellOrderId) : String(r.id)), [tab]);
 
   const toggle = (k: string) => setSelected((p) => { const n = new Set(p); if (n.has(k)) n.delete(k); else n.add(k); return n; });
-  const toggleAll = () => setSelected((p) => p.size === rows.length ? new Set() : new Set(rows.map(rowKey)));
+  // CG Bekliyor'da "Tümünü Seç" Excel'i ALINMIŞ siparişleri dahil etmez (çift MCF önleme).
+  // Alınanlar yine elle tek tek seçilebilir (yeniden indirme gerekirse).
+  const toggleAll = () => setSelected((p) => {
+    const pickable = rows.filter((r) => !(tab === 'cgBekliyor' && r.cgExportedAt));
+    return p.size >= pickable.length && pickable.length > 0 ? new Set() : new Set(pickable.map(rowKey));
+  });
 
   async function runAction(url: string, body: unknown, okMsg: (j: { [k: string]: unknown }) => string) {
     setBusy(true); setMsg(null);
@@ -409,6 +415,7 @@ export default function SiparisPage() {
                       <div className="flex flex-wrap items-center gap-1 mt-0.5">
                         {r.source === 'MANUAL' && <span className="inline-block text-[10px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-1.5 py-0.5">manuel giriş</span>}
                         {r.readyPending && <span className="inline-block text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">ready-pending</span>}
+                        {tab === 'cgBekliyor' && r.cgExportedAt && <span className="inline-block text-[10px] font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded px-1.5 py-0.5" title={`Excel alındı: ${fmtDate(r.cgExportedAt)}`}>Excel alındı</span>}
                       </div>
                     </td>
                     <td className="px-3 py-2.5"><span title={r.marketplaceCode} className="inline-block text-xs font-medium px-2 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-100">{r.marketplaceLabel || r.marketplaceCode || '—'}</span></td>

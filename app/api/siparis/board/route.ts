@@ -191,6 +191,7 @@ export async function GET(request: NextRequest) {
       shippedAt: o.shippedAt,
       wisersellReadyAt: o.wisersellReadyAt,
       wisersellClosedAt: o.wisersellClosedAt,
+      cgExportedAt: o.cgExportedAt, // CG MCF Excel alındı mı (badge + tekrar export'a girmesin)
       // ready-pending Wisersell mark-ready kavramı → yalnız AUTO. MANUAL'da anlamsız.
       readyPending: o.source === 'WISERSELL_AUTO' && !o.wisersellReadyAt,
     };
