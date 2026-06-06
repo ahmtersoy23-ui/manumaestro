@@ -8,10 +8,11 @@
  */
 
 import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Zap, CheckCircle2, PackageCheck, Truck, Send, Archive, AlertTriangle, MapPin, Printer, FileText, X, ChevronRight, Copy, Check, Plus, Warehouse, Download } from 'lucide-react';
+import { RefreshCw, Zap, CheckCircle2, PackageCheck, Truck, Send, Archive, AlertTriangle, MapPin, Printer, FileText, X, ChevronRight, Copy, Check, Plus, Warehouse, Download, Tag } from 'lucide-react';
 import { LabelUploader } from '@/components/wms/LabelUploader';
 import { ShipModal } from '@/components/wms/ShipModal';
 import { ManualOrderModal } from '@/components/siparis/ManualOrderModal';
+import VeeqoLabelModal from '@/components/siparis/VeeqoLabelModal';
 
 type StatusKey = 'onayBekliyor' | 'eslesmeGerek' | 'etiketBekliyor' | 'cikisBekliyor' | 'cgBekliyor' | 'kapatmaBekliyor' | 'kapandi';
 
@@ -110,6 +111,7 @@ export default function SiparisPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [detailRow, setDetailRow] = useState<Row | null>(null);
   const [shipOrder, setShipOrder] = useState<Row | null>(null);
+  const [veeqoOrder, setVeeqoOrder] = useState<Row | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   // CG MCF export — eşleşmeyen part number kuyruğu (export'u engeller; operatör burada eşler)
   const [unmatched, setUnmatched] = useState<Array<{ iwasku: string; productName: string | null; orderNumbers: string[] }> | null>(null);
@@ -534,6 +536,14 @@ export default function SiparisPage() {
                   <CheckCircle2 className="w-4 h-4" /> Onayla
                 </button>
               )}
+              {tab === 'etiketBekliyor' && canManage
+                && ['AMZN_US', 'Ama_US'].includes(detailRow.marketplaceCode ?? '')
+                && (detailRow.warehouse === 'NJ' || detailRow.warehouse === 'SHOWROOM')
+                && !detailRow.trackingNumber && (
+                <button onClick={() => setVeeqoOrder(detailRow)} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50">
+                  <Tag className="w-4 h-4" /> Veeqo Etiket Al
+                </button>
+              )}
               {tab === 'cikisBekliyor' && (
                 <button onClick={() => setShipOrder(detailRow)} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50">
                   <Truck className="w-4 h-4" /> Çıkış Yap (FIFO)
@@ -591,6 +601,16 @@ export default function SiparisPage() {
           orderNumber={shipOrder.orderNumber ?? shipOrder.orderCode ?? ''}
           onClose={() => setShipOrder(null)}
           onSuccess={() => { setShipOrder(null); setDetailRow(null); load(); }}
+        />
+      )}
+
+      {/* Veeqo etiket al (rates → seç → book), detay modalinden tetiklenir */}
+      {veeqoOrder?.id && (
+        <VeeqoLabelModal
+          orderId={veeqoOrder.id}
+          orderNumber={veeqoOrder.orderNumber ?? veeqoOrder.orderCode ?? ''}
+          onClose={() => setVeeqoOrder(null)}
+          onSuccess={(tracking) => { setVeeqoOrder(null); setDetailRow(null); setMsg(`Veeqo etiketi alındı — tracking: ${tracking}`); load(); }}
         />
       )}
 
