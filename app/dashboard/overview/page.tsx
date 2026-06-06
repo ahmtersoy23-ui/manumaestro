@@ -11,9 +11,9 @@ import { Factory, Boxes, Ship, ShoppingCart, AlertTriangle, ChevronRight, Refres
 
 interface Overview {
   uretim: { month: string; requests: number; quantity: number; produced: number };
-  stok: Array<{ warehouse: string; lines: number; qty: number }>;
+  stok: Array<{ warehouse: string; skus: number; qty: number }>;
   sevkiyat: { active: number; pendingPools: number };
-  siparis: { draft: number; amazonCancelled: number; kapatmaBekliyor: number };
+  siparis: { etiket: number; cikis: number; cg: number; kapatmaBekliyor: number; amazonCancelled: number };
 }
 
 const WH_LABEL: Record<string, string> = { ANKARA: 'Ankara', NJ: 'Somerset', SHOWROOM: 'Fairfield', NL: 'Hollanda' };
@@ -83,11 +83,11 @@ export default function OverviewPage() {
         {/* STOK */}
         <Card href="/dashboard/stok" icon={Boxes} title="Stok" accent="bg-amber-500">
           {data?.stok?.length ? (
-            <ul className="space-y-0.5 text-sm">
+            <ul className="space-y-1 text-sm">
               {data.stok.map((s) => (
                 <li key={s.warehouse} className="flex justify-between gap-2">
                   <span className="text-gray-600">{whLabel(s.warehouse)}</span>
-                  <span className="text-gray-900 font-medium">{nf(s.lines)} kalem</span>
+                  <span className="text-gray-900 font-medium">{nf(s.skus)} çeşit · {nf(s.qty)} adet</span>
                 </li>
               ))}
             </ul>
@@ -108,8 +108,19 @@ export default function OverviewPage() {
         <Card href="/dashboard/siparis" icon={ShoppingCart} title="Sipariş" accent="bg-violet-600">
           {data ? (
             <>
-              <div className="text-2xl font-bold text-gray-900">{nf(data.siparis.draft)} <span className="text-base font-medium text-gray-500">bekleyen</span></div>
-              <div className="text-sm text-gray-500 mt-1">{nf(data.siparis.kapatmaBekliyor)} kapatma bekliyor</div>
+              <ul className="space-y-1 text-sm">
+                {([
+                  ['Etiket bekliyor', data.siparis.etiket],
+                  ['Çıkış bekliyor', data.siparis.cikis],
+                  ['CG bekliyor', data.siparis.cg],
+                  ['Kapatma bekliyor', data.siparis.kapatmaBekliyor],
+                ] as const).map(([label, n]) => (
+                  <li key={label} className="flex justify-between gap-2">
+                    <span className="text-gray-600">{label}</span>
+                    <span className="text-gray-900 font-medium">{nf(n)}</span>
+                  </li>
+                ))}
+              </ul>
               {data.siparis.amazonCancelled > 0 && (
                 <div className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded px-1.5 py-0.5">
                   <AlertTriangle className="w-3.5 h-3.5" /> {nf(data.siparis.amazonCancelled)} Amazon iptal
