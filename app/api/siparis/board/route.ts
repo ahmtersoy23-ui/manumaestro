@@ -192,6 +192,7 @@ export async function GET(request: NextRequest) {
       wisersellReadyAt: o.wisersellReadyAt,
       wisersellClosedAt: o.wisersellClosedAt,
       cgExportedAt: o.cgExportedAt, // CG MCF Excel alındı mı (badge + tekrar export'a girmesin)
+      amazonCancelledAt: o.amazonCancelledAt, // Amazon'da iptal (SP-API) → "İptal (Amazon)" rozeti + Listeden Düş
       // ready-pending Wisersell mark-ready kavramı → yalnız AUTO. MANUAL'da anlamsız.
       readyPending: o.source === 'WISERSELL_AUTO' && !o.wisersellReadyAt,
     };

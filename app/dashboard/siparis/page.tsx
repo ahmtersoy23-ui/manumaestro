@@ -88,6 +88,7 @@ interface Row {
   manualTracking?: string | null;
   labelId?: string | null;
   cgExportedAt?: string | null; // CG MCF Excel alındı mı
+  amazonCancelledAt?: string | null; // Amazon'da iptal (SP-API canlı kontrol)
   readyPending?: boolean;
   createdAt?: string | null;
   items?: ItemLite[];
@@ -197,6 +198,13 @@ export default function SiparisPage() {
     return `${j.closed} kapatıldı.${failed.length ? ` ${failed.length} başarısız: ${failed.map((f) => f.message).join('; ')}` : ''}`;
   });
   const doAutoRun = () => runAction(`/api/siparis/auto-run?region=${region}`, {}, (j) => `Otomatik: ${j.approved} onaylandı.`);
+  // Amazon'da iptal edilmiş siparişi listeden düş (DRAFT → CANCELLED). Operatör onayı.
+  const dropOne = async (id?: string) => {
+    if (!id) return;
+    if (!window.confirm('Bu sipariş Amazon’da iptal edilmiş. Listeden düşürülsün mü? (CANCELLED)')) return;
+    await runAction('/api/siparis/cancel', { orderIds: [id] }, (j) => `${j.cancelled} sipariş listeden düşürüldü.`);
+    setDetailRow(null);
+  };
 
   // ── CG / Wayfair MCF export + eşleştirme + manuel tracking ──────────────────
   const downloadBase64Xlsx = (filename: string, b64: string) => {
@@ -416,6 +424,7 @@ export default function SiparisPage() {
                         {r.source === 'MANUAL' && <span className="inline-block text-[10px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-1.5 py-0.5">manuel giriş</span>}
                         {r.readyPending && <span className="inline-block text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">ready-pending</span>}
                         {tab === 'cgBekliyor' && r.cgExportedAt && <span className="inline-block text-[10px] font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded px-1.5 py-0.5" title={`Excel alındı: ${fmtDate(r.cgExportedAt)}`}>Excel alındı</span>}
+                        {r.amazonCancelledAt && <span className="inline-block text-[10px] font-semibold text-red-700 bg-red-50 border border-red-200 rounded px-1.5 py-0.5" title={`Amazon'da iptal: ${fmtDate(r.amazonCancelledAt)}`}>İptal (Amazon)</span>}
                       </div>
                     </td>
                     <td className="px-3 py-2.5"><span title={r.marketplaceCode} className="inline-block text-xs font-medium px-2 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-100">{r.marketplaceLabel || r.marketplaceCode || '—'}</span></td>
@@ -463,6 +472,12 @@ export default function SiparisPage() {
             </div>
 
             <div className="p-5 max-h-[72vh] overflow-y-auto space-y-4">
+              {detailRow.amazonCancelledAt && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                  <div className="font-semibold flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> Amazon&apos;da iptal edilmiş</div>
+                  <div className="mt-1 text-xs">Bu sipariş Amazon&apos;da iptal edilmiş (canlı SP-API kontrolü). Etiket/çıkış/MCF <strong>yapmayın</strong> — <strong>Listeden Düş</strong> ile kaldırın. (Wisersell tarafı ayrıca kapatılmalı.)</div>
+                </div>
+              )}
               {tab === 'eslesmeGerek' && (
                 <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-800">
                   <div className="font-semibold flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> iwasku eşleşmesi yok — mapping gerekli</div>
@@ -538,6 +553,11 @@ export default function SiparisPage() {
             {/* Aksiyon footer — duruma göre */}
             <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-200 bg-gray-50/50">
               <button onClick={() => { setDetailRow(null); load(); }} className="text-sm px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700">Kapat</button>
+              {detailRow.amazonCancelledAt && canManage && (
+                <button onClick={() => dropOne(detailRow.id)} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50">
+                  <X className="w-4 h-4" /> Listeden Düş
+                </button>
+              )}
               {tab === 'onayBekliyor' && (
                 <button onClick={() => approveOne(detailRow.wisersellOrderId)} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">
                   <CheckCircle2 className="w-4 h-4" /> Onayla
@@ -546,12 +566,12 @@ export default function SiparisPage() {
               {tab === 'etiketBekliyor' && canManage
                 && ['AMZN_US', 'Ama_US'].includes(detailRow.marketplaceCode ?? '')
                 && (detailRow.warehouse === 'NJ' || detailRow.warehouse === 'SHOWROOM')
-                && !detailRow.trackingNumber && (
+                && !detailRow.trackingNumber && !detailRow.amazonCancelledAt && (
                 <button onClick={() => setVeeqoOrder(detailRow)} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50">
                   <Tag className="w-4 h-4" /> Veeqo Etiket Al
                 </button>
               )}
-              {tab === 'cikisBekliyor' && (
+              {tab === 'cikisBekliyor' && !detailRow.amazonCancelledAt && (
                 <button onClick={() => setShipOrder(detailRow)} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50">
                   <Truck className="w-4 h-4" /> Çıkış Yap (FIFO)
                 </button>
@@ -561,7 +581,7 @@ export default function SiparisPage() {
                   <Send className="w-4 h-4" /> Wisersell&apos;de Kapat
                 </button>
               )}
-              {tab === 'cgBekliyor' && canManage && (
+              {tab === 'cgBekliyor' && canManage && !detailRow.amazonCancelledAt && (
                 <button onClick={() => closeOne(detailRow.id)} disabled={busy || !detailRow.manualTracking} title={detailRow.manualTracking ? '' : 'Önce tracking girin'} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-40">
                   <Send className="w-4 h-4" /> Wisersell&apos;de Kapat
                 </button>

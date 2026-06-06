@@ -50,3 +50,13 @@ export async function closeWisersellPlatform(orderId: number): Promise<void> {
 export async function saveWayfairMapping(partNumber: string, iwasku: string): Promise<void> {
   await post('/wisersell-routing/wayfair-map', { partNumber, iwasku });
 }
+
+/**
+ * Amazon sipariş durumlarını SP-API'den canlı sorgular (Wisersell'e yansımayan
+ * iptalleri yakalamak için). Dönen: { amazonOrderId: OrderStatus }. Bulunamayan = 'Unknown'.
+ */
+export async function getAmazonOrderStatuses(amazonOrderIds: string[]): Promise<Record<string, string>> {
+  if (!amazonOrderIds.length) return {};
+  const data = (await post('/amazon-order-status/by-ids', { amazonOrderIds })) as { statuses?: Record<string, string> };
+  return data.statuses ?? {};
+}

@@ -810,6 +810,7 @@ model OutboundOrder {
   wisersellClosedAt DateTime?    // external-close başarıyla yazıldıysa (Kapandı)
   manualTracking  String?        // CG/etiketsiz akış: operatörün Wayfair MCF raporundan elle girdiği tracking (SHIPPING etiketi yok)
   cgExportedAt    DateTime?      // CG (CastleGate) MCF Excel'i alındıysa — tekrar export'a girmesin (çift MCF önleme)
+  amazonCancelledAt DateTime?    // SP-API canlı kontrol: Amazon'da Canceled tespit edildi (Ama_US). Board'da "İptal (Amazon)" rozeti + operatör "Listeden Düş".
   createdById     String
   createdAt       DateTime       @default(now())
   shippedById     String?
