@@ -109,9 +109,9 @@ export async function POST(request: NextRequest) {
   }
 
   const dateStr = ddmmyyyy(new Date());
-  const files = [...rowsByAccount.entries()].map(([code, rows]) => {
+  const files = await Promise.all([...rowsByAccount.entries()].map(async ([code, rows]) => {
     const account = CG_ACCOUNT_LABEL[code];
-    const buf = buildMcfWorkbook(rows);
+    const buf = await buildMcfWorkbook(rows);
     return {
       account,
       retailerId: CG_RETAILER_ID[code],
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
       orderCount: new Set(rows.map((r) => r.orderNumber)).size,
       rowCount: rows.length,
     };
-  });
+  }));
 
   logger.info(`cg-export: ${orders.length} sipariş → ${files.length} dosya (${files.map((f) => `${f.account}:${f.rowCount}`).join(', ')})`);
   return NextResponse.json({ success: true, files });

@@ -10,8 +10,9 @@
  *    kanonik = wayfair_inventory'de canlı satırı olan part (eski *WALLPANEL alias'lar elenir).
  */
 
-import * as XLSX from 'xlsx';
+import type ExcelJS from 'exceljs';
 import { queryDataBridge } from '@/lib/db/prisma';
+import { MCF_TEMPLATE_B64 } from './mcfTemplate';
 
 /** warehouseCode → Wayfair Retailer ID (mağaza/hesap). */
 export const CG_RETAILER_ID: Record<string, number> = {
@@ -228,34 +229,44 @@ export interface ExportRow {
   email: string;
 }
 
-const TEMPLATE_HEADER = [
-  'Retailer ID', 'Retailer PO Number', 'Retailer Order Number', 'Recipient Order Number',
-  'Part Number', 'Quantity', 'Fulfillment Warehouse ID', 'Shipping Account Number', 'SCAC Code',
-  'Ship Speed', 'Delivery Signature Required', 'Shipping Name', 'Shipping Address 1',
-  'Shipping Address 2', 'Shipping City', 'Shipping State', 'Shipping Postal Code', 'Shipping Country',
-  'Shipping Phone Number', 'Shipping Email', 'Billing Name', 'Billing Address 1', 'Billing Address 2',
-  'Billing City', 'Billing State', 'Billing Postal Code', 'Billing Country',
-];
+const OIT_SHEET = 'Order Import Template';
+const DATA_START_ROW = 6; // metadata: row 1-5 (grup/zorunluluk/kolon adı/açıklama/tip), veri row 6+
 
 function clip(s: string | null, max: number): string {
   return (s ?? '').slice(0, max);
 }
 
-/** Tek hesabın satırlarını Order Import Template biçiminde xlsx Buffer'a basar (tek "Order Import Template" sheet). */
-export function buildMcfWorkbook(rows: ExportRow[]): Buffer {
-  const aoa: (string | number)[][] = [TEMPLATE_HEADER];
-  for (const r of rows) {
-    aoa.push([
-      r.retailerId, r.poNumber, r.orderNumber, '',
-      r.partNumber, r.quantity, '', '', '',
-      '', '', clip(r.name, 30), clip(r.address1, 35),
-      '', r.city, r.state, r.postalCode, r.country,
-      r.phone, r.email, '', '', '',
-      '', '', '', '',
-    ]);
-  }
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Order Import Template');
-  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+/** ExportRow → 27 kolonluk satır (template kolon sırasıyla; boş = Wayfair'in doldurmadığımız alanları). */
+function toCells(r: ExportRow): (string | number)[] {
+  return [
+    r.retailerId, r.poNumber, r.orderNumber, '',
+    r.partNumber, r.quantity, '', '', '',
+    '', '', clip(r.name, 30), clip(r.address1, 35),
+    '', r.city, r.state, r.postalCode, r.country,
+    r.phone, r.email, '', '', '',
+    '', '', '', '',
+  ];
+}
+
+/**
+ * Wayfair "Order Import Template" boş şablonunu (3 sheet + metadata + dropdown'lar) yükler,
+ * veri satırlarını row 6'dan itibaren doldurur ve xlsx Buffer döner. Şablon bozulmaz; örnek
+ * MCF_Orders dosyasıyla birebir format (Instructions / Order Import Template / Valid Values).
+ */
+export async function buildMcfWorkbook(rows: ExportRow[]): Promise<Buffer> {
+  const ExcelJSModule = (await import('exceljs')).default;
+  const wb = new ExcelJSModule.Workbook();
+  // exceljs kendi `Buffer` tipini (extends ArrayBuffer) declare ediyor → Node Buffer'la çakışır; param tipine cast.
+  await wb.xlsx.load(Buffer.from(MCF_TEMPLATE_B64, 'base64') as unknown as Parameters<typeof wb.xlsx.load>[0]);
+  const ws = wb.getWorksheet(OIT_SHEET);
+  if (!ws) throw new Error(`Şablonda "${OIT_SHEET}" sheet'i yok`);
+
+  rows.forEach((r, i) => {
+    const row = ws.getRow(DATA_START_ROW + i);
+    toCells(r).forEach((v, c) => { row.getCell(c + 1).value = v as ExcelJS.CellValue; });
+    row.commit();
+  });
+
+  const buf = await wb.xlsx.writeBuffer();
+  return Buffer.from(buf);
 }

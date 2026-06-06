@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { parseAddressNote, buildMcfWorkbook, CG_RETAILER_ID, type ExportRow } from '@/lib/wisersell/wayfairExport';
 
 describe('parseAddressNote', () => {
@@ -58,31 +58,41 @@ describe('buildMcfWorkbook', () => {
     email: 'test@example.com',
   };
 
-  it('Retailer ID = 27348 (Shukran), Fulfillment Warehouse ID boş, doğru kolon hizası', () => {
-    const buf = buildMcfWorkbook([row]);
-    const wb = XLSX.read(buf, { type: 'buffer' });
-    const aoa = XLSX.utils.sheet_to_json<(string | number)[]>(wb.Sheets['Order Import Template'], { header: 1 });
-    const header = aoa[0];
-    const data = aoa[1];
-    expect(header[0]).toBe('Retailer ID');
-    expect(header[4]).toBe('Part Number');
-    expect(header[6]).toBe('Fulfillment Warehouse ID');
-    expect(data[0]).toBe(27348);
-    expect(data[1]).toBe('113-3939298-5619414');
-    expect(data[4]).toBe('AHM69BABYLON');
-    expect(data[5]).toBe(2);
-    expect(data[6]).toBe(''); // Fulfillment Warehouse ID boş
-    expect(data[11]).toBe('Michael Jay Peterson'); // Shipping Name
-    expect(data[15]).toBe('SD'); // Shipping State
-    expect(data[17]).toBe('US'); // Shipping Country
+  const loadOIT = async (buf: Buffer) => {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf as unknown as Parameters<typeof wb.xlsx.load>[0]);
+    return wb;
+  };
+  const cell = (wb: ExcelJS.Workbook, rowNo: number, col: number) => wb.getWorksheet('Order Import Template')!.getRow(rowNo).getCell(col).value;
+
+  it('3 sheet korunur + Retailer ID 27348 (Shukran) + Fulfillment Warehouse ID boş + kolon hizası (data row 6)', async () => {
+    const wb = await loadOIT(await buildMcfWorkbook([row]));
+    expect(wb.worksheets.map((w) => w.name)).toEqual(['Instructions', 'Order Import Template', 'Valid Values']);
+    // metadata: kolon adları row 3
+    expect(cell(wb, 3, 1)).toBe('Retailer ID');
+    expect(cell(wb, 3, 5)).toBe('Part Number');
+    expect(cell(wb, 3, 7)).toBe('Fulfillment Warehouse ID');
+    // veri: row 6
+    expect(cell(wb, 6, 1)).toBe(27348);
+    expect(cell(wb, 6, 2)).toBe('113-3939298-5619414');
+    expect(cell(wb, 6, 5)).toBe('AHM69BABYLON');
+    expect(cell(wb, 6, 6)).toBe(2);
+    expect(cell(wb, 6, 7) || '').toBe(''); // Fulfillment Warehouse ID boş
+    expect(cell(wb, 6, 12)).toBe('Michael Jay Peterson'); // Shipping Name
+    expect(cell(wb, 6, 16)).toBe('SD'); // Shipping State
+    expect(cell(wb, 6, 18)).toBe('US'); // Shipping Country
   });
 
-  it('Shipping Name 30, Address1 35 karakterde kırpılır', () => {
+  it('çok satır row 6,7,8… sırasıyla dolar', async () => {
+    const wb = await loadOIT(await buildMcfWorkbook([row, { ...row, partNumber: 'AHM69GEMSTONE', quantity: 1 }]));
+    expect(cell(wb, 6, 5)).toBe('AHM69BABYLON');
+    expect(cell(wb, 7, 5)).toBe('AHM69GEMSTONE');
+  });
+
+  it('Shipping Name 30, Address1 35 karakterde kırpılır', async () => {
     const long: ExportRow = { ...row, name: 'X'.repeat(50), address1: 'Y'.repeat(50) };
-    const buf = buildMcfWorkbook([long]);
-    const wb = XLSX.read(buf, { type: 'buffer' });
-    const aoa = XLSX.utils.sheet_to_json<(string | number)[]>(wb.Sheets['Order Import Template'], { header: 1 });
-    expect((aoa[1][11] as string).length).toBe(30);
-    expect((aoa[1][12] as string).length).toBe(35);
+    const wb = await loadOIT(await buildMcfWorkbook([long]));
+    expect((cell(wb, 6, 12) as string).length).toBe(30);
+    expect((cell(wb, 6, 13) as string).length).toBe(35);
   });
 });
