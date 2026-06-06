@@ -47,6 +47,7 @@ export interface VeeqoRatesResponse {
   requestToken: string;
   expiresAt: string;
   quotes: VeeqoQuote[];
+  destState?: string | null;
 }
 
 export interface VeeqoParcelInput {
@@ -72,6 +73,7 @@ export async function getVeeqoRates(
     requestToken: data.requestToken ?? '',
     expiresAt: data.expiresAt ?? '',
     quotes: data.quotes ?? [],
+    destState: data.destState ?? null,
   };
 }
 

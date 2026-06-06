@@ -95,10 +95,8 @@ export async function POST(request: NextRequest) {
   const finalParcel: VeeqoParcelInput = { ...DEFAULT_PARCEL, ...(catalog?.parcel ?? {}), ...(parcel ?? {}) };
 
   try {
-    const [result, benchmark] = await Promise.all([
-      getVeeqoRates(order.orderNumber, finalParcel, { contents: order.description || undefined, warehouse: order.warehouseCode }),
-      getShippingBenchmark({ desi: catalog?.desi ?? null, weightLb: finalParcel.weight ?? null }),
-    ]);
+    const result = await getVeeqoRates(order.orderNumber, finalParcel, { contents: order.description || undefined, warehouse: order.warehouseCode });
+    const benchmark = await getShippingBenchmark({ desi: catalog?.desi ?? null, weightLb: finalParcel.weight ?? null, state: result.destState ?? null });
     logger.info(`rates OK: ${order.orderNumber} → ${result.quotes.length} quote (parcel ${finalParcel.weight}lb ${finalParcel.length}x${finalParcel.width}x${finalParcel.height})`);
     // modalın ölçü kutularını doldurması için kullanılan parcel'ı + katalog kaynağını + kıyas verisini döndür
     return NextResponse.json({ success: true, ...result, parcel: finalParcel, parcelFromCatalog: !!catalog, benchmark });

@@ -25,7 +25,7 @@ interface Quote {
 }
 interface Benchmark {
   trUs: { desi: number; eco: number | null; pri: number | null } | null;
-  fedexIzmir: { avg: number; n: number; lowLb: number; highLb: number } | null;
+  fedexIzmir: { avg: number; n: number; lowLb: number; highLb: number; scope: 'state' | 'genel'; state: string | null } | null;
 }
 interface RatesResp {
   remoteShipmentId: string;
@@ -130,10 +130,10 @@ export default function VeeqoLabelModal({ orderId, orderNumber, onClose, onSucce
             <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-2.5 text-xs text-amber-900 space-y-1">
               <div className="text-[10px] font-semibold uppercase text-amber-700">Kıyas (referans — Veeqo değil)</div>
               {rates.benchmark?.trUs && (
-                <div>🇹🇷→🇺🇸 FedEx (desi {rates.benchmark.trUs.desi}): {rates.benchmark.trUs.eco != null && <b>Eco ${rates.benchmark.trUs.eco.toFixed(2)}</b>}{rates.benchmark.trUs.pri != null && <> · Pri ${rates.benchmark.trUs.pri.toFixed(2)}</>}</div>
+                <div>🇹🇷→🇺🇸 FedEx (desi {rates.benchmark.trUs.desi}): {rates.benchmark.trUs.pri != null ? <b>Pri ${rates.benchmark.trUs.pri.toFixed(2)}</b> : '—'}</div>
               )}
               {rates.benchmark?.fedexIzmir && (
-                <div>FedEx Izmir (US-içi, ~{rates.benchmark.fedexIzmir.lowLb}-{rates.benchmark.fedexIzmir.highLb} lb): ort <b>${rates.benchmark.fedexIzmir.avg.toFixed(2)}</b> <span className="text-amber-600">({rates.benchmark.fedexIzmir.n} geçmiş gönderi)</span></div>
+                <div>FedEx Izmir ({rates.benchmark.fedexIzmir.scope === 'state' ? rates.benchmark.fedexIzmir.state : 'genel'}, ~{rates.benchmark.fedexIzmir.lowLb}-{rates.benchmark.fedexIzmir.highLb} lb): ort <b>${rates.benchmark.fedexIzmir.avg.toFixed(2)}</b> <span className="text-amber-600">({rates.benchmark.fedexIzmir.n} geçmiş{rates.benchmark.fedexIzmir.scope === 'genel' ? ', genel ort.' : ''})</span></div>
               )}
             </div>
           )}
