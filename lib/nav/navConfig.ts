@@ -70,8 +70,8 @@ export const ADMIN_LINKS: AdminLink[] = [
   { label: 'Geçmiş', href: '/dashboard/logs', icon: FileText },
 ];
 
-/** Ana sayfa (logo) hedefi. Faz 2'de 4-kart özet dashboard'a dönecek. */
-export const HOME_HREF = '/dashboard2';
+/** Ana sayfa (logo) hedefi — 4-kart özet dashboard (A1.5). */
+export const HOME_HREF = '/dashboard/overview';
 
 export function getNavGroup(key: string): NavGroup | undefined {
   return NAV_GROUPS.find((g) => g.key === key);
