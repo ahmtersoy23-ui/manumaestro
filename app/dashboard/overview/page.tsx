@@ -10,7 +10,7 @@ import Link from 'next/link';
 import { Factory, Boxes, Ship, ShoppingCart, AlertTriangle, ChevronRight, RefreshCw } from 'lucide-react';
 
 interface Overview {
-  uretim: { month: string; requests: number; quantity: number; produced: number };
+  uretim: { month: string; requests: number; quantity: number; produced: number; groups: Array<{ key: string; label: string; quantity: number }> };
   stok: Array<{ warehouse: string; skus: number; qty: number }>;
   sevkiyat: { planning: number; loading: number; inTransit: number; pendingPools: number };
   siparis: { etiket: number; cikis: number; cg: number; kapatmaBekliyor: number; amazonCancelled: number };
@@ -76,6 +76,16 @@ export default function OverviewPage() {
             <>
               <div className="text-2xl font-bold text-gray-900">{nf(u.requests)} <span className="text-base font-medium text-gray-500">talep</span></div>
               <div className="text-sm text-gray-500 mt-1">{u.month} · {nf(u.quantity)} adet · %{producedPct} üretildi</div>
+              {u.groups?.length > 0 && (
+                <ul className="mt-2 pt-2 border-t border-gray-100 space-y-1 text-sm">
+                  {u.groups.map((g) => (
+                    <li key={g.key} className="flex justify-between gap-2">
+                      <span className="text-gray-600">{g.label}</span>
+                      <span className="text-gray-900 font-medium">{nf(g.quantity)} adet</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </>
           ) : <div className="text-sm text-gray-400">{loading ? 'Yükleniyor…' : '—'}</div>}
         </Card>

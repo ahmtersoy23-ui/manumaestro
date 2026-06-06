@@ -7,8 +7,18 @@
 import { prisma } from '@/lib/db/prisma';
 import { withRoute } from '@/lib/api/withRoute';
 import { successResponse } from '@/lib/api/response';
+import { getAnkaraTotals } from '@/lib/warehouse/ankaraTotals';
 
 interface StokRow { wh: string; skus: number; qty: number }
+
+// Üretim grubu sınıflandırması (dashboard ile aynı)
+const HAZIR_ALIM = ['Alsat', 'Tekstil'];
+const MOBILYA = ['Mobilya'];
+function productionGroupOf(cat: string | null): 'fabrika' | 'mobilya' | 'hazirAlim' {
+  if (cat && HAZIR_ALIM.includes(cat)) return 'hazirAlim';
+  if (cat && MOBILYA.includes(cat)) return 'mobilya';
+  return 'fabrika';
+}
 
 export const GET = withRoute(
   { rateLimit: 'read', fallbackMessage: 'Özet getirilemedi' },
@@ -19,6 +29,7 @@ export const GET = withRoute(
     const [
       prAgg,
       producedAgg,
+      catGroups,
       shipmentGroups,
       completedPr,
       shippedIwaskus,
@@ -26,6 +37,7 @@ export const GET = withRoute(
       kapatmaBekliyor,
       amazonCancelled,
       stokRows,
+      ankaraTotals,
     ] = await Promise.all([
       // ÜRETİM — mevcut ay talebi (talep adedi + adet)
       prisma.productionRequest.aggregate({
@@ -35,6 +47,12 @@ export const GET = withRoute(
       }),
       // ÜRETİM — üretilen (MonthSnapshot.produced; dashboard ile aynı kaynak)
       prisma.monthSnapshot.aggregate({ where: { month: currentMonth }, _sum: { produced: true } }),
+      // ÜRETİM — kategori (grup) bazında talep
+      prisma.productionRequest.groupBy({
+        by: ['productCategory'],
+        where: { productionMonth: currentMonth, status: { not: 'CANCELLED' } },
+        _sum: { quantity: true },
+      }),
       // SEVKİYAT — duruma göre kırılım
       prisma.shipment.groupBy({ by: ['status'], _count: { _all: true } }),
       // SEVKİYAT — bekleyen havuz (COMPLETED PR, henüz sevkiyata eklenmemiş)
@@ -51,16 +69,30 @@ export const GET = withRoute(
       }),
       prisma.outboundOrder.count({ where: { status: 'SHIPPED', source: 'WISERSELL_AUTO', wisersellClosedAt: null } }),
       prisma.outboundOrder.count({ where: { status: 'DRAFT', amazonCancelledAt: { not: null } } }),
-      // STOK — depo başına çeşit (distinct SKU) + adet (raf stoğu)
+      // STOK — depo başına çeşit (distinct SKU) + adet — raf stoğu (loose) + SEALED koliler
       prisma.$queryRaw<StokRow[]>`
-        SELECT "warehouseCode" AS wh, COUNT(DISTINCT iwasku)::int AS skus, COALESCE(SUM(quantity), 0)::int AS qty
-        FROM shelf_stock WHERE quantity > 0 GROUP BY "warehouseCode" ORDER BY "warehouseCode"`,
+        SELECT wh, COUNT(DISTINCT iwasku)::int AS skus, COALESCE(SUM(qty), 0)::int AS qty FROM (
+          SELECT "warehouseCode" AS wh, iwasku, quantity AS qty FROM shelf_stock WHERE quantity > 0
+          UNION ALL
+          SELECT "warehouseCode" AS wh, iwasku, quantity AS qty FROM shelf_boxes WHERE quantity > 0 AND status = 'SEALED'
+        ) t GROUP BY wh ORDER BY wh`,
+      // STOK — Ankara (TOTALS_PRIMARY: WarehouseProduct, Depolar dashboard ile aynı kaynak)
+      getAnkaraTotals(),
     ]);
 
     const shippedSet = new Set(shippedIwaskus.map((s) => s.iwasku));
     const pendingPools = completedPr.filter((c) => !shippedSet.has(c.iwasku)).length;
 
     const shipBy = Object.fromEntries(shipmentGroups.map((g) => [g.status, g._count._all]));
+
+    // Üretim grup (kategori) kırılımı
+    const groupSum: Record<string, number> = { fabrika: 0, mobilya: 0, hazirAlim: 0 };
+    for (const g of catGroups) groupSum[productionGroupOf(g.productCategory)] += g._sum.quantity ?? 0;
+    const uretimGroups = [
+      { key: 'fabrika', label: 'IWA Fabrika', quantity: groupSum.fabrika },
+      { key: 'mobilya', label: 'CİTİ Mobilya', quantity: groupSum.mobilya },
+      { key: 'hazirAlim', label: 'Hazır Alım', quantity: groupSum.hazirAlim },
+    ].filter((g) => g.quantity > 0);
 
     // Kanban aşamaları (OutboundOrder tarafı; onay/eşleşme aday tarafı board'da)
     const isCg = (w: string) => w === 'CG_SHUKRAN' || w === 'CG_MDN';
@@ -77,8 +109,12 @@ export const GET = withRoute(
         requests: prAgg._count._all,
         quantity: prAgg._sum.quantity ?? 0,
         produced: producedAgg._sum.produced ?? 0,
+        groups: uretimGroups,
       },
-      stok: stokRows.map((r) => ({ warehouse: r.wh, skus: r.skus, qty: r.qty })),
+      stok: [
+        { warehouse: 'ANKARA', skus: ankaraTotals.productCount, qty: ankaraTotals.totalQty },
+        ...stokRows.filter((r) => r.wh !== 'ANKARA').map((r) => ({ warehouse: r.wh, skus: r.skus, qty: r.qty })),
+      ],
       sevkiyat: {
         planning: shipBy.PLANNING ?? 0,
         loading: shipBy.LOADING ?? 0,
