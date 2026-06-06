@@ -68,6 +68,12 @@ async function runMiddleware(request: NextRequest): Promise<NextResponse> {
     return NextResponse.next();
   }
 
+  // Sunucu cron → ManuMaestro: Amazon iptal kontrolü (server-to-server).
+  // SSO cookie YOK, x-internal-api-key ile yetkilendirilir (route handler'da). Middleware geçirir.
+  if (request.nextUrl.pathname === '/api/siparis/check-cancellations') {
+    return NextResponse.next();
+  }
+
   logger.debug('Request:', request.nextUrl.pathname);
 
   // Apply rate limiting based on endpoint
