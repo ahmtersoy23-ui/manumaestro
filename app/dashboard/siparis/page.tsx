@@ -201,8 +201,11 @@ export default function SiparisPage() {
   // Amazon'da iptal edilmiş siparişi listeden düş (DRAFT → CANCELLED). Operatör onayı.
   const dropOne = async (id?: string) => {
     if (!id) return;
-    if (!window.confirm('Bu sipariş Amazon’da iptal edilmiş. Listeden düşürülsün mü? (CANCELLED)')) return;
-    await runAction('/api/siparis/cancel', { orderIds: [id] }, (j) => `${j.cancelled} sipariş listeden düşürüldü.`);
+    if (!window.confirm('Bu sipariş Amazon’da iptal edilmiş. Listeden düşürülsün mü? (Manu CANCELLED + Wisersell iptal)')) return;
+    await runAction('/api/siparis/cancel', { orderIds: [id] }, (j) => {
+      const failed = (j.wisersellFailed as string[]) ?? [];
+      return `${j.cancelled} listeden düşürüldü${j.wisersellCancelled ? `, Wisersell'de ${j.wisersellCancelled} iptal` : ''}.${failed.length ? ` ⚠ WS başarısız: ${failed.join('; ')}` : ''}`;
+    });
     setDetailRow(null);
   };
 
@@ -475,7 +478,7 @@ export default function SiparisPage() {
               {detailRow.amazonCancelledAt && (
                 <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
                   <div className="font-semibold flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" /> Amazon&apos;da iptal edilmiş</div>
-                  <div className="mt-1 text-xs">Bu sipariş Amazon&apos;da iptal edilmiş (canlı SP-API kontrolü). Etiket/çıkış/MCF <strong>yapmayın</strong> — <strong>Listeden Düş</strong> ile kaldırın. (Wisersell tarafı ayrıca kapatılmalı.)</div>
+                  <div className="mt-1 text-xs">Bu sipariş Amazon&apos;da iptal edilmiş (canlı SP-API kontrolü). Etiket/çıkış/MCF <strong>yapmayın</strong> — <strong>Listeden Düş</strong> ile kaldırın (Wisersell&apos;de de iptal edilir).</div>
                 </div>
               )}
               {tab === 'eslesmeGerek' && (

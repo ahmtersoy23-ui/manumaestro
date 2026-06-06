@@ -46,6 +46,11 @@ export async function closeWisersellPlatform(orderId: number): Promise<void> {
   await post('/wisersell-routing/platform-close', { orderId });
 }
 
+/** Siparişi Wisersell'de iptal eder (Amazon'da iptal edilmiş, Wisersell'e yansımamış siparişler için). */
+export async function cancelWisersellOrder(orderId: number): Promise<void> {
+  await post('/wisersell-routing/cancel', { orderId });
+}
+
 /** CG export'unda eşleşmeyen iwasku için operatörün girdiği Wayfair part number mapping'ini kalıcılaştırır. */
 export async function saveWayfairMapping(partNumber: string, iwasku: string): Promise<void> {
   await post('/wisersell-routing/wayfair-map', { partNumber, iwasku });
