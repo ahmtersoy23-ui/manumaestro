@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { X, Loader2, RefreshCw, Tag, CheckCircle2, AlertTriangle } from 'lucide-react';
 
+interface ServiceOption { key: string; label?: string; type?: string; values?: Array<{ value: string; label?: string; price?: number | string }> }
 interface Quote {
   rate_id: string;
   service_name: string;
@@ -20,6 +21,7 @@ interface Quote {
   total_charge: string;
   delivery_estimate?: string;
   options?: Record<string, string>;
+  serviceOptions?: ServiceOption[];
 }
 interface RatesResp {
   remoteShipmentId: string;
@@ -51,6 +53,10 @@ export default function VeeqoLabelModal({ orderId, orderNumber, onClose, onSucce
   const [loadingRates, setLoadingRates] = useState(false);
   const [booking, setBooking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [vas, setVas] = useState<Record<string, string>>({}); // operatörün seçtiği ek servisler
+
+  // rate değişince ek servis seçimini sıfırla (her rate'in opsiyonları farklı)
+  useEffect(() => { setVas({}); }, [selected]);
 
   const fetchRates = useCallback(async () => {
     setLoadingRates(true); setError(null); setRates(null); setSelected('');
@@ -79,10 +85,14 @@ export default function VeeqoLabelModal({ orderId, orderNumber, onClose, onSucce
   const book = async () => {
     if (!rates || !selected) return;
     setBooking(true); setError(null);
+    // booking opsiyonları: rate'in ücretsiz varsayılanları + operatörün ek servis seçimleri
+    const chosen = rates.quotes.find((q) => q.rate_id === selected);
+    const bookOptions: Record<string, string> = { ...(chosen?.options ?? {}) };
+    for (const [k, v] of Object.entries(vas)) { if (v) bookOptions[k] = v; else delete bookOptions[k]; }
     try {
       const res = await fetch('/api/siparis/veeqo-label', {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, remoteShipmentId: rates.remoteShipmentId, rateId: selected, requestToken: rates.requestToken, options: rates.quotes.find((q) => q.rate_id === selected)?.options }),
+        body: JSON.stringify({ orderId, remoteShipmentId: rates.remoteShipmentId, rateId: selected, requestToken: rates.requestToken, options: bookOptions }),
       });
       const j = await res.json();
       if (!res.ok || !j.success) {
@@ -159,6 +169,40 @@ export default function VeeqoLabelModal({ orderId, orderNumber, onClose, onSucce
                   <div className="text-sm font-semibold text-gray-900 shrink-0">${q.total_charge}</div>
                 </label>
               ))}
+            </div>
+          )}
+
+          {/* Ek servisler (seçili rate'e göre) — confirmation tipi + sigorta */}
+          {sel?.serviceOptions?.some((o) => (o.type === 'select' && o.values?.length) || o.key === 'liability_amount') && (
+            <div className="rounded-lg border border-gray-100 p-3 space-y-2">
+              <div className="text-[11px] text-gray-400 uppercase">Ek servisler (opsiyonel)</div>
+              {sel.serviceOptions.map((o) => {
+                if (o.type === 'select' && o.values?.length) {
+                  const cur = vas[o.key] ?? sel.options?.[o.key] ?? o.values[0].value;
+                  return (
+                    <label key={o.key} className="flex items-center justify-between gap-2 text-xs text-gray-600">
+                      <span>{o.label || o.key.replace(/^value_added_service__/, '')}</span>
+                      <select value={cur} onChange={(e) => setVas((p) => ({ ...p, [o.key]: e.target.value }))}
+                        className="text-sm px-2 py-1 rounded border border-gray-300 bg-white text-gray-800 max-w-[60%]">
+                        {o.values.map((v) => (
+                          <option key={v.value} value={v.value}>{(v.label || v.value)}{Number(v.price) > 0 ? ` (+$${v.price})` : ''}</option>
+                        ))}
+                      </select>
+                    </label>
+                  );
+                }
+                if (o.key === 'liability_amount') {
+                  return (
+                    <label key={o.key} className="flex items-center justify-between gap-2 text-xs text-gray-600">
+                      <span>{o.label || 'Sigorta'} ($)</span>
+                      <input type="number" min={0} step="1" value={vas[o.key] ?? ''} placeholder="0"
+                        onChange={(e) => setVas((p) => ({ ...p, [o.key]: e.target.value }))}
+                        className="w-24 text-sm px-2 py-1 rounded border border-gray-300 bg-white text-gray-800" />
+                    </label>
+                  );
+                }
+                return null;
+              })}
             </div>
           )}
         </div>

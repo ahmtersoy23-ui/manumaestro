@@ -36,8 +36,10 @@ export interface VeeqoQuote {
   service_carrier: string;
   total_charge: string;
   delivery_estimate?: string;
-  /** booking'de gönderilmesi gereken value-added-service değerleri (rates'ten) */
+  /** booking'de gönderilmesi gereken value-added-service varsayılanları (ücretsiz) */
   options?: Record<string, string>;
+  /** operatörün seçebileceği ek servisler (confirmation/sigorta vb.) */
+  serviceOptions?: Array<{ key: string; label?: string; type?: string; values?: Array<{ value: string; label?: string; price?: number | string }> }>;
 }
 
 export interface VeeqoRatesResponse {
