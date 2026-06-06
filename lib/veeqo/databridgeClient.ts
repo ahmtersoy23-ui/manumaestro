@@ -36,6 +36,8 @@ export interface VeeqoQuote {
   service_carrier: string;
   total_charge: string;
   delivery_estimate?: string;
+  /** booking'de gönderilmesi gereken value-added-service değerleri (rates'ten) */
+  options?: Record<string, string>;
 }
 
 export interface VeeqoRatesResponse {
@@ -87,6 +89,7 @@ export async function bookVeeqoLabel(input: {
   rateId: string;
   requestToken?: string;
   labelFormat?: 'PDF' | 'PNG' | 'ZPL' | 'JPEG';
+  options?: Record<string, string>;
 }): Promise<VeeqoBookResponse> {
   return (await post('/veeqo-routing/book', input)) as VeeqoBookResponse;
 }

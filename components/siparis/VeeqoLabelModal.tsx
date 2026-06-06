@@ -19,6 +19,7 @@ interface Quote {
   service_carrier: string;
   total_charge: string;
   delivery_estimate?: string;
+  options?: Record<string, string>;
 }
 interface RatesResp {
   remoteShipmentId: string;
@@ -81,7 +82,7 @@ export default function VeeqoLabelModal({ orderId, orderNumber, onClose, onSucce
     try {
       const res = await fetch('/api/siparis/veeqo-label', {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, remoteShipmentId: rates.remoteShipmentId, rateId: selected, requestToken: rates.requestToken }),
+        body: JSON.stringify({ orderId, remoteShipmentId: rates.remoteShipmentId, rateId: selected, requestToken: rates.requestToken, options: rates.quotes.find((q) => q.rate_id === selected)?.options }),
       });
       const j = await res.json();
       if (!res.ok || !j.success) {

@@ -27,6 +27,7 @@ const Schema = z.object({
   remoteShipmentId: z.string().min(3),
   rateId: z.string().min(3),
   requestToken: z.string().optional(),
+  options: z.record(z.string(), z.string()).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ success: false, error: 'Doğrulama hatası', details: parsed.error.flatten().fieldErrors }, { status: 400 });
   }
-  const { orderId, remoteShipmentId, rateId, requestToken } = parsed.data;
+  const { orderId, remoteShipmentId, rateId, requestToken, options } = parsed.data;
 
   const order = await prisma.outboundOrder.findUnique({
     where: { id: orderId },
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
   // 1) Etiketi satın al (GERÇEK PARA) — DataBridge book endpoint'i retry YAPMAZ
   let booked;
   try {
-    booked = await bookVeeqoLabel({ remoteShipmentId, rateId, requestToken, labelFormat: 'PDF' });
+    booked = await bookVeeqoLabel({ remoteShipmentId, rateId, requestToken, labelFormat: 'PDF', options });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Veeqo booking hatası';
     logger.error(`book error: ${order.orderNumber}: ${msg}`);
