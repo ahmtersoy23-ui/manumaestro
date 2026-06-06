@@ -14,14 +14,14 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
   Calendar, Package, ShoppingCart, Factory, Plus,
   Hammer, Sofa, ShoppingBag, Lock, RefreshCw, Truck, Camera, ArrowLeft, ChevronDown,
 } from 'lucide-react';
 import { notify } from '@/lib/ui/notify';
 import { createLogger } from '@/lib/logger';
-import { parseMonthValue } from '@/lib/monthUtils';
+import { parseMonthValue, isLegacyMonth } from '@/lib/monthUtils';
 import { NewRequestModal } from '@/components/forms/NewRequestModal';
 import { MarketplacePriority as MarketplacePriorityComponent } from '@/components/seasonal/MarketplacePriority';
 import { useAuth } from '@/contexts/AuthContext';
@@ -97,6 +97,7 @@ interface MarketplaceMeta {
 export default function Dashboard2MonthPage() {
   const params = useParams<{ month: string }>();
   const month = params?.month ?? '';
+  const router = useRouter();
   const [viewMode, setViewMode] = useState<'quantity' | 'desi'>('desi');
   const { role } = useAuth();
   const [priorityOpen, setPriorityOpen] = useState(false);
@@ -183,7 +184,12 @@ export default function Dashboard2MonthPage() {
     }
   };
 
-  useEffect(() => { loadAll(); }, [month]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    // Eski aylar (Haziran 2026 öncesi) Dashboard 1 gösterimine yönlenir — yeni
+    // gösterim recommendedDestination'a dayanıyor, eski veride o yok.
+    if (isLegacyMonth(month)) { router.replace(`/dashboard/month/${month}`); return; }
+    loadAll();
+  }, [month]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getMpSummary = (mpId: string) => marketplaceSummary.find(s => s.marketplaceId === mpId);
 
@@ -263,6 +269,10 @@ export default function Dashboard2MonthPage() {
     try { return parseMonthValue(month).toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' }); }
     catch { return month; }
   }, [month]);
+
+  if (isLegacyMonth(month)) {
+    return <div className="p-6 text-center text-slate-500">Eski ay — Dashboard 1 görünümüne yönlendiriliyor…</div>;
+  }
 
   return (
     <div className="p-4 md:p-6 max-w-[1600px] mx-auto space-y-6">

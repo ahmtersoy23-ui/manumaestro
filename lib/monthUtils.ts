@@ -131,6 +131,23 @@ export function getCurrentMonth(): string {
 }
 
 /**
+ * Yeni Dashboard 2 gösteriminin başladığı ay. Bu aydan ÖNCEKİ aylar "eski tip"
+ * (recommendedDestination yok, elle girilmiş/işlenmiş veri) — Dashboard 1
+ * gösterimiyle (`/dashboard/month/[month]`) açılır; Haziran 2026+ Dashboard 2.
+ */
+export const NEW_DASHBOARD_FROM = '2026-06';
+
+/** Ay eski tip mi (Haziran 2026 öncesi → Dashboard 1 gösterimi)? */
+export function isLegacyMonth(month: string): boolean {
+  return month < NEW_DASHBOARD_FROM;
+}
+
+/** Ay detayı için doğru rota: eski aylar Dashboard 1, yeni aylar Dashboard 2. */
+export function monthDetailHref(month: string): string {
+  return isLegacyMonth(month) ? `/dashboard/month/${month}` : `/dashboard2/${month}`;
+}
+
+/**
  * Get the default month for a new entry (first unlocked month from today onwards).
  * Super admin de dahil herkes için "doğal hedef" — kilitli ay manuel seçilebilir kalsa
  * bile auto-select buradan döner.

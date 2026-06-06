@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react';
 import { Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import Link from 'next/link';
-import { getActiveMonths, getAllMonthsForViewing } from '@/lib/monthUtils';
+import { getActiveMonths, getAllMonthsForViewing, monthDetailHref } from '@/lib/monthUtils';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('Dashboard2Home');
@@ -92,7 +92,7 @@ export default function Dashboard2HomePage() {
             return (
               <Link
                 key={month.value}
-                href={`/dashboard2/${month.value}`}
+                href={monthDetailHref(month.value)}
                 className="block p-6 bg-white rounded-xl border-2 border-slate-200 hover:border-purple-500 hover:shadow-lg transition-all group"
               >
                 <div className="flex items-start justify-between mb-4">
@@ -141,7 +141,7 @@ export default function Dashboard2HomePage() {
                 return (
                   <Link
                     key={month.value}
-                    href={`/dashboard2/${month.value}`}
+                    href={monthDetailHref(month.value)}
                     className="block p-6 bg-slate-50 rounded-xl border-2 border-slate-200 hover:border-slate-400 hover:shadow-md transition-all group"
                   >
                     <div className="flex items-start justify-between mb-4">
