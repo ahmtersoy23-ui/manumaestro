@@ -49,14 +49,14 @@ const COLS: { key: NumKey; label: string; group: GroupKey }[] = [
   { key: 'total', label: 'TOPLAM', group: 'total' },
 ];
 
-const GROUP_META: Record<GroupKey, { label: string; text: string; border: string }> = {
-  amerika:    { label: 'Amerika',    text: 'text-blue-600',   border: 'border-l border-l-blue-200' },
-  turkiye:    { label: 'Türkiye',    text: 'text-rose-600',   border: 'border-l border-l-rose-200' },
-  avrupa:     { label: 'Avrupa',     text: 'text-violet-600', border: 'border-l border-l-violet-200' },
-  kanada:     { label: 'Kanada',     text: 'text-red-600',    border: 'border-l border-l-red-200' },
-  avustralya: { label: 'Avustralya', text: 'text-orange-600', border: 'border-l border-l-orange-200' },
-  ortadogu:   { label: 'Orta Doğu',  text: 'text-teal-600',   border: 'border-l border-l-teal-200' },
-  total:      { label: '',           text: 'text-gray-700',   border: 'border-l border-l-gray-300' },
+const GROUP_META: Record<GroupKey, { label: string; text: string; border: string; bg: string }> = {
+  amerika:    { label: 'Amerika',    text: 'text-blue-600',   border: 'border-l border-l-blue-200',   bg: 'bg-blue-50/60' },
+  turkiye:    { label: 'Türkiye',    text: 'text-rose-600',   border: 'border-l border-l-rose-200',   bg: 'bg-rose-50/60' },
+  avrupa:     { label: 'Avrupa',     text: 'text-violet-600', border: 'border-l border-l-violet-200', bg: 'bg-violet-50/60' },
+  kanada:     { label: 'Kanada',     text: 'text-red-600',    border: 'border-l border-l-red-200',    bg: 'bg-red-50/60' },
+  avustralya: { label: 'Avustralya', text: 'text-orange-600', border: 'border-l border-l-orange-200', bg: 'bg-orange-50/60' },
+  ortadogu:   { label: 'Orta Doğu',  text: 'text-teal-600',   border: 'border-l border-l-teal-200',   bg: 'bg-teal-50/60' },
+  total:      { label: '',           text: 'text-gray-700',   border: 'border-l border-l-gray-300',   bg: 'bg-slate-100/80' },
 };
 
 // Bölge bantları (band row) — sıralı grup + colSpan
@@ -192,7 +192,7 @@ export default function StokHaritasiPage() {
 
       <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm whitespace-nowrap">
+          <table className="min-w-full text-sm whitespace-nowrap">
             <thead>
               {/* Bölge bantları */}
               <tr className="bg-gray-50/80 border-b border-gray-200">
@@ -207,13 +207,13 @@ export default function StokHaritasiPage() {
               </tr>
               {/* Kolon başlıkları */}
               <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-200">
-                <th className="sticky left-0 z-20 bg-gray-50 w-[130px] px-3 py-3 cursor-pointer hover:text-gray-800" onClick={() => toggleSort('iwasku')}>IWASKU</th>
-                <th className="sticky left-[130px] z-20 bg-gray-50 w-[300px] px-3 py-3 cursor-pointer hover:text-gray-800 border-r border-gray-200" onClick={() => toggleSort('name')}>Ürün Adı</th>
-                <th className="px-3 py-3 cursor-pointer hover:text-gray-800" onClick={() => toggleSort('category')}>Kategori</th>
+                <th className="sticky left-0 z-20 bg-gray-50 w-[130px] min-w-[130px] max-w-[130px] px-3 py-3 cursor-pointer hover:text-gray-800" onClick={() => toggleSort('iwasku')}>IWASKU</th>
+                <th className="sticky left-[130px] z-20 bg-gray-50 w-[300px] min-w-[300px] max-w-[300px] px-3 py-3 cursor-pointer hover:text-gray-800 border-r border-gray-200" onClick={() => toggleSort('name')}>Ürün Adı</th>
+                <th className="px-3 py-3 min-w-[120px] cursor-pointer hover:text-gray-800" onClick={() => toggleSort('category')}>Kategori</th>
                 <th className="px-3 py-3 text-right cursor-pointer hover:text-gray-800" onClick={() => toggleSort('desi')}>Desi</th>
                 {COLS.map((c, idx) => (
                   <th key={c.key} onClick={() => toggleSort(c.key)}
-                    className={`px-3 py-3 text-right cursor-pointer hover:text-gray-800 bg-slate-100/60 ${c.key === 'total' ? 'font-bold' : ''} ${groupBorder(idx)}`}>
+                    className={`px-3 py-3 text-right cursor-pointer hover:text-gray-800 ${GROUP_META[c.group].bg} ${c.key === 'total' ? 'font-bold' : ''} ${groupBorder(idx)}`}>
                     <span className="inline-flex items-center gap-1">{c.label}<ArrowUpDown className="w-3 h-3 opacity-40" /></span>
                   </th>
                 ))}
@@ -226,14 +226,14 @@ export default function StokHaritasiPage() {
                 <tr><td colSpan={4 + COLS.length} className="px-3 py-12 text-center text-gray-400">Kayıt yok.</td></tr>
               ) : paged.map((r) => (
                 <tr key={r.iwasku} className="group hover:bg-blue-50/40">
-                  <td className="sticky left-0 z-10 bg-white group-hover:bg-blue-50/40 w-[130px] px-3 py-3.5 align-top font-mono text-xs text-gray-600">{r.iwasku}</td>
-                  <td className="sticky left-[130px] z-10 bg-white group-hover:bg-blue-50/40 w-[300px] px-3 py-3.5 align-top border-r border-gray-200">
-                    <div className="text-sm text-gray-800 leading-snug whitespace-normal break-words">{r.name ?? '—'}</div>
+                  <td className="sticky left-0 z-10 bg-white group-hover:bg-blue-50/40 w-[130px] min-w-[130px] max-w-[130px] px-3 py-3.5 align-top font-mono text-xs text-gray-600">{r.iwasku}</td>
+                  <td className="sticky left-[130px] z-10 bg-white group-hover:bg-blue-50/40 w-[300px] min-w-[300px] max-w-[300px] px-3 py-3.5 align-top border-r border-gray-200">
+                    <div className="text-xs text-gray-800 leading-snug whitespace-normal break-words">{r.name ?? '—'}</div>
                   </td>
-                  <td className="px-3 py-3.5 align-top text-gray-600 text-xs">{r.category ?? '—'}</td>
+                  <td className="px-3 py-3.5 align-top text-gray-600 text-xs min-w-[120px]">{r.category ?? '—'}</td>
                   <td className="px-3 py-3.5 align-top text-right text-gray-600 text-sm">{r.desi != null ? r.desi.toFixed(1) : '—'}</td>
                   {COLS.map((c, idx) => (
-                    <td key={c.key} className={`px-3 py-3.5 align-top text-right text-sm bg-slate-50/70 ${c.key === 'total' ? 'font-bold text-gray-900 bg-slate-100' : ''} ${groupBorder(idx)}`}>
+                    <td key={c.key} className={`px-3 py-3.5 align-top text-right text-sm ${GROUP_META[c.group].bg} ${c.key === 'total' ? 'font-bold text-gray-900' : ''} ${groupBorder(idx)}`}>
                       {c.key === 'total' ? nf(r.total) : num(r[c.key])}
                     </td>
                   ))}
@@ -246,7 +246,7 @@ export default function StokHaritasiPage() {
                   <td className="sticky left-0 z-10 bg-gray-50 px-3 py-3 text-xs uppercase tracking-wide border-r border-gray-200" colSpan={2}>Toplam ({nf(filtered.length)} ürün)</td>
                   <td className="px-3 py-3" colSpan={2}></td>
                   {COLS.map((c, idx) => (
-                    <td key={c.key} className={`px-3 py-3 text-right text-sm bg-slate-100/70 ${c.key === 'total' ? 'font-bold text-gray-900 bg-slate-200/70' : ''} ${groupBorder(idx)}`}>
+                    <td key={c.key} className={`px-3 py-3 text-right text-sm ${GROUP_META[c.group].bg} ${c.key === 'total' ? 'font-bold text-gray-900' : ''} ${groupBorder(idx)}`}>
                       {nf(totals[c.key])}
                     </td>
                   ))}
