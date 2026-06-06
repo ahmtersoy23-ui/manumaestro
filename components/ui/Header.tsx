@@ -36,7 +36,7 @@ export function Header() {
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
       <div className="px-4 md:px-6 py-3 md:py-4">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
           {/* Logo */}
           <Link href={HOME_HREF} className="flex items-center gap-3 shrink-0">
             <div className="w-8 h-8 md:w-10 md:h-10 relative">
@@ -49,7 +49,7 @@ export function Header() {
           </Link>
 
           {/* Desktop: 4 ana grup */}
-          <nav className="hidden md:flex items-center gap-1 flex-1 justify-center">
+          <nav className="hidden md:flex items-center gap-1 ml-auto">
             {groups.map((g) => {
               const Icon = g.icon;
               const active = isActive(g);
@@ -123,7 +123,7 @@ export function Header() {
           </div>
 
           {/* Mobile: avatar + hamburger */}
-          <div className="flex md:hidden items-center gap-2">
+          <div className="flex md:hidden items-center gap-2 ml-auto">
             {user?.picture ? (
               <img src={user.picture} alt={user.name} className="w-8 h-8 rounded-full" />
             ) : (
