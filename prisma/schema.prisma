@@ -808,6 +808,7 @@ model OutboundOrder {
   wisersellOrderId Int?          @unique // Wisersell internal order id (otomasyon) — idempotency + external-close anahtarı
   wisersellReadyAt DateTime?     // Wisersell "Kargoya Hazır" (status/update) başarıyla yazıldıysa; null = ready-pending (retry)
   wisersellClosedAt DateTime?    // external-close başarıyla yazıldıysa (Kapandı)
+  manualTracking  String?        // CG/etiketsiz akış: operatörün Wayfair MCF raporundan elle girdiği tracking (SHIPPING etiketi yok)
   createdById     String
   createdAt       DateTime       @default(now())
   shippedById     String?

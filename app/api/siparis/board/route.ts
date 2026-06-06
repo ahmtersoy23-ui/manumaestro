@@ -182,7 +182,9 @@ export async function GET(request: NextRequest) {
       shipAddress: manual?.location ?? null,
       addressNote: o.addressNote,
       items: o.items,
-      trackingNumber: shippingLabel?.trackingNumber ?? null,
+      // CG'de SHIPPING etiketi yok → tracking manualTracking'ten gelir (tablo/detayda tek alan).
+      trackingNumber: shippingLabel?.trackingNumber ?? (isCgWarehouse(o.warehouseCode) ? o.manualTracking : null) ?? null,
+      manualTracking: o.manualTracking ?? null,
       labelId: shippingLabel?.id ?? null,
       status: o.status,
       createdAt: o.createdAt,

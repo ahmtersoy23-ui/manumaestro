@@ -36,7 +36,17 @@ export async function markWisersellReady(ids: number[]): Promise<{ affected: num
   return { affected: data.affected ?? [], count: data.count ?? 0 };
 }
 
-/** Wisersell siparişini tracking ile harici kapatır. */
+/** Wisersell siparişini tracking ile harici kapatır (tracking'i marketplace'e push'lar). */
 export async function closeWisersellExternal(orderId: number, carrierId: number, trackingCode: string): Promise<void> {
   await post('/wisersell-routing/close', { orderId, carrierId, trackingCode });
+}
+
+/** Platform kapama (evrensel son adım) — siparişi Wisersell'de "Açık"tan düşürür. external-close'dan SONRA. */
+export async function closeWisersellPlatform(orderId: number): Promise<void> {
+  await post('/wisersell-routing/platform-close', { orderId });
+}
+
+/** CG export'unda eşleşmeyen iwasku için operatörün girdiği Wayfair part number mapping'ini kalıcılaştırır. */
+export async function saveWayfairMapping(partNumber: string, iwasku: string): Promise<void> {
+  await post('/wisersell-routing/wayfair-map', { partNumber, iwasku });
 }

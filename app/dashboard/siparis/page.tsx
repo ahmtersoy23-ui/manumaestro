@@ -8,7 +8,7 @@
  */
 
 import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Zap, CheckCircle2, PackageCheck, Truck, Send, Archive, AlertTriangle, MapPin, Printer, FileText, X, ChevronRight, Copy, Check, Plus, Warehouse } from 'lucide-react';
+import { RefreshCw, Zap, CheckCircle2, PackageCheck, Truck, Send, Archive, AlertTriangle, MapPin, Printer, FileText, X, ChevronRight, Copy, Check, Plus, Warehouse, Download } from 'lucide-react';
 import { LabelUploader } from '@/components/wms/LabelUploader';
 import { ShipModal } from '@/components/wms/ShipModal';
 import { ManualOrderModal } from '@/components/siparis/ManualOrderModal';
@@ -84,6 +84,7 @@ interface Row {
   marketplaceLabel?: string | null;
   source?: 'MANUAL' | 'WISERSELL_AUTO';
   trackingNumber?: string | null;
+  manualTracking?: string | null;
   labelId?: string | null;
   readyPending?: boolean;
   createdAt?: string | null;
@@ -110,6 +111,12 @@ export default function SiparisPage() {
   const [detailRow, setDetailRow] = useState<Row | null>(null);
   const [shipOrder, setShipOrder] = useState<Row | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
+  // CG MCF export — eşleşmeyen part number kuyruğu (export'u engeller; operatör burada eşler)
+  const [unmatched, setUnmatched] = useState<Array<{ iwasku: string; productName: string | null; orderNumbers: string[] }> | null>(null);
+  const [mapDraft, setMapDraft] = useState<Record<string, string>>({});
+  const [exportIds, setExportIds] = useState<string[]>([]); // mapping sonrası tekrar denemek için
+  // CG detay modalinde manuel tracking girişi
+  const [trackingDraft, setTrackingDraft] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -157,8 +164,8 @@ export default function SiparisPage() {
     (mpFilter === 'ALL' || r.marketplaceCode === mpFilter)
   ), [tabRows, whFilter, mpFilter]);
 
-  // İlk onay (bootstrap) + çıkış etiket yazdırma → herkes; kapatma (Wisersell) → Manager+.
-  const selectable = tab === 'onayBekliyor' || tab === 'cikisBekliyor' || (tab === 'kapatmaBekliyor' && canManage);
+  // İlk onay (bootstrap) + çıkış etiket yazdırma → herkes; kapatma + CG (Wisersell) → Manager+.
+  const selectable = tab === 'onayBekliyor' || tab === 'cikisBekliyor' || ((tab === 'kapatmaBekliyor' || tab === 'cgBekliyor') && canManage);
   const rowKey = useCallback((r: Row) => (tab === 'onayBekliyor' ? String(r.wisersellOrderId) : String(r.id)), [tab]);
 
   const toggle = (k: string) => setSelected((p) => { const n = new Set(p); if (n.has(k)) n.delete(k); else n.add(k); return n; });
@@ -182,6 +189,57 @@ export default function SiparisPage() {
     return `${j.closed} kapatıldı.${failed.length ? ` ${failed.length} başarısız: ${failed.map((f) => f.message).join('; ')}` : ''}`;
   });
   const doAutoRun = () => runAction(`/api/siparis/auto-run?region=${region}`, {}, (j) => `Otomatik: ${j.approved} onaylandı.`);
+
+  // ── CG / Wayfair MCF export + eşleştirme + manuel tracking ──────────────────
+  const downloadBase64Xlsx = (filename: string, b64: string) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const runExport = useCallback(async (ids: string[]) => {
+    if (!ids.length) { setMsg('Önce sipariş seçin.'); return; }
+    setBusy(true); setMsg(null);
+    try {
+      const res = await fetch('/api/siparis/cg-export', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderIds: ids }) });
+      const json = await res.json();
+      if (res.status === 409 && json.unmatched) {
+        setExportIds(ids); setUnmatched(json.unmatched); setMapDraft({});
+        return;
+      }
+      if (!res.ok || !json.success) throw new Error(json.error || 'Export hatası');
+      const files = (json.files ?? []) as Array<{ filename: string; base64: string; account: string; rowCount: number }>;
+      for (const f of files) downloadBase64Xlsx(f.filename, f.base64);
+      setUnmatched(null);
+      setMsg(`${files.length} MCF dosyası indirildi (${files.map((f) => `${f.account}: ${f.rowCount} satır`).join(', ')}).`);
+    } catch (e) { setMsg(e instanceof Error ? e.message : 'Hata'); } finally { setBusy(false); }
+  }, []);
+
+  const doExport = () => runExport([...selected]);
+
+  const submitMappings = async () => {
+    const entries = Object.entries(mapDraft).map(([iw, pn]) => [iw, pn.trim()] as const).filter(([, pn]) => pn);
+    if (!entries.length) { setMsg('En az bir part number girin.'); return; }
+    setBusy(true); setMsg(null);
+    try {
+      for (const [iwasku, partNumber] of entries) {
+        const res = await fetch('/api/siparis/wayfair-map', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ partNumber, iwasku }) });
+        const json = await res.json();
+        if (!res.ok || !json.success) throw new Error(json.error || `Mapping yazılamadı (${iwasku})`);
+      }
+      await runExport(exportIds); // hepsi eşleştiyse dosya iner; eksik kaldıysa kalan liste döner
+    } catch (e) { setMsg(e instanceof Error ? e.message : 'Hata'); setBusy(false); }
+  };
+
+  const saveTracking = async (orderId?: string) => {
+    if (!orderId || !trackingDraft.trim()) return;
+    await runAction('/api/siparis/cg-tracking', { orderId, tracking: trackingDraft.trim() }, () => 'Tracking kaydedildi.');
+    setTrackingDraft(''); setDetailRow(null);
+  };
+
+  const openDetail = (r: Row) => { setDetailRow(r); setTrackingDraft(r.manualTracking ?? ''); };
 
   // Toplu "Hazır Etiketleri Yazdır" — depoya münhasır (fiziksel mekan ayrı), seçili siparişler.
   const printSelected = () => {
@@ -302,6 +360,16 @@ export default function SiparisPage() {
               <Send className="w-4 h-4" /> Wisersell&apos;de Kapat {selected.size > 0 && `(${selected.size})`}
             </button>
           )}
+          {tab === 'cgBekliyor' && (
+            <div className="flex items-center gap-2">
+              <button onClick={doExport} disabled={busy || selected.size === 0} title="Seçili CG siparişleri için Wayfair MCF Order Import Excel'i (Shukran/MDN ayrı) indir" className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                <Download className="w-4 h-4" /> MCF Excel İndir {selected.size > 0 && `(${selected.size})`}
+              </button>
+              <button onClick={doClose} disabled={busy || selected.size === 0} title="Tracking girilmiş CG siparişlerini Wisersell'de kapat (external-close + platform kapama)" className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                <Send className="w-4 h-4" /> Wisersell&apos;de Kapat {selected.size > 0 && `(${selected.size})`}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -331,7 +399,7 @@ export default function SiparisPage() {
                 const key = rowKey(r);
                 const sel = selected.has(key);
                 return (
-                  <tr key={key} onClick={() => setDetailRow(r)} className={`cursor-pointer hover:bg-gray-50/70 ${sel ? 'bg-emerald-50/40' : ''}`}>
+                  <tr key={key} onClick={() => openDetail(r)} className={`cursor-pointer hover:bg-gray-50/70 ${sel ? 'bg-emerald-50/40' : ''}`}>
                     {selectable && <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}><input type="checkbox" className="rounded" checked={sel} onChange={() => toggle(key)} /></td>}
                     <td className="px-3 py-2.5">
                       <div className="font-semibold text-gray-900">{r.orderCode ?? r.orderNumber}</div>
@@ -396,9 +464,17 @@ export default function SiparisPage() {
                 </div>
               )}
               {tab === 'cgBekliyor' && (
-                <div className="rounded-lg border border-teal-200 bg-teal-50 p-3 text-sm text-teal-800">
+                <div className="rounded-lg border border-teal-200 bg-teal-50 p-3 text-sm text-teal-800 space-y-2">
                   <div className="font-semibold flex items-center gap-1.5"><Warehouse className="w-4 h-4" /> CastleGate (Wayfair MCF)</div>
-                  <div className="mt-1 text-xs">Bu sipariş CG&apos;de — etiket/shelf çıkışı yok. Toplu MCF Excel çıktısı + manuel tracking girişi + Wisersell kapatma <strong>sonraki aşamada</strong> (Faz 3) eklenecek.</div>
+                  <div className="text-xs">Etiket/shelf çıkışı yok. Akış: <strong>MCF Excel indir</strong> → Wayfair&apos;e yükle → sevk edince MCF raporundaki tracking&apos;i aşağı gir → <strong>Wisersell&apos;de Kapat</strong>.</div>
+                  <div>
+                    <div className="text-[11px] uppercase text-teal-600 mb-1">Tracking (Wayfair MCF raporundan)</div>
+                    <div className="flex items-center gap-2">
+                      <input value={trackingDraft} onChange={(e) => setTrackingDraft(e.target.value)} placeholder="örn. 514965862962" className="flex-1 text-sm px-2.5 py-1.5 rounded-lg border border-teal-300 bg-white text-gray-800 font-mono" />
+                      <button onClick={() => saveTracking(detailRow.id)} disabled={busy || !trackingDraft.trim()} className="text-sm px-3 py-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-40">Kaydet</button>
+                    </div>
+                    {detailRow.manualTracking && <div className="mt-1 text-[11px] text-teal-700">Kayıtlı: <span className="font-mono">{detailRow.manualTracking}</span></div>}
+                  </div>
                 </div>
               )}
               {/* Üst bilgi şeridi */}
@@ -468,6 +544,39 @@ export default function SiparisPage() {
                   <Send className="w-4 h-4" /> Wisersell&apos;de Kapat
                 </button>
               )}
+              {tab === 'cgBekliyor' && canManage && (
+                <button onClick={() => closeOne(detailRow.id)} disabled={busy || !detailRow.manualTracking} title={detailRow.manualTracking ? '' : 'Önce tracking girin'} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-40">
+                  <Send className="w-4 h-4" /> Wisersell&apos;de Kapat
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CG MCF export — eşleşmeyen part number kuyruğu (uygulama-içi mapping) */}
+      {unmatched && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 overflow-y-auto" onClick={() => setUnmatched(null)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl my-8" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-200">
+              <div className="font-bold text-gray-900 flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-orange-500" /> Eşleşmeyen Wayfair Part Number</div>
+              <button onClick={() => setUnmatched(null)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-5 space-y-3 max-h-[70vh] overflow-y-auto">
+              <p className="text-sm text-gray-600">Aşağıdaki iwasku&apos;ların Wayfair part number eşleşmesi yok — export engellendi. Part number&apos;ı girin; kaydedilince <code className="bg-gray-100 px-1 rounded">wayfair_sku_mapping</code>&apos;e yazılır ve export tekrar denenir.</p>
+              {unmatched.map((u) => (
+                <div key={u.iwasku} className="rounded-lg border border-gray-100 p-3">
+                  <div className="text-sm font-medium text-gray-800">{u.productName ?? '—'}</div>
+                  <div className="text-[11px] font-mono text-gray-500 mt-0.5">{u.iwasku} · {u.orderNumbers.length} sipariş</div>
+                  <input value={mapDraft[u.iwasku] ?? ''} onChange={(e) => setMapDraft((p) => ({ ...p, [u.iwasku]: e.target.value }))} placeholder="Wayfair Part Number (örn. AHM69GEMSTONE)" className="mt-2 w-full text-sm px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-800 font-mono" />
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-200 bg-gray-50/50">
+              <button onClick={() => setUnmatched(null)} className="text-sm px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700">Vazgeç</button>
+              <button onClick={submitMappings} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50">
+                <Check className="w-4 h-4" /> Kaydet ve Tekrar Dene
+              </button>
             </div>
           </div>
         </div>
