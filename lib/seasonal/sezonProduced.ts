@@ -29,14 +29,23 @@ const EMPTY: SezonProducedResult = {
   byIwaskuMonth: new Map(),
 };
 
-export async function computeSezonProduced(poolId: string): Promise<SezonProducedResult> {
+export async function computeSezonProduced(
+  poolId: string,
+  // Yalnız bu IWASKU'lar için hesapla. Döngüdeki her (iwasku, month) çifti BAĞIMSIZ
+  // hesaplandığından bu filtre sonucu bozmaz — sadece gereksiz tüm-havuz okumasını
+  // (snapshot/request/priority) önler. getSezonProducedByIwasku (ATP/stok-haritası hot
+  // path) ihtiyacı kadar geçer; filtresiz çağrılar (pool detay/allocate) tüm havuzu alır.
+  iwaskuFilter?: string[],
+): Promise<SezonProducedResult> {
   const sezonMp = await prisma.marketplace.findUnique({ where: { code: 'SEZON' } });
   if (!sezonMp) return EMPTY;
 
+  const hasFilter = iwaskuFilter !== undefined && iwaskuFilter.length > 0;
   const sezonRequests = await prisma.productionRequest.findMany({
     where: {
       marketplaceId: sezonMp.id,
       notes: { contains: `[pool:${poolId}]` },
+      ...(hasFilter ? { iwasku: { in: iwaskuFilter } } : {}),
     },
     select: { iwasku: true, productionMonth: true, quantity: true, productSize: true },
   });
@@ -156,9 +165,11 @@ export async function getSezonProducedByIwasku(
   const poolIds = [...new Set(reserves.map(r => r.poolId))];
   if (poolIds.length === 0) return new Map();
 
-  // Her havuz için sezon üretimini hesapla, iwasku başına birleştir
+  // Her havuz için sezon üretimini hesapla, iwasku başına birleştir.
+  // iwaskuFilter geçilir → her havuz yalnız istenen IWASKU'ların verisini çeker
+  // (tüm havuzu değil); bu yol sadece byIwaskuQty kullandığından güvenli.
   const merged = new Map<string, number>();
-  const results = await Promise.all(poolIds.map(id => computeSezonProduced(id)));
+  const results = await Promise.all(poolIds.map(id => computeSezonProduced(id, iwaskus)));
   for (const result of results) {
     for (const [iwasku, qty] of result.byIwaskuQty) {
       if (qty <= 0) continue;
