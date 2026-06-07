@@ -225,7 +225,7 @@ export default function StokHaritasiPage() {
             <thead>
               {/* Bölge bantları */}
               <tr className="bg-gray-50/80 border-b border-gray-200">
-                <th colSpan={2} className="sticky left-0 z-20 bg-gray-50 px-3 py-1.5 text-left text-[10px] font-semibold uppercase tracking-widest text-gray-400 border-r border-gray-200">Ürün</th>
+                <th colSpan={2} className="sticky left-0 z-30 bg-gray-50 px-3 py-1.5 text-left text-[10px] font-semibold uppercase tracking-widest text-gray-400 border-r border-gray-200">Ürün</th>
                 <th colSpan={2} className="px-3 py-1.5 text-left text-[10px] font-semibold uppercase tracking-widest text-gray-400">Detay</th>
                 {GROUP_RUNS.map((r) => (
                   <th key={r.group} colSpan={r.span}
@@ -236,8 +236,8 @@ export default function StokHaritasiPage() {
               </tr>
               {/* Kolon başlıkları */}
               <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-200">
-                <th className="sticky left-0 z-20 bg-gray-50 w-[130px] min-w-[130px] max-w-[130px] px-3 py-3 cursor-pointer hover:text-gray-800" onClick={() => toggleSort('iwasku')}>IWASKU</th>
-                <th className="sticky left-[130px] z-20 bg-gray-50 w-[300px] min-w-[300px] max-w-[300px] px-3 py-3 cursor-pointer hover:text-gray-800 border-r border-gray-200" onClick={() => toggleSort('name')}>Ürün Adı</th>
+                <th className="sticky left-0 z-30 bg-gray-50 w-[130px] min-w-[130px] max-w-[130px] px-3 py-3 cursor-pointer hover:text-gray-800" onClick={() => toggleSort('iwasku')}>IWASKU</th>
+                <th className="sticky left-[130px] z-30 bg-gray-50 w-[300px] min-w-[300px] max-w-[300px] px-3 py-3 cursor-pointer hover:text-gray-800 border-r border-gray-200" onClick={() => toggleSort('name')}>Ürün Adı</th>
                 <th className="px-3 py-3 min-w-[120px] cursor-pointer hover:text-gray-800" onClick={() => toggleSort('category')}>Kategori</th>
                 <th className="px-3 py-3 text-right cursor-pointer hover:text-gray-800" onClick={() => toggleSort('desi')}>Desi</th>
                 {COLS.map((c, idx) => (
@@ -255,8 +255,8 @@ export default function StokHaritasiPage() {
                 <tr><td colSpan={4 + COLS.length} className="px-3 py-12 text-center text-gray-400">Kayıt yok.</td></tr>
               ) : paged.map((r) => (
                 <tr key={r.iwasku} className="group hover:bg-blue-50/40">
-                  <td className="sticky left-0 z-10 bg-white group-hover:bg-blue-50/40 w-[130px] min-w-[130px] max-w-[130px] px-3 py-3.5 align-top font-mono text-xs text-gray-600">{r.iwasku}</td>
-                  <td className="sticky left-[130px] z-10 bg-white group-hover:bg-blue-50/40 w-[300px] min-w-[300px] max-w-[300px] px-3 py-3.5 align-top border-r border-gray-200">
+                  <td className="sticky left-0 z-20 bg-white group-hover:bg-blue-50 w-[130px] min-w-[130px] max-w-[130px] px-3 py-3.5 align-top font-mono text-xs text-gray-600">{r.iwasku}</td>
+                  <td className="sticky left-[130px] z-20 bg-white group-hover:bg-blue-50 w-[300px] min-w-[300px] max-w-[300px] px-3 py-3.5 align-top border-r border-gray-200">
                     <div className="text-xs text-gray-800 leading-snug whitespace-normal break-words">{r.name ?? '—'}</div>
                   </td>
                   <td className="px-3 py-3.5 align-top text-gray-600 text-xs min-w-[120px]">{r.category ?? '—'}</td>
@@ -272,7 +272,7 @@ export default function StokHaritasiPage() {
             {!loading && filtered.length > 0 && (
               <tfoot>
                 <tr className="bg-gray-50 border-t-2 border-gray-200 font-semibold text-gray-700">
-                  <td className="sticky left-0 z-10 bg-gray-50 px-3 py-3 text-xs uppercase tracking-wide border-r border-gray-200" colSpan={2}>Toplam ({nf(filtered.length)} ürün)</td>
+                  <td className="sticky left-0 z-20 bg-gray-50 px-3 py-3 text-xs uppercase tracking-wide border-r border-gray-200" colSpan={2}>Toplam ({nf(filtered.length)} ürün)</td>
                   <td className="px-3 py-3" colSpan={2}></td>
                   {COLS.map((c, idx) => (
                     <td key={c.key} className={`px-3 py-3 text-right text-sm ${GROUP_META[c.group].bg} ${c.key === 'total' ? 'font-bold text-gray-900' : ''} ${groupBorder(idx)}`}>
