@@ -84,8 +84,11 @@ export async function getATPBulk(iwaskus: string[]): Promise<ATPResult[]> {
     shipmentReservedMap.set(s.iwasku, s._sum.quantity ?? 0);
   }
 
+  // O(n²) lineer tarama yerine tek seferlik Map (hot path: stok-haritası/snapshot)
+  const wpMap = new Map(warehouseProducts.map(w => [w.iwasku, w]));
+
   return iwaskus.map(iwasku => {
-    const wp = warehouseProducts.find(w => w.iwasku === iwasku);
+    const wp = wpMap.get(iwasku);
     if (!wp) {
       return { iwasku, mevcut: 0, reserved: 0, shipmentReserved: 0, atp: 0 };
     }

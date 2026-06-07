@@ -38,7 +38,7 @@ export const GET = withRoute(
 
     const ankaraIwaskus = (await prisma.warehouseProduct.findMany({ select: { iwasku: true } })).map((p) => p.iwasku);
 
-    const [fbaRows, prodRows, usOnHand, atpResults] = await Promise.all([
+    const [fbaRows, usOnHand, atpResults] = await Promise.all([
       queryProductDb(`
         SELECT iwasku,
           SUM(CASE WHEN warehouse='US'  THEN fulfillable_quantity ELSE 0 END)::int AS fba_us,
@@ -53,19 +53,25 @@ export const GET = withRoute(
         FROM fba_inventory
         GROUP BY iwasku
       `) as Promise<FbaRow[]>,
-      queryProductDb(`
-        SELECT product_sku AS iwasku, name, category, COALESCE(manual_size, size) AS desi
-        FROM products WHERE product_sku IS NOT NULL
-      `) as Promise<ProdRow[]>,
       getUsOnHand(),
       getATPBulk(ankaraIwaskus),
     ]);
 
     const fbaMap = new Map(fbaRows.map((r) => [r.iwasku, r]));
-    const prodMap = new Map(prodRows.map((p) => [p.iwasku, p]));
     const atpMap = new Map(atpResults.map((a) => [a.iwasku, a]));
 
     const allIwaskus = new Set<string>([...fbaMap.keys(), ...usOnHand.keys(), ...atpMap.keys()]);
+
+    // Ürün adı/kategori/desi yalnız görünen iwasku'lar için — eskiden tüm products
+    // tablosu (~15k satır) çekiliyordu; artık allIwaskus'a filtreli (indexed product_sku).
+    const prodRows = (allIwaskus.size > 0
+      ? ((await queryProductDb(
+          `SELECT product_sku AS iwasku, name, category, COALESCE(manual_size, size) AS desi
+           FROM products WHERE product_sku = ANY($1::text[])`,
+          [[...allIwaskus]],
+        )) as ProdRow[])
+      : []);
+    const prodMap = new Map(prodRows.map((p) => [p.iwasku, p]));
 
     const rows = [];
     for (const iwasku of allIwaskus) {
