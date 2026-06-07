@@ -23,8 +23,9 @@ export interface ArrivalResult {
 /**
  * Bir koli'nin gideceği depoyu belirler.
  * Mapping yoksa null döner (raf yansıması atlanır).
+ * Export: birim test + ileride yeni destinationTab eklenince tablo görünür kalsın.
  */
-function resolveTargetWarehouse(destinationTab: string, boxDestination: string): string | null {
+export function resolveTargetWarehouse(destinationTab: string, boxDestination: string): string | null {
   if (destinationTab === 'US') {
     if (boxDestination === 'SHOWROOM') return 'SHOWROOM';
     if (boxDestination === 'DEPO') return 'NJ';
