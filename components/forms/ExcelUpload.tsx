@@ -7,7 +7,6 @@
 
 import { useState, useEffect } from 'react';
 import { Upload, Download, FileSpreadsheet, X, Calendar, AlertCircle, Check } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import { getAvailableMonthsForEntry } from '@/lib/monthUtils';
 import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
@@ -58,41 +57,31 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
   };
 
   const parseExcel = async (file: File): Promise<ParsedRow[]> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
+    // exceljs dinamik import — ağır lib yalnız parse anında yüklenir (bundle şişmez).
+    // (xlsx/SheetJS prototype-pollution + ReDoS açığı taşıyordu, terk edildi.)
+    const ExcelJS = (await import('exceljs')).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(await file.arrayBuffer());
+    const ws = wb.worksheets[0];
+    if (!ws) return [];
 
-      reader.onload = (e) => {
-        try {
-          const data = e.target?.result;
-          const workbook = XLSX.read(data, { type: 'binary' });
-          const sheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[sheetName];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as unknown[][];
-
-          // Skip header row, parse data
-          const rows: ParsedRow[] = [];
-          for (let i = 1; i < jsonData.length && i <= 1000; i++) {
-            const row = jsonData[i];
-            if (row && row[0] && row[1]) {
-              const rawPriority = row[3] ? String(row[3]).trim().toLowerCase() : '';
-              rows.push({
-                iwasku: String(row[0]).trim(),
-                quantity: parseInt(String(row[1])),
-                notes: row[2] ? String(row[2]).trim() : undefined,
-                priority: PRIORITY_MAP[rawPriority] ?? 'MEDIUM',
-              });
-            }
-          }
-
-          resolve(rows);
-        } catch (error) {
-          reject(error);
-        }
-      };
-
-      reader.onerror = () => reject(new Error('Dosya okunamadı'));
-      reader.readAsBinaryString(file);
+    const rows: ParsedRow[] = [];
+    ws.eachRow((row, rowNumber) => {
+      if (rowNumber === 1 || rows.length >= 1000) return; // başlık satırını atla, 1000 cap
+      const iwasku = row.getCell(1).text.trim();
+      const qtyText = row.getCell(2).text.trim();
+      if (!iwasku || !qtyText) return;
+      const quantity = parseInt(qtyText, 10);
+      if (!Number.isFinite(quantity)) return;
+      const rawPriority = row.getCell(4).text.trim().toLowerCase();
+      rows.push({
+        iwasku,
+        quantity,
+        notes: row.getCell(3).text.trim() || undefined,
+        priority: PRIORITY_MAP[rawPriority] ?? 'MEDIUM',
+      });
     });
+    return rows;
   };
 
   const handleUpload = async () => {
@@ -144,18 +133,25 @@ export function ExcelUpload({ marketplaceId, marketplaceName }: ExcelUploadProps
     }
   };
 
-  const downloadTemplate = () => {
-    // Create template workbook
-    const wb = XLSX.utils.book_new();
-    const wsData = [
-      ['IWASKU', 'Miktar', 'Notlar', 'Öncelik'],
-      ['IM154@0QXFF0', '100', 'İsteğe bağlı not', 'Yüksek'],
-      ['CA120@0R53ZY', '50', '', 'Orta'],
-      ['EX789@0AB12C', '200', '', 'Düşük'],
-    ];
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    XLSX.utils.book_append_sheet(wb, ws, 'Template');
-    XLSX.writeFile(wb, `${marketplaceName}_template.xlsx`);
+  const downloadTemplate = async () => {
+    const ExcelJS = (await import('exceljs')).default;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Template');
+    ws.addRow(['IWASKU', 'Miktar', 'Notlar', 'Öncelik']);
+    ws.addRow(['IM154@0QXFF0', 100, 'İsteğe bağlı not', 'Yüksek']);
+    ws.addRow(['CA120@0R53ZY', 50, '', 'Orta']);
+    ws.addRow(['EX789@0AB12C', 200, '', 'Düşük']);
+
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${marketplaceName}_template.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (

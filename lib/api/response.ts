@@ -4,6 +4,7 @@
  */
 
 import { NextResponse } from 'next/server';
+import * as Sentry from '@sentry/nextjs';
 import { ApiError } from './errors';
 import { createLogger } from '@/lib/logger';
 
@@ -56,7 +57,7 @@ export function errorResponse(
       },
     };
 
-    // Log errors (but not client errors like 400, 401, 403, 404)
+    // Log + Sentry (but not client errors like 400, 401, 403, 404)
     if (error.statusCode >= 500) {
       logger.error('API Error:', {
         code: error.code,
@@ -64,6 +65,7 @@ export function errorResponse(
         statusCode: error.statusCode,
         details: error.details,
       });
+      Sentry.captureException(error);
     }
 
     return NextResponse.json(response, { status: error.statusCode });
@@ -76,6 +78,7 @@ export function errorResponse(
       message: error.message,
       stack: error.stack,
     });
+    Sentry.captureException(error);
 
     return NextResponse.json(
       {
@@ -91,6 +94,7 @@ export function errorResponse(
 
   // Handle unknown errors
   logger.error('Unknown error type:', error);
+  Sentry.captureException(error);
 
   return NextResponse.json(
     {

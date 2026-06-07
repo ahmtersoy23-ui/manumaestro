@@ -16,6 +16,8 @@ declare global {
 // Create connection pool and adapter
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  connectionTimeoutMillis: 5000,
+  statement_timeout: 30000,
   // Explicitly disable env variable fallback
   user: undefined,
   database: undefined,
@@ -36,6 +38,8 @@ if (process.env.NODE_ENV !== 'production') {
 // Separate connection for products database
 const productPool = new Pool({
   connectionString: process.env.PRODUCT_DB_URL,
+  connectionTimeoutMillis: 5000,
+  statement_timeout: 15000,
   user: undefined,
   database: undefined,
   password: undefined,
@@ -57,6 +61,8 @@ export async function queryProductDb(query: string, params: (string | number | b
 // Production-pipeline endpoint pazar yeri-bazlı L30/L90 hesabında kullanır.
 const databridgePool = new Pool({
   connectionString: process.env.DATABRIDGE_DB_URL,
+  connectionTimeoutMillis: 5000,
+  statement_timeout: 15000,
   user: undefined,
   database: undefined,
   password: undefined,
@@ -79,6 +85,8 @@ export async function queryDataBridge(query: string, params: (string | number | 
 // (FedEx Izmir US-içi geçmiş maliyet).
 const cargolensPool = new Pool({
   connectionString: process.env.CARGOLENS_DB_URL,
+  connectionTimeoutMillis: 5000,
+  statement_timeout: 15000,
   user: undefined,
   database: undefined,
   password: undefined,
