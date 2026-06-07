@@ -288,7 +288,7 @@ export default function Dashboard2MonthPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{monthLabel}</h1>
-              <p className="text-xs text-purple-600 font-medium">Dashboard 2 — Merkezi Üretim Talebi</p>
+              <p className="text-xs text-purple-600 font-medium">Merkezi Üretim Talebi</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

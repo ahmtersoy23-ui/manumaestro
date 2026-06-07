@@ -7,18 +7,7 @@
 
 import { useEffect, useRef } from 'react';
 import { X, ShoppingBag, CheckCircle2 } from 'lucide-react';
-
-const PRIORITY_STYLE: Record<string, string> = {
-  HIGH: 'bg-red-100 text-red-700 border-red-200',
-  MEDIUM: 'bg-amber-100 text-amber-700 border-amber-200',
-  LOW: 'bg-blue-100 text-blue-700 border-blue-200',
-};
-
-const PRIORITY_LABEL: Record<string, string> = {
-  HIGH: 'Yüksek',
-  MEDIUM: 'Orta',
-  LOW: 'Düşük',
-};
+import { PriorityBadge } from '@/components/ui/Badge';
 
 interface MarketplaceRequest {
   marketplaceName: string;
@@ -119,11 +108,7 @@ export function ProductMarketplaceModal({
                     <span className={`text-sm ${req.status === 'COMPLETED' ? 'text-green-700 font-medium' : 'text-gray-900'}`}>
                       {req.marketplaceName}
                     </span>
-                    {req.priority && (
-                      <span className={`text-xs px-1.5 py-0.5 rounded border ${PRIORITY_STYLE[req.priority]}`}>
-                        {PRIORITY_LABEL[req.priority]}
-                      </span>
-                    )}
+                    {req.priority && <PriorityBadge priority={req.priority} />}
                   </div>
                   <div className="flex items-center gap-2 text-sm">
                     <span className={`font-semibold ${req.status === 'COMPLETED' ? 'text-green-600' : 'text-gray-900'}`}>{req.quantity}</span>

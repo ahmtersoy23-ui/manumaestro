@@ -9,6 +9,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { notify } from '@/lib/ui/notify';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
+import { PriorityBadge, StatusBadge } from '@/components/ui/Badge';
+import { STATUS_STYLE, STATUS_LABEL } from '@/lib/ui/badges';
 import {
   Calendar, Package, Trash2, CheckSquare, Square, Check, Loader2,
   Anchor, Truck, Plane, Filter,
@@ -66,27 +68,6 @@ interface AvailableShipment {
   shippingMethod: string;
 }
 
-const PRIORITY_STYLE: Record<string, string> = {
-  HIGH: 'bg-red-100 text-red-700',
-  MEDIUM: 'bg-amber-100 text-amber-700',
-  LOW: 'bg-blue-100 text-blue-700',
-};
-const PRIORITY_LABEL: Record<string, string> = { HIGH: 'Yüksek', MEDIUM: 'Orta', LOW: 'Düşük' };
-
-const STATUS_COLORS: Record<string, string> = {
-  REQUESTED: 'bg-blue-100 text-blue-700',
-  IN_PRODUCTION: 'bg-orange-100 text-orange-700',
-  PARTIALLY_PRODUCED: 'bg-yellow-100 text-yellow-700',
-  COMPLETED: 'bg-green-100 text-green-700',
-  CANCELLED: 'bg-gray-100 text-gray-700',
-};
-const STATUS_LABELS: Record<string, string> = {
-  REQUESTED: 'Talep Edildi',
-  IN_PRODUCTION: 'Uretimde',
-  PARTIALLY_PRODUCED: 'Kismen Uretildi',
-  COMPLETED: 'Tamamlandi',
-  CANCELLED: 'Iptal Edildi',
-};
 
 const METHOD_ICON: Record<string, typeof Anchor> = { sea: Anchor, road: Truck, air: Plane };
 const METHOD_LABEL: Record<string, string> = { sea: 'Deniz', road: 'Kara', air: 'Hava' };
@@ -416,11 +397,11 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
             onClick={() => handleStatusFilter(status)}
             className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
               statusFilter === status
-                ? STATUS_COLORS[status]?.replace('bg-', 'bg-').replace('100', '200') || 'bg-gray-200 text-gray-800'
+                ? STATUS_STYLE[status as keyof typeof STATUS_STYLE]?.replace('100', '200') || 'bg-gray-200 text-gray-800'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
-            {STATUS_LABELS[status] || status} ({count})
+            {STATUS_LABEL[status as keyof typeof STATUS_LABEL] || status} ({count})
           </button>
         ))}
       </div>
@@ -543,14 +524,10 @@ export function RequestsTable({ marketplaceId, month, refreshTrigger, onDelete, 
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-gray-900">{request.quantity}</td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${PRIORITY_STYLE[request.priority] ?? PRIORITY_STYLE.MEDIUM}`}>
-                      {PRIORITY_LABEL[request.priority] ?? 'Orta'}
-                    </span>
+                    <PriorityBadge priority={request.priority} />
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[request.status]}`}>
-                      {STATUS_LABELS[request.status]}
-                    </span>
+                    <StatusBadge status={request.status} />
                   </td>
                   <td className="px-4 py-3">{renderShipmentCell(request)}</td>
                   {isSuperAdmin && (

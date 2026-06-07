@@ -19,6 +19,7 @@ import { useEffect, useState } from 'react';
 import { X, AlertCircle, Upload, Download, CheckCircle2, FileSpreadsheet } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { warehouseLabel } from '@/lib/warehouseLabels';
+import { Button } from '@/components/ui/Button';
 
 const logger = createLogger('BulkBoxExcelDialog');
 
@@ -372,24 +373,21 @@ export function BulkBoxExcelDialog({ isOpen, warehouseCode, onClose, onSuccess }
         </div>
 
         <div className="flex justify-end gap-2 p-4 border-t border-gray-200">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md disabled:opacity-50"
-          >
+          <Button type="button" variant="secondary" size="sm" onClick={onClose} disabled={submitting}>
             {result ? 'Kapat' : 'İptal'}
-          </button>
+          </Button>
           {!result && (
-            <button
+            <Button
               type="button"
+              variant="success"
+              size="sm"
               onClick={handleSubmit}
+              loading={submitting}
               disabled={submitting || validRows.length === 0}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-emerald-600 hover:bg-emerald-700 rounded-md disabled:opacity-50"
+              icon={!submitting ? <Upload className="w-4 h-4" /> : undefined}
             >
-              <Upload className="w-4 h-4" />
               {submitting ? 'Yaratılıyor…' : `Yarat (${validRows.length})`}
-            </button>
+            </Button>
           )}
         </div>
       </div>

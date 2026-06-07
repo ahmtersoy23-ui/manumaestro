@@ -14,6 +14,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { X, Upload, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('BulkLabelDialog');
@@ -293,29 +294,23 @@ export function BulkLabelDialog({ warehouseCode, open, onClose, onCompleted }: P
 
         <div className="px-5 py-3 border-t border-gray-200 flex items-center justify-end gap-2">
           {result ? (
-            <button
-              onClick={handleClose}
-              className="px-4 py-1.5 text-sm bg-gray-200 hover:bg-gray-300 rounded-md"
-            >
+            <Button variant="secondary" size="sm" onClick={handleClose}>
               Kapat
-            </button>
+            </Button>
           ) : (
             <>
-              <button
-                onClick={handleClose}
-                disabled={submitting}
-                className="px-4 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-md disabled:opacity-50"
-              >
+              <Button variant="secondary" size="sm" onClick={handleClose} disabled={submitting}>
                 İptal
-              </button>
-              <button
+              </Button>
+              <Button
+                size="sm"
                 onClick={handleSubmit}
+                loading={submitting}
                 disabled={!file || !allMapped || submitting}
-                className="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                icon={!submitting ? <Upload className="w-4 h-4" /> : undefined}
               >
-                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                 {pageCount > 0 ? `${pageCount} sayfayı yükle` : 'Yükle'}
-              </button>
+              </Button>
             </>
           )}
         </div>

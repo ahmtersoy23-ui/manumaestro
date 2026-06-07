@@ -10,6 +10,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { X, AlertCircle, Search, ChevronDown, AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { createLogger } from '@/lib/logger';
 import { warehouseLabel } from '@/lib/warehouseLabels';
 
@@ -314,22 +315,12 @@ export function EmptyShelfDialog({
         )}
 
         <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md disabled:opacity-50"
-          >
+          <Button type="button" variant="secondary" size="sm" onClick={onClose} disabled={submitting}>
             İptal
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={submitting || !toShelfId}
-            className="px-3 py-1.5 text-sm text-white bg-amber-600 hover:bg-amber-700 rounded-md disabled:opacity-50"
-          >
+          </Button>
+          <Button type="button" variant="warning" size="sm" onClick={handleSubmit} loading={submitting} disabled={submitting || !toShelfId}>
             {submitting ? 'Boşaltılıyor…' : 'Rafı Boşalt'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

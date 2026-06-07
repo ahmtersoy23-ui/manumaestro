@@ -10,6 +10,7 @@
 
 import { useEffect, useState } from 'react';
 import { X, Pencil, AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('EditQuantityDialog');
@@ -225,23 +226,20 @@ export function EditQuantityDialog({ isOpen, warehouseCode, target, onClose, onS
         )}
 
         <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md disabled:opacity-50"
-          >
+          <Button type="button" variant="secondary" size="sm" onClick={onClose} disabled={submitting}>
             İptal
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="warning"
+            size="sm"
             onClick={handleSubmit}
+            loading={submitting}
             disabled={!canSubmit}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-amber-600 hover:bg-amber-700 rounded-md disabled:opacity-50"
+            icon={!submitting ? <Pencil className="w-4 h-4" /> : undefined}
           >
-            <Pencil className="w-4 h-4" />
             {submitting ? 'Kaydediliyor…' : 'Kaydet'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

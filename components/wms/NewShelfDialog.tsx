@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { X } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { warehouseLabel } from '@/lib/warehouseLabels';
+import { Button } from '@/components/ui/Button';
 
 const logger = createLogger('NewShelfDialog');
 
@@ -117,22 +118,12 @@ export function NewShelfDialog({ isOpen, warehouseCode, onClose, onSuccess }: Pr
           )}
 
           <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
-              disabled={submitting}
-            >
+            <Button type="button" variant="secondary" size="sm" onClick={onClose} disabled={submitting}>
               İptal
-            </button>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={submitting}
-              className="px-3 py-1.5 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
-            >
+            </Button>
+            <Button type="button" size="sm" onClick={handleSubmit} loading={submitting}>
               {submitting ? 'Yaratılıyor…' : 'Yarat'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

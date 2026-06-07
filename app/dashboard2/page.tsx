@@ -78,7 +78,7 @@ export default function Dashboard2HomePage() {
   return (
     <div className="p-6 space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-slate-900">Dashboard 2 — Üretim Paneli</h1>
+        <h1 className="text-3xl font-bold text-slate-900">Aylık Üretim Talebi</h1>
         <p className="text-slate-600 mt-1">
           Merkezi üretim talebi (StockPulse otomatik) — bir ay seçin
         </p>

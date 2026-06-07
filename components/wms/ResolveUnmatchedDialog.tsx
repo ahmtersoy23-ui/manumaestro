@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import { X, Search, AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('ResolveUnmatchedDialog');
@@ -221,22 +222,12 @@ export function ResolveUnmatchedDialog({ isOpen, warehouseCode, source, onClose,
           )}
 
           <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
-              disabled={submitting}
-            >
+            <Button type="button" variant="secondary" size="sm" onClick={onClose} disabled={submitting}>
               İptal
-            </button>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={submitting || !iwasku}
-              className="px-3 py-1.5 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
-            >
+            </Button>
+            <Button type="button" size="sm" onClick={handleSubmit} loading={submitting} disabled={submitting || !iwasku}>
               {submitting ? 'Kaydediliyor…' : applyToAll ? `Çöz (${source.groupCount})` : 'Çöz'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

@@ -231,7 +231,7 @@ export default function DestinasyonDetailPage() {
     <div className="p-4 md:p-6 max-w-[1600px] mx-auto space-y-4">
       {/* Breadcrumb + Header */}
       <div className="flex items-center gap-2 text-xs text-slate-500">
-        <Link href="/dashboard2" className="hover:text-purple-600">Dashboard 2</Link>
+        <Link href="/dashboard2" className="hover:text-purple-600">Aylık Talep</Link>
         <span>›</span>
         <Link href={`/dashboard2/${month}`} className="hover:text-purple-600">{monthLabel}</Link>
         <span>›</span>

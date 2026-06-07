@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { X } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { warehouseLabel } from '@/lib/warehouseLabels';
+import { Button } from '@/components/ui/Button';
 
 const logger = createLogger('BulkShelfDialog');
 
@@ -139,23 +140,19 @@ export function BulkShelfDialog({ isOpen, warehouseCode, onClose, onSuccess }: P
           )}
 
           <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
-              disabled={submitting}
-            >
+            <Button type="button" variant="secondary" size="sm" onClick={handleClose} disabled={submitting}>
               {result ? 'Kapat' : 'İptal'}
-            </button>
+            </Button>
             {!result && (
-              <button
+              <Button
                 type="button"
+                size="sm"
                 onClick={handleSubmit}
+                loading={submitting}
                 disabled={submitting || codes.length === 0}
-                className="px-3 py-1.5 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
               >
                 {submitting ? 'Yaratılıyor…' : `Yarat (${uniqueCount})`}
-              </button>
+              </Button>
             )}
           </div>
         </div>

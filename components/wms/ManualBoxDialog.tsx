@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { warehouseLabel } from '@/lib/warehouseLabels';
+import { Button } from '@/components/ui/Button';
 import { ProductSearch, type ProductHit } from '@/components/wms/ProductSearch';
 import { notify } from '@/lib/ui/notify';
 
@@ -262,22 +263,18 @@ export function ManualBoxDialog({ isOpen, warehouseCode, fixedShelfId, fixedShel
           )}
 
           <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
-              disabled={submitting}
-            >
+            <Button type="button" variant="secondary" size="sm" onClick={handleClose} disabled={submitting}>
               Kapat
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              size="sm"
               onClick={handleSubmit}
+              loading={submitting}
               disabled={submitting || !product || !quantity || !marketplaceCode}
-              className="px-3 py-1.5 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
             >
               {submitting ? 'Yaratılıyor…' : 'Koli Yarat'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

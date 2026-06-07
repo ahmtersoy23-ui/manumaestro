@@ -9,6 +9,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { X, AlertCircle, Plus, Trash2, Sparkles, Truck } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('ShipModal');
@@ -309,23 +310,20 @@ export function ShipModal({
         )}
 
         <div className="flex justify-end gap-2 p-4 border-t border-gray-200">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md disabled:opacity-50"
-          >
+          <Button type="button" variant="secondary" size="sm" onClick={onClose} disabled={submitting}>
             İptal
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="success"
+            size="sm"
             onClick={handleSubmit}
+            loading={submitting}
             disabled={submitting || !allOk}
-            className="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm text-white bg-green-600 hover:bg-green-700 rounded-md disabled:opacity-50"
+            icon={!submitting ? <Truck className="w-4 h-4" /> : undefined}
           >
-            <Truck className="w-4 h-4" />
             {submitting ? 'Çıkış yapılıyor…' : 'Çıkış Yap'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

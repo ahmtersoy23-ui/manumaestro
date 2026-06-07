@@ -9,6 +9,7 @@
 
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { createLogger } from '@/lib/logger';
 import { warehouseLabel } from '@/lib/warehouseLabels';
 import { notify } from '@/lib/ui/notify';
@@ -237,22 +238,12 @@ export function LooseStockDialog({ isOpen, warehouseCode, fixedShelfId, fixedShe
           )}
 
           <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
-              disabled={submitting}
-            >
+            <Button type="button" variant="secondary" size="sm" onClick={handleClose} disabled={submitting}>
               Kapat
-            </button>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={submitting || !product || !quantity}
-              className="px-3 py-1.5 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
-            >
+            </Button>
+            <Button type="button" size="sm" onClick={handleSubmit} loading={submitting} disabled={submitting || !product || !quantity}>
               {submitting ? 'Ekleniyor…' : 'Ekle'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

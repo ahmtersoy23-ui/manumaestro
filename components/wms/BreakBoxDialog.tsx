@@ -7,6 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, AlertCircle, Scissors } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('BreakBoxDialog');
@@ -125,22 +126,12 @@ export function BreakBoxDialog({ isOpen, warehouseCode, source, onClose, onSucce
           )}
 
           <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
-              disabled={submitting}
-            >
+            <Button type="button" variant="secondary" size="sm" onClick={onClose} disabled={submitting}>
               İptal
-            </button>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={submitting || !quantity}
-              className="px-3 py-1.5 text-sm text-white bg-amber-600 hover:bg-amber-700 rounded-md disabled:opacity-50"
-            >
+            </Button>
+            <Button type="button" variant="warning" size="sm" onClick={handleSubmit} loading={submitting} disabled={submitting || !quantity}>
               {submitting ? 'Aktarılıyor…' : 'Parçala'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

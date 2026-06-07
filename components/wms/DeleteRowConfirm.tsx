@@ -10,6 +10,7 @@
 
 import { useEffect, useState } from 'react';
 import { X, Trash2, AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('DeleteRowConfirm');
@@ -162,23 +163,20 @@ export function DeleteRowConfirm({ isOpen, warehouseCode, target, onClose, onSuc
         )}
 
         <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md disabled:opacity-50"
-          >
+          <Button type="button" variant="secondary" size="sm" onClick={onClose} disabled={submitting}>
             İptal
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="danger"
+            size="sm"
             onClick={handleSubmit}
+            loading={submitting}
             disabled={submitting || reason.trim().length < 3}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-red-600 hover:bg-red-700 rounded-md disabled:opacity-50"
+            icon={!submitting ? <Trash2 className="w-4 h-4" /> : undefined}
           >
-            <Trash2 className="w-4 h-4" />
             {submitting ? 'Siliniyor…' : 'Kalıcı Olarak Sil'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

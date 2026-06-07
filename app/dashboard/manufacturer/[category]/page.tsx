@@ -14,6 +14,7 @@ import { ArrowLeft, Package, Save, Calendar, Store, Download, ChevronLeft, Chevr
 import { formatMonthValue, parseMonthValue } from '@/lib/monthUtils';
 import { createLogger } from '@/lib/logger';
 import { ProductMarketplaceModal } from '@/components/modals/ProductMarketplaceModal';
+import { PriorityBadge } from '@/components/ui/Badge';
 
 // qrcode (~80KB) sadece etiket modalı açıldığında yüklensin
 const LabelPrintModal = dynamic(
@@ -37,18 +38,6 @@ function getHighestPriority(requests: { priority: string }[]): 'HIGH' | 'MEDIUM'
     return PRIORITY_ORDER[rPri] > PRIORITY_ORDER[best] ? rPri : best;
   }, 'LOW' as 'HIGH' | 'MEDIUM' | 'LOW');
 }
-
-const PRIORITY_STYLE: Record<string, string> = {
-  HIGH: 'bg-red-100 text-red-700 border-red-200',
-  MEDIUM: 'bg-amber-100 text-amber-700 border-amber-200',
-  LOW: 'bg-blue-100 text-blue-700 border-blue-200',
-};
-
-const PRIORITY_LABEL: Record<string, string> = {
-  HIGH: 'Yüksek',
-  MEDIUM: 'Orta',
-  LOW: 'Düşük',
-};
 
 interface Request {
   id: string;
@@ -574,9 +563,7 @@ export default function ManufacturerCategoryPage() {
                             ) : (
                               <span className="text-xs text-gray-400">{group.requests[0].marketplaceName}</span>
                             )}
-                            <span className={`text-xs px-1.5 py-0.5 rounded border ${PRIORITY_STYLE[highestPriority]}`}>
-                              {PRIORITY_LABEL[highestPriority]}
-                            </span>
+                            <PriorityBadge priority={highestPriority} />
                           </div>
                         );
                       })()}
