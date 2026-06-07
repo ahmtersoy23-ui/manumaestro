@@ -1,3 +1,5 @@
+> ⚠️ **ARŞİV (tarihsel).** 2026-05-12 tarihli; o günkü kod tabanını (98 route / 271 test) yansıtır. Açık maddeler (H1/H4) kapandı. Güncel durum için yeni audit'lere bakın — referans/pattern için tutuluyor.
+
 # ManuMaestro Bağımsız Audit — 2026-05-12
 
 **Kapsam:** ManuMaestro (Next.js 16 + Prisma 7 + PostgreSQL 16) tek başına derin inceleme.

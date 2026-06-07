@@ -1,3 +1,5 @@
+> ⚠️ **ARŞİV (tarihsel).** 2026-05-13 handoff'u; içindeki açık maddeler (H1/H4) kapandı. Yalnız geçmiş referans için tutuluyor.
+
 # ManuMaestro Audit — Sonraki Session Handoff
 
 Bağımsız audit (2026-05-12, `AUDIT_2026_05_12_FRESH.md`) sonucunda

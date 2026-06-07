@@ -5,7 +5,7 @@ Uretim talep yonetimi + sezonsal stok + sevkiyat. Next.js 16 + Prisma 7.
 ## Komutlar
 ```bash
 npm run dev      # next dev (port 3000)
-npm test         # vitest (13 test)
+npm test         # vitest (336 test)
 npm run build    # next build (prisma generate dahil)
 ```
 

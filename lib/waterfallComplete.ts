@@ -54,19 +54,23 @@ export async function waterfallComplete(iwasku: string, month: string): Promise<
     return result.count;
   }
 
-  // 4. Partial: distribute by marketplace priority
+  // 4. Partial: distribute by marketplace priority.
+  // Öncelik tanımlı değilse erken dönüp BIRAKMA — aksi halde stok yetersizken
+  // eski COMPLETED'lar bayat kalır (gerçekleşmeyen talebi tamamlanmış gösterir).
+  // Öncelik yoksa id-bazlı deterministik sırayla yine de dağıt.
   const priorities = await prisma.marketplacePriority.findMany({
     where: { month },
     orderBy: { priority: 'asc' },
   });
-
-  if (priorities.length === 0) return 0;
+  if (priorities.length === 0) {
+    logger.info(`Waterfall: ${iwasku} (${month}) — öncelik tanımsız, id-sırası fallback ile dağıtılıyor`);
+  }
 
   const priorityMap = new Map(priorities.map(p => [p.marketplaceId, p.priority]));
   const sorted = [...allRequests].sort((a, b) => {
     const pa = priorityMap.get(a.marketplaceId) ?? 999;
     const pb = priorityMap.get(b.marketplaceId) ?? 999;
-    return pa - pb;
+    return pa - pb || a.id.localeCompare(b.id); // eşitlikte deterministik tiebreak
   });
 
   // Calculate target status for each request, group by status for batch update
