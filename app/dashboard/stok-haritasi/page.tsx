@@ -8,7 +8,7 @@
  * Kaynak: GET /api/stok-haritasi. Arama / kategori / sort / CSV.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, Search, Download, ArrowUpDown, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { rowsToCsv, downloadCsv } from '@/lib/wms/exportCsv';
@@ -147,6 +147,27 @@ export default function StokHaritasiPage() {
     downloadCsv(rowsToCsv(headers, body), 'stok-haritasi.csv');
   };
 
+  // Yatay drag-to-scroll: tabloyu mouse'la tutup kaydır. Sürükleme olduysa
+  // takip eden click'i yut (yanlışlıkla kolon sort'u tetiklenmesin).
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const drag = useRef({ down: false, startX: 0, left: 0, moved: false });
+  const onDragStart = (e: React.MouseEvent) => {
+    const el = scrollRef.current; if (!el) return;
+    drag.current = { down: true, startX: e.pageX, left: el.scrollLeft, moved: false };
+  };
+  const onDragMove = (e: React.MouseEvent) => {
+    if (!drag.current.down) return;
+    const el = scrollRef.current; if (!el) return;
+    const dx = e.pageX - drag.current.startX;
+    if (Math.abs(dx) > 4) drag.current.moved = true;
+    el.scrollLeft = drag.current.left - dx;
+    e.preventDefault();
+  };
+  const onDragEnd = () => { drag.current.down = false; };
+  const onClickCapture = (e: React.MouseEvent) => {
+    if (drag.current.moved) { e.preventDefault(); e.stopPropagation(); drag.current.moved = false; }
+  };
+
   const nf = (v: number) => v.toLocaleString('tr-TR');
   const num = (v: number) => (v > 0 ? <span className="text-gray-800">{nf(v)}</span> : <span className="text-gray-300">0</span>);
   const groupBorder = (idx: number) => (idx === 0 || COLS[idx].group !== COLS[idx - 1].group ? GROUP_META[COLS[idx].group].border : '');
@@ -191,7 +212,15 @@ export default function StokHaritasiPage() {
       {error && <div className="mb-3 text-sm text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
 
       <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
-        <div className="overflow-x-auto">
+        <div
+          ref={scrollRef}
+          onMouseDown={onDragStart}
+          onMouseMove={onDragMove}
+          onMouseUp={onDragEnd}
+          onMouseLeave={onDragEnd}
+          onClickCapture={onClickCapture}
+          className="overflow-x-auto cursor-grab active:cursor-grabbing"
+        >
           <table className="min-w-full text-sm whitespace-nowrap">
             <thead>
               {/* Bölge bantları */}
