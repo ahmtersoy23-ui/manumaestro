@@ -19,8 +19,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ManuMaestro - Üretim Talep Yönetimi",
-  description: "Üretim Mükemmelliğini Yönetin",
+  title: "ManuMaestro - Üretim · Stok · Sevkiyat · Sipariş",
+  description: "Üretimden sevkiyata operasyon orkestrası",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
