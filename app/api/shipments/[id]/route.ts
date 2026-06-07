@@ -147,6 +147,7 @@ export const GET = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'read'
 
 // --- PATCH: Update status/dates ---
 const UpdateShipmentSchema = z.object({
+  name: z.string().min(1).max(120).optional(),
   status: z.enum(['PLANNING', 'LOADING', 'IN_TRANSIT', 'DELIVERED']).optional(),
   plannedDate: z.string().datetime().optional(),
   actualDate: z.string().datetime().optional(),
@@ -213,6 +214,8 @@ export const PATCH = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'wri
   const updated = await prisma.shipment.update({
     where: { id },
     data: {
+      // Gemi adı yalnızca admin'lerce değişebilir (kapalı sevkiyatta da)
+      ...(data.name && user.role === 'admin' ? { name: data.name } : {}),
       ...(data.status ? { status: data.status } : {}),
       ...(data.plannedDate ? { plannedDate: new Date(data.plannedDate) } : {}),
       ...(data.actualDate ? { actualDate: new Date(data.actualDate) } : {}),

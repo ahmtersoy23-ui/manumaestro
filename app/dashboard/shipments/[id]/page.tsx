@@ -285,6 +285,8 @@ export default function ShipmentDetailPage() {
   const canUnsend = perms.unsendItems ?? false;
   const canDest = perms.setDestination ?? false;
   const canEdit = perms.createShipment ?? false; // manager = edit shipment info
+  // Gemi/ETA bilgisi: aktif sevkiyatta manager, kapalı sevkiyatta da admin düzenleyebilir
+  const canEditInfo = (isActive && canEdit) || role === 'admin';
   const pendingItems = shipment.items.filter(i => !i.sentAt);
   const sentItems = shipment.items.filter(i => i.sentAt);
   const totalQty = shipment.items.reduce((s, i) => s + i.quantity, 0);
@@ -315,6 +317,7 @@ export default function ShipmentDetailPage() {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           notes: editForm.notes || undefined,
+          ...(role === 'admin' && editForm.name ? { name: editForm.name } : {}),
           ...(editForm.plannedDate ? { plannedDate: new Date(editForm.plannedDate).toISOString() } : {}),
           ...(editForm.etaDate ? { etaDate: new Date(editForm.etaDate).toISOString() } : {}),
         }),
@@ -1039,7 +1042,7 @@ export default function ShipmentDetailPage() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold text-gray-900">{shipment.name}</h1>
-              {isActive && canEdit && !editing && (
+              {canEditInfo && !editing && (
                 <button onClick={startEdit} className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded" title="Düzenle">
                   <Pencil className="w-4 h-4" />
                 </button>
@@ -1091,6 +1094,7 @@ export default function ShipmentDetailPage() {
         <EditShipmentForm
           form={editForm}
           saving={saving}
+          canEditName={role === 'admin'}
           onChange={setEditForm}
           onSave={handleSaveEdit}
           onCancel={() => setEditing(false)}
