@@ -174,55 +174,62 @@ export const PATCH = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'wri
   }
 
   const data = validation.data;
-  const shipment = await prisma.shipment.findUnique({
-    where: { id },
-    include: { items: true },
-  });
 
-  if (!shipment) {
-    return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadı' }, { status: 404 });
-  }
+  // Tüm geçiş (durum okuma → reserve/varış yan etkileri → update) TEK transaction'da
+  // ve shipment satırı FOR UPDATE ile kilitli: eşzamanlı iki PATCH (örn. çift tık)
+  // reserve.shippedQuantity'yi iki kez ARTIRAMAZ — ikinci tx ilkini bekler, güncel
+  // durumu okur, guard'a takılır.
+  let arrivalSummary: import('@/lib/wms/shipmentArrivalHook').ArrivalResult | null = null;
+  const txResult = await prisma.$transaction(async (tx) => {
+    const locked = await tx.$queryRaw<{ status: string }[]>`
+      SELECT status FROM shipments WHERE id = ${id} FOR UPDATE
+    `;
+    if (locked.length === 0) return null; // bulunamadı
+    const currentStatus = locked[0].status;
 
-  // If dispatching (IN_TRANSIT), process reserve shipping (depo çıkışı ayrı onay modalından)
-  if (data.status === 'IN_TRANSIT' && shipment.status !== 'IN_TRANSIT') {
-    await prisma.$transaction(async (tx) => {
+    const shipment = await tx.shipment.findUniqueOrThrow({
+      where: { id },
+      include: { items: true },
+    });
+
+    // Sevk (IN_TRANSIT): rezerv çıkışını işle (depo çıkışı ayrı onay modalından)
+    if (data.status === 'IN_TRANSIT' && currentStatus !== 'IN_TRANSIT') {
       for (const item of shipment.items) {
         if (item.reserveId) {
           await tx.stockReserve.update({
             where: { id: item.reserveId },
-            data: {
-              shippedQuantity: { increment: item.quantity },
-              status: 'SHIPPED',
-            },
+            data: { shippedQuantity: { increment: item.quantity }, status: 'SHIPPED' },
           });
         }
       }
-    });
-  }
+    }
 
-  // DELIVERED'a geçiş: WMS varış hook'u — koli'ler ShipmentBox.destination'a göre
-  // hedef deponun POOL rafına SEALED olarak yansır (US+SHOWROOM→SHOWROOM, US+FBA/DEPO→NJ).
-  // Idempotent: aynı sevkiyat ikinci kez DELIVERED yapılırsa atlar.
-  let arrivalSummary: import('@/lib/wms/shipmentArrivalHook').ArrivalResult | null = null;
-  if (data.status === 'DELIVERED' && shipment.status !== 'DELIVERED') {
-    arrivalSummary = await prisma.$transaction(async (tx) => {
+    // DELIVERED'a geçiş: WMS varış hook'u — koli'ler ShipmentBox.destination'a göre
+    // hedef deponun POOL rafına SEALED olarak yansır (US+SHOWROOM→SHOWROOM, US+FBA/DEPO→NJ).
+    // Idempotent: aynı sevkiyat ikinci kez DELIVERED yapılırsa atlar.
+    if (data.status === 'DELIVERED' && currentStatus !== 'DELIVERED') {
       const { processShipmentArrival } = await import('@/lib/wms/shipmentArrivalHook');
-      return processShipmentArrival(tx, id, user.id);
-    });
-  }
+      arrivalSummary = await processShipmentArrival(tx, id, user.id);
+    }
 
-  const updated = await prisma.shipment.update({
-    where: { id },
-    data: {
-      // Gemi adı yalnızca admin'lerce değişebilir (kapalı sevkiyatta da)
-      ...(data.name && user.role === 'admin' ? { name: data.name } : {}),
-      ...(data.status ? { status: data.status } : {}),
-      ...(data.plannedDate ? { plannedDate: new Date(data.plannedDate) } : {}),
-      ...(data.actualDate ? { actualDate: new Date(data.actualDate) } : {}),
-      ...(data.etaDate ? { etaDate: new Date(data.etaDate) } : {}),
-      ...(data.notes !== undefined ? { notes: data.notes } : {}),
-    },
-  });
+    return tx.shipment.update({
+      where: { id },
+      data: {
+        // Gemi adı yalnızca admin'lerce değişebilir (kapalı sevkiyatta da)
+        ...(data.name && user.role === 'admin' ? { name: data.name } : {}),
+        ...(data.status ? { status: data.status } : {}),
+        ...(data.plannedDate ? { plannedDate: new Date(data.plannedDate) } : {}),
+        ...(data.actualDate ? { actualDate: new Date(data.actualDate) } : {}),
+        ...(data.etaDate ? { etaDate: new Date(data.etaDate) } : {}),
+        ...(data.notes !== undefined ? { notes: data.notes } : {}),
+      },
+    });
+  }, { timeout: 20000, maxWait: 5000 });
+
+  if (!txResult) {
+    return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadı' }, { status: 404 });
+  }
+  const updated = txResult;
 
   await logAction({
     userId: user.id, userName: user.name, userEmail: user.email,
