@@ -16,11 +16,13 @@
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { BoxStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
 import { withRoute } from '@/lib/api/withRoute';
 import { successResponse } from '@/lib/api/response';
+import { lockShelfStockById, lockShelfBoxById } from '@/lib/wms/lockedStock';
 
 const Schema = z.discriminatedUnion('type', [
   z.object({
@@ -67,9 +69,8 @@ export const POST = withRoute<{ code: string }>(
     try {
       const result = await prisma.$transaction(async (tx) => {
         if (parsed.data.type === 'STOCK') {
-          const stock = await tx.shelfStock.findUnique({
-            where: { id: parsed.data.shelfStockId },
-          });
+          // FOR UPDATE: eşzamanlı düzeltme stale oldQty'den yanlış diff yazmasın
+          const stock = await lockShelfStockById(tx, parsed.data.shelfStockId);
           if (!stock || stock.warehouseCode !== upperCode) {
             throw new Error('Tekil stok bulunamadı');
           }
@@ -115,9 +116,8 @@ export const POST = withRoute<{ code: string }>(
             diff,
           };
         } else {
-          const box = await tx.shelfBox.findUnique({
-            where: { id: parsed.data.shelfBoxId },
-          });
+          // FOR UPDATE: eşzamanlı düzeltme stale oldQty'den yanlış diff yazmasın
+          const box = await lockShelfBoxById(tx, parsed.data.shelfBoxId);
           if (!box || box.warehouseCode !== upperCode) {
             throw new Error('Koli bulunamadı');
           }
@@ -140,7 +140,7 @@ export const POST = withRoute<{ code: string }>(
             };
           }
           // Status: 0 → EMPTY, eski SEALED'da azalma varsa PARTIAL'a düşür, artış ise SEALED'a değiştirme (manuel).
-          let newStatus = box.status;
+          let newStatus: BoxStatus = box.status as BoxStatus;
           if (parsed.data.newQuantity === 0) {
             newStatus = 'EMPTY';
           } else if (box.status === 'SEALED' && diff < 0) {

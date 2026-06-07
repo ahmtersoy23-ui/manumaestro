@@ -13,6 +13,7 @@ import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
 import { withRoute } from '@/lib/api/withRoute';
 import { successResponse } from '@/lib/api/response';
+import { lockShelfBoxById } from '@/lib/wms/lockedStock';
 
 const BreakSchema = z.object({
   quantity: z.number().int().positive(),
@@ -46,7 +47,8 @@ export const POST = withRoute<{ code: string; boxId: string }>(
 
     try {
       const result = await prisma.$transaction(async (tx) => {
-        const box = await tx.shelfBox.findUnique({ where: { id: boxId } });
+        // FOR UPDATE: eşzamanlı parçalama aynı koliyi çift düşüremez
+        const box = await lockShelfBoxById(tx, boxId);
         if (!box) throw new Error('Koli bulunamadı');
         if (box.warehouseCode !== upperCode) throw new Error('Koli bu depoya ait değil');
         if (box.status === 'EMPTY') throw new Error('Koli zaten boş');

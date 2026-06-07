@@ -20,6 +20,7 @@ import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
 import { withRoute } from '@/lib/api/withRoute';
 import { successResponse } from '@/lib/api/response';
+import { lockShelfStockById, lockShelfBoxById } from '@/lib/wms/lockedStock';
 
 const TransferSchema = z.object({
   source: z.object({
@@ -122,10 +123,8 @@ async function transferStock(
   if (quantity <= 0) throw new Error('Miktar pozitif olmalı');
 
   return prisma.$transaction(async (tx) => {
-    const src = await tx.shelfStock.findUnique({
-      where: { id: sourceStockId },
-      include: { shelf: true },
-    });
+    // FOR UPDATE: eşzamanlı iki transfer aynı satırı çift düşüremez (oversell yarışı)
+    const src = await lockShelfStockById(tx, sourceStockId);
     if (!src) throw new Error('Kaynak stok bulunamadı');
     if (src.warehouseCode !== fromWarehouseCode) {
       throw new Error('Kaynak stok bu depoya ait değil');
@@ -200,7 +199,8 @@ async function transferBox(
   notes?: string
 ) {
   return prisma.$transaction(async (tx) => {
-    const box = await tx.shelfBox.findUnique({ where: { id: sourceBoxId } });
+    // FOR UPDATE: eşzamanlı koli transferi aynı koliyi iki hedefe taşıyamaz
+    const box = await lockShelfBoxById(tx, sourceBoxId);
     if (!box) throw new Error('Kaynak koli bulunamadı');
     if (box.warehouseCode !== fromWarehouseCode) {
       throw new Error('Kaynak koli bu depoya ait değil');
