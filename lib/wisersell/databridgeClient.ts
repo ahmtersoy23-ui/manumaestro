@@ -36,6 +36,12 @@ export async function markWisersellReady(ids: number[]): Promise<{ affected: num
   return { affected: data.affected ?? [], count: data.count ?? 0 };
 }
 
+/** Wisersell siparişini "açık"a (open=2) geri al + routing candidate'ı yeniden görünür kıl. */
+export async function reopenWisersellOrder(ids: number[]): Promise<{ count: number; candidatesRevived: number }> {
+  const data = await post('/wisersell-routing/reopen', { ids }) as { count?: number; candidatesRevived?: number };
+  return { count: data.count ?? 0, candidatesRevived: data.candidatesRevived ?? 0 };
+}
+
 /** Wisersell siparişini tracking ile harici kapatır (tracking'i marketplace'e push'lar). */
 export async function closeWisersellExternal(orderId: number, carrierId: number, trackingCode: string): Promise<void> {
   await post('/wisersell-routing/close', { orderId, carrierId, trackingCode });

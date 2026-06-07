@@ -208,6 +208,15 @@ export default function SiparisPage() {
     });
     setDetailRow(null);
   };
+  // Onaylı (DRAFT) siparişi tekrar "açık"a al — Onay Bekliyor'a döner + Wisersell open.
+  const reopenOne = async (id?: string) => {
+    if (!id) return;
+    if (!window.confirm('Sipariş "açık"a alınsın mı? Onay Bekliyor’a döner, Wisersell’de "açık" yapılır. (Etiket alınmamış olmalı)')) return;
+    await runAction('/api/siparis/reopen', { orderId: id }, (j) =>
+      `Sipariş açığa alındı — Onay Bekliyor.${j.wisersellReopened ? ' Wisersell: açık.' : (j.wisersellError ? ` ⚠ Wisersell: ${j.wisersellError}` : '')}`,
+    );
+    setDetailRow(null);
+  };
 
   // ── CG / Wayfair MCF export + eşleştirme + manuel tracking ──────────────────
   const downloadBase64Xlsx = (filename: string, b64: string) => {
@@ -571,6 +580,13 @@ export default function SiparisPage() {
                 && !detailRow.trackingNumber && !detailRow.amazonCancelledAt && (
                 <button onClick={() => setVeeqoOrder(detailRow)} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50">
                   <Tag className="w-4 h-4" /> Veeqo Etiket Al
+                </button>
+              )}
+              {tab === 'etiketBekliyor' && canManage && detailRow.wisersellOrderId
+                && !detailRow.trackingNumber && !detailRow.amazonCancelledAt && (
+                <button onClick={() => reopenOne(detailRow.id)} disabled={busy} title="Veeqo cazip değilse / başka sebeple: Onay Bekliyor'a geri al + Wisersell'de açık yap"
+                  className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                  <RefreshCw className="w-4 h-4" /> Açık Siparişe Geri Al
                 </button>
               )}
               {tab === 'cikisBekliyor' && !detailRow.amazonCancelledAt && (
