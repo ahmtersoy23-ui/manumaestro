@@ -34,6 +34,21 @@ interface SnapshotItem {
   totalRequested: number; warehouseStock: number; netProduction: number;
 }
 
+// Yerel tarih → "YYYY-MM-DD" (toISOString UTC kaymasından kaçın: UTC+3'te Pazartesi
+// bir gün geri kayıyordu → kolon anahtarı DB'deki weekStart ile eşleşmiyordu).
+function toLocalYmd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// "YYYY-MM-DD" → yerel Date (new Date("YYYY-MM-DD") UTC parse eder, yerelde 1 gün geri).
+function parseLocalYmd(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('T')[0].split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
 // Pzt-Cum week starts (2 weeks: prev, current)
 function getWeekStarts(): string[] {
   const weeks: string[] = [];
@@ -44,13 +59,13 @@ function getWeekStarts(): string[] {
   for (let i = -1; i <= 0; i++) {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i * 7);
-    weeks.push(d.toISOString().split('T')[0]);
+    weeks.push(toLocalYmd(d));
   }
   return weeks;
 }
 
 function formatWeekLabel(dateStr: string): { range: string; month: string } {
-  const d = new Date(dateStr);
+  const d = parseLocalYmd(dateStr);
   const fri = new Date(d);
   fri.setDate(d.getDate() + 4);
   const monMonth = d.toLocaleDateString('tr-TR', { month: 'short' }).replace('.', '');
