@@ -41,7 +41,7 @@ export const GET = withRoute({ skipAuth: true, rateLimit: 'read' }, async ({ req
     },
     include: {
       items: { select: { iwasku: true, quantity: true, desi: true, marketplaceId: true } },
-      _count: { select: { items: true } },
+      _count: { select: { items: true, boxes: true } },
     },
     orderBy: { createdAt: 'desc' },
     take: 100,
@@ -53,7 +53,7 @@ export const GET = withRoute({ skipAuth: true, rateLimit: 'read' }, async ({ req
     const { items: _items, ...shipmentData } = s;
     return {
       ...shipmentData,
-      stats: { itemCount: s._count.items, totalQty, totalDesi: Math.round(totalDesi) },
+      stats: { itemCount: s._count.items, boxCount: s._count.boxes, totalQty, totalDesi: Math.round(totalDesi) },
     };
   });
 

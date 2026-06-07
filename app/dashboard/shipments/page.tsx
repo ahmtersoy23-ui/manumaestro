@@ -43,7 +43,7 @@ export default async function ShipmentsPage({ searchParams }: PageProps) {
       items: {
         select: { iwasku: true, quantity: true, desi: true, marketplaceId: true, recommendedDestination: true },
       },
-      _count: { select: { items: true } },
+      _count: { select: { items: true, boxes: true } },
     },
     orderBy: { createdAt: 'desc' },
     take: 100,
@@ -70,6 +70,7 @@ export default async function ShipmentsPage({ searchParams }: PageProps) {
       notes: s.notes,
       stats: {
         itemCount: s._count.items,
+        boxCount: s._count.boxes,
         totalQty,
         totalDesi: Math.round(totalDesi),
       },

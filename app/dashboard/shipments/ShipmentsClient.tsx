@@ -31,6 +31,7 @@ import {
 
 export interface ShipmentStats {
   itemCount: number;
+  boxCount: number;
   totalQty: number;
   totalDesi: number;
 }
@@ -304,6 +305,7 @@ function ShipmentCard({ shipment }: { shipment: ShipmentDTO }) {
             <span>{shipment.stats.itemCount} ürün</span>
             <span>{shipment.stats.totalQty.toLocaleString('tr-TR')} ünite</span>
             <span>{shipment.stats.totalDesi.toLocaleString('tr-TR')} desi</span>
+            {shipment.stats.boxCount > 0 && <span>{shipment.stats.boxCount} koli</span>}
           </div>
           {destEntries.length > 0 && (
             <div className="flex gap-1.5 mt-2 flex-wrap">
