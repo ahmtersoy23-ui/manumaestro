@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
     take: 1000,
     include: {
       items: { select: { iwasku: true, quantity: true } },
-      labels: { where: { type: 'SHIPPING', archivedAt: null }, select: { id: true, trackingNumber: true }, take: 1 },
+      labels: { where: { type: 'SHIPPING', archivedAt: null }, select: { id: true, trackingNumber: true, veeqoShipmentId: true }, take: 1 },
     },
   });
 
@@ -186,6 +186,7 @@ export async function GET(request: NextRequest) {
       trackingNumber: shippingLabel?.trackingNumber ?? (isCgWarehouse(o.warehouseCode) ? o.manualTracking : null) ?? null,
       manualTracking: o.manualTracking ?? null,
       labelId: shippingLabel?.id ?? null,
+      veeqoShipmentId: shippingLabel?.veeqoShipmentId ?? null, // varsa → "Etiketi İptal Et (iade)" butonu
       status: o.status,
       createdAt: o.createdAt,
       shippedAt: o.shippedAt,

@@ -87,6 +87,7 @@ interface Row {
   trackingNumber?: string | null;
   manualTracking?: string | null;
   labelId?: string | null;
+  veeqoShipmentId?: string | null;
   cgExportedAt?: string | null; // CG MCF Excel alındı mı
   amazonCancelledAt?: string | null; // Amazon'da iptal (SP-API canlı kontrol)
   readyPending?: boolean;
@@ -215,6 +216,13 @@ export default function SiparisPage() {
     await runAction('/api/siparis/reopen', { orderId: id }, (j) =>
       `Sipariş açığa alındı — Onay Bekliyor.${j.wisersellReopened ? ' Wisersell: açık.' : (j.wisersellError ? ` ⚠ Wisersell: ${j.wisersellError}` : '')}`,
     );
+    setDetailRow(null);
+  };
+  // Alınmış Veeqo etiketini iptal et (Veeqo'da void+iade) → Etiket Bekliyor'a döner.
+  const cancelVeeqoOne = async (id?: string) => {
+    if (!id) return;
+    if (!window.confirm('Veeqo etiketi iptal edilsin mi? Veeqo’da void edilir (iade) ve sipariş Etiket Bekliyor’a döner. Kargo yola çıktıysa Veeqo iptali reddedebilir.')) return;
+    await runAction('/api/siparis/veeqo-cancel', { orderId: id }, (j) => `Etiket iptal edildi (iade)${j.trackingNumber ? ` — ${j.trackingNumber}` : ''}. Etiket Bekliyor’a döndü.`);
     setDetailRow(null);
   };
 
@@ -592,6 +600,12 @@ export default function SiparisPage() {
               {tab === 'cikisBekliyor' && !detailRow.amazonCancelledAt && (
                 <button onClick={() => setShipOrder(detailRow)} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50">
                   <Truck className="w-4 h-4" /> Çıkış Yap (FIFO)
+                </button>
+              )}
+              {tab === 'cikisBekliyor' && canManage && detailRow.veeqoShipmentId && !detailRow.amazonCancelledAt && (
+                <button onClick={() => cancelVeeqoOne(detailRow.id)} disabled={busy} title="Veeqo etiketini iptal et (void+iade) → Etiket Bekliyor'a döner"
+                  className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg border border-rose-300 bg-white text-rose-700 hover:bg-rose-50 disabled:opacity-50">
+                  <X className="w-4 h-4" /> Etiketi İptal Et (iade)
                 </button>
               )}
               {tab === 'kapatmaBekliyor' && canManage && (

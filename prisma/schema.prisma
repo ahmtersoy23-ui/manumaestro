@@ -955,6 +955,7 @@ model OrderLabel {
   printedById     String?
   notes           String?
   trackingNumber  String? // Kargo tracking no — etiket arşivlense bile saklanır
+  veeqoShipmentId String? // Veeqo remote_shipment_id (iade/iptal anahtarı — DELETE .../shipments/{id})
   archivedAt      DateTime? // Fiziksel dosya silindi (tracking ref. kaldı)
 
   outboundOrder OutboundOrder @relation(fields: [outboundOrderId], references: [id], onDelete: Cascade)
