@@ -567,7 +567,6 @@ export default function SiparisPage() {
                 </button>
               )}
               {tab === 'etiketBekliyor' && canManage
-                && ['AMZN_US', 'Ama_US'].includes(detailRow.marketplaceCode ?? '')
                 && (detailRow.warehouse === 'NJ' || detailRow.warehouse === 'SHOWROOM')
                 && !detailRow.trackingNumber && !detailRow.amazonCancelledAt && (
                 <button onClick={() => setVeeqoOrder(detailRow)} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50">

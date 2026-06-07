@@ -12,14 +12,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { requireBoardManager } from '@/lib/auth/boardAuth';
-import { getVeeqoRates, type VeeqoParcelInput } from '@/lib/veeqo/databridgeClient';
+import { getVeeqoRates, getVeeqoRatesStandalone, type VeeqoParcelInput, type VeeqoShipTo } from '@/lib/veeqo/databridgeClient';
 import { getProductsByIwasku, usDimensions } from '@/lib/products/lookup';
 import { getShippingBenchmark } from '@/lib/veeqo/benchmark';
+import { getOrderShipTo } from '@/lib/veeqo/orderAddress';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('VeeqoRates');
 
 const AMAZON_CODES = ['AMZN_US', 'Ama_US'];
+// Veeqo ship-from US (Somerset/Fairfield) → yalnız bu depolardan Veeqo etiketi
+const US_WAREHOUSES = ['NJ', 'SHOWROOM'];
 // Katalog ölçüsü hiç yoksa son-çare varsayılan (operatör modalda düzenler).
 const DEFAULT_PARCEL: VeeqoParcelInput = { weight: 2, weight_unit: 'lb', length: 12, width: 9, height: 3, dimension_unit: 'in' };
 
@@ -63,6 +66,17 @@ const Schema = z.object({
     width: z.number().positive(),
     height: z.number().positive(),
   }).partial().optional(),
+  /** Amazon-dışı: operatörün modalda düzenlediği alıcı adresi (yoksa candidate'tan parse). */
+  toAddress: z.object({
+    name: z.string().min(1),
+    line1: z.string().min(1),
+    line2: z.string().optional(),
+    town: z.string().min(1),
+    county: z.string().optional(),
+    postcode: z.string().min(1),
+    country_code: z.string().min(2).max(2).optional(),
+    phone: z.string().optional(),
+  }).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -77,7 +91,7 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ success: false, error: 'Doğrulama hatası', details: parsed.error.flatten().fieldErrors }, { status: 400 });
   }
-  const { orderId, parcel } = parsed.data;
+  const { orderId, parcel, toAddress: editedAddress } = parsed.data;
 
   const order = await prisma.outboundOrder.findUnique({
     where: { id: orderId },
@@ -86,8 +100,31 @@ export async function POST(request: NextRequest) {
   if (!order) {
     return NextResponse.json({ success: false, error: 'Sipariş bulunamadı' }, { status: 404 });
   }
-  if (!AMAZON_CODES.includes(order.marketplaceCode)) {
-    return NextResponse.json({ success: false, error: 'Veeqo etiket şu an sadece Amazon siparişlerinde (Faz 2: diğer pazar yerleri)' }, { status: 400 });
+
+  const isAmazon = AMAZON_CODES.includes(order.marketplaceCode);
+  // Veeqo ship-from US (Somerset/Fairfield) — sadece US depolardan etiket alınır
+  if (!US_WAREHOUSES.includes(order.warehouseCode)) {
+    return NextResponse.json({ success: false, error: 'Veeqo etiket yalnız Somerset/Fairfield (US) deposundan alınabilir' }, { status: 400 });
+  }
+
+  // Amazon-dışı: alıcı adresi BİZDEN — operatör düzenlediyse onu, yoksa candidate'tan parse.
+  let shipTo: (VeeqoShipTo & { parsed?: boolean }) | null = null;
+  if (!isAmazon) {
+    if (editedAddress) {
+      shipTo = { ...editedAddress, country_code: editedAddress.country_code || 'US', parsed: true };
+    } else {
+      const parsedAddr = await getOrderShipTo(order.orderNumber);
+      if (parsedAddr) {
+        shipTo = {
+          name: parsedAddr.name, line1: parsedAddr.line1, town: parsedAddr.town,
+          county: parsedAddr.county, postcode: parsedAddr.postcode,
+          country_code: parsedAddr.country_code, phone: parsedAddr.phone, parsed: parsedAddr.parsed,
+        };
+      }
+    }
+    if (!shipTo) {
+      return NextResponse.json({ success: false, error: 'Alıcı adresi bulunamadı — modaldan elle girin', needsAddress: true }, { status: 422 });
+    }
   }
 
   // Koli ölçüsü: önce katalog (products), üstüne operatörün modalda düzenlediği değerler.
@@ -95,11 +132,16 @@ export async function POST(request: NextRequest) {
   const finalParcel: VeeqoParcelInput = { ...DEFAULT_PARCEL, ...(catalog?.parcel ?? {}), ...(parcel ?? {}) };
 
   try {
-    const result = await getVeeqoRates(order.orderNumber, finalParcel, { contents: order.description || undefined, warehouse: order.warehouseCode });
+    const result = isAmazon
+      ? await getVeeqoRates(order.orderNumber, finalParcel, { contents: order.description || undefined, warehouse: order.warehouseCode })
+      : await getVeeqoRatesStandalone(shipTo as VeeqoShipTo, finalParcel, { contents: order.description || undefined, warehouse: order.warehouseCode, reference: order.orderNumber });
     const benchmark = await getShippingBenchmark({ desi: catalog?.desi ?? null, weightLb: finalParcel.weight ?? null, state: result.destState ?? null });
-    logger.info(`rates OK: ${order.orderNumber} → ${result.quotes.length} quote (parcel ${finalParcel.weight}lb ${finalParcel.length}x${finalParcel.width}x${finalParcel.height})`);
-    // modalın ölçü kutularını doldurması için kullanılan parcel'ı + katalog kaynağını + kıyas verisini döndür
-    return NextResponse.json({ success: true, ...result, parcel: finalParcel, parcelFromCatalog: !!catalog, benchmark });
+    logger.info(`rates OK (${isAmazon ? 'amazon' : 'standalone'}): ${order.orderNumber} → ${result.quotes.length} quote`);
+    // modal için: parcel + katalog kaynağı + kıyas + (standalone'da) kullanılan adres + parse güveni
+    return NextResponse.json({
+      success: true, ...result, parcel: finalParcel, parcelFromCatalog: !!catalog, benchmark,
+      ...(shipTo ? { shipTo, addressParsed: shipTo.parsed !== false } : {}),
+    });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Veeqo oran hatası';
     logger.error(`rates error: ${order.orderNumber}: ${msg}`);

@@ -27,12 +27,24 @@ interface Benchmark {
   trUs: { desi: number; eco: number | null; pri: number | null } | null;
   fedexIzmir: { avg: number; n: number; lowLb: number; highLb: number; scope: 'state' | 'genel'; state: string | null } | null;
 }
+interface ShipTo {
+  name: string;
+  line1: string;
+  line2?: string;
+  town: string;
+  county?: string;
+  postcode: string;
+  country_code?: string;
+  phone?: string;
+}
 interface RatesResp {
   remoteShipmentId: string;
   requestToken: string;
   expiresAt: string;
   quotes: Quote[];
   benchmark?: Benchmark;
+  shipTo?: ShipTo;          // sadece Amazon-dışı (adres bizden)
+  addressParsed?: boolean;  // false → otomatik parse güvenilmez, kontrol et
 }
 interface Parcel { weight: number; length: number; width: number; height: number }
 
@@ -59,6 +71,8 @@ export default function VeeqoLabelModal({ orderId, orderNumber, onClose, onSucce
   const [booking, setBooking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [vas, setVas] = useState<Record<string, string>>({}); // operatörün seçtiği ek servisler
+  const [shipTo, setShipTo] = useState<ShipTo | null>(null); // Amazon-dışı: alıcı adresi (düzenlenebilir)
+  const [addressParsed, setAddressParsed] = useState(true);
 
   // rate değişince ek servis seçimini sıfırla (her rate'in opsiyonları farklı)
   useEffect(() => { setVas({}); }, [selected]);
@@ -68,7 +82,7 @@ export default function VeeqoLabelModal({ orderId, orderNumber, onClose, onSucce
     try {
       const res = await fetch('/api/siparis/veeqo-rates', {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, ...(parcel ? { parcel } : {}) }),
+        body: JSON.stringify({ orderId, ...(parcel ? { parcel } : {}), ...(shipTo ? { toAddress: shipTo } : {}) }),
       });
       const j = await res.json();
       if (!res.ok || !j.success) throw new Error(j.error || `HTTP ${res.status}`);
@@ -77,12 +91,14 @@ export default function VeeqoLabelModal({ orderId, orderNumber, onClose, onSucce
       if (sorted[0]) setSelected(sorted[0].rate_id); // en ucuz otomatik seçili
       // ilk yanıtta kullanılan koliyi (katalogtan) ölçü kutularına yaz
       if (j.parcel) { setParcel({ weight: j.parcel.weight, length: j.parcel.length, width: j.parcel.width, height: j.parcel.height }); setFromCatalog(!!j.parcelFromCatalog); }
+      // Amazon-dışı: sunucunun kullandığı/parse ettiği adresi forma yaz
+      if (j.shipTo) { setShipTo(j.shipTo); setAddressParsed(j.addressParsed !== false); }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Oran alınamadı');
     } finally {
       setLoadingRates(false);
     }
-  }, [orderId, parcel]);
+  }, [orderId, parcel, shipTo]);
 
   useEffect(() => { fetchRates(); /* ilk açılış */ // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -135,6 +151,27 @@ export default function VeeqoLabelModal({ orderId, orderNumber, onClose, onSucce
               {rates.benchmark?.fedexIzmir && (
                 <div>FedEx Izmir ({rates.benchmark.fedexIzmir.scope === 'state' ? rates.benchmark.fedexIzmir.state : 'genel'}, ~{rates.benchmark.fedexIzmir.lowLb}-{rates.benchmark.fedexIzmir.highLb} lb): ort <b>${rates.benchmark.fedexIzmir.avg.toFixed(2)}</b> <span className="text-amber-600">({rates.benchmark.fedexIzmir.n} geçmiş{rates.benchmark.fedexIzmir.scope === 'genel' ? ', genel ort.' : ''})</span></div>
               )}
+            </div>
+          )}
+
+          {/* Alıcı adresi — yalnız Amazon-dışı (adres bizden; Amazon'da Veeqo'dan gelir) */}
+          {shipTo && (
+            <div className={`rounded-lg border p-3 ${addressParsed ? 'border-gray-100' : 'border-rose-200 bg-rose-50/40'}`}>
+              <div className="text-[11px] text-gray-400 uppercase mb-2 flex items-center gap-1.5">
+                Alıcı adresi (kontrol et)
+                {!addressParsed && <span className="text-[9px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded px-1 normal-case">otomatik ayrıştırılamadı — düzelt</span>}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {([['name', 'İsim'], ['phone', 'Telefon'], ['line1', 'Adres'], ['line2', 'Adres 2'], ['town', 'Şehir'], ['county', 'Eyalet'], ['postcode', 'ZIP'], ['country_code', 'Ülke']] as const).map(([k, label]) => (
+                  <label key={k} className="text-xs text-gray-600">
+                    <span>{label}</span>
+                    <input value={(shipTo[k] as string) ?? ''}
+                      onChange={(e) => setShipTo((p) => (p ? { ...p, [k]: e.target.value } : p))}
+                      className="mt-0.5 w-full text-sm px-2 py-1 rounded border border-gray-300 bg-white text-gray-800" />
+                  </label>
+                ))}
+              </div>
+              <div className="mt-1.5 text-[10px] text-gray-400">Adresi düzenledikten sonra <b>Oranları Yenile</b>’ye bas (oran + etiket bu adresle alınır).</div>
             </div>
           )}
 

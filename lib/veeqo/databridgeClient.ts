@@ -77,6 +77,38 @@ export async function getVeeqoRates(
   };
 }
 
+export interface VeeqoShipTo {
+  name: string;
+  line1: string;
+  line2?: string;
+  town: string;
+  county?: string;
+  postcode: string;
+  country_code: string;
+  phone?: string;
+}
+
+/**
+ * Amazon-DIŞI (standalone) oran çek — adres BİZ veririz (Veeqo'da sipariş yok).
+ * is_amazon_order:false → Buy Shipping push YOK, Veeqo Stripe kartından faturalanır.
+ */
+export async function getVeeqoRatesStandalone(
+  toAddress: VeeqoShipTo,
+  parcel: VeeqoParcelInput,
+  opts?: { contents?: string; warehouse?: string; reference?: string },
+): Promise<VeeqoRatesResponse> {
+  const data = (await post('/veeqo-routing/rates', {
+    toAddress, parcel, reference: opts?.reference, contents: opts?.contents, warehouse: opts?.warehouse, isAmazonOrder: false,
+  })) as Partial<VeeqoRatesResponse>;
+  return {
+    remoteShipmentId: data.remoteShipmentId ?? '',
+    requestToken: data.requestToken ?? '',
+    expiresAt: data.expiresAt ?? '',
+    quotes: data.quotes ?? [],
+    destState: data.destState ?? null,
+  };
+}
+
 export interface VeeqoBookResponse {
   shipmentId: string;
   trackingNumber: string;
