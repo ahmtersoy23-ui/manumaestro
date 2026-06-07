@@ -37,6 +37,7 @@ interface ShipTo {
   country_code?: string;
   phone?: string;
 }
+interface DeliverInfo { latestShipDate?: string; latestDeliveryDate?: string }
 interface RatesResp {
   remoteShipmentId: string;
   requestToken: string;
@@ -45,6 +46,7 @@ interface RatesResp {
   benchmark?: Benchmark;
   shipTo?: ShipTo;          // sadece Amazon-dışı (adres bizden)
   addressParsed?: boolean;  // false → otomatik parse güvenilmez, kontrol et
+  deliverInfo?: DeliverInfo;
 }
 interface Parcel { weight: number; length: number; width: number; height: number }
 
@@ -73,6 +75,7 @@ export default function VeeqoLabelModal({ orderId, orderNumber, onClose, onSucce
   const [vas, setVas] = useState<Record<string, string>>({}); // operatörün seçtiği ek servisler
   const [shipTo, setShipTo] = useState<ShipTo | null>(null); // Amazon-dışı: alıcı adresi (düzenlenebilir)
   const [addressParsed, setAddressParsed] = useState(true);
+  const [deliverInfo, setDeliverInfo] = useState<DeliverInfo | null>(null); // müşteri kargo beklentisi
 
   // rate değişince ek servis seçimini sıfırla (her rate'in opsiyonları farklı)
   useEffect(() => { setVas({}); }, [selected]);
@@ -93,6 +96,8 @@ export default function VeeqoLabelModal({ orderId, orderNumber, onClose, onSucce
       if (j.parcel) { setParcel({ weight: j.parcel.weight, length: j.parcel.length, width: j.parcel.width, height: j.parcel.height }); setFromCatalog(!!j.parcelFromCatalog); }
       // Amazon-dışı: sunucunun kullandığı/parse ettiği adresi forma yaz
       if (j.shipTo) { setShipTo(j.shipTo); setAddressParsed(j.addressParsed !== false); }
+      // Amazon SLA tarihleri (varsa) — header'da göster
+      if (j.deliverInfo) setDeliverInfo(j.deliverInfo);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Oran alınamadı');
     } finally {
@@ -139,7 +144,15 @@ export default function VeeqoLabelModal({ orderId, orderNumber, onClose, onSucce
         </div>
 
         <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
-          <div className="text-xs text-gray-500">Sipariş <span className="font-mono text-gray-700">{orderNumber}</span></div>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="text-xs text-gray-500">Sipariş <span className="font-mono text-gray-700">{orderNumber}</span></div>
+            {(deliverInfo?.latestDeliveryDate || deliverInfo?.latestShipDate) && (
+              <div className="text-[11px] text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-md px-2 py-0.5">
+                {deliverInfo.latestDeliveryDate && <span>Amazon son teslim: <b>{new Date(deliverInfo.latestDeliveryDate).toLocaleDateString('tr-TR')}</b></span>}
+                {deliverInfo.latestShipDate && <span className="text-indigo-500"> · son sevk {new Date(deliverInfo.latestShipDate).toLocaleDateString('tr-TR')}</span>}
+              </div>
+            )}
+          </div>
 
           {/* Kıyas şeridi — Veeqo dışı referans maliyetler (CargoLens). Veeqo ucuzsa direkt al. */}
           {(rates?.benchmark?.trUs || rates?.benchmark?.fedexIzmir) && (

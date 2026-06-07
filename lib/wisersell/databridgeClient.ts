@@ -65,3 +65,12 @@ export async function getAmazonOrderStatuses(amazonOrderIds: string[]): Promise<
   const data = (await post('/amazon-order-status/by-ids', { amazonOrderIds })) as { statuses?: Record<string, string> };
   return data.statuses ?? {};
 }
+
+export interface AmazonOrderDates { latestShipDate?: string; latestDeliveryDate?: string }
+
+/** Amazon SLA tarihleri (LatestShipDate/LatestDeliveryDate) — getOrder'dan, ek maliyet yok. */
+export async function getAmazonOrderDates(amazonOrderId: string): Promise<AmazonOrderDates | null> {
+  if (!amazonOrderId) return null;
+  const data = (await post('/amazon-order-status/dates', { amazonOrderIds: [amazonOrderId] })) as { dates?: Record<string, AmazonOrderDates> };
+  return data.dates?.[amazonOrderId] ?? null;
+}

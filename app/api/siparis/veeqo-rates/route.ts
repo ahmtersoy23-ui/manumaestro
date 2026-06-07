@@ -16,6 +16,7 @@ import { getVeeqoRates, getVeeqoRatesStandalone, type VeeqoParcelInput, type Vee
 import { getProductsByIwasku, usDimensions } from '@/lib/products/lookup';
 import { getShippingBenchmark } from '@/lib/veeqo/benchmark';
 import { getOrderShipTo } from '@/lib/veeqo/orderAddress';
+import { getAmazonOrderDates } from '@/lib/wisersell/databridgeClient';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('VeeqoRates');
@@ -23,6 +24,9 @@ const logger = createLogger('VeeqoRates');
 const AMAZON_CODES = ['AMZN_US', 'Ama_US'];
 // Veeqo ship-from US (Somerset/Fairfield) → yalnız bu depolardan Veeqo etiketi
 const US_WAREHOUSES = ['NJ', 'SHOWROOM'];
+// İçerik-kısıtlı USPS servisleri — metal/genel ürün için GEÇERSİZ (BPM/Media/Library
+// sadece basılı/medya içeriğe). Listede gösterme (yanlış servis = etiket reddi/sürşarj).
+const RESTRICTED_SERVICE = /bound printed matter|media mail|library mail/i;
 // Katalog ölçüsü hiç yoksa son-çare varsayılan (operatör modalda düzenler).
 const DEFAULT_PARCEL: VeeqoParcelInput = { weight: 2, weight_unit: 'lb', length: 12, width: 9, height: 3, dimension_unit: 'in' };
 
@@ -135,12 +139,18 @@ export async function POST(request: NextRequest) {
     const result = isAmazon
       ? await getVeeqoRates(order.orderNumber, finalParcel, { contents: order.description || undefined, warehouse: order.warehouseCode })
       : await getVeeqoRatesStandalone(shipTo as VeeqoShipTo, finalParcel, { contents: order.description || undefined, warehouse: order.warehouseCode, reference: order.orderNumber });
+    // İçerik-kısıtlı servisleri (BPM/Media/Library Mail) listeden çıkar
+    const quotes = (result.quotes ?? []).filter((q) => !RESTRICTED_SERVICE.test(q.service_name));
     const benchmark = await getShippingBenchmark({ desi: catalog?.desi ?? null, weightLb: finalParcel.weight ?? null, state: result.destState ?? null });
-    logger.info(`rates OK (${isAmazon ? 'amazon' : 'standalone'}): ${order.orderNumber} → ${result.quotes.length} quote`);
-    // modal için: parcel + katalog kaynağı + kıyas + (standalone'da) kullanılan adres + parse güveni
+    // Amazon SLA (LatestShip/LatestDelivery) — operatör quote teslim süreleriyle kıyaslasın.
+    // Sadece Amazon US; best-effort (SP-API patlarsa rates bozulmasın). Non-Amazon'da yok.
+    const deliverInfo = isAmazon ? await getAmazonOrderDates(order.orderNumber).catch(() => null) : null;
+    logger.info(`rates OK (${isAmazon ? 'amazon' : 'standalone'}): ${order.orderNumber} → ${quotes.length} quote`);
+    // modal için: parcel + katalog kaynağı + kıyas + (standalone'da) kullanılan adres + parse güveni + teslim bilgisi
     return NextResponse.json({
-      success: true, ...result, parcel: finalParcel, parcelFromCatalog: !!catalog, benchmark,
+      success: true, ...result, quotes, parcel: finalParcel, parcelFromCatalog: !!catalog, benchmark,
       ...(shipTo ? { shipTo, addressParsed: shipTo.parsed !== false } : {}),
+      ...(deliverInfo ? { deliverInfo } : {}),
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Veeqo oran hatası';
