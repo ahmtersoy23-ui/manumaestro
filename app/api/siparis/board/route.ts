@@ -157,7 +157,7 @@ export async function GET(request: NextRequest) {
     take: 1000,
     include: {
       items: { select: { iwasku: true, quantity: true } },
-      labels: { where: { type: 'SHIPPING', archivedAt: null }, select: { id: true, trackingNumber: true, veeqoShipmentId: true, cost: true, costCurrency: true, notes: true }, take: 1 },
+      labels: { where: { type: 'SHIPPING', archivedAt: null }, select: { id: true, trackingNumber: true, veeqoShipmentId: true, cost: true, costCurrency: true, notes: true, uploadedAt: true }, take: 1 },
     },
   });
 
@@ -192,6 +192,7 @@ export async function GET(request: NextRequest) {
       labelCost: shippingLabel?.cost != null ? Number(shippingLabel.cost) : null, // etiket bedeli (mutabakat/export)
       labelCostCurrency: shippingLabel?.costCurrency ?? null,
       labelService: shippingLabel?.notes ?? null, // "Veeqo: UPS Ground" — servis adı
+      labelAt: shippingLabel?.uploadedAt ?? null, // etiketin alındığı an (Çıkış Bekliyor sıralaması)
       status: o.status,
       createdAt: o.createdAt,
       shippedAt: o.shippedAt,
@@ -243,6 +244,13 @@ export async function GET(request: NextRequest) {
   for (const coll of [etiketBekliyor, cikisBekliyor, cgBekliyor, kapatmaBekliyor, kapandi]) {
     for (const row of coll) row.items = (row.items as Array<{ iwasku: string | null; quantity: number }>).map(enrichAuto);
   }
+
+  // Çıkış Bekliyor: etiketin alındığı zamana göre (işlem zamanı) en yeni en üstte.
+  cikisBekliyor.sort((a, b) => {
+    const ta = a.labelAt ? new Date(a.labelAt as string).getTime() : 0;
+    const tb = b.labelAt ? new Date(b.labelAt as string).getTime() : 0;
+    return tb - ta;
+  });
 
   // ── 4. Pazar yeri dostça adı ──────────────────────────────────────────────
   // marketplaceCode → bizim Marketplace tablosundaki ad. Wisersell store kodları
