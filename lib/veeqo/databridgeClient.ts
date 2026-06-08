@@ -132,11 +132,12 @@ export async function bookVeeqoLabel(input: {
   requestToken?: string;
   labelFormat?: 'PDF' | 'PNG' | 'ZPL' | 'JPEG';
   options?: Record<string, string>;
+  orderNumber?: string; // audit (sync_log.detail)
 }): Promise<VeeqoBookResponse> {
   return (await post('/veeqo-routing/book', input)) as VeeqoBookResponse;
 }
 
 /** Yanlış/test etiketini iptal et (ücret iadesi). */
-export async function cancelVeeqoLabel(shipmentId: string): Promise<void> {
-  await post('/veeqo-routing/cancel', { shipmentId });
+export async function cancelVeeqoLabel(shipmentId: string, orderNumber?: string): Promise<void> {
+  await post('/veeqo-routing/cancel', { shipmentId, orderNumber });
 }

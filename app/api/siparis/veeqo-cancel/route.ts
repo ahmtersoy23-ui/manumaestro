@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 
   // 1) Veeqo'da iptal (void+iade). Hata = iptal edilemedi (örn. kargo taranmış) → operatöre.
   try {
-    await cancelVeeqoLabel(label.veeqoShipmentId);
+    await cancelVeeqoLabel(label.veeqoShipmentId, order.orderNumber);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Veeqo iptal hatası';
     logger.error(`cancel error: ${order.orderNumber} (sid ${label.veeqoShipmentId}): ${msg}`);

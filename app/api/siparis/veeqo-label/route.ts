@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
   // 1) Etiketi satın al (GERÇEK PARA) — DataBridge book endpoint'i retry YAPMAZ
   let booked;
   try {
-    booked = await bookVeeqoLabel({ remoteShipmentId, rateId, requestToken, labelFormat: 'PDF', options });
+    booked = await bookVeeqoLabel({ remoteShipmentId, rateId, requestToken, labelFormat: 'PDF', options, orderNumber: order.orderNumber });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Veeqo booking hatası';
     logger.error(`book error: ${order.orderNumber}: ${msg}`);
