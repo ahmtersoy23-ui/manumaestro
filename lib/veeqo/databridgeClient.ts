@@ -120,8 +120,9 @@ export interface VeeqoBookResponse {
   serviceName?: string;
   serviceCarrier?: string;
   totalCharge?: { value: number; unit: string };
-  labelBase64: string;
+  labelBase64: string | null; // book başarılı ama etiket alınamadıysa null (booking yine de geçerli)
   labelFormat: string;
+  labelError?: string;        // etiket alınamadıysa sebebi
 }
 
 /** Seçilen oranla etiketi SATIN AL — GERÇEK PARA. Tracking + label(base64) döner. */

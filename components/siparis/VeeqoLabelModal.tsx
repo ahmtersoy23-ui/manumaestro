@@ -54,7 +54,7 @@ interface Props {
   orderId: string;
   orderNumber: string;
   onClose: () => void;
-  onSuccess: (trackingNumber: string) => void;
+  onSuccess: (trackingNumber: string, note?: string) => void;
 }
 
 const carrierStyle: Record<string, string> = {
@@ -144,7 +144,7 @@ export default function VeeqoLabelModal({ orderId, orderNumber, onClose, onSucce
         if (j.alreadyHasLabel) { onSuccess(j.trackingNumber); return; }
         throw new Error(j.error || `HTTP ${res.status}`);
       }
-      onSuccess(j.trackingNumber);
+      onSuccess(j.trackingNumber, j.labelPending ? j.message : undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Etiket alınamadı');
     } finally {

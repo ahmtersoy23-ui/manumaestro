@@ -70,52 +70,80 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: msg }, { status: 502 });
   }
 
-  // 2) PDF'i diske + OrderLabel olarak kaydet
-  const pdfBuffer = Buffer.from(booked.labelBase64, 'base64');
-  let saved;
-  try {
-    saved = await saveLabelFile({
-      outboundOrderId: orderId,
-      fileBuffer: pdfBuffer,
-      fileName: `veeqo-${booked.trackingNumber}.pdf`,
-      mimeType: 'application/pdf',
+  // 2) Etiketi kaydet. PDF geldiyse diske + OrderLabel. Gelmediyse (book OK ama getLabel başarısız —
+  //    ör. Amazon Buy Shipping async) PDF'siz OrderLabel aç: booking KAYBOLMAZ → sipariş Çıkış
+  //    Bekliyor'a düşer + tekrar-book engellenir (çift ücret imkânsız). PDF Amazon SC'den yazdırılır.
+  if (booked.labelBase64) {
+    const pdfBuffer = Buffer.from(booked.labelBase64, 'base64');
+    let saved;
+    try {
+      saved = await saveLabelFile({
+        outboundOrderId: orderId,
+        fileBuffer: pdfBuffer,
+        fileName: `veeqo-${booked.trackingNumber}.pdf`,
+        mimeType: 'application/pdf',
+      });
+    } catch (err) {
+      const ioMsg = err instanceof LabelStorageError ? err.message : (err as Error).message;
+      logger.error(`label saved-to-disk FAILED ama booking OLDU (tracking ${booked.trackingNumber}): ${ioMsg}`);
+      return NextResponse.json(
+        { success: false, error: `Etiket alındı (tracking ${booked.trackingNumber}) ama dosya kaydedilemedi: ${ioMsg}. Veeqo'dan manuel indirin.`, trackingNumber: booked.trackingNumber, bookedButNotSaved: true },
+        { status: 500 },
+      );
+    }
+    const label = await prisma.orderLabel.create({
+      data: {
+        id: saved.id,
+        outboundOrderId: orderId,
+        type: 'SHIPPING',
+        fileName: `veeqo-${booked.trackingNumber}.pdf`,
+        storagePath: saved.storagePath,
+        mimeType: 'application/pdf',
+        fileSize: saved.fileSize,
+        uploadedById: auth.user.id,
+        trackingNumber: booked.trackingNumber,
+        veeqoShipmentId: booked.shipmentId,
+        cost: booked.totalCharge?.value ?? null,
+        costCurrency: booked.totalCharge?.unit ?? null,
+        notes: `Veeqo: ${booked.serviceName ?? ''}`.trim(),
+      },
     });
-  } catch (err) {
-    // Etiket SATIN ALINDI ama dosya kaydedilemedi — tracking'i kaybetme, label'ı yine de yaz
-    const ioMsg = err instanceof LabelStorageError ? err.message : (err as Error).message;
-    logger.error(`label saved-to-disk FAILED ama booking OLDU (tracking ${booked.trackingNumber}): ${ioMsg}`);
-    return NextResponse.json(
-      { success: false, error: `Etiket alındı (tracking ${booked.trackingNumber}) ama dosya kaydedilemedi: ${ioMsg}. Veeqo'dan manuel indirin.`, trackingNumber: booked.trackingNumber, bookedButNotSaved: true },
-      { status: 500 },
-    );
+    logger.info(`label OK: ${order.orderNumber} tracking=${booked.trackingNumber} service=${booked.serviceName}`);
+    return NextResponse.json({
+      success: true,
+      labelId: label.id,
+      trackingNumber: booked.trackingNumber,
+      serviceName: booked.serviceName,
+      serviceCarrier: booked.serviceCarrier,
+      totalCharge: booked.totalCharge,
+    });
   }
 
+  // PDF YOK: book başarılı (para çekildi) ama etiket Veeqo'dan alınamadı → kaybetme, kaydı yine aç.
   const label = await prisma.orderLabel.create({
     data: {
-      id: saved.id,
       outboundOrderId: orderId,
       type: 'SHIPPING',
-      fileName: `veeqo-${booked.trackingNumber}.pdf`,
-      storagePath: saved.storagePath,
+      fileName: `veeqo-${booked.trackingNumber}-NOPDF`,
+      storagePath: '', // PDF yok — Amazon Buy Shipping; Amazon SC'den yazdırılır (print bunu atlar)
       mimeType: 'application/pdf',
-      fileSize: saved.fileSize,
+      fileSize: 0,
       uploadedById: auth.user.id,
       trackingNumber: booked.trackingNumber,
-      veeqoShipmentId: booked.shipmentId, // iade/iptal anahtarı (DELETE .../shipments/{id})
-      // Bedel DB'ye yazılır (mutabakat/export) — etikete/damgaya BASILMAZ (PDF müşteriye gider).
+      veeqoShipmentId: booked.shipmentId,
       cost: booked.totalCharge?.value ?? null,
       costCurrency: booked.totalCharge?.unit ?? null,
-      notes: `Veeqo: ${booked.serviceName ?? ''}`.trim(),
+      notes: `Veeqo: ${booked.serviceName ?? ''} — PDF alınamadı (Amazon Buy Shipping; Amazon SC'den yazdır)`.trim(),
     },
   });
-
-  logger.info(`label OK: ${order.orderNumber} tracking=${booked.trackingNumber} service=${booked.serviceName}`);
+  logger.warn(`label booked NO-PDF: ${order.orderNumber} tracking=${booked.trackingNumber} — kayıt açıldı (çift-book engellendi); sebep: ${booked.labelError ?? 'getLabel başarısız'}`);
   return NextResponse.json({
     success: true,
     labelId: label.id,
     trackingNumber: booked.trackingNumber,
     serviceName: booked.serviceName,
-    serviceCarrier: booked.serviceCarrier,
     totalCharge: booked.totalCharge,
+    labelPending: true,
+    message: 'Etiket alındı ve ücret çekildi, ancak PDF Veeqo\'dan gelmedi (Amazon Buy Shipping). Sipariş Çıkış Bekliyor\'a alındı; etiketi Amazon Seller Central\'dan yazdırın.',
   });
 }

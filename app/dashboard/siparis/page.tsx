@@ -814,7 +814,7 @@ export default function SiparisPage() {
           orderId={veeqoOrder.id}
           orderNumber={veeqoOrder.orderNumber ?? veeqoOrder.orderCode ?? ''}
           onClose={() => setVeeqoOrder(null)}
-          onSuccess={(tracking) => { setVeeqoOrder(null); setDetailRow(null); setMsg(`Veeqo etiketi alındı — tracking: ${tracking}`); load(); }}
+          onSuccess={(tracking, note) => { setVeeqoOrder(null); setDetailRow(null); setMsg(note ?? `Veeqo etiketi alındı — tracking: ${tracking}`); load(); }}
         />
       )}
 
