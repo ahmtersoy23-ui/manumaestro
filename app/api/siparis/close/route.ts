@@ -18,7 +18,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { requireBoardManager } from '@/lib/auth/boardAuth';
-import { closeWisersellExternal, closeWisersellPlatform } from '@/lib/wisersell/databridgeClient';
+import { closeWisersellExternal, closeWisersellPlatform, markWisersellOrderItems } from '@/lib/wisersell/databridgeClient';
 import { carrierIdFromTracking, WISERSELL_CARRIER_IDS } from '@/lib/wisersell/carrierMap';
 import { createLogger } from '@/lib/logger';
 
@@ -117,6 +117,15 @@ export async function POST(request: NextRequest) {
     processed++;
 
     try {
+      // 0) Çıkışta önce orderitem → Teslim Edildi (6); sonra komple close. Best-effort: üretim
+      //    durumu yazması patlasa da sipariş kapanışı bloklanmasın.
+      if (o.wisersellOrderItemIds.length) {
+        try {
+          await markWisersellOrderItems(o.wisersellOrderItemIds, 6);
+        } catch (err: unknown) {
+          logger.error(`orderitem Teslim Edildi yazılamadı (order ${o.wisersellOrderId}): ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
       // 1) external-close (tracking yaz) → 2) platform-close (platformda kapat)
       await closeWisersellExternal(o.wisersellOrderId, carrierId, tracking);
       await platformCloseWithBackoff(o.wisersellOrderId);

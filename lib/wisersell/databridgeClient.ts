@@ -42,6 +42,16 @@ export async function reopenWisersellOrder(ids: number[]): Promise<{ count: numb
   return { count: data.count ?? 0, candidatesRevived: data.candidatesRevived ?? 0 };
 }
 
+/**
+ * Orderitem ÜRETİM durumunu değiştirir (Üretim/Tedarik pipeline; sipariş orderstatus'ünden ayrı).
+ * 1=Yeni, 5=Beklemede, 6=Teslim Edildi. US-depo siparişlerini üretim kuyruğundan yönetmek için.
+ * Best-effort: çağıran try/catch ile sarar, hata core akışı bloklamasın.
+ */
+export async function markWisersellOrderItems(itemIds: number[], statusId: 1 | 5 | 6): Promise<void> {
+  if (!itemIds.length) return;
+  await post('/wisersell-routing/orderitem-status', { itemIds, statusId });
+}
+
 /** Wisersell siparişini tracking ile harici kapatır (tracking'i marketplace'e push'lar). */
 export async function closeWisersellExternal(orderId: number, carrierId: number, trackingCode: string): Promise<void> {
   await post('/wisersell-routing/close', { orderId, carrierId, trackingCode });

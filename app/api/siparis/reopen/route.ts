@@ -16,7 +16,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireBoardManager } from '@/lib/auth/boardAuth';
-import { reopenWisersellOrder } from '@/lib/wisersell/databridgeClient';
+import { reopenWisersellOrder, markWisersellOrderItems } from '@/lib/wisersell/databridgeClient';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('SiparisReopen');
@@ -60,6 +60,14 @@ export async function POST(request: NextRequest) {
       wisersellReopened = true;
     } catch (err) {
       wisersellError = err instanceof Error ? err.message.slice(0, 160) : 'Wisersell reopen hatası';
+    }
+    // orderitem → Yeni (1): üretim kuyruğuna geri koy (Beklemede'den geri al). Best-effort.
+    if (order.wisersellOrderItemIds.length) {
+      try {
+        await markWisersellOrderItems(order.wisersellOrderItemIds, 1);
+      } catch (err) {
+        logger.error(`orderitem Yeni yazılamadı (order ${order.wisersellOrderId}): ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
   }
 

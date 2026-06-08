@@ -13,13 +13,14 @@ import { getUsAvailability } from '@/lib/wms/usWarehouseStock';
 import { getCgAvailability } from '@/lib/wms/cgStock';
 import { getProductsByIwasku } from '@/lib/products/lookup';
 import { resolveOrderWarehouse } from '@/lib/wisersell/orderRouting';
-import { markWisersellReady } from '@/lib/wisersell/databridgeClient';
+import { markWisersellReady, markWisersellOrderItems } from '@/lib/wisersell/databridgeClient';
 import { findChannelDuplicate } from '@/lib/wms/orderDuplicateGuard';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('WisersellApprove');
 
 interface CandItem {
+  id?: number | null;            // Wisersell orderitem id — üretim durumu (Beklemede) yazmak için
   iwasku: string | null;
   qty: number;
   product_code: string | null;
@@ -147,6 +148,8 @@ export async function approveWisersellCandidates(ids: number[], userId: string):
       continue;
     }
     const items = physicalItems(c.orderitems).map((i) => ({ iwasku: i.iwasku, qty: i.qty, desi: i.iwasku ? productMap.get(i.iwasku)?.desi ?? null : null, category: i.iwasku ? productMap.get(i.iwasku)?.category ?? null : null }));
+    // Wisersell orderitem id'leri — üretim durumu (Beklemede/Teslim/Yeni) için sipariş kaydında saklanır.
+    const wsItemIds = physicalItems(c.orderitems).map((i) => i.id).filter((x): x is number => typeof x === 'number');
     const wh = resolveOrderWarehouse(items, avail, cgAvail);
     if (!wh) {
       results.push({ wisersellOrderId: c.wisersell_order_id, ok: false, status: 'skipped', message: 'Tek depodan tam karşılanmıyor (stok/iwasku)' });
@@ -179,6 +182,7 @@ export async function approveWisersellCandidates(ids: number[], userId: string):
             status: 'DRAFT',
             source: 'WISERSELL_AUTO',
             wisersellOrderId: c.wisersell_order_id,
+            wisersellOrderItemIds: wsItemIds,
             createdById: userId,
           },
         });
@@ -193,6 +197,16 @@ export async function approveWisersellCandidates(ids: number[], userId: string):
       // unique violation → zaten onaylı / numara çakışması
       results.push({ wisersellOrderId: c.wisersell_order_id, ok: false, status: 'skipped', message: `Oluşturulamadı (muhtemelen zaten var): ${msg.slice(0, 120)}` });
       continue;
+    }
+
+    // Üretim kuyruğundan düş: orderitem → Beklemede (5). US-depodan karşılanıyor, üretime gerek yok.
+    // Best-effort: Wisersell yazması patlarsa onay akışı bloklanmaz (markWisersellReady gibi).
+    if (wsItemIds.length) {
+      try {
+        await markWisersellOrderItems(wsItemIds, 5);
+      } catch (err: unknown) {
+        logger.error(`orderitem Beklemede yazılamadı (order ${c.wisersell_order_id}): ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
 
     // mark-ready (dış aksiyon) — başarısızsa ready-pending bırak
