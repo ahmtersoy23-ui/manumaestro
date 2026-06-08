@@ -50,7 +50,9 @@ function parseManualAddress(note: string | null): { recipient: string | null; lo
   if (!note) return { recipient: null, location: null };
   const parts = note.split(/[\n|]/).map((s) => s.trim()).filter(Boolean);
   const recipient = parts[0] ?? null;
-  const location = parts.find((p) => /[A-Z]{2}\s+\d{5}/.test(p)) ?? parts[1] ?? null;
+  // İlk satır = alıcı; kalan TÜM satırlar adres bloğu (sokak + şehir/eyalet/zip + tel).
+  // Eskiden yalnız "STATE ZIP" satırı seçiliyordu → sokak ve telefon düşüyordu (Adres eksik görünüyordu).
+  const location = parts.slice(1).join('\n') || null;
   return { recipient, location };
 }
 
