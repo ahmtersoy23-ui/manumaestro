@@ -40,24 +40,30 @@ function parseCityStateZip(line: string): { town: string; county: string; postco
 
 /**
  * Serbest-metin ship_address blob'unu yapısal adrese çevirir (saf — test edilir).
- * Telefon son satırda (çoğunlukla rakam), city/state/zip ondan önceki satır,
- * geri kalanı sokak.
+ * Pozisyona GÜVENMEZ: "Şehir EYALET ZIP" satırını TÜM satırlarda tarar (telefon satırında
+ * sondaki '*', ülke eki vb. olabilir → eski "son satır = csz" varsayımı postcode'u boş
+ * bırakıyordu). Telefon = harf içermeyen, ≥7 rakamlı satır; geri kalan = sokak.
  */
 export function parseShipAddress(name: string | null, raw: string): ParsedShipTo {
   const lines = raw.split(/[\n\r]+/).map((l) => l.trim()).filter(Boolean);
 
+  // Telefon: harf yok + en az 7 rakam ("(570) 604-3683*" gibi kirli sonları tolere et).
+  const isPhone = (s: string) => !/[A-Za-z]/.test(s) && s.replace(/\D/g, '').length >= 7;
+
+  let csz: { town: string; county: string; postcode: string } | null = null;
   let phone: string | undefined;
-  const body = [...lines];
-  if (body.length > 1 && /^[\d\s()+.\-]{7,}$/.test(body[body.length - 1])) {
-    phone = body.pop()!.replace(/[^\d+]/g, '');
+  const street: string[] = [];
+  for (const ln of lines) {
+    if (!csz) {
+      const c = parseCityStateZip(ln);
+      if (c) { csz = c; continue; }
+    }
+    if (!phone && isPhone(ln)) { phone = ln.replace(/[^\d+]/g, ''); continue; }
+    street.push(ln);
   }
 
-  const cszLine = body.length > 0 ? body[body.length - 1] : '';
-  const csz = parseCityStateZip(cszLine);
-  const streetLines = csz ? body.slice(0, -1) : body.slice(0, Math.max(1, body.length - 1));
-  const line1 = (streetLines.join(', ') || lines[0] || '').trim();
-
-  const town = csz?.town ?? cszLine;
+  const line1 = (street.join(', ') || lines[0] || '').trim();
+  const town = csz?.town ?? '';
   const county = csz?.county ?? '';
   const postcode = csz?.postcode ?? '';
   const parsed = Boolean(line1 && csz && town && postcode);

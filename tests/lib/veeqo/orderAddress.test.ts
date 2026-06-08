@@ -66,6 +66,15 @@ describe('parseAddressNote (manuel sipariş addressNote fallback)', () => {
     expect(parseAddressNote('kamrun imam')).toBeNull();
   });
 
+  it('telefon satırı kirli (sonda *) → csz yine de bulunur, postcode dolu', () => {
+    // Gerçek vaka (Walmart 119115864645019): operatör telefonu "(570) 604-3683*" yazmış.
+    const r = parseAddressNote('Manum Jan\n1008 Ravine St\nScranton, PA 18508\n(570) 604-3683*');
+    expect(r).toMatchObject({
+      name: 'Manum Jan', line1: '1008 Ravine St', town: 'Scranton', county: 'PA', postcode: '18508', parsed: true,
+    });
+    expect(r?.phone).toBe('5706043683');
+  });
+
   it('boş/null → null', () => {
     expect(parseAddressNote(null)).toBeNull();
     expect(parseAddressNote('')).toBeNull();
