@@ -27,12 +27,10 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* NOT: Uygulama tamamen light-mode (her yer bg-white/gray). Dark-mode media
+ * bloğu --foreground'u açık griye çeviriyordu → OS dark mode'da rengi
+ * belirtilmemiş metinler (tablo hücreleri vb.) beyaz kart üstünde soluk
+ * görünüyordu. Light-only olduğumuz için bilinçli kaldırıldı (2026-06-08). */
 
 body {
   background: var(--background);
