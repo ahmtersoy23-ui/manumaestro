@@ -125,6 +125,7 @@ export default function SiparisPage() {
   const [exportIds, setExportIds] = useState<string[]>([]); // mapping sonrası tekrar denemek için
   // CG detay modalinde manuel tracking girişi
   const [trackingDraft, setTrackingDraft] = useState('');
+  const [costDraft, setCostDraft] = useState(''); // Veeqo-dışı etiket bedeli (elle)
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -278,7 +279,15 @@ export default function SiparisPage() {
     setTrackingDraft(''); setDetailRow(null);
   };
 
-  const openDetail = (r: Row) => { setDetailRow(r); setTrackingDraft(r.manualTracking ?? ''); };
+  const saveCost = async (orderId?: string) => {
+    if (!orderId) return;
+    const v = parseFloat(costDraft.replace(',', '.'));
+    if (!isFinite(v) || v < 0) { setMsg('Geçerli bir bedel girin'); return; }
+    await runAction('/api/siparis/label-cost', { orderId, cost: v }, () => 'Etiket bedeli kaydedildi.');
+    setDetailRow(null);
+  };
+
+  const openDetail = (r: Row) => { setDetailRow(r); setTrackingDraft(r.manualTracking ?? ''); setCostDraft(r.labelCost != null ? String(r.labelCost) : ''); };
 
   // Toplu "Hazır Etiketleri Yazdır" — depoya münhasır (fiziksel mekan ayrı), seçili siparişler.
   const printSelected = () => {
@@ -529,7 +538,24 @@ export default function SiparisPage() {
                 <div><div className="text-[11px] text-gray-400 uppercase">Pazar Yeri</div><span title={detailRow.marketplaceCode} className="inline-block mt-0.5 text-xs font-medium px-2 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-100">{detailRow.marketplaceLabel || detailRow.marketplaceCode || '—'}</span></div>
                 <div><div className="text-[11px] text-gray-400 uppercase">Depo</div><span className={`inline-block mt-0.5 text-xs font-medium px-2 py-0.5 rounded-md border ${whBadge(detailRow.warehouse)}`}>{whLabel(detailRow.warehouse)}</span></div>
                 <div><div className="text-[11px] text-gray-400 uppercase">Tracking</div><div className="mt-0.5 font-mono text-xs text-gray-700">{detailRow.trackingNumber ?? '—'}</div></div>
-                <div><div className="text-[11px] text-gray-400 uppercase">Kargo Bedeli</div><div className="mt-0.5 text-xs text-gray-700">{detailRow.labelCost != null ? `$${detailRow.labelCost.toFixed(2)}${detailRow.labelCostCurrency && detailRow.labelCostCurrency !== 'USD' ? ` ${detailRow.labelCostCurrency}` : ''}` : '—'}{detailRow.labelService ? <span className="text-gray-400"> · {detailRow.labelService.replace(/^Veeqo:\s*/, '')}</span> : null}</div></div>
+                <div>
+                  <div className="text-[11px] text-gray-400 uppercase">Kargo Bedeli</div>
+                  {detailRow.veeqoShipmentId ? (
+                    // Veeqo etiketi: bedel book'tan otomatik, salt-okunur
+                    <div className="mt-0.5 text-xs text-gray-700">{detailRow.labelCost != null ? `$${detailRow.labelCost.toFixed(2)}${detailRow.labelCostCurrency && detailRow.labelCostCurrency !== 'USD' ? ` ${detailRow.labelCostCurrency}` : ''}` : '—'}{detailRow.labelService ? <span className="text-gray-400"> · {detailRow.labelService.replace(/^Veeqo:\s*/, '')}</span> : null}</div>
+                  ) : detailRow.labelId && canManage ? (
+                    // Veeqo-dışı (elle yüklenen) etiket: bedel elle girilir/düzeltilir
+                    <div className="mt-0.5 flex items-center gap-1.5">
+                      <span className="text-xs text-gray-400">$</span>
+                      <input type="number" min={0} step="0.01" value={costDraft} onChange={(e) => setCostDraft(e.target.value)} placeholder="0.00"
+                        className="w-20 text-xs px-2 py-1 rounded border border-gray-300 bg-white text-gray-800" />
+                      <button onClick={() => saveCost(detailRow.id)} disabled={busy || !costDraft.trim()}
+                        className="text-[11px] px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40">Kaydet</button>
+                    </div>
+                  ) : (
+                    <div className="mt-0.5 text-xs text-gray-700">{detailRow.labelCost != null ? `$${detailRow.labelCost.toFixed(2)}` : '—'}</div>
+                  )}
+                </div>
               </div>
 
               {/* Alıcı + Adres — ayrı alanlar, tek tıkla kopyala */}
