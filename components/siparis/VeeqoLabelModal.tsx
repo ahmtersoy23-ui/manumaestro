@@ -88,7 +88,17 @@ export default function VeeqoLabelModal({ orderId, orderNumber, onClose, onSucce
         body: JSON.stringify({ orderId, ...(parcel ? { parcel } : {}), ...(shipTo ? { toAddress: shipTo } : {}) }),
       });
       const j = await res.json();
-      if (!res.ok || !j.success) throw new Error(j.error || `HTTP ${res.status}`);
+      if (!res.ok || !j.success) {
+        // Adres yok (manuel sipariş, parse edilemedi) → boş düzenlenebilir form aç,
+        // operatör doldurup "Oranları Yenile"ye bassın (çıkmaz hata gösterme).
+        if (j.needsAddress) {
+          setShipTo((prev) => prev ?? { name: '', line1: '', line2: '', town: '', county: '', postcode: '', country_code: 'US', phone: '' });
+          setAddressParsed(false);
+          setError('Alıcı adresi bulunamadı — aşağıdaki alanları doldurup "Oranları Yenile"ye basın.');
+          return;
+        }
+        throw new Error(j.error || `HTTP ${res.status}`);
+      }
       const sorted: Quote[] = [...(j.quotes ?? [])].sort((a, b) => parseFloat(a.total_charge) - parseFloat(b.total_charge));
       setRates({ remoteShipmentId: j.remoteShipmentId, requestToken: j.requestToken, expiresAt: j.expiresAt, quotes: sorted, benchmark: j.benchmark });
       if (sorted[0]) setSelected(sorted[0].rate_id); // en ucuz otomatik seçili

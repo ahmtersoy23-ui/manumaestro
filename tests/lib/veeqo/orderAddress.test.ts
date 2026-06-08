@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseShipAddress } from '@/lib/veeqo/orderAddress';
+import { parseShipAddress, parseAddressNote } from '@/lib/veeqo/orderAddress';
 
 describe('parseShipAddress', () => {
   it('3-satır US blob (51218 örneği) temiz parse', () => {
@@ -46,5 +46,28 @@ describe('parseShipAddress', () => {
   it('isim yoksa Customer fallback', () => {
     const r = parseShipAddress(null, '1 A St\nNYC NY 10001');
     expect(r.name).toBe('Customer');
+  });
+
+  it('virgüllü şehir "Scranton, PA 18508" → town virgülsüz', () => {
+    const r = parseShipAddress('Manum Jan', '1008 Ravine St\nScranton, PA 18508\n(570) 604-3683');
+    expect(r).toMatchObject({ line1: '1008 Ravine St', town: 'Scranton', county: 'PA', postcode: '18508', parsed: true });
+  });
+});
+
+describe('parseAddressNote (manuel sipariş addressNote fallback)', () => {
+  it('isim-ilk-satır formatını parse eder (Walmart manuel vakası)', () => {
+    const r = parseAddressNote('Manum Jan\n1008 Ravine St\nScranton, PA 18508\n(570) 604-3683');
+    expect(r).toMatchObject({
+      name: 'Manum Jan', line1: '1008 Ravine St', town: 'Scranton', county: 'PA', postcode: '18508', parsed: true,
+    });
+  });
+
+  it('yalnız isim (adres yok) → null', () => {
+    expect(parseAddressNote('kamrun imam')).toBeNull();
+  });
+
+  it('boş/null → null', () => {
+    expect(parseAddressNote(null)).toBeNull();
+    expect(parseAddressNote('')).toBeNull();
   });
 });

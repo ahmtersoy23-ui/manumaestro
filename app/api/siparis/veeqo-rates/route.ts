@@ -15,7 +15,7 @@ import { requireBoardManager } from '@/lib/auth/boardAuth';
 import { getVeeqoRates, getVeeqoRatesStandalone, type VeeqoParcelInput, type VeeqoShipTo } from '@/lib/veeqo/databridgeClient';
 import { getProductsByIwasku, usDimensions } from '@/lib/products/lookup';
 import { getShippingBenchmark } from '@/lib/veeqo/benchmark';
-import { getOrderShipTo } from '@/lib/veeqo/orderAddress';
+import { getOrderShipTo, parseAddressNote } from '@/lib/veeqo/orderAddress';
 import { getAmazonOrderDates } from '@/lib/wisersell/databridgeClient';
 import { createLogger } from '@/lib/logger';
 
@@ -117,7 +117,9 @@ export async function POST(request: NextRequest) {
     if (editedAddress) {
       shipTo = { ...editedAddress, country_code: editedAddress.country_code || 'US', parsed: true };
     } else {
-      const parsedAddr = await getOrderShipTo(order.orderNumber);
+      // Önce Wisersell candidate (otomatik sipariş), yoksa manuel siparişin addressNote'u
+      // (operatör girişte adresi zaten yazmış → tekrar yazdırma).
+      const parsedAddr = (await getOrderShipTo(order.orderNumber)) ?? parseAddressNote(order.addressNote);
       if (parsedAddr) {
         shipTo = {
           name: parsedAddr.name, line1: parsedAddr.line1, town: parsedAddr.town,

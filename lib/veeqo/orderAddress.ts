@@ -30,11 +30,12 @@ export interface ParsedShipTo {
   raw: string;
 }
 
-/** "Old Bridge NJ 08857" → { town, county, postcode } (US formatı). */
+/** "Old Bridge NJ 08857" / "Scranton, PA 18508" → { town, county, postcode } (US formatı). */
 function parseCityStateZip(line: string): { town: string; county: string; postcode: string } | null {
   const m = line.match(/^(.+?)\s+([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)$/);
   if (!m) return null;
-  return { town: m[1].trim(), county: m[2].toUpperCase(), postcode: m[3] };
+  // "Scranton, PA" gibi şehir-sonu virgül/boşluk temizle (manuel girişte yaygın).
+  return { town: m[1].trim().replace(/[,\s]+$/, ''), county: m[2].toUpperCase(), postcode: m[3] };
 }
 
 /**
@@ -85,4 +86,16 @@ export async function getOrderShipTo(orderCode: string): Promise<ParsedShipTo | 
   )) as Array<{ recipient_name: string | null; ship_address: string | null }>;
   if (!rows.length || !rows[0].ship_address) return null;
   return parseShipAddress(rows[0].recipient_name, rows[0].ship_address);
+}
+
+/**
+ * MANUAL siparişin `addressNote`'undan adres çıkarır (Wisersell candidate yok → fallback).
+ * Operatör girişte ilk satır = alıcı adı, kalan = sokak / "Şehir EYALET ZIP" / telefon yazar.
+ * Sadece isim (adres satırı yok) → null (modal operatöre boş form açar).
+ */
+export function parseAddressNote(note: string | null): ParsedShipTo | null {
+  if (!note) return null;
+  const lines = note.split(/[\n\r]+/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length < 2) return null; // yalnız isim ya da boş → adres yok
+  return parseShipAddress(lines[0], lines.slice(1).join('\n'));
 }
