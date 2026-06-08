@@ -279,6 +279,18 @@ export default function SiparisPage() {
     setTrackingDraft(''); setDetailRow(null);
   };
 
+  const runClosedExport = async () => {
+    setBusy(true); setMsg(null);
+    try {
+      const res = await fetch('/api/siparis/export-closed', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const j = await res.json();
+      if (!res.ok || !j.success) throw new Error(j.error || 'Export hatası');
+      for (const f of (j.files ?? []) as Array<{ filename: string; base64: string; rowCount: number }>) downloadBase64Xlsx(f.filename, f.base64);
+      setMsg(`${j.files?.[0]?.rowCount ?? 0} kapanan sipariş indirildi.`);
+    } catch (e) { setMsg(e instanceof Error ? e.message : 'Export hatası'); }
+    finally { setBusy(false); }
+  };
+
   const saveCost = async (orderId?: string) => {
     if (!orderId) return;
     const v = parseFloat(costDraft.replace(',', '.'));
@@ -389,8 +401,8 @@ export default function SiparisPage() {
       {msg && <div className="mb-3 text-sm text-blue-800 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 whitespace-pre-wrap">{msg}</div>}
       {error && <div className="mb-3 text-sm text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
 
-      {/* Bulk aksiyon barı */}
-      {selectable && (
+      {/* Bulk aksiyon barı (+ Kapandı'da export) */}
+      {(selectable || tab === 'kapandi') && (
         <div className="flex items-center justify-between mb-2 min-h-[40px]">
           <div className="text-sm text-gray-500">{selected.size > 0 ? `${selected.size} sipariş seçili` : `${rows.length} sipariş`}</div>
           {tab === 'onayBekliyor' && (
@@ -417,6 +429,11 @@ export default function SiparisPage() {
                 <Send className="w-4 h-4" /> Wisersell&apos;de Kapat {selected.size > 0 && `(${selected.size})`}
               </button>
             </div>
+          )}
+          {tab === 'kapandi' && (
+            <button onClick={runClosedExport} disabled={busy} title="Kapanan siparişleri Excel olarak indir (sipariş, tarih, pazaryeri, alıcı, firma, servis, track, bedel)" className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed">
+              <Download className="w-4 h-4" /> Excel İndir
+            </button>
           )}
         </div>
       )}
