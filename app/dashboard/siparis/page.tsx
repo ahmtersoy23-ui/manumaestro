@@ -7,8 +7,8 @@
  * region: ülke-genişletilebilir (şimdi US).
  */
 
-import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Zap, CheckCircle2, PackageCheck, Truck, Send, Archive, AlertTriangle, MapPin, Printer, FileText, X, ChevronRight, Copy, Check, Plus, Warehouse, Download, Tag } from 'lucide-react';
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { RefreshCw, Zap, CheckCircle2, PackageCheck, Truck, Send, Archive, AlertTriangle, MapPin, Printer, FileText, X, ChevronRight, Copy, Check, Plus, Warehouse, Download, Tag, Bell } from 'lucide-react';
 import { LabelUploader } from '@/components/wms/LabelUploader';
 import { ShipModal } from '@/components/wms/ShipModal';
 import { ManualOrderModal } from '@/components/siparis/ManualOrderModal';
@@ -102,6 +102,103 @@ interface BoardData {
   counts: Record<string, number>;
   data: Record<StatusKey, Row[]>;
   canManage?: boolean; // Wisersell otomasyon (onayla/kapat/auto-run) yetkisi
+}
+
+/**
+ * Bildirim zili — kullanıcı tercihine göre (localStorage) Etiket Bekliyor / Çıkış Bekliyor
+ * kovalarına YENİ sipariş düşünce sesli (WebAudio) + tarayıcı bildirimi verir. ~45 sn poll;
+ * yalnız bu sekme açıkken çalışır (push değil). Ana board state'ine dokunmaz (bağımsız fetch).
+ */
+type NotifPrefs = { enabled: boolean; sound: boolean; etiket: boolean; cikis: boolean };
+const NOTIF_KEY = 'siparis_notif_prefs';
+const NOTIF_DEFAULT: NotifPrefs = { enabled: false, sound: true, etiket: true, cikis: false };
+
+function NotificationBell({ region }: { region: string }) {
+  const [prefs, setPrefs] = useState<NotifPrefs>(() => {
+    if (typeof window === 'undefined') return NOTIF_DEFAULT;
+    try { const s = localStorage.getItem(NOTIF_KEY); return s ? { ...NOTIF_DEFAULT, ...JSON.parse(s) } : NOTIF_DEFAULT; } catch { return NOTIF_DEFAULT; }
+  });
+  const [open, setOpen] = useState(false);
+  const seenRef = useRef<Set<string> | null>(null);
+  const audioRef = useRef<AudioContext | null>(null);
+
+  const save = (p: NotifPrefs) => { setPrefs(p); try { localStorage.setItem(NOTIF_KEY, JSON.stringify(p)); } catch { /* kota */ } };
+
+  const beep = useCallback(() => {
+    try {
+      const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = audioRef.current ?? new Ctx();
+      audioRef.current = ctx;
+      const o = ctx.createOscillator(); const g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = 880; g.gain.value = 0.12;
+      o.connect(g); g.connect(ctx.destination);
+      o.start(); o.stop(ctx.currentTime + 0.25);
+    } catch { /* ses yoksa sessiz geç */ }
+  }, []);
+
+  const fire = useCallback((n: number, label: string) => {
+    if (prefs.sound) beep();
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification('Yeni sipariş', { body: `${label}: ${n} yeni sipariş düştü` });
+      }
+    } catch { /* bildirim yoksa sessiz */ }
+  }, [prefs.sound, beep]);
+
+  // Poll: izlenen kovaların id'lerini ~45 sn'de bir kontrol et, yeni id → bildir.
+  useEffect(() => {
+    if (!prefs.enabled || (!prefs.etiket && !prefs.cikis)) { seenRef.current = null; return; }
+    let stop = false;
+    const tick = async () => {
+      try {
+        const res = await fetch(`/api/siparis/board?region=${region}`, { credentials: 'include' });
+        const j = await res.json();
+        if (stop || !j?.success) return;
+        const ids: string[] = [];
+        if (prefs.etiket) ids.push(...(j.data?.etiketBekliyor ?? []).map((r: { id?: string }) => r.id).filter(Boolean));
+        if (prefs.cikis) ids.push(...(j.data?.cikisBekliyor ?? []).map((r: { id?: string }) => r.id).filter(Boolean));
+        const cur = new Set(ids);
+        if (seenRef.current == null) { seenRef.current = cur; return; } // ilk tur = baz çizgi (bildirme)
+        const fresh = ids.filter((id) => !seenRef.current!.has(id));
+        seenRef.current = cur;
+        if (fresh.length) {
+          const lbl = [prefs.etiket && 'Etiket Bekliyor', prefs.cikis && 'Çıkış Bekliyor'].filter(Boolean).join(' / ');
+          fire(fresh.length, lbl);
+        }
+      } catch { /* ağ hatası — sessiz, sonraki tur dener */ }
+    };
+    tick();
+    const iv = setInterval(tick, 45_000);
+    return () => { stop = true; clearInterval(iv); };
+  }, [prefs.enabled, prefs.etiket, prefs.cikis, region, fire]);
+
+  const toggleEnable = async () => {
+    if (!prefs.enabled) {
+      try { if (typeof Notification !== 'undefined' && Notification.permission === 'default') await Notification.requestPermission(); } catch { /* izin reddi */ }
+      beep(); // kullanıcı jestiyle AudioContext'i başlat (sonraki beep'ler için)
+      seenRef.current = null;
+    }
+    save({ ...prefs, enabled: !prefs.enabled });
+  };
+
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((o) => !o)} title="Bildirim ayarları"
+        className={`inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border ${prefs.enabled ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>
+        <Bell className="w-4 h-4" /> {prefs.enabled ? 'Bildirim açık' : 'Bildirim'}
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-40 text-sm space-y-2">
+          <label className="flex items-center justify-between cursor-pointer"><span>Bildirim</span><input type="checkbox" checked={prefs.enabled} onChange={toggleEnable} /></label>
+          <label className="flex items-center justify-between cursor-pointer"><span>Ses</span><input type="checkbox" checked={prefs.sound} onChange={(e) => save({ ...prefs, sound: e.target.checked })} /></label>
+          <div className="text-[11px] text-gray-400 uppercase pt-1">İzlenen kovalar</div>
+          <label className="flex items-center justify-between cursor-pointer"><span>Etiket Bekliyor</span><input type="checkbox" checked={prefs.etiket} onChange={(e) => save({ ...prefs, etiket: e.target.checked })} /></label>
+          <label className="flex items-center justify-between cursor-pointer"><span>Çıkış Bekliyor</span><input type="checkbox" checked={prefs.cikis} onChange={(e) => save({ ...prefs, cikis: e.target.checked })} /></label>
+          <div className="text-[10px] text-gray-400 pt-1 leading-snug">Yalnız bu sekme açıkken çalışır · ~45 sn&apos;de bir kontrol. Yeni sipariş görmek için Sayfayı Yenile.</div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function SiparisPage() {
@@ -331,6 +428,7 @@ export default function SiparisPage() {
           <p className="text-sm text-gray-500 mt-0.5">Wisersell → US depo otomasyonu · süper-admin kontrol</p>
         </div>
         <div className="flex items-center gap-2">
+          <NotificationBell region={region} />
           <button onClick={load} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 disabled:opacity-50">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Sayfayı Yenile
           </button>
