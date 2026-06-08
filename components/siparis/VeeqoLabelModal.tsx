@@ -64,6 +64,9 @@ const carrierStyle: Record<string, string> = {
   amzn_us: 'bg-orange-50 text-orange-800 border-orange-200',
 };
 
+/** Tarihi gün başına yuvarla (ms) — teslim/son-teslim kıyası gün-bazlı (saat farkı geç saymasın). */
+const dayMs = (d: string): number => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime(); };
+
 export default function VeeqoLabelModal({ orderId, orderNumber, onClose, onSuccess }: Props) {
   const [parcel, setParcel] = useState<Parcel | null>(null); // katalogtan dolar (ilk yanıt)
   const [fromCatalog, setFromCatalog] = useState(false);
@@ -76,12 +79,14 @@ export default function VeeqoLabelModal({ orderId, orderNumber, onClose, onSucce
   const [shipTo, setShipTo] = useState<ShipTo | null>(null); // Amazon-dışı: alıcı adresi (düzenlenebilir)
   const [addressParsed, setAddressParsed] = useState(true);
   const [deliverInfo, setDeliverInfo] = useState<DeliverInfo | null>(null); // müşteri kargo beklentisi
+  const [deliverBy, setDeliverBy] = useState<string | null>(null); // son teslim (Amazon: SP-API · diğer: sipariş+6g)
+  const [showLate, setShowLate] = useState(false); // son teslimi aşan kargo seçeneklerini göster
 
   // rate değişince ek servis seçimini sıfırla (her rate'in opsiyonları farklı)
   useEffect(() => { setVas({}); }, [selected]);
 
   const fetchRates = useCallback(async () => {
-    setLoadingRates(true); setError(null); setRates(null); setSelected('');
+    setLoadingRates(true); setError(null); setRates(null); setSelected(''); setShowLate(false);
     try {
       const res = await fetch('/api/siparis/veeqo-rates', {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
@@ -101,7 +106,11 @@ export default function VeeqoLabelModal({ orderId, orderNumber, onClose, onSucce
       }
       const sorted: Quote[] = [...(j.quotes ?? [])].sort((a, b) => parseFloat(a.total_charge) - parseFloat(b.total_charge));
       setRates({ remoteShipmentId: j.remoteShipmentId, requestToken: j.requestToken, expiresAt: j.expiresAt, quotes: sorted, benchmark: j.benchmark });
-      if (sorted[0]) setSelected(sorted[0].rate_id); // en ucuz otomatik seçili
+      setDeliverBy(j.deliverBy ?? null);
+      // en ucuz ZAMANINDA (son teslimi yakalayan) seçeneği otomatik seç; hiç yoksa en ucuz
+      const dl = j.deliverBy ? dayMs(j.deliverBy) : null;
+      const firstOnTime = sorted.find((q) => dl == null || !q.delivery_estimate || dayMs(q.delivery_estimate) <= dl) ?? sorted[0];
+      if (firstOnTime) setSelected(firstOnTime.rate_id);
       // ilk yanıtta kullanılan koliyi (katalogtan) ölçü kutularına yaz
       if (j.parcel) { setParcel({ weight: j.parcel.weight, length: j.parcel.length, width: j.parcel.width, height: j.parcel.height }); setFromCatalog(!!j.parcelFromCatalog); }
       // Amazon-dışı: sunucunun kullandığı/parse ettiği adresi forma yaz
@@ -145,6 +154,15 @@ export default function VeeqoLabelModal({ orderId, orderNumber, onClose, onSucce
 
   const sel = rates?.quotes.find((q) => q.rate_id === selected);
 
+  // Son teslimi (deliverBy) AŞAN tahmini teslimli kargo seçeneklerini gizle (operatör hızlı seçsin).
+  // delivery_estimate'i olmayan seçenek (belirsiz) gizlenmez. Hepsi geç ise hiç boş bırakma → hepsini göster.
+  const deadlineMs = deliverBy ? dayMs(deliverBy) : null;
+  const isLate = (q: Quote): boolean => deadlineMs != null && !!q.delivery_estimate && dayMs(q.delivery_estimate) > deadlineMs;
+  const allQuotes = rates?.quotes ?? [];
+  const onTimeQuotes = allQuotes.filter((q) => !isLate(q));
+  const lateCount = allQuotes.length - onTimeQuotes.length;
+  const visibleQuotes = showLate || onTimeQuotes.length === 0 ? allQuotes : onTimeQuotes;
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 overflow-y-auto" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg my-8" onClick={(e) => e.stopPropagation()}>
@@ -160,6 +178,12 @@ export default function VeeqoLabelModal({ orderId, orderNumber, onClose, onSucce
               <div className="text-[11px] text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-md px-2 py-0.5">
                 {deliverInfo.latestDeliveryDate && <span>Amazon son teslim: <b>{new Date(deliverInfo.latestDeliveryDate).toLocaleDateString('tr-TR')}</b></span>}
                 {deliverInfo.latestShipDate && <span className="text-indigo-500"> · son sevk {new Date(deliverInfo.latestShipDate).toLocaleDateString('tr-TR')}</span>}
+              </div>
+            )}
+            {/* Amazon-dışı: son teslim SP-API'den gelmez → sipariş tarihi + 6 gün (tahmini deadline). */}
+            {!deliverInfo && deliverBy && (
+              <div className="text-[11px] text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-md px-2 py-0.5">
+                Son teslim (tahmini, sipariş +6g): <b>{new Date(deliverBy).toLocaleDateString('tr-TR')}</b>
               </div>
             )}
           </div>
@@ -235,18 +259,33 @@ export default function VeeqoLabelModal({ orderId, orderNumber, onClose, onSucce
 
           {rates && !loadingRates && (
             <div className="space-y-1.5">
-              <div className="text-[11px] text-gray-400 uppercase">{rates.quotes.length} oran (ucuzdan pahalıya)</div>
-              {rates.quotes.map((q, i) => (
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[11px] text-gray-400 uppercase">{visibleQuotes.length} oran (ucuzdan pahalıya)</div>
+                {lateCount > 0 && onTimeQuotes.length > 0 && (
+                  <button type="button" onClick={() => setShowLate((s) => !s)} className="text-[11px] text-sky-600 hover:underline">
+                    {showLate ? `${lateCount} geç seçeneği gizle` : `${lateCount} geç seçenek gizlendi · göster`}
+                  </button>
+                )}
+              </div>
+              {onTimeQuotes.length === 0 && lateCount > 0 && (
+                <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+                  Hiçbir seçenek son teslimi yakalamıyor — hepsi gösteriliyor.
+                </div>
+              )}
+              {visibleQuotes.map((q, i) => {
+                const late = isLate(q);
+                return (
                 <label key={q.rate_id} className={`flex items-center gap-3 rounded-lg border p-2.5 cursor-pointer ${selected === q.rate_id ? 'border-sky-400 bg-sky-50 ring-1 ring-sky-300' : 'border-gray-150 hover:bg-gray-50'}`}>
                   <input type="radio" name="rate" checked={selected === q.rate_id} onChange={() => setSelected(q.rate_id)} className="accent-sky-600" />
                   <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${carrierStyle[q.service_carrier] ?? 'bg-gray-50 text-gray-600 border-gray-200'}`}>{q.service_carrier.toUpperCase()}</span>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm text-gray-800 truncate">{q.service_name}{i === 0 && <span className="ml-1.5 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1">en ucuz</span>}</div>
-                    {q.delivery_estimate && <div className="text-[11px] text-gray-400">Tahmini teslim: {new Date(q.delivery_estimate).toLocaleDateString('tr-TR')}</div>}
+                    <div className="text-sm text-gray-800 truncate">{q.service_name}{i === 0 && !late && <span className="ml-1.5 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1">en ucuz</span>}{late && <span className="ml-1.5 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded px-1">gecikmeli</span>}</div>
+                    {q.delivery_estimate && <div className={`text-[11px] ${late ? 'text-rose-500' : 'text-gray-400'}`}>Tahmini teslim: {new Date(q.delivery_estimate).toLocaleDateString('tr-TR')}</div>}
                   </div>
                   <div className="text-sm font-semibold text-gray-900 shrink-0">${q.total_charge}</div>
                 </label>
-              ))}
+                );
+              })}
             </div>
           )}
 

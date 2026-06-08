@@ -147,12 +147,18 @@ export async function POST(request: NextRequest) {
     // Amazon SLA (LatestShip/LatestDelivery) — operatör quote teslim süreleriyle kıyaslasın.
     // Sadece Amazon US; best-effort (SP-API patlarsa rates bozulmasın). Non-Amazon'da yok.
     const deliverInfo = isAmazon ? await getAmazonOrderDates(order.orderNumber).catch(() => null) : null;
+    // Son teslim (deliver-by): Amazon → SP-API LatestDelivery; Amazon-dışı → sipariş tarihi + 6 gün.
+    // Modal bunu aşan (geç teslim) kargo seçeneklerini gizler.
+    const deliverBy = isAmazon
+      ? (deliverInfo?.latestDeliveryDate ?? null)
+      : new Date(order.createdAt.getTime() + 6 * 86_400_000).toISOString();
     logger.info(`rates OK (${isAmazon ? 'amazon' : 'standalone'}): ${order.orderNumber} → ${quotes.length} quote`);
     // modal için: parcel + katalog kaynağı + kıyas + (standalone'da) kullanılan adres + parse güveni + teslim bilgisi
     return NextResponse.json({
       success: true, ...result, quotes, parcel: finalParcel, parcelFromCatalog: !!catalog, benchmark,
       ...(shipTo ? { shipTo, addressParsed: shipTo.parsed !== false } : {}),
       ...(deliverInfo ? { deliverInfo } : {}),
+      ...(deliverBy ? { deliverBy } : {}),
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Veeqo oran hatası';
