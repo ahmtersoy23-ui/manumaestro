@@ -14,6 +14,7 @@ import { getCgAvailability } from '@/lib/wms/cgStock';
 import { getProductsByIwasku } from '@/lib/products/lookup';
 import { resolveOrderWarehouse } from '@/lib/wisersell/orderRouting';
 import { markWisersellReady } from '@/lib/wisersell/databridgeClient';
+import { findChannelDuplicate } from '@/lib/wms/orderDuplicateGuard';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('WisersellApprove');
@@ -92,8 +93,13 @@ export async function getEligibleCandidateIds(region: string): Promise<number[]>
     .map((c) => c.wisersell_order_id);
 }
 
+/** Kanal sipariş no'su = label_prefix + label_no (ör. "S_IWAUS" + "22055" = "S_IWAUS22055"). */
+function channelOrderNo(c: Cand, labelPrefix: string | null): string {
+  return `${labelPrefix ?? ''}${c.label_no ?? ''}`.trim();
+}
+
 function buildAddressNote(c: Cand, labelPrefix: string | null): string {
-  const labelBase = `${labelPrefix ?? ''}${c.label_no ?? ''}`.trim();
+  const labelBase = channelOrderNo(c, labelPrefix);
   const productNames = physicalItems(c.orderitems).map((i) => i.product_name ?? i.title).filter(Boolean) as string[];
   return [labelBase, c.recipient_name ?? '', c.ship_address ?? '', ...productNames].filter(Boolean).join('\n');
 }
@@ -147,6 +153,17 @@ export async function approveWisersellCandidates(ids: number[], userId: string):
       continue;
     }
 
+    // Çift kayıt guard'ı (ters yön): bu kanal no'su (ör. S_IWAUS22055) manuel olarak
+    // zaten girilmişse otomatik kayıt açma — operatör elle reconcile etsin.
+    const channelNo = channelOrderNo(c, sm.label_prefix);
+    if (channelNo) {
+      const manualDup = await findChannelDuplicate(channelNo, { excludeWisersellOrderId: c.wisersell_order_id });
+      if (manualDup) {
+        results.push({ wisersellOrderId: c.wisersell_order_id, ok: false, status: 'skipped', message: `Manuel olarak zaten girilmiş (no: ${manualDup.orderNumber}) — atlandı` });
+        continue;
+      }
+    }
+
     // OutboundOrder oluştur (idempotent: wisersellOrderId @unique)
     let orderId: string;
     try {
@@ -157,6 +174,7 @@ export async function approveWisersellCandidates(ids: number[], userId: string):
             orderType: 'SINGLE',
             marketplaceCode: sm.marketplace_code!,
             orderNumber: c.order_code,
+            channelOrderNumber: channelNo || null,
             addressNote: buildAddressNote(c, sm.label_prefix),
             status: 'DRAFT',
             source: 'WISERSELL_AUTO',

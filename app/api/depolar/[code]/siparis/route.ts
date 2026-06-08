@@ -12,6 +12,7 @@ import { requireShelfAction } from '@/lib/auth/requireShelfRole';
 import { ALL_WAREHOUSES } from '@/lib/auth/shelfPermission';
 import { getMarketplaceAccess, canEditMarketplace } from '@/lib/auth/marketplaceAccess';
 import { getUsAvailability, outboundBlockMessage, type UsWarehouse } from '@/lib/wms/usWarehouseStock';
+import { findChannelDuplicate, duplicateMessage } from '@/lib/wms/orderDuplicateGuard';
 import { getProductsByIwasku } from '@/lib/products/lookup';
 import type { Prisma } from '@prisma/client';
 import { withRoute } from '@/lib/api/withRoute';
@@ -218,6 +219,16 @@ export const POST = withRoute<{ code: string }>(
       );
     }
 
+    // Çift kayıt guard'ı (SINGLE müşteri siparişi): aynı sipariş başka numara/kaynakla
+    // (ör. Wisersell otomatik orderNumber=51199, channelOrderNumber=S_IWAUS22055) zaten
+    // girilmiş mi? FBA_PICKUP iç çıkış olduğundan kapsam dışı.
+    if (orderType === 'SINGLE') {
+      const channelDup = await findChannelDuplicate(orderNumber);
+      if (channelDup) {
+        return NextResponse.json({ success: false, error: duplicateMessage(channelDup) }, { status: 409 });
+      }
+    }
+
     const created = await prisma.$transaction(async (tx) => {
       const order = await tx.outboundOrder.create({
         data: {
@@ -225,6 +236,7 @@ export const POST = withRoute<{ code: string }>(
           orderType,
           marketplaceCode,
           orderNumber,
+          channelOrderNumber: orderType === 'SINGLE' ? orderNumber : null,
           description: description ?? null,
           addressNote: addressNote ?? null,
           status: 'DRAFT',

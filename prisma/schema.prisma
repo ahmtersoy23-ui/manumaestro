@@ -801,6 +801,10 @@ model OutboundOrder {
   orderType       OrderType
   marketplaceCode String // SINGLE'da seçilen; FBA_PICKUP'da "AMZN_US" sabit
   orderNumber     String // SINGLE: order#; FBA_PICKUP: appointment/pickup ID
+  // Kanal sipariş no'su (paket fişindeki no, ör. "S_IWAUS22055"). MANUAL'da = orderNumber;
+  // WISERSELL_AUTO'da label_prefix+label_no (orderNumber ise Wisersell iç kodu, ör. 51199).
+  // Çift kayıt guard'ı bununla eşleştirir (aynı sipariş, farklı numara/kaynak).
+  channelOrderNumber String?
   description     String?
   addressNote     String? // Adres ve serbest açıklama — SINGLE entry sırasında
   status          OutboundStatus @default(DRAFT)
@@ -824,6 +828,7 @@ model OutboundOrder {
   @@index([warehouseCode, status])
   @@index([createdById])
   @@index([shippedById])
+  @@index([channelOrderNumber])
   @@map("outbound_orders")
 }
 

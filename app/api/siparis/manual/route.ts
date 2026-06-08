@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { requireBoardUser } from '@/lib/auth/boardAuth';
 import { getUsAvailability, outboundBlockMessage, type UsWarehouse } from '@/lib/wms/usWarehouseStock';
+import { findChannelDuplicate, duplicateMessage } from '@/lib/wms/orderDuplicateGuard';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('SiparisManual');
@@ -75,6 +76,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Çift kayıt guard'ı: aynı sipariş başka numara/kaynakla (ör. Wisersell otomatik
+  // orderNumber=51199, channelOrderNumber=S_IWAUS22055) zaten girilmiş mi?
+  const channelDup = await findChannelDuplicate(orderNumber);
+  if (channelDup) {
+    return NextResponse.json({ success: false, error: duplicateMessage(channelDup) }, { status: 409 });
+  }
+
   const created = await prisma.$transaction(async (tx) => {
     const order = await tx.outboundOrder.create({
       data: {
@@ -82,6 +90,7 @@ export async function POST(request: NextRequest) {
         orderType: 'SINGLE',
         marketplaceCode,
         orderNumber,
+        channelOrderNumber: orderNumber,
         description: description ?? null,
         addressNote: addressNote ?? null,
         status: 'DRAFT',
