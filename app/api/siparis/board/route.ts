@@ -56,6 +56,15 @@ function parseManualAddress(note: string | null): { recipient: string | null; lo
   return { recipient, location };
 }
 
+/**
+ * Amazon US (Ama_US) onay öncesi bekleme: alıcı iptalleri ilk saatlerde yoğun →
+ * Wisersell siparişi gördükten (created_at_ws) 2 saat geçene kadar "Onay Bekliyor"a
+ * düşürme. Candidate yine yazılır; süre dolunca kendiliğinden görünür. Sadece Ama_US
+ * (store 111); CITI/diğer kanallar anında düşmeye devam eder.
+ */
+const AMA_US_MARKETPLACE = 'Ama_US';
+const AMA_US_HOLD_MS = 2 * 60 * 60 * 1000; // 2 saat
+
 export async function GET(request: NextRequest) {
   const auth = await requireBoardUser(request);
   if (auth instanceof NextResponse) return auth;
@@ -92,6 +101,10 @@ export async function GET(request: NextRequest) {
     [region],
   ) as Array<{ store_id: number; marketplace_code: string | null; label: string | null }>;
   const marketplaceByStore = new Map(storeMapRows.map((s) => [Number(s.store_id), s.label || s.marketplace_code || `store ${s.store_id}`]));
+  // Ama_US mağaza id'leri (2 saat bekleme kapsamı) — marketplace_code'tan türetilir, id hardcode yok.
+  const amaUsStoreIds = new Set(
+    storeMapRows.filter((s) => s.marketplace_code === AMA_US_MARKETPLACE).map((s) => Number(s.store_id)),
+  );
 
   // Stok teyidi: tüm iwasku'lar için availability
   const allIwaskus = [
@@ -109,7 +122,15 @@ export async function GET(request: NextRequest) {
   const onayBekliyor: Array<Record<string, unknown>> = [];
   const eslesmeGerek: Array<Record<string, unknown>> = [];
   let stokYok = 0;
+  let amazonHold = 0; // Ama_US 2 saat beklemede gizlenen aday sayısı
   for (const c of pendingCandidates) {
+    // Ama_US 2 saat bekleme: süre dolmadan board'da hiç gösterme (alıcı iptali otursun).
+    if (
+      amaUsStoreIds.has(Number(c.store_id)) &&
+      c.created_at_ws &&
+      Date.now() - new Date(c.created_at_ws).getTime() < AMA_US_HOLD_MS
+    ) { amazonHold++; continue; }
+
     const all = c.orderitems ?? [];
     // Fiziksel ürün kalemleri (özel/ödeme-linki satırları hariç). physical alanı yoksa
     // (eski kayıt) herhangi bir kimlik varsa fiziksel say.
@@ -287,6 +308,7 @@ export async function GET(request: NextRequest) {
       kapatmaBekliyor: kapatmaBekliyor.length,
       kapandi: kapandi.length,
       stokYok,
+      amazonHold,
     },
     warehouseStats: {
       onayBekliyor: warehouseCounts(onayBekliyor),
