@@ -51,15 +51,15 @@ async function deriveParcelFromCatalog(items: Array<{ iwasku: string; quantity: 
     if (dim.weightLb) sumWt += dim.weightLb * q;
   }
   if (!any && sumDesi === 0) return null;
-  return {
-    parcel: {
-      weight: sumWt > 0 ? Math.round(sumWt * 10) / 10 : undefined,
-      length: maxL > 0 ? maxL : undefined,
-      width: maxW > 0 ? maxW : undefined,
-      height: sumH > 0 ? Math.round(sumH * 10) / 10 : undefined,
-    },
-    desi: Math.round(sumDesi * 10) / 10,
-  };
+  // Yalnız TANIMLI ölçüleri koy — `undefined` anahtar spread'de DEFAULT_PARCEL'i ezerdi
+  // (desi var ama ölçü yok = Alsat/Etsy → 4 boyut da undefined → DataBridge parcelSchema
+  // reddi "Validation failed"). Eksik boyut DEFAULT_PARCEL'den dolar.
+  const parcel: Partial<VeeqoParcelInput> = {};
+  if (sumWt > 0) parcel.weight = Math.round(sumWt * 10) / 10;
+  if (maxL > 0) parcel.length = maxL;
+  if (maxW > 0) parcel.width = maxW;
+  if (sumH > 0) parcel.height = Math.round(sumH * 10) / 10;
+  return { parcel, desi: Math.round(sumDesi * 10) / 10 };
 }
 
 const Schema = z.object({

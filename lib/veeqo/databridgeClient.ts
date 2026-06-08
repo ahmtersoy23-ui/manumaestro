@@ -25,7 +25,12 @@ async function post(path: string, body: unknown, timeoutMs = 40_000): Promise<un
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || (data as { success?: boolean }).success === false) {
-    throw new Error((data as { error?: string }).error || `DataBridge ${path} HTTP ${res.status}`);
+    const d = data as { error?: string; details?: Array<{ path?: string; message?: string }> };
+    // Validation detayını mesaja ekle (yoksa "Validation failed" hangi alanda belirsiz kalır).
+    const detail = Array.isArray(d.details)
+      ? ` (${d.details.map((x) => [x.path, x.message].filter(Boolean).join(': ')).join('; ')})`
+      : '';
+    throw new Error(`${d.error || `DataBridge ${path} HTTP ${res.status}`}${detail}`);
   }
   return data;
 }
