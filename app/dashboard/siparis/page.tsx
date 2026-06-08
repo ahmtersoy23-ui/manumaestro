@@ -88,6 +88,9 @@ interface Row {
   manualTracking?: string | null;
   labelId?: string | null;
   veeqoShipmentId?: string | null;
+  labelCost?: number | null;
+  labelCostCurrency?: string | null;
+  labelService?: string | null;
   cgExportedAt?: string | null; // CG MCF Excel alındı mı
   amazonCancelledAt?: string | null; // Amazon'da iptal (SP-API canlı kontrol)
   readyPending?: boolean;
@@ -526,6 +529,7 @@ export default function SiparisPage() {
                 <div><div className="text-[11px] text-gray-400 uppercase">Pazar Yeri</div><span title={detailRow.marketplaceCode} className="inline-block mt-0.5 text-xs font-medium px-2 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-100">{detailRow.marketplaceLabel || detailRow.marketplaceCode || '—'}</span></div>
                 <div><div className="text-[11px] text-gray-400 uppercase">Depo</div><span className={`inline-block mt-0.5 text-xs font-medium px-2 py-0.5 rounded-md border ${whBadge(detailRow.warehouse)}`}>{whLabel(detailRow.warehouse)}</span></div>
                 <div><div className="text-[11px] text-gray-400 uppercase">Tracking</div><div className="mt-0.5 font-mono text-xs text-gray-700">{detailRow.trackingNumber ?? '—'}</div></div>
+                <div><div className="text-[11px] text-gray-400 uppercase">Kargo Bedeli</div><div className="mt-0.5 text-xs text-gray-700">{detailRow.labelCost != null ? `$${detailRow.labelCost.toFixed(2)}${detailRow.labelCostCurrency && detailRow.labelCostCurrency !== 'USD' ? ` ${detailRow.labelCostCurrency}` : ''}` : '—'}{detailRow.labelService ? <span className="text-gray-400"> · {detailRow.labelService.replace(/^Veeqo:\s*/, '')}</span> : null}</div></div>
               </div>
 
               {/* Alıcı + Adres — ayrı alanlar, tek tıkla kopyala */}

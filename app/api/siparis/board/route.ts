@@ -157,7 +157,7 @@ export async function GET(request: NextRequest) {
     take: 1000,
     include: {
       items: { select: { iwasku: true, quantity: true } },
-      labels: { where: { type: 'SHIPPING', archivedAt: null }, select: { id: true, trackingNumber: true, veeqoShipmentId: true }, take: 1 },
+      labels: { where: { type: 'SHIPPING', archivedAt: null }, select: { id: true, trackingNumber: true, veeqoShipmentId: true, cost: true, costCurrency: true, notes: true }, take: 1 },
     },
   });
 
@@ -189,6 +189,9 @@ export async function GET(request: NextRequest) {
       manualTracking: o.manualTracking ?? null,
       labelId: shippingLabel?.id ?? null,
       veeqoShipmentId: shippingLabel?.veeqoShipmentId ?? null, // varsa → "Etiketi İptal Et (iade)" butonu
+      labelCost: shippingLabel?.cost != null ? Number(shippingLabel.cost) : null, // etiket bedeli (mutabakat/export)
+      labelCostCurrency: shippingLabel?.costCurrency ?? null,
+      labelService: shippingLabel?.notes ?? null, // "Veeqo: UPS Ground" — servis adı
       status: o.status,
       createdAt: o.createdAt,
       shippedAt: o.shippedAt,

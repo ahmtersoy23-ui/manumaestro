@@ -102,7 +102,9 @@ export async function POST(request: NextRequest) {
       uploadedById: auth.user.id,
       trackingNumber: booked.trackingNumber,
       veeqoShipmentId: booked.shipmentId, // iade/iptal anahtarı (DELETE .../shipments/{id})
-      // NOT: fiyat YAZMA — etiket müşteriye gidiyor, damgada görünmesin. Sadece servis adı.
+      // Bedel DB'ye yazılır (mutabakat/export) — etikete/damgaya BASILMAZ (PDF müşteriye gider).
+      cost: booked.totalCharge?.value ?? null,
+      costCurrency: booked.totalCharge?.unit ?? null,
       notes: `Veeqo: ${booked.serviceName ?? ''}`.trim(),
     },
   });
