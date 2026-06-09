@@ -58,7 +58,7 @@ export async function getProductsByIwasku(iwaskus: string[]): Promise<Map<string
   const [productRows, asinRows] = await Promise.all([
     queryProductDb(
       `SELECT product_sku AS iwasku, name, category, width, height, length, weight,
-              COALESCE(manual_size, size) AS desi,
+              size AS desi,
               eans->>0 AS ean
        FROM products
        WHERE product_sku IN (${placeholders})`,

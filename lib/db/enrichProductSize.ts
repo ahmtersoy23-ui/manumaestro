@@ -18,7 +18,7 @@ export async function enrichProductSize<T extends HasIwasku>(items: T[]): Promis
 
   const placeholders = allSkus.map((_, i) => `$${i + 1}`).join(',');
   const products = await queryProductDb(
-    `SELECT product_sku, COALESCE(manual_size, size) as size, name FROM products WHERE product_sku IN (${placeholders})`,
+    `SELECT product_sku, size, name FROM products WHERE product_sku IN (${placeholders})`,
     allSkus
   );
   const productMap = new Map(
