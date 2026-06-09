@@ -11,6 +11,7 @@ export interface ProductInfo {
   category: string | null;
   asin: string | null; // sku_master'dan distinct asin (varsa ilki)
   fnsku: string | null; // sku_master'dan distinct fnsku(lar), virgülle (varsa)
+  ean: string | null; // products.eans dizisinin ilki (birincil EAN/GTIN), varsa
   // Katalog ölçüleri (products) — ham birim: cm + kg
   widthCm: number | null;
   heightCm: number | null;
@@ -57,7 +58,8 @@ export async function getProductsByIwasku(iwaskus: string[]): Promise<Map<string
   const [productRows, asinRows] = await Promise.all([
     queryProductDb(
       `SELECT product_sku AS iwasku, name, category, width, height, length, weight,
-              COALESCE(manual_size, size) AS desi
+              COALESCE(manual_size, size) AS desi,
+              eans->>0 AS ean
        FROM products
        WHERE product_sku IN (${placeholders})`,
       unique
@@ -88,6 +90,7 @@ export async function getProductsByIwasku(iwaskus: string[]): Promise<Map<string
     length: unknown;
     weight: unknown;
     desi: unknown;
+    ean: string | null;
   }>) {
     const sku = skuMap.get(r.iwasku);
     map.set(r.iwasku, {
@@ -96,6 +99,7 @@ export async function getProductsByIwasku(iwaskus: string[]): Promise<Map<string
       category: r.category,
       asin: sku?.asin ?? null,
       fnsku: sku?.fnsku ?? null,
+      ean: r.ean,
       widthCm: num(r.width),
       heightCm: num(r.height),
       lengthCm: num(r.length),
@@ -112,6 +116,7 @@ export async function getProductsByIwasku(iwaskus: string[]): Promise<Map<string
         category: null,
         asin: sku.asin,
         fnsku: sku.fnsku,
+        ean: null,
         widthCm: null,
         heightCm: null,
         lengthCm: null,

@@ -93,6 +93,7 @@ export const GET = withRoute<{ id: string }>(
           id: it.id,
           iwasku: it.iwasku,
           name: productMap.get(it.iwasku)?.name ?? null,
+          ean: productMap.get(it.iwasku)?.ean ?? null,
           quantity: it.quantity,
           placed,
           remaining: it.quantity - placed,

@@ -7,6 +7,7 @@ const base: ProductInfo = {
   category: null,
   asin: null,
   fnsku: null,
+  ean: null,
   widthCm: null,
   heightCm: null,
   lengthCm: null,

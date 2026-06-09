@@ -7,11 +7,80 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Boxes, Package, Plus, Trash2, X } from 'lucide-react';
+import { Boxes, Package, Plus, Printer, Trash2, X } from 'lucide-react';
 import { notify } from '@/lib/ui/notify';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('ConsolidationTab');
+
+/** EAN-13: 13 hane + doğru kontrol hanesi. Geçersizse barkod basılmaz. */
+export function isValidEan13(ean: string | null | undefined): ean is string {
+  if (!ean || !/^\d{13}$/.test(ean)) return false;
+  const d = ean.split('').map(Number);
+  const sum = d.slice(0, 12).reduce((s, n, i) => s + n * (i % 2 === 0 ? 1 : 3), 0);
+  return (10 - (sum % 10)) % 10 === d[12];
+}
+
+/**
+ * Fairfield depo kalemleri için EAN-13 ürün etiketi (60×40mm, ürün başına `count` kopya).
+ * Üstte barkod + okunur EAN numarası, altta ürün adı, en altta iwasku. Tek PDF.
+ */
+async function printEanLabels(rows: { ean: string; name: string | null; iwasku: string; count: number }[]) {
+  const printable = rows.filter((r) => r.count > 0 && isValidEan13(r.ean));
+  if (printable.length === 0) return;
+
+  const [JsBarcode, { jsPDF }] = await Promise.all([
+    import('jsbarcode').then((m) => m.default),
+    import('jspdf'),
+  ]);
+
+  const PX_PER_MM = 8;
+  const W_MM = 60, H_MM = 40;
+  const CW = W_MM * PX_PER_MM, CH = H_MM * PX_PER_MM;
+
+  const wrapLine = (ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] => {
+    const words = text.split(' ');
+    const lines: string[] = [];
+    let line = '';
+    for (const w of words) {
+      const test = line ? `${line} ${w}` : w;
+      if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; } else { line = test; }
+    }
+    if (line) lines.push(line);
+    return lines;
+  };
+
+  const doc = new jsPDF({ unit: 'mm', format: [W_MM, H_MM], orientation: 'landscape' });
+  let first = true;
+
+  for (const r of printable) {
+    const bc = document.createElement('canvas');
+    JsBarcode(bc, r.ean, { format: 'EAN13', width: 2, height: 90, displayValue: true, fontSize: 24, textMargin: 2, margin: 0 });
+    const targetBh = 150;
+    const scale = targetBh / bc.height;
+    const bw = bc.width * scale;
+
+    for (let i = 0; i < r.count; i++) {
+      if (!first) doc.addPage([W_MM, H_MM], 'landscape');
+      first = false;
+      const c = document.createElement('canvas');
+      c.width = CW; c.height = CH;
+      const ctx = c.getContext('2d')!;
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, CW, CH);
+      ctx.fillStyle = '#000';
+      ctx.drawImage(bc, (CW - bw) / 2, 14, bw, targetBh);
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 20px Arial';
+      let y = 14 + targetBh + 26;
+      for (const ln of wrapLine(ctx, r.name ?? r.iwasku, CW - 30).slice(0, 2)) { ctx.fillText(ln, CW / 2, y); y += 24; }
+      ctx.font = '16px Courier New'; ctx.fillStyle = '#888';
+      ctx.fillText(r.iwasku, CW / 2, CH - 12);
+      doc.addImage(c.toDataURL('image/png'), 'PNG', 0, 0, W_MM, H_MM);
+    }
+  }
+
+  doc.save(`fairfield-ean-etiket-${printable.length}sku.pdf`);
+}
 
 const DEST_BADGE: Record<string, string> = {
   NJ_DEPO: 'bg-amber-100 text-amber-700',
@@ -29,7 +98,7 @@ interface Container {
 const containerDesi = (c: Container): number =>
   (c.width && c.depth && c.height) ? (c.width * c.depth * c.height) / 5000 : 0;
 interface Item {
-  id: string; iwasku: string; name: string | null; quantity: number;
+  id: string; iwasku: string; name: string | null; ean: string | null; quantity: number;
   placed: number; remaining: number; recommendedDestination: string | null; marketplaceCode: string | null;
 }
 interface Data { role: string; canManage: boolean; containers: Container[]; items: Item[] }
@@ -92,6 +161,11 @@ export function ConsolidationTab({ shipmentId, onChange }: { shipmentId: string;
   const canManage = data.canManage;
   const openItems = data.items.filter((i) => i.remaining > 0);
   const totalRemaining = openItems.reduce((s, i) => s + i.remaining, 0);
+  const labelItems = openItems.filter((i) => isValidEan13(i.ean));
+  const noEanCount = openItems.length - labelItems.length;
+  const totalLabels = labelItems.reduce((s, i) => s + i.quantity, 0);
+  const printAll = () =>
+    printEanLabels(labelItems.map((i) => ({ ean: i.ean!, name: i.name, iwasku: i.iwasku, count: i.quantity })));
 
   if (data.items.length === 0) {
     return (
@@ -118,9 +192,20 @@ export function ConsolidationTab({ shipmentId, onChange }: { shipmentId: string;
 
       {/* Paketlenecek depo kalemleri */}
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <div className="bg-gray-50 px-4 py-2 text-xs font-medium text-gray-700 flex items-center gap-2">
+        <div className="bg-gray-50 px-4 py-2 text-xs font-medium text-gray-700 flex items-center gap-2 flex-wrap">
           <Package className="w-4 h-4" /> Paketlenecek Depo Kalemleri
           <span className="text-gray-400">{openItems.length} kalem · {totalRemaining} adet kaldı</span>
+          {noEanCount > 0 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700" title="EAN'i olmayan ürünler etiket basımına dahil edilmez; önce katalogda EAN tamamlanmalı.">
+              {noEanCount} ürün EAN&apos;siz
+            </span>
+          )}
+          {totalLabels > 0 && (
+            <button onClick={printAll}
+              className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 text-xs text-white bg-emerald-600 hover:bg-emerald-700 rounded">
+              <Printer className="w-3.5 h-3.5" /> Tüm Etiketleri Bas (×{totalLabels})
+            </button>
+          )}
         </div>
         {openItems.length === 0 ? (
           <div className="px-4 py-6 text-sm text-green-700 text-center">Tüm depo kalemleri yerleştirildi ✓</div>
@@ -133,6 +218,7 @@ export function ConsolidationTab({ shipmentId, onChange }: { shipmentId: string;
                 <th className="text-right px-4 py-1.5">Toplam</th>
                 <th className="text-right px-4 py-1.5">Yerleşen</th>
                 <th className="text-right px-4 py-1.5">Kalan</th>
+                <th className="text-right px-4 py-1.5">Etiket</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -150,6 +236,20 @@ export function ConsolidationTab({ shipmentId, onChange }: { shipmentId: string;
                   <td className="px-4 py-1.5 text-right">{it.quantity}</td>
                   <td className="px-4 py-1.5 text-right text-gray-400">{it.placed}</td>
                   <td className="px-4 py-1.5 text-right font-semibold text-amber-700">{it.remaining}</td>
+                  <td className="px-4 py-1.5 text-right">
+                    {isValidEan13(it.ean) ? (
+                      <button
+                        onClick={() => printEanLabels([{ ean: it.ean!, name: it.name, iwasku: it.iwasku, count: it.quantity }])}
+                        title={`EAN ${it.ean} — ${it.quantity} adet etiket bas`}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-50">
+                        <Printer className="w-3 h-3" /> ×{it.quantity}
+                      </button>
+                    ) : (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700" title="Bu ürünün geçerli bir EAN'i yok; katalogda tamamlanmalı.">
+                        EAN yok
+                      </span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
