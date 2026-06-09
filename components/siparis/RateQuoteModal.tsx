@@ -2,12 +2,14 @@
 
 /**
  * Serbest kargo fiyat sorgu modalı (siparişe bağlı DEĞİL).
- * Operatör ship-from depo + alıcı adresi + koli ölçüsü girer → Veeqo oran listesi.
+ * Operatör ship-from depo + varış ZIP + koli ölçüsü girer → Veeqo oran listesi.
+ * Eyalet ZIP'ten otomatik türetilir (Amazon Shipping rate validator'ı eyaleti zorunlu
+ * tutar + ZIP ile uyumlu olmalı); isim/sokak/şehir gerekmez (backend generic doldurur).
  * Etiket ALMAZ, para çekmez (POST /api/siparis/rate-quote → getRates standalone).
  */
 
 import { useState } from 'react';
-import { X, Calculator, Loader2, MapPin, Package } from 'lucide-react';
+import { X, Calculator, Loader2, Package } from 'lucide-react';
 
 interface Quote {
   rate_id: string;
@@ -22,20 +24,35 @@ const WAREHOUSES = [
   { code: 'SHOWROOM', label: 'Fairfield (Showroom)' },
 ] as const;
 
+// US ZIP ilk-3-hane → eyalet (USPS SCF). Edge'lerde elle düzeltilebilir.
+const ZIP3: Array<[number, number, string]> = [
+  [6, 9, 'PR'], [10, 27, 'MA'], [28, 29, 'RI'], [30, 38, 'NH'], [39, 49, 'ME'], [50, 59, 'VT'],
+  [60, 69, 'CT'], [70, 89, 'NJ'], [100, 149, 'NY'], [150, 196, 'PA'], [197, 199, 'DE'],
+  [200, 205, 'DC'], [206, 219, 'MD'], [220, 246, 'VA'], [247, 268, 'WV'], [270, 289, 'NC'],
+  [290, 299, 'SC'], [300, 319, 'GA'], [320, 349, 'FL'], [350, 369, 'AL'], [370, 385, 'TN'],
+  [386, 397, 'MS'], [398, 399, 'GA'], [400, 427, 'KY'], [430, 459, 'OH'], [460, 479, 'IN'],
+  [480, 499, 'MI'], [500, 528, 'IA'], [530, 549, 'WI'], [550, 567, 'MN'], [570, 577, 'SD'],
+  [580, 588, 'ND'], [590, 599, 'MT'], [600, 629, 'IL'], [630, 658, 'MO'], [660, 679, 'KS'],
+  [680, 693, 'NE'], [700, 714, 'LA'], [716, 729, 'AR'], [730, 732, 'OK'], [733, 733, 'TX'],
+  [734, 749, 'OK'], [750, 799, 'TX'], [800, 816, 'CO'], [820, 831, 'WY'], [832, 838, 'ID'],
+  [840, 847, 'UT'], [850, 865, 'AZ'], [870, 884, 'NM'], [885, 885, 'TX'], [889, 898, 'NV'],
+  [900, 961, 'CA'], [967, 968, 'HI'], [970, 979, 'OR'], [980, 994, 'WA'], [995, 999, 'AK'],
+];
+function zipToState(zip: string): string {
+  const digits = zip.replace(/\D/g, '');
+  if (digits.length < 3) return '';
+  const p = Number(digits.slice(0, 3));
+  return ZIP3.find(([lo, hi]) => p >= lo && p <= hi)?.[2] ?? '';
+}
+
 const field = 'w-full text-sm px-2.5 py-1.5 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none';
 const lbl = 'block text-[11px] font-medium text-gray-500 mb-0.5';
 
 export default function RateQuoteModal({ onClose }: { onClose: () => void }) {
   const [warehouse, setWarehouse] = useState<'NJ' | 'SHOWROOM'>('NJ');
-  // adres
-  const [name, setName] = useState('');
-  const [line1, setLine1] = useState('');
-  const [line2, setLine2] = useState('');
-  const [town, setTown] = useState('');
-  const [county, setCounty] = useState('');
   const [postcode, setPostcode] = useState('');
-  const [phone, setPhone] = useState('');
-  // koli (in / lb)
+  const [state, setState] = useState('');           // ZIP'ten oto, elle düzeltilebilir
+  const [stateAuto, setStateAuto] = useState(true);  // kullanıcı elle değiştirdiyse oto-doldurmayı bırak
   const [weight, setWeight] = useState('');
   const [length, setLength] = useState('');
   const [width, setWidth] = useState('');
@@ -46,9 +63,13 @@ export default function RateQuoteModal({ onClose }: { onClose: () => void }) {
   const [quotes, setQuotes] = useState<Quote[] | null>(null);
   const [destState, setDestState] = useState<string | null>(null);
 
+  function onZip(v: string) {
+    setPostcode(v);
+    if (stateAuto) { const s = zipToState(v); if (s) setState(s); }
+  }
+
   const num = (s: string) => Number(String(s).replace(',', '.'));
-  const ready =
-    name.trim() && line1.trim() && town.trim() && postcode.trim() &&
+  const ready = postcode.trim().length >= 3 && state.trim().length === 2 &&
     num(weight) > 0 && num(length) > 0 && num(width) > 0 && num(height) > 0;
 
   async function submit() {
@@ -59,16 +80,8 @@ export default function RateQuoteModal({ onClose }: { onClose: () => void }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          warehouse,
-          toAddress: {
-            name: name.trim(), line1: line1.trim(), line2: line2.trim() || undefined,
-            town: town.trim(), county: county.trim() || undefined, postcode: postcode.trim(),
-            country_code: 'US', phone: phone.trim() || undefined,
-          },
-          parcel: {
-            weight: num(weight), weight_unit: 'lb',
-            length: num(length), width: num(width), height: num(height), dimension_unit: 'in',
-          },
+          warehouse, postcode: postcode.trim(), state: state.trim().toUpperCase(),
+          parcel: { weight: num(weight), weight_unit: 'lb', length: num(length), width: num(width), height: num(height), dimension_unit: 'in' },
         }),
       });
       const j = await res.json();
@@ -84,7 +97,7 @@ export default function RateQuoteModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 overflow-y-auto" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl mt-8 mb-8" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl mt-10 mb-8" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <Calculator className="w-5 h-5 text-indigo-600" />
@@ -108,19 +121,16 @@ export default function RateQuoteModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
-          {/* Adres */}
-          <div>
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 mb-1.5"><MapPin className="w-3.5 h-3.5" /> Alıcı Adresi (US)</div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="col-span-2"><label className={lbl}>İsim</label><input className={field} value={name} onChange={(e) => setName(e.target.value)} placeholder="Alıcı adı" /></div>
-              <div className="col-span-2"><label className={lbl}>Adres satırı 1</label><input className={field} value={line1} onChange={(e) => setLine1(e.target.value)} placeholder="Sokak / no" /></div>
-              <div className="col-span-2"><label className={lbl}>Adres satırı 2 <span className="text-gray-400">(ops.)</span></label><input className={field} value={line2} onChange={(e) => setLine2(e.target.value)} /></div>
-              <div><label className={lbl}>Şehir</label><input className={field} value={town} onChange={(e) => setTown(e.target.value)} /></div>
-              <div className="grid grid-cols-2 gap-2">
-                <div><label className={lbl}>Eyalet</label><input className={field} value={county} onChange={(e) => setCounty(e.target.value)} placeholder="NJ" /></div>
-                <div><label className={lbl}>ZIP</label><input className={field} value={postcode} onChange={(e) => setPostcode(e.target.value)} /></div>
-              </div>
-              <div className="col-span-2"><label className={lbl}>Telefon <span className="text-gray-400">(ops.)</span></label><input className={field} value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
+          {/* Varış: ZIP + eyalet (oto) */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="col-span-2">
+              <label className={lbl}>Varış ZIP</label>
+              <input className={field} value={postcode} onChange={(e) => onZip(e.target.value)} placeholder="08850" inputMode="numeric" />
+            </div>
+            <div>
+              <label className={lbl}>Eyalet <span className="text-gray-400">(ZIP&apos;ten oto)</span></label>
+              <input className={field + ' uppercase'} value={state} maxLength={2}
+                onChange={(e) => { setState(e.target.value.toUpperCase()); setStateAuto(false); }} placeholder="NJ" />
             </div>
           </div>
 
@@ -145,7 +155,7 @@ export default function RateQuoteModal({ onClose }: { onClose: () => void }) {
 
           {quotes && (
             quotes.length === 0 ? (
-              <div className="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">Bu ölçü/adres için kargo seçeneği bulunamadı.</div>
+              <div className="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">Bu ölçü/ZIP için kargo seçeneği bulunamadı.</div>
             ) : (
               <div className="border border-gray-200 rounded-lg overflow-hidden">
                 <div className="flex items-center justify-between px-3 py-1.5 bg-gray-50 border-b border-gray-100 text-[11px] text-gray-500">
