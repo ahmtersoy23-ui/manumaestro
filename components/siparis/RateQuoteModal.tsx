@@ -24,6 +24,11 @@ const WAREHOUSES = [
   { code: 'SHOWROOM', label: 'Fairfield (Showroom)' },
 ] as const;
 
+// Sistem birimi = in/lb (Veeqo'ya bu gider). Kullanıcı cm/kg girerse submit'te çevrilir.
+const KG_TO_LB = 2.20462;
+const CM_TO_IN = 0.393701;
+const round = (n: number, d: number) => Math.round(n * 10 ** d) / 10 ** d;
+
 // US ZIP ilk-3-hane → eyalet (USPS SCF). Edge'lerde elle düzeltilebilir.
 const ZIP3: Array<[number, number, string]> = [
   [6, 9, 'PR'], [10, 27, 'MA'], [28, 29, 'RI'], [30, 38, 'NH'], [39, 49, 'ME'], [50, 59, 'VT'],
@@ -53,6 +58,7 @@ export default function RateQuoteModal({ onClose }: { onClose: () => void }) {
   const [postcode, setPostcode] = useState('');
   const [state, setState] = useState('');           // ZIP'ten oto, elle düzeltilebilir
   const [stateAuto, setStateAuto] = useState(true);  // kullanıcı elle değiştirdiyse oto-doldurmayı bırak
+  const [unit, setUnit] = useState<'imperial' | 'metric'>('imperial'); // in/lb veya cm/kg
   const [weight, setWeight] = useState('');
   const [length, setLength] = useState('');
   const [width, setWidth] = useState('');
@@ -76,12 +82,20 @@ export default function RateQuoteModal({ onClose }: { onClose: () => void }) {
     if (!ready || loading) return;
     setLoading(true); setError(null); setQuotes(null); setDestState(null);
     try {
+      // Kullanıcı cm/kg girdiyse sisteme (in/lb) çevirerek gönder.
+      const metric = unit === 'metric';
+      const w = metric ? num(weight) * KG_TO_LB : num(weight);
+      const conv = (v: string) => metric ? num(v) * CM_TO_IN : num(v);
       const res = await fetch('/api/siparis/rate-quote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           warehouse, postcode: postcode.trim(), state: state.trim().toUpperCase(),
-          parcel: { weight: num(weight), weight_unit: 'lb', length: num(length), width: num(width), height: num(height), dimension_unit: 'in' },
+          parcel: {
+            weight: round(w, 2), weight_unit: 'lb',
+            length: round(conv(length), 1), width: round(conv(width), 1), height: round(conv(height), 1),
+            dimension_unit: 'in',
+          },
         }),
       });
       const j = await res.json();
@@ -136,13 +150,20 @@ export default function RateQuoteModal({ onClose }: { onClose: () => void }) {
 
           {/* Koli */}
           <div>
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 mb-1.5"><Package className="w-3.5 h-3.5" /> Koli Ölçüsü</div>
-            <div className="grid grid-cols-4 gap-2">
-              <div><label className={lbl}>Ağırlık (lb)</label><input type="number" min="0" step="0.1" className={field} value={weight} onChange={(e) => setWeight(e.target.value)} /></div>
-              <div><label className={lbl}>Boy (in)</label><input type="number" min="0" step="0.1" className={field} value={length} onChange={(e) => setLength(e.target.value)} /></div>
-              <div><label className={lbl}>En (in)</label><input type="number" min="0" step="0.1" className={field} value={width} onChange={(e) => setWidth(e.target.value)} /></div>
-              <div><label className={lbl}>Yükseklik (in)</label><input type="number" min="0" step="0.1" className={field} value={height} onChange={(e) => setHeight(e.target.value)} /></div>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-600"><Package className="w-3.5 h-3.5" /> Koli Ölçüsü</div>
+              <div className="flex rounded-lg border border-gray-200 overflow-hidden text-[11px]">
+                <button onClick={() => setUnit('imperial')} className={`px-2.5 py-0.5 ${unit === 'imperial' ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-gray-500 hover:bg-gray-50'}`}>in / lb</button>
+                <button onClick={() => setUnit('metric')} className={`px-2.5 py-0.5 border-l border-gray-200 ${unit === 'metric' ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-gray-500 hover:bg-gray-50'}`}>cm / kg</button>
+              </div>
             </div>
+            <div className="grid grid-cols-4 gap-2">
+              <div><label className={lbl}>Ağırlık ({unit === 'metric' ? 'kg' : 'lb'})</label><input type="number" min="0" step="0.1" className={field} value={weight} onChange={(e) => setWeight(e.target.value)} /></div>
+              <div><label className={lbl}>Boy ({unit === 'metric' ? 'cm' : 'in'})</label><input type="number" min="0" step="0.1" className={field} value={length} onChange={(e) => setLength(e.target.value)} /></div>
+              <div><label className={lbl}>En ({unit === 'metric' ? 'cm' : 'in'})</label><input type="number" min="0" step="0.1" className={field} value={width} onChange={(e) => setWidth(e.target.value)} /></div>
+              <div><label className={lbl}>Yükseklik ({unit === 'metric' ? 'cm' : 'in'})</label><input type="number" min="0" step="0.1" className={field} value={height} onChange={(e) => setHeight(e.target.value)} /></div>
+            </div>
+            {unit === 'metric' && <div className="text-[10px] text-gray-400 mt-1">Sistem otomatik in/lb&apos;ye çevirip sorgular.</div>}
           </div>
 
           <button onClick={submit} disabled={!ready || loading}
