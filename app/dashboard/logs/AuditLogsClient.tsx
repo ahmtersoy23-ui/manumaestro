@@ -104,6 +104,13 @@ export function AuditLogsClient({ initialLogs, currentFilter }: Props) {
             <option value="CREATE_MARKETPLACE">Pazar Yeri Oluştur</option>
             <option value="UPDATE_PRODUCTION">Üretim Güncelle</option>
             <option value="BULK_UPLOAD">Toplu Yükleme</option>
+            <option value="CREATE_ORDER">Sipariş Girildi</option>
+            <option value="APPROVE_ORDER">Sipariş Onaylandı</option>
+            <option value="LABEL_ORDER">Etiket Alındı</option>
+            <option value="CANCEL_LABEL">Etiket İptal</option>
+            <option value="CLOSE_ORDER">Sipariş Kapatıldı</option>
+            <option value="CANCEL_ORDER">Listeden Düşürüldü</option>
+            <option value="DELETE_ORDER">Sipariş Silindi</option>
             <option value="LOGIN">Giriş</option>
             <option value="LOGOUT">Çıkış</option>
           </select>

@@ -16,6 +16,7 @@ import { prisma } from '@/lib/db/prisma';
 import { requireBoardUser } from '@/lib/auth/boardAuth';
 import { getUsAvailability, outboundBlockMessage, type UsWarehouse } from '@/lib/wms/usWarehouseStock';
 import { findChannelDuplicate, duplicateMessage } from '@/lib/wms/orderDuplicateGuard';
+import { logAction } from '@/lib/auditLog';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('SiparisManual');
@@ -105,5 +106,10 @@ export async function POST(request: NextRequest) {
   });
 
   logger.info(`manual order created: ${created.id} (${warehouseCode} ${marketplaceCode} ${orderNumber}, ${items.length} kalem)`);
+  await logAction({
+    userId: auth.user.id, userName: auth.user.name, userEmail: auth.user.email,
+    action: 'CREATE_ORDER', entityType: 'OutboundOrder', entityId: created.id,
+    description: `Manuel sipariş girildi: ${orderNumber} (${warehouseCode} · ${marketplaceCode}, ${items.length} kalem)`,
+  });
   return NextResponse.json({ success: true, id: created.id, orderNumber: created.orderNumber });
 }

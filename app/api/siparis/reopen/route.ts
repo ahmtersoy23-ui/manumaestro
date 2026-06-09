@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireBoardManager } from '@/lib/auth/boardAuth';
 import { reopenWisersellOrder, markWisersellOrderItems } from '@/lib/wisersell/databridgeClient';
+import { logAction } from '@/lib/auditLog';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('SiparisReopen');
@@ -72,5 +73,12 @@ export async function POST(request: NextRequest) {
   }
 
   logger.info(`reopen: ${order.orderNumber} (#${order.wisersellOrderId ?? '-'}) silindi; Wisersell reopen=${wisersellReopened}${wisersellError ? ` (hata: ${wisersellError})` : ''} — ${auth.user.email}`);
+  await logAction({
+    userId: auth.user.id, userName: auth.user.name, userEmail: auth.user.email,
+    action: 'DELETE_ORDER', entityType: 'OutboundOrder', entityId: orderId,
+    description: order.source === 'MANUAL'
+      ? `Manuel sipariş silindi: ${order.orderNumber} (${order.warehouseCode})`
+      : `Sipariş açığa alındı (silindi): ${order.orderNumber} (#${order.wisersellOrderId ?? '-'})${wisersellReopened ? ' · Wisersell açık' : ''}`,
+  });
   return NextResponse.json({ success: true, reopened: true, wisersellReopened, wisersellError });
 }

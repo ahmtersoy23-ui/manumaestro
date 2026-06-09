@@ -182,6 +182,14 @@ export async function GET(request: NextRequest) {
     },
   });
 
+  // Oluşturan kullanıcı adı (OutboundOrder→User relation'ı yok → ayrı sorgu, mp adı kalıbı gibi)
+  const creatorIds = [...new Set(autoOrders.map((o) => o.createdById).filter(Boolean))];
+  const creatorById = new Map<string, { name: string; email: string }>();
+  if (creatorIds.length) {
+    const users = await prisma.user.findMany({ where: { id: { in: creatorIds } }, select: { id: true, name: true, email: true } });
+    for (const u of users) creatorById.set(u.id, { name: u.name, email: u.email });
+  }
+
   const etiketBekliyor: Array<Record<string, unknown>> = [];
   const cikisBekliyor: Array<Record<string, unknown>> = [];
   const cgBekliyor: Array<Record<string, unknown>> = [];
@@ -201,6 +209,7 @@ export async function GET(request: NextRequest) {
       marketplaceCode: o.marketplaceCode,
       warehouse: o.warehouseCode,
       source: o.source,
+      createdBy: creatorById.get(o.createdById) ?? null,
       recipientName: manual?.recipient ?? null,
       shipAddress: manual?.location ?? null,
       addressNote: o.addressNote,

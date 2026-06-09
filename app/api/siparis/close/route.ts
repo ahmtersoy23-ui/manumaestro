@@ -20,6 +20,7 @@ import { prisma } from '@/lib/db/prisma';
 import { requireBoardManager } from '@/lib/auth/boardAuth';
 import { closeWisersellExternal, closeWisersellPlatform, markWisersellOrderItems } from '@/lib/wisersell/databridgeClient';
 import { carrierIdFromTracking, WISERSELL_CARRIER_IDS } from '@/lib/wisersell/carrierMap';
+import { logAction } from '@/lib/auditLog';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('SiparisClose');
@@ -147,5 +148,13 @@ export async function POST(request: NextRequest) {
 
   const closed = results.filter((r) => r.ok && !/Zaten/.test(r.message ?? '')).length;
   logger.info(`close: ${closed}/${orderIds.length} kapatıldı`);
+  if (closed > 0) {
+    await logAction({
+      userId: auth.user.id, userName: auth.user.name, userEmail: auth.user.email,
+      action: 'CLOSE_ORDER', entityType: 'OutboundOrder',
+      entityId: results.filter((r) => r.ok && !/Zaten/.test(r.message ?? '')).map((r) => r.orderId).join(','),
+      description: `${closed} sipariş Wisersell'de kapatıldı`,
+    });
+  }
   return NextResponse.json({ success: true, results, closed });
 }

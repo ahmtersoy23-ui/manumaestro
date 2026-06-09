@@ -84,6 +84,7 @@ interface Row {
   marketplaceCode?: string;
   marketplaceLabel?: string | null;
   source?: 'MANUAL' | 'WISERSELL_AUTO';
+  createdBy?: { name: string; email: string } | null;
   trackingNumber?: string | null;
   manualTracking?: string | null;
   labelId?: string | null;
@@ -619,6 +620,7 @@ export default function SiparisPage() {
                   <div className="text-xs text-gray-500 flex items-center gap-1.5">
                     {STATUS_META[tab].label}
                     {detailRow.createdAt && <span className="text-gray-400">· {fmtDate(detailRow.createdAt)}</span>}
+                    {detailRow.createdBy && <span className="text-gray-400" title={detailRow.createdBy.email}>· {detailRow.createdBy.name}</span>}
                     {detailRow.source === 'MANUAL' && <span className="inline-block text-[10px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-1.5 py-0.5">manuel giriş</span>}
                   </div>
                 </div>

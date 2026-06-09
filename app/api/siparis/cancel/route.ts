@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireBoardManager } from '@/lib/auth/boardAuth';
 import { cancelWisersellOrder } from '@/lib/wisersell/databridgeClient';
+import { logAction } from '@/lib/auditLog';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('SiparisCancel');
@@ -60,5 +61,10 @@ export async function POST(request: NextRequest) {
     }
   }
   logger.info(`${targets.length} listeden düşürüldü (CANCELLED); Wisersell iptal ${wisersellCancelled}, başarısız ${wisersellFailed.length} — ${auth.user.email}`);
+  await logAction({
+    userId: auth.user.id, userName: auth.user.name, userEmail: auth.user.email,
+    action: 'CANCEL_ORDER', entityType: 'OutboundOrder', entityId: targets.map((t) => t.id).join(','),
+    description: `${targets.length} sipariş listeden düşürüldü (CANCELLED)${wisersellCancelled ? `, Wisersell'de ${wisersellCancelled} iptal` : ''}`,
+  });
   return NextResponse.json({ success: true, cancelled: targets.length, wisersellCancelled, wisersellFailed });
 }

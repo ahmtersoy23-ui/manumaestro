@@ -12,6 +12,7 @@ import { prisma } from '@/lib/db/prisma';
 import { requireBoardUser } from '@/lib/auth/boardAuth';
 import { approveWisersellCandidates, type ApproveResult } from '@/lib/wisersell/approve';
 import { markWisersellReady } from '@/lib/wisersell/databridgeClient';
+import { logAction } from '@/lib/auditLog';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('SiparisApprove');
@@ -68,5 +69,13 @@ export async function POST(request: NextRequest) {
 
   const approved = results.filter((r) => r.status === 'approved').length;
   logger.info(`approve: ${approved}/${ids.length} onaylandı (${results.filter(r => r.status === 'ready_pending').length} ready-pending)`);
+  if (approved > 0) {
+    await logAction({
+      userId: auth.user.id, userName: auth.user.name, userEmail: auth.user.email,
+      action: 'APPROVE_ORDER', entityType: 'OutboundOrder',
+      entityId: results.filter((r) => r.status === 'approved' && r.orderId).map((r) => r.orderId).join(','),
+      description: `${approved} sipariş onaylandı (Etiket Bekliyor)`,
+    });
+  }
   return NextResponse.json({ success: true, results, approved });
 }

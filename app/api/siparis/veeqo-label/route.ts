@@ -18,6 +18,7 @@ import { prisma } from '@/lib/db/prisma';
 import { requireBoardManager } from '@/lib/auth/boardAuth';
 import { bookVeeqoLabel } from '@/lib/veeqo/databridgeClient';
 import { saveLabelFile, LabelStorageError } from '@/lib/wms/labelStorage';
+import { logAction } from '@/lib/auditLog';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('VeeqoLabel');
@@ -69,6 +70,13 @@ export async function POST(request: NextRequest) {
     logger.error(`book error: ${order.orderNumber}: ${msg}`);
     return NextResponse.json({ success: false, error: msg }, { status: 502 });
   }
+
+  // Booking başarılı (para çekildi, tracking var) → PDF gelse de gelmese de denetime yaz.
+  await logAction({
+    userId: auth.user.id, userName: auth.user.name, userEmail: auth.user.email,
+    action: 'LABEL_ORDER', entityType: 'OutboundOrder', entityId: orderId,
+    description: `Veeqo etiketi alındı: ${order.orderNumber} · ${booked.serviceName ?? ''} · tracking ${booked.trackingNumber}`.trim(),
+  });
 
   // 2) Etiketi kaydet. PDF geldiyse diske + OrderLabel. Gelmediyse (book OK ama getLabel başarısız —
   //    ör. Amazon Buy Shipping async) PDF'siz OrderLabel aç: booking KAYBOLMAZ → sipariş Çıkış

@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireBoardManager } from '@/lib/auth/boardAuth';
 import { cancelVeeqoLabel } from '@/lib/veeqo/databridgeClient';
+import { logAction } from '@/lib/auditLog';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('VeeqoCancel');
@@ -60,5 +61,10 @@ export async function POST(request: NextRequest) {
   await prisma.orderLabel.update({ where: { id: label.id }, data: { archivedAt: new Date() } });
 
   logger.info(`cancel OK: ${order.orderNumber} tracking=${label.trackingNumber} → Veeqo void, etiket arşivlendi — ${auth.user.email}`);
+  await logAction({
+    userId: auth.user.id, userName: auth.user.name, userEmail: auth.user.email,
+    action: 'CANCEL_LABEL', entityType: 'OutboundOrder', entityId: orderId,
+    description: `Veeqo etiketi iptal edildi (iade): ${order.orderNumber} · tracking ${label.trackingNumber}`,
+  });
   return NextResponse.json({ success: true, cancelled: true, trackingNumber: label.trackingNumber });
 }

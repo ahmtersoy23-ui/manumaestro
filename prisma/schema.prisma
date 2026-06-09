@@ -289,6 +289,13 @@ enum AuditAction {
   UPDATE_STOCK
   ACCESS_DENIED
   ROUTE_TO_SHIPMENT
+  CREATE_ORDER
+  APPROVE_ORDER
+  CANCEL_ORDER
+  DELETE_ORDER
+  CLOSE_ORDER
+  LABEL_ORDER
+  CANCEL_LABEL
 }
 
 // ============================================
