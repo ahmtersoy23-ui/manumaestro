@@ -319,6 +319,14 @@ export default function SiparisPage() {
     );
     setDetailRow(null);
   };
+  // Manuel girilmiş (source=MANUAL) DRAFT siparişi tamamen sil. reopen ucu MANUAL'de
+  // Wisersell'e dokunmadan yalnız outbound kaydı siler (cascade items/labels).
+  const deleteManualOne = async (id?: string) => {
+    if (!id) return;
+    if (!window.confirm('Bu manuel sipariş tamamen silinsin mi? Geri alınamaz. (Etiket alınmamış olmalı)')) return;
+    await runAction('/api/siparis/reopen', { orderId: id }, () => 'Manuel sipariş silindi.');
+    setDetailRow(null);
+  };
   // Alınmış Veeqo etiketini iptal et (Veeqo'da void+iade) → Etiket Bekliyor'a döner.
   const cancelVeeqoOne = async (id?: string) => {
     if (!id) return;
@@ -740,6 +748,13 @@ export default function SiparisPage() {
                 <button onClick={() => reopenOne(detailRow.id)} disabled={busy} title="Veeqo cazip değilse / başka sebeple: Onay Bekliyor'a geri al + Wisersell'de açık yap"
                   className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50">
                   <RefreshCw className="w-4 h-4" /> Açık Siparişe Geri Al
+                </button>
+              )}
+              {tab === 'etiketBekliyor' && canManage && detailRow.source === 'MANUAL'
+                && !detailRow.trackingNumber && !detailRow.amazonCancelledAt && (
+                <button onClick={() => deleteManualOne(detailRow.id)} disabled={busy} title="Manuel girilen siparişi tamamen sil (geri alınamaz)"
+                  className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg border border-red-300 bg-white text-red-700 hover:bg-red-50 disabled:opacity-50">
+                  <X className="w-4 h-4" /> Sil
                 </button>
               )}
               {tab === 'cikisBekliyor' && !detailRow.amazonCancelledAt && (
