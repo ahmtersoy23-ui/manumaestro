@@ -25,7 +25,7 @@ export function isValidEan13(ean: string | null | undefined): ean is string {
  * Fairfield depo kalemleri için EAN-13 ürün etiketi (60×40mm, ürün başına `count` kopya).
  * Üstte barkod + okunur EAN numarası, altta ürün adı, en altta iwasku. Tek PDF.
  */
-async function printEanLabels(rows: { ean: string; name: string | null; iwasku: string; count: number }[]) {
+async function printEanLabels(rows: { ean: string; name: string | null; iwasku: string; dest: string; count: number }[]) {
   const printable = rows.filter((r) => r.count > 0 && isValidEan13(r.ean));
   if (printable.length === 0) return;
 
@@ -53,12 +53,11 @@ async function printEanLabels(rows: { ean: string; name: string | null; iwasku: 
   const doc = new jsPDF({ unit: 'mm', format: [W_MM, H_MM], orientation: 'landscape' });
   let first = true;
 
+  // Barkod yatayda yayılır (X bağımsız uzatma → bar oranları korunur, taranabilir kalır).
+  const bcTop = 16, bcW = 440, bcH = 150, bcX = (CW - bcW) / 2;
   for (const r of printable) {
     const bc = document.createElement('canvas');
-    JsBarcode(bc, r.ean, { format: 'EAN13', width: 2, height: 90, displayValue: true, fontSize: 24, textMargin: 2, margin: 0 });
-    const targetBh = 150;
-    const scale = targetBh / bc.height;
-    const bw = bc.width * scale;
+    JsBarcode(bc, r.ean, { format: 'EAN13', width: 2, height: 80, displayValue: true, fontSize: 22, textMargin: 2, margin: 0 });
 
     for (let i = 0; i < r.count; i++) {
       if (!first) doc.addPage([W_MM, H_MM], 'landscape');
@@ -68,13 +67,17 @@ async function printEanLabels(rows: { ean: string; name: string | null; iwasku: 
       const ctx = c.getContext('2d')!;
       ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, CW, CH);
       ctx.fillStyle = '#000';
-      ctx.drawImage(bc, (CW - bw) / 2, 14, bw, targetBh);
+      ctx.drawImage(bc, bcX, bcTop, bcW, bcH);
       ctx.textAlign = 'center';
       ctx.font = 'bold 20px Arial';
-      let y = 14 + targetBh + 26;
+      let y = bcTop + bcH + 44; // barkod–isim arasını aç
       for (const ln of wrapLine(ctx, r.name ?? r.iwasku, CW - 30).slice(0, 2)) { ctx.fillText(ln, CW / 2, y); y += 24; }
-      ctx.font = '16px Courier New'; ctx.fillStyle = '#888';
-      ctx.fillText(r.iwasku, CW / 2, CH - 12);
+      // Alt köşeler: sol = iwasku, sağ = hedef (Fairfield / CG Depo)
+      ctx.font = '15px Courier New'; ctx.fillStyle = '#888';
+      ctx.textAlign = 'left';
+      ctx.fillText(r.iwasku, 16, CH - 12);
+      ctx.textAlign = 'right';
+      ctx.fillText(r.dest, CW - 16, CH - 12);
       doc.addImage(c.toDataURL('image/png'), 'PNG', 0, 0, W_MM, H_MM);
     }
   }
@@ -164,8 +167,9 @@ export function ConsolidationTab({ shipmentId, onChange }: { shipmentId: string;
   const labelItems = openItems.filter((i) => isValidEan13(i.ean));
   const noEanCount = openItems.length - labelItems.length;
   const totalLabels = labelItems.reduce((s, i) => s + i.quantity, 0);
+  const destLabel = (d: string | null) => DEST_LABEL[d ?? ''] ?? 'Fairfield';
   const printAll = () =>
-    printEanLabels(labelItems.map((i) => ({ ean: i.ean!, name: i.name, iwasku: i.iwasku, count: i.quantity })));
+    printEanLabels(labelItems.map((i) => ({ ean: i.ean!, name: i.name, iwasku: i.iwasku, dest: destLabel(i.recommendedDestination), count: i.quantity })));
 
   if (data.items.length === 0) {
     return (
@@ -239,7 +243,7 @@ export function ConsolidationTab({ shipmentId, onChange }: { shipmentId: string;
                   <td className="px-4 py-1.5 text-right">
                     {isValidEan13(it.ean) ? (
                       <button
-                        onClick={() => printEanLabels([{ ean: it.ean!, name: it.name, iwasku: it.iwasku, count: it.quantity }])}
+                        onClick={() => printEanLabels([{ ean: it.ean!, name: it.name, iwasku: it.iwasku, dest: destLabel(it.recommendedDestination), count: it.quantity }])}
                         title={`EAN ${it.ean} — ${it.quantity} adet etiket bas`}
                         className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-50">
                         <Printer className="w-3 h-3" /> ×{it.quantity}
