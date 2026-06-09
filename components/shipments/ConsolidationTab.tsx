@@ -82,7 +82,12 @@ async function printEanLabels(rows: { ean: string; name: string | null; iwasku: 
     }
   }
 
-  doc.save(`fairfield-ean-etiket-${printable.length}sku.pdf`);
+  // Tek ürün → dosya adı ürün adı; çoklu (toplu) → jenerik.
+  const safe = (s: string) => s.replace(/[/\\:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 120);
+  const fileName = printable.length === 1
+    ? safe(printable[0].name ?? printable[0].iwasku)
+    : `fairfield-ean-etiket-${printable.length}urun`;
+  doc.save(`${fileName}.pdf`);
 }
 
 const DEST_BADGE: Record<string, string> = {
