@@ -97,6 +97,7 @@ export const GET = withRoute<{ id: string }>(
           quantity: it.quantity,
           placed,
           remaining: it.quantity - placed,
+          labelPrintedAt: it.labelPrintedAt ? it.labelPrintedAt.toISOString() : null,
           recommendedDestination: it.recommendedDestination,
           marketplaceCode: it.marketplaceId ? mpCode.get(it.marketplaceId) ?? null : null,
         };

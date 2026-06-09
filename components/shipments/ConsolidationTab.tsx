@@ -102,7 +102,8 @@ const containerDesi = (c: Container): number =>
   (c.width && c.depth && c.height) ? (c.width * c.depth * c.height) / 5000 : 0;
 interface Item {
   id: string; iwasku: string; name: string | null; ean: string | null; quantity: number;
-  placed: number; remaining: number; recommendedDestination: string | null; marketplaceCode: string | null;
+  placed: number; remaining: number; labelPrintedAt: string | null;
+  recommendedDestination: string | null; marketplaceCode: string | null;
 }
 interface Data { role: string; canManage: boolean; containers: Container[]; items: Item[] }
 
@@ -168,8 +169,28 @@ export function ConsolidationTab({ shipmentId, onChange }: { shipmentId: string;
   const noEanCount = openItems.length - labelItems.length;
   const totalLabels = labelItems.reduce((s, i) => s + i.quantity, 0);
   const destLabel = (d: string | null) => DEST_LABEL[d ?? ''] ?? 'Fairfield';
-  const printAll = () =>
-    printEanLabels(labelItems.map((i) => ({ ean: i.ean!, name: i.name, iwasku: i.iwasku, dest: destLabel(i.recommendedDestination), count: i.quantity })));
+
+  // PDF üretimi başarılıysa kalemleri "basıldı" damgala (optimistic + sunucu kalıcı).
+  // Tekrar basıma izinli; işaret kaldırılmaz.
+  const markPrinted = (itemIds: string[]) => {
+    if (itemIds.length === 0) return;
+    const ts = new Date().toISOString();
+    setData((prev) => prev ? { ...prev, items: prev.items.map((i) => itemIds.includes(i.id) ? { ...i, labelPrintedAt: ts } : i) } : prev);
+    fetch(`/api/shipments/${shipmentId}/items/label-printed`, {
+      method: 'PATCH', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemIds }),
+    }).catch((e) => logger.error('markPrinted', e));
+  };
+
+  const printOne = async (it: Item) => {
+    await printEanLabels([{ ean: it.ean!, name: it.name, iwasku: it.iwasku, dest: destLabel(it.recommendedDestination), count: it.quantity }]);
+    markPrinted([it.id]);
+  };
+  const printAll = async () => {
+    await printEanLabels(labelItems.map((i) => ({ ean: i.ean!, name: i.name, iwasku: i.iwasku, dest: destLabel(i.recommendedDestination), count: i.quantity })));
+    markPrinted(labelItems.map((i) => i.id));
+  };
 
   if (data.items.length === 0) {
     return (
@@ -227,7 +248,7 @@ export function ConsolidationTab({ shipmentId, onChange }: { shipmentId: string;
             </thead>
             <tbody className="divide-y divide-gray-100">
               {openItems.map((it) => (
-                <tr key={it.id} className="text-gray-700">
+                <tr key={it.id} className={`text-gray-700 ${it.labelPrintedAt ? 'bg-emerald-50/70' : ''}`}>
                   <td className="px-4 py-1.5">
                     <span>{it.name ?? it.iwasku}</span>
                     <span className="ml-1.5 font-mono text-[10px] text-gray-400">{it.iwasku}</span>
@@ -243,10 +264,16 @@ export function ConsolidationTab({ shipmentId, onChange }: { shipmentId: string;
                   <td className="px-4 py-1.5 text-right">
                     {isValidEan13(it.ean) ? (
                       <button
-                        onClick={() => printEanLabels([{ ean: it.ean!, name: it.name, iwasku: it.iwasku, dest: destLabel(it.recommendedDestination), count: it.quantity }])}
-                        title={`EAN ${it.ean} — ${it.quantity} adet etiket bas`}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] text-emerald-700 border border-emerald-200 rounded hover:bg-emerald-50">
-                        <Printer className="w-3 h-3" /> ×{it.quantity}
+                        onClick={() => printOne(it)}
+                        title={it.labelPrintedAt
+                          ? `Basıldı: ${new Date(it.labelPrintedAt).toLocaleString('tr-TR')} — tekrar basmak için tıkla`
+                          : `EAN ${it.ean} — ${it.quantity} adet etiket bas`}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded ${
+                          it.labelPrintedAt
+                            ? 'text-white bg-emerald-600 hover:bg-emerald-700'
+                            : 'text-emerald-700 border border-emerald-200 hover:bg-emerald-50'
+                        }`}>
+                        <Printer className="w-3 h-3" /> {it.labelPrintedAt ? `Basıldı ✓ ×${it.quantity}` : `×${it.quantity}`}
                       </button>
                     ) : (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700" title="Bu ürünün geçerli bir EAN'i yok; katalogda tamamlanmalı.">
