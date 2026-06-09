@@ -12,9 +12,10 @@
  * Network ve state hep parent'ta — bu component sadece presentation.
  */
 
+import { useState, useEffect } from 'react';
 import { Plus, Download, Search, X, Loader2, CheckSquare, Square, RefreshCw, Copy, Printer, Package } from 'lucide-react';
 import { ExtraBoxForm } from './ExtraBoxForm';
-import { EditableBoxCell } from './EditableBoxCell';
+import { EditableBoxCell, type CellField } from './EditableBoxCell';
 import { BulkFbaPanel } from './BulkFbaPanel';
 import type { BoxFormData, ShipmentBox } from '@/lib/shipments/types';
 
@@ -98,6 +99,20 @@ export function BoxesTab({
 }: Props) {
   const hasBoxes = boxes.length > 0;
 
+  // Ölçü birimi toggle (metric=cm/kg [saklanan ham veri], imperial=in/lb gösterim).
+  // Sadece görünüm: imperial modda hücreler salt-okunur, düzenleme cm/kg üzerinden yapılır.
+  const [unitSystem, setUnitSystem] = useState<'metric' | 'imperial'>(
+    () => (typeof window !== 'undefined' && localStorage.getItem('mm_boxes_units') === 'imperial' ? 'imperial' : 'metric')
+  );
+  useEffect(() => {
+    localStorage.setItem('mm_boxes_units', unitSystem);
+  }, [unitSystem]);
+  const isImperial = unitSystem === 'imperial';
+  const dimUnit = isImperial ? 'in' : 'cm';
+  const weightUnit = isImperial ? 'lb' : 'kg';
+  const fmtDim = (v: number | null) => (v == null ? '—' : isImperial ? (v / 2.54).toFixed(1) : v);
+  const fmtWeight = (v: number | null) => (v == null ? '—' : isImperial ? (v * 2.2046226218).toFixed(2) : v);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
@@ -154,6 +169,17 @@ export function BoxesTab({
                 {markets.map(m => <option key={m} value={m}>{mktCodeToName.get(m) || m}</option>)}
               </select>
             )}
+            {/* Ölçü birimi toggle (sadece gösterim) */}
+            <div className="flex items-center rounded-lg border bg-white p-0.5 text-xs font-medium">
+              <button onClick={() => setUnitSystem('metric')}
+                className={`px-3 py-1.5 rounded-md transition-colors ${isImperial ? 'text-gray-500 hover:text-gray-700' : 'bg-blue-100 text-blue-700'}`}>
+                cm/kg
+              </button>
+              <button onClick={() => setUnitSystem('imperial')}
+                className={`px-3 py-1.5 rounded-md transition-colors ${isImperial ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:text-gray-700'}`}>
+                in/lb
+              </button>
+            </div>
           </>
         )}
         {canDest && selectedBoxIds.size > 0 && (
@@ -212,10 +238,10 @@ export function BoxesTab({
                 <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Ürün Adı</th>
                 <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Pazar Yeri</th>
                 <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Adet</th>
-                <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">En</th>
-                <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Boy</th>
-                <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Yuk.</th>
-                <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Agr.</th>
+                <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">En ({dimUnit})</th>
+                <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Boy ({dimUnit})</th>
+                <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Yuk. ({dimUnit})</th>
+                <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Agr. ({weightUnit})</th>
                 <th className="text-center px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Desi</th>
                 <th className="w-8"></th>
                 <th className="w-10"></th>
@@ -229,6 +255,12 @@ export function BoxesTab({
                 const donorKey = `${box.iwasku}|${box.quantity}`;
                 const donor = donorMap.get(donorKey);
                 const needsCopy = donor && donor.id !== box.id && (!box.width || !box.depth || !box.height || !box.weight);
+
+                // Imperial modda salt-okunur dönüştürülmüş değer; metric modda düzenlenebilir hücre.
+                const measureCell = (field: CellField, value: number | null) => isImperial
+                  ? <td className="text-center px-3 py-3 text-gray-600">{field === 'weight' ? fmtWeight(value) : fmtDim(value)}</td>
+                  : <EditableBoxCell boxId={box.id} shipmentId={shipmentId} field={field} value={value} canEdit={isActive && canBoxes} onUpdated={onBoxUpdated}
+                      editingCell={editingCell} setEditingCell={onEditingCellChange} visibleBoxes={filteredBoxes} />;
 
                 return (
                   <tr key={box.id} className={`hover:bg-gray-50 ${isFba ? 'bg-orange-50/40' : ''}`}>
@@ -263,14 +295,10 @@ export function BoxesTab({
                     <td className="px-3 py-3 text-xs text-gray-700 line-clamp-1">{box.productName || '—'}</td>
                     <td className="px-3 py-3 text-sm text-gray-600">{(box.marketplaceCode && mktCodeToName.get(box.marketplaceCode)) || box.marketplaceCode || '—'}</td>
                     <td className="text-center px-3 py-3 font-semibold">{box.quantity}</td>
-                    <EditableBoxCell boxId={box.id} shipmentId={shipmentId} field="width" value={box.width} canEdit={isActive && canBoxes} onUpdated={onBoxUpdated}
-                      editingCell={editingCell} setEditingCell={onEditingCellChange} visibleBoxes={filteredBoxes} />
-                    <EditableBoxCell boxId={box.id} shipmentId={shipmentId} field="depth" value={box.depth} canEdit={isActive && canBoxes} onUpdated={onBoxUpdated}
-                      editingCell={editingCell} setEditingCell={onEditingCellChange} visibleBoxes={filteredBoxes} />
-                    <EditableBoxCell boxId={box.id} shipmentId={shipmentId} field="height" value={box.height} canEdit={isActive && canBoxes} onUpdated={onBoxUpdated}
-                      editingCell={editingCell} setEditingCell={onEditingCellChange} visibleBoxes={filteredBoxes} />
-                    <EditableBoxCell boxId={box.id} shipmentId={shipmentId} field="weight" value={box.weight} canEdit={isActive && canBoxes} onUpdated={onBoxUpdated}
-                      editingCell={editingCell} setEditingCell={onEditingCellChange} visibleBoxes={filteredBoxes} />
+                    {measureCell('width', box.width)}
+                    {measureCell('depth', box.depth)}
+                    {measureCell('height', box.height)}
+                    {measureCell('weight', box.weight)}
                     <td className="text-center px-3 py-3 font-medium text-gray-900">{boxDesi ? boxDesi.toFixed(1) : '—'}</td>
                     <td className="px-1 py-3 text-center">
                       {isActive && canBoxes && needsCopy ? (
