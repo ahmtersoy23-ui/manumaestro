@@ -24,13 +24,13 @@ const CM_PER_INCH = 2.54;
 const LB_PER_KG = 2.20462;
 
 /**
- * Ağır ürün mü (CastleGate'te tutulan)? Mobilya/Alsat ≥4 desi, diğerleri ≥7 desi.
+ * Ağır ürün mü (CastleGate'te tutulan)? Mobilya/Alsat ≥4 desi, diğerleri ≥6.75 desi.
  * desi yoksa false (heavy kabul etme → normal US depo routing).
  */
 const HEAVY_LOW_CATEGORIES = new Set(['mobilya', 'alsat']);
 export function isHeavyItem(category: string | null | undefined, desi: number | null | undefined): boolean {
   if (desi == null) return false;
-  const threshold = category && HEAVY_LOW_CATEGORIES.has(category.trim().toLowerCase()) ? 4 : 7;
+  const threshold = category && HEAVY_LOW_CATEGORIES.has(category.trim().toLowerCase()) ? 4 : 6.75;
   return desi >= threshold;
 }
 
