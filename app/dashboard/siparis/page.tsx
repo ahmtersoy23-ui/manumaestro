@@ -8,11 +8,12 @@
  */
 
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshCw, Zap, CheckCircle2, PackageCheck, Truck, Send, Archive, AlertTriangle, MapPin, Printer, FileText, X, ChevronRight, Copy, Check, Plus, Warehouse, Download, Tag, Bell } from 'lucide-react';
+import { RefreshCw, Zap, CheckCircle2, PackageCheck, Truck, Send, Archive, AlertTriangle, MapPin, Printer, FileText, X, ChevronRight, Copy, Check, Plus, Warehouse, Download, Tag, Bell, Calculator } from 'lucide-react';
 import { LabelUploader } from '@/components/wms/LabelUploader';
 import { ShipModal } from '@/components/wms/ShipModal';
 import { ManualOrderModal } from '@/components/siparis/ManualOrderModal';
 import VeeqoLabelModal from '@/components/siparis/VeeqoLabelModal';
+import RateQuoteModal from '@/components/siparis/RateQuoteModal';
 
 type StatusKey = 'onayBekliyor' | 'eslesmeGerek' | 'etiketBekliyor' | 'cikisBekliyor' | 'cgBekliyor' | 'kapatmaBekliyor' | 'kapandi';
 
@@ -220,6 +221,7 @@ export default function SiparisPage() {
   const [shipOrder, setShipOrder] = useState<Row | null>(null);
   const [veeqoOrder, setVeeqoOrder] = useState<Row | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
+  const [rateOpen, setRateOpen] = useState(false);
   // CG MCF export — eşleşmeyen part number kuyruğu (export'u engeller; operatör burada eşler)
   const [unmatched, setUnmatched] = useState<Array<{ iwasku: string; productName: string | null; orderNumbers: string[] }> | null>(null);
   const [mapDraft, setMapDraft] = useState<Record<string, string>>({});
@@ -444,6 +446,11 @@ export default function SiparisPage() {
         </div>
         <div className="flex items-center gap-2">
           <NotificationBell region={region} />
+          {canApprove && (
+            <button onClick={() => setRateOpen(true)} title="Ölçü + adres girip Veeqo kargo fiyatlarını sorgula (etiket almaz, para çekmez)" className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700">
+              <Calculator className="w-4 h-4" /> Kargo Fiyat
+            </button>
+          )}
           <button onClick={load} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 disabled:opacity-50">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Sayfayı Yenile
           </button>
@@ -850,6 +857,9 @@ export default function SiparisPage() {
           onSuccess={() => { setManualOpen(false); setTab('etiketBekliyor'); setMsg('Manuel sipariş oluşturuldu — Etiket Bekliyor.'); load(); }}
         />
       )}
+
+      {/* Serbest kargo fiyat sorgu (siparişe bağlı değil) */}
+      {rateOpen && <RateQuoteModal onClose={() => setRateOpen(false)} />}
     </div>
   );
 }
