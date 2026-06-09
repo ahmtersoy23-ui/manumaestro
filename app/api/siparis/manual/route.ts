@@ -12,8 +12,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '@/lib/db/prisma';
-import { requireBoardUser } from '@/lib/auth/boardAuth';
+import { prisma, queryDataBridge } from '@/lib/db/prisma';
+import { requireOrderBoardLevel } from '@/lib/auth/orderBoardPermission';
 import { getUsAvailability, outboundBlockMessage, type UsWarehouse } from '@/lib/wms/usWarehouseStock';
 import { findChannelDuplicate, duplicateMessage } from '@/lib/wms/orderDuplicateGuard';
 import { logAction } from '@/lib/auditLog';
@@ -36,7 +36,7 @@ const Schema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  const auth = await requireBoardUser(request);
+  const auth = await requireOrderBoardLevel(request, 'CREATOR');
   if (auth instanceof NextResponse) return auth;
 
   let body: unknown;
@@ -82,6 +82,30 @@ export async function POST(request: NextRequest) {
   const channelDup = await findChannelDuplicate(orderNumber);
   if (channelDup) {
     return NextResponse.json({ success: false, error: duplicateMessage(channelDup) }, { status: 409 });
+  }
+
+  // Wisersell'de var olan sipariş manuel girilemez: orderNumber, bir Wisersell adayının
+  // kanal/etiket no'su (order_code / label_no / wisersell_order_id) ile eşleşirse engelle —
+  // manuel kopya çift kayıt/karışıklık yaratır (Onay Bekliyor'dan onaylanmalı). Ama_US19424 vakası.
+  const digits = orderNumber.replace(/\D/g, '');
+  const wsMatch = await queryDataBridge(
+    `SELECT order_code, label_no
+     FROM wisersell_routing_candidates
+     WHERE order_code = $1 OR label_no = $1 OR wisersell_order_id::text = $1
+        OR ($2 <> '' AND (label_no = $2 OR wisersell_order_id::text = $2))
+     LIMIT 1`,
+    [orderNumber, digits],
+  ) as Array<{ order_code: string; label_no: string | null }>;
+  if (wsMatch.length) {
+    const m = wsMatch[0];
+    return NextResponse.json(
+      {
+        success: false,
+        inWisersell: true,
+        error: `Bu sipariş Wisersell'de mevcut (sipariş ${m.order_code}${m.label_no ? `, etiket ${m.label_no}` : ''}). Manuel girilemez — Onay Bekliyor'dan onaylayın.`,
+      },
+      { status: 409 },
+    );
   }
 
   const created = await prisma.$transaction(async (tx) => {

@@ -17,7 +17,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
-import { requireBoardManager } from '@/lib/auth/boardAuth';
+import { requireOrderBoardLevel } from '@/lib/auth/orderBoardPermission';
 import { closeWisersellExternal, closeWisersellPlatform, markWisersellOrderItems } from '@/lib/wisersell/databridgeClient';
 import { carrierIdFromTracking, WISERSELL_CARRIER_IDS } from '@/lib/wisersell/carrierMap';
 import { logAction } from '@/lib/auditLog';
@@ -65,7 +65,7 @@ async function platformCloseWithBackoff(wisersellOrderId: number): Promise<void>
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireBoardManager(request);
+  const auth = await requireOrderBoardLevel(request, 'APPROVER');
   if (auth instanceof NextResponse) return auth;
 
   let body: unknown;

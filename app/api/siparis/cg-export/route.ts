@@ -13,7 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
-import { requireBoardManager } from '@/lib/auth/boardAuth';
+import { requireOrderBoardLevel } from '@/lib/auth/orderBoardPermission';
 import { getProductsByIwasku } from '@/lib/products/lookup';
 import {
   resolveWayfairPartNumbers, parseAddressNote, buildMcfWorkbook,
@@ -35,7 +35,7 @@ function ddmmyyyy(d: Date): string {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireBoardManager(request);
+  const auth = await requireOrderBoardLevel(request, 'APPROVER');
   if (auth instanceof NextResponse) return auth;
 
   let body: unknown;

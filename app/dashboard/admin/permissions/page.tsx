@@ -33,7 +33,7 @@ type CatPermMap = Map<string, { canView: boolean; canEdit: boolean }>;
 
 export default function AdminPermissionsPage() {
   const { role } = useAuth();
-  const [activeTab, setActiveTab] = useState<'marketplace' | 'category' | 'stock' | 'shelf' | 'shipment'>('marketplace');
+  const [activeTab, setActiveTab] = useState<'marketplace' | 'category' | 'stock' | 'shelf' | 'shipment' | 'order'>('marketplace');
 
   // Marketplace tab state
   const [users, setUsers] = useState<OperatorUser[]>([]);
@@ -427,6 +427,16 @@ export default function AdminPermissionsPage() {
           >
             Sevkiyat İzinleri
           </button>
+          <button
+            onClick={() => setActiveTab('order')}
+            className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'order'
+                ? 'border-purple-600 text-purple-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Sipariş İzinleri
+          </button>
         </nav>
       </div>
 
@@ -714,6 +724,9 @@ export default function AdminPermissionsPage() {
       {activeTab === 'shipment' && (
         <ShipmentPermissionsSection availableUsers={users.map(u => ({ id: u.id, name: u.name, email: u.email }))} />
       )}
+
+      {/* Order Board Tab */}
+      {activeTab === 'order' && <OrderPermissionsSection />}
     </div>
   );
 }
@@ -998,6 +1011,111 @@ function ShipmentPermissionsSection({ availableUsers }: { availableUsers: { id: 
                   <td className="px-3 py-3"><button onClick={() => handleDelete(p.id)} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button></td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// --- Sipariş Board Izinleri (UserOrderPermission) — shelf/depo izninden bağımsız kademe ---
+const ORDER_LEVELS = ['NONE', 'APPROVER', 'CREATOR', 'FULL'] as const;
+const ORDER_LEVEL_META: Record<string, { label: string; color: string }> = {
+  NONE: { label: 'Yok (sadece görür)', color: 'bg-gray-100 text-gray-600' },
+  APPROVER: { label: 'Onaylayan', color: 'bg-emerald-100 text-emerald-700' },
+  CREATOR: { label: 'Ekleyen', color: 'bg-sky-100 text-sky-700' },
+  FULL: { label: 'Tam (etiket/sil)', color: 'bg-purple-100 text-purple-700' },
+};
+
+interface OrderPermUser {
+  id: string;
+  name: string;
+  email: string;
+  orderPermission: { level: string } | null;
+}
+
+function OrderPermissionsSection() {
+  const [users, setUsers] = useState<OrderPermUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [savingId, setSavingId] = useState<string | null>(null);
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/order-permissions');
+      const data = await res.json();
+      if (data.success) setUsers(data.data.users);
+    } catch (err) {
+      logger.error('order perms fetch', err);
+      notify.error('Sipariş izinleri yüklenemedi');
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchUsers(); }, [fetchUsers]);
+
+  const setLevel = async (userId: string, level: string) => {
+    setSavingId(userId);
+    try {
+      const res = await fetch('/api/admin/order-permissions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, level }),
+      });
+      if ((await res.json()).success) {
+        setUsers(us => us.map(u => u.id === userId ? { ...u, orderPermission: { level } } : u));
+      } else { notify.error('Kademe güncellenemedi'); }
+    } catch (err) {
+      logger.error('order perm save', err); notify.error('Kademe güncellenemedi');
+    } finally { setSavingId(null); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <Shield className="w-6 h-6 text-purple-600" />
+        <h2 className="text-xl font-bold text-gray-900">Sipariş İzinleri</h2>
+      </div>
+      <p className="text-sm text-gray-500">
+        Sipariş board kademeli yetki (depo/raf izninden bağımsız). Kümülatif: <b>Onaylayan</b> = Onay Bekliyor onaylar + Kapat + Listeden Düş ·
+        <b> Ekleyen</b> = + Manuel Giriş · <b>Tam</b> = + Veeqo Etiket Al + Manuel Sil/Açığa Al. Admin her zaman Tam.
+      </p>
+
+      <div className="bg-white border rounded-xl overflow-hidden">
+        {loading ? (
+          <div className="p-8 text-center text-gray-400">Yükleniyor...</div>
+        ) : users.length === 0 ? (
+          <div className="p-8 text-center text-gray-400">Operatör kullanıcı yok</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b">
+              <tr>
+                <th className="text-left px-4 py-3 font-semibold text-gray-700 text-xs uppercase">Kullanıcı</th>
+                <th className="text-left px-3 py-3 font-semibold text-gray-700 text-xs uppercase">Kademe</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {users.map(u => {
+                const level = u.orderPermission?.level ?? 'NONE';
+                return (
+                  <tr key={u.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-gray-900">{u.name}</p>
+                      <p className="text-xs text-gray-400">{u.email}</p>
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-0.5 rounded text-xs font-semibold ${ORDER_LEVEL_META[level]?.color ?? ''}`}>
+                          {ORDER_LEVEL_META[level]?.label ?? level}
+                        </span>
+                        <select value={level} disabled={savingId === u.id}
+                          onChange={e => setLevel(u.id, e.target.value)}
+                          className="px-3 py-1.5 border rounded-lg text-sm disabled:opacity-50">
+                          {ORDER_LEVELS.map(l => <option key={l} value={l}>{ORDER_LEVEL_META[l].label}</option>)}
+                        </select>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

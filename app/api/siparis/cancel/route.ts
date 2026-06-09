@@ -12,7 +12,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { requireBoardManager } from '@/lib/auth/boardAuth';
+import { requireOrderBoardLevel } from '@/lib/auth/orderBoardPermission';
 import { cancelWisersellOrder } from '@/lib/wisersell/databridgeClient';
 import { logAction } from '@/lib/auditLog';
 import { createLogger } from '@/lib/logger';
@@ -20,7 +20,7 @@ import { createLogger } from '@/lib/logger';
 const logger = createLogger('SiparisCancel');
 
 export async function POST(request: NextRequest) {
-  const auth = await requireBoardManager(request);
+  const auth = await requireOrderBoardLevel(request, 'APPROVER');
   if (auth instanceof NextResponse) return auth;
 
   const body = await request.json().catch(() => ({}));

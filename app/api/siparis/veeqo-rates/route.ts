@@ -5,13 +5,13 @@
  * görüp seçer → /api/siparis/veeqo-label ile satın alır.
  *
  * Sadece Amazon (WISERSELL_AUTO, AMZN_US/Ama_US) — Veeqo'da yalnız Amazon kanalı bağlı.
- * Yetki: requireBoardManager (etiket = gerçek para, otomasyon-tier).
+ * Yetki: sipariş board FULL (etiket = gerçek para, üst kademe).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
-import { requireBoardManager } from '@/lib/auth/boardAuth';
+import { requireOrderBoardLevel } from '@/lib/auth/orderBoardPermission';
 import { getVeeqoRates, getVeeqoRatesStandalone, type VeeqoParcelInput, type VeeqoShipTo } from '@/lib/veeqo/databridgeClient';
 import { getProductsByIwasku, usDimensions } from '@/lib/products/lookup';
 import { getShippingBenchmark } from '@/lib/veeqo/benchmark';
@@ -84,7 +84,7 @@ const Schema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  const auth = await requireBoardManager(request);
+  const auth = await requireOrderBoardLevel(request, 'FULL');
   if (auth instanceof NextResponse) return auth;
 
   let body: unknown;

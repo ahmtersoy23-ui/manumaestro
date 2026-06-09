@@ -1,15 +1,15 @@
 /**
  * POST /api/siparis/approve  { wisersellOrderIds: number[] }
  *
- * İlk onay (bootstrap): giriş yapmış HERKES onaylayabilir — Wisersell adaylarını
- * OutboundOrder + Kargoya Hazır'a çevirir. (Sistem oturunca tekrar Manager+ kısılacak.)
+ * Onay (sipariş board en alt kademe, APPROVER+): Wisersell adaylarını
+ * OutboundOrder + Kargoya Hazır'a çevirir.
  * Zaten oluşmuş ama Kargoya Hazır yazılamamış (ready-pending) siparişler için mark-ready retry yapar.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
-import { requireBoardUser } from '@/lib/auth/boardAuth';
+import { requireOrderBoardLevel } from '@/lib/auth/orderBoardPermission';
 import { approveWisersellCandidates, type ApproveResult } from '@/lib/wisersell/approve';
 import { markWisersellReady } from '@/lib/wisersell/databridgeClient';
 import { logAction } from '@/lib/auditLog';
@@ -22,7 +22,7 @@ const Schema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  const auth = await requireBoardUser(request);
+  const auth = await requireOrderBoardLevel(request, 'APPROVER');
   if (auth instanceof NextResponse) return auth;
 
   let body: unknown;

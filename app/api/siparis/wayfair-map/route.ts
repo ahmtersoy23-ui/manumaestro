@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireBoardManager } from '@/lib/auth/boardAuth';
+import { requireOrderBoardLevel } from '@/lib/auth/orderBoardPermission';
 import { saveWayfairMapping } from '@/lib/wisersell/databridgeClient';
 import { createLogger } from '@/lib/logger';
 
@@ -20,7 +20,7 @@ const Schema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  const auth = await requireBoardManager(request);
+  const auth = await requireOrderBoardLevel(request, 'APPROVER');
   if (auth instanceof NextResponse) return auth;
 
   let body: unknown;

@@ -102,7 +102,10 @@ interface Row {
 interface BoardData {
   counts: Record<string, number>;
   data: Record<StatusKey, Row[]>;
-  canManage?: boolean; // Wisersell otomasyon (onayla/kapat/auto-run) yetkisi
+  orderLevel?: 'NONE' | 'APPROVER' | 'CREATOR' | 'FULL';
+  canApprove?: boolean;     // Onayla / auto-run / Kapat / Listeden Düş / CG-rutin
+  canCreateOrder?: boolean; // Manuel Giriş
+  canLabelDelete?: boolean; // Veeqo Etiket Al / Manuel Sil / Açığa Al / Etiketi İptal
 }
 
 /**
@@ -244,7 +247,10 @@ export default function SiparisPage() {
   useEffect(() => { setSelected(new Set()); setWhFilter('ALL'); setMpFilter('ALL'); }, [tab]);
 
   const counts = board?.counts ?? {};
-  const canManage = board?.canManage ?? false; // Wisersell otomasyon aksiyonları (Manager+)
+  // Sipariş board kademeli yetki (shelf'ten bağımsız): APPROVER < CREATOR < FULL
+  const canApprove = board?.canApprove ?? false;       // Onayla / auto-run / Kapat / Listeden Düş / CG-rutin
+  const canCreateOrder = board?.canCreateOrder ?? false; // Manuel Giriş
+  const canLabelDelete = board?.canLabelDelete ?? false; // Veeqo Etiket Al / Manuel Sil / Açığa Al / Etiketi İptal
   const tabRows = useMemo(() => board?.data[tab] ?? [], [board, tab]);
 
   // Warehouse sayıları (aktif tab) + marketplace seçenekleri — client-side
@@ -272,7 +278,7 @@ export default function SiparisPage() {
   ), [tabRows, whFilter, mpFilter]);
 
   // İlk onay (bootstrap) + çıkış etiket yazdırma → herkes; kapatma + CG (Wisersell) → Manager+.
-  const selectable = tab === 'onayBekliyor' || tab === 'cikisBekliyor' || ((tab === 'kapatmaBekliyor' || tab === 'cgBekliyor') && canManage);
+  const selectable = (tab === 'onayBekliyor' && canApprove) || tab === 'cikisBekliyor' || ((tab === 'kapatmaBekliyor' || tab === 'cgBekliyor') && canApprove);
   const rowKey = useCallback((r: Row) => (tab === 'onayBekliyor' ? String(r.wisersellOrderId) : String(r.id)), [tab]);
 
   const toggle = (k: string) => setSelected((p) => { const n = new Set(p); if (n.has(k)) n.delete(k); else n.add(k); return n; });
@@ -441,10 +447,12 @@ export default function SiparisPage() {
           <button onClick={load} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 disabled:opacity-50">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Sayfayı Yenile
           </button>
-          <button onClick={() => setManualOpen(true)} title="Wisersell'de olmayan, etiketi başka platformdan alınan siparişi elle ekle" className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700">
-            <Plus className="w-4 h-4" /> Manuel Giriş
-          </button>
-          {canManage && (
+          {canCreateOrder && (
+            <button onClick={() => setManualOpen(true)} title="Wisersell'de olmayan, etiketi başka platformdan alınan siparişi elle ekle" className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700">
+              <Plus className="w-4 h-4" /> Manuel Giriş
+            </button>
+          )}
+          {canApprove && (
             <button onClick={doAutoRun} disabled={busy} title="WISERSELL_AUTO_APPROVE açıksa tüm uygun adayları onaylar" className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50">
               <Zap className="w-4 h-4" /> Tümünü Onayla
             </button>
@@ -668,7 +676,7 @@ export default function SiparisPage() {
                   {detailRow.veeqoShipmentId ? (
                     // Veeqo etiketi: bedel book'tan otomatik, salt-okunur
                     <div className="mt-0.5 text-xs text-gray-700">{detailRow.labelCost != null ? `$${detailRow.labelCost.toFixed(2)}${detailRow.labelCostCurrency && detailRow.labelCostCurrency !== 'USD' ? ` ${detailRow.labelCostCurrency}` : ''}` : '—'}{detailRow.labelService ? <span className="text-gray-400"> · {detailRow.labelService.replace(/^Veeqo:\s*/, '')}</span> : null}</div>
-                  ) : detailRow.labelId && canManage ? (
+                  ) : detailRow.labelId && canApprove ? (
                     // Veeqo-dışı (elle yüklenen) etiket: bedel elle girilir/düzeltilir
                     <div className="mt-0.5 flex items-center gap-1.5">
                       <span className="text-xs text-gray-400">$</span>
@@ -728,31 +736,31 @@ export default function SiparisPage() {
             {/* Aksiyon footer — duruma göre */}
             <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-200 bg-gray-50/50">
               <button onClick={() => { setDetailRow(null); load(); }} className="text-sm px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700">Kapat</button>
-              {detailRow.amazonCancelledAt && canManage && (
+              {detailRow.amazonCancelledAt && canApprove && (
                 <button onClick={() => dropOne(detailRow.id)} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50">
                   <X className="w-4 h-4" /> Listeden Düş
                 </button>
               )}
-              {tab === 'onayBekliyor' && (
+              {tab === 'onayBekliyor' && canApprove && (
                 <button onClick={() => approveOne(detailRow.wisersellOrderId)} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">
                   <CheckCircle2 className="w-4 h-4" /> Onayla
                 </button>
               )}
-              {tab === 'etiketBekliyor' && canManage
+              {tab === 'etiketBekliyor' && canLabelDelete
                 && (detailRow.warehouse === 'NJ' || detailRow.warehouse === 'SHOWROOM')
                 && !detailRow.trackingNumber && !detailRow.amazonCancelledAt && (
                 <button onClick={() => setVeeqoOrder(detailRow)} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50">
                   <Tag className="w-4 h-4" /> Veeqo Etiket Al
                 </button>
               )}
-              {tab === 'etiketBekliyor' && canManage && detailRow.wisersellOrderId
+              {tab === 'etiketBekliyor' && canLabelDelete && detailRow.wisersellOrderId
                 && !detailRow.trackingNumber && !detailRow.amazonCancelledAt && (
                 <button onClick={() => reopenOne(detailRow.id)} disabled={busy} title="Veeqo cazip değilse / başka sebeple: Onay Bekliyor'a geri al + Wisersell'de açık yap"
                   className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50">
                   <RefreshCw className="w-4 h-4" /> Açık Siparişe Geri Al
                 </button>
               )}
-              {tab === 'etiketBekliyor' && canManage && detailRow.source === 'MANUAL'
+              {tab === 'etiketBekliyor' && canLabelDelete && detailRow.source === 'MANUAL'
                 && !detailRow.trackingNumber && !detailRow.amazonCancelledAt && (
                 <button onClick={() => deleteManualOne(detailRow.id)} disabled={busy} title="Manuel girilen siparişi tamamen sil (geri alınamaz)"
                   className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg border border-red-300 bg-white text-red-700 hover:bg-red-50 disabled:opacity-50">
@@ -764,18 +772,18 @@ export default function SiparisPage() {
                   <Truck className="w-4 h-4" /> Çıkış Yap (FIFO)
                 </button>
               )}
-              {tab === 'cikisBekliyor' && canManage && detailRow.veeqoShipmentId && !detailRow.amazonCancelledAt && (
+              {tab === 'cikisBekliyor' && canLabelDelete && detailRow.veeqoShipmentId && !detailRow.amazonCancelledAt && (
                 <button onClick={() => cancelVeeqoOne(detailRow.id)} disabled={busy} title="Veeqo etiketini iptal et (void+iade) → Etiket Bekliyor'a döner"
                   className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg border border-rose-300 bg-white text-rose-700 hover:bg-rose-50 disabled:opacity-50">
                   <X className="w-4 h-4" /> Etiketi İptal Et (iade)
                 </button>
               )}
-              {tab === 'kapatmaBekliyor' && canManage && (
+              {tab === 'kapatmaBekliyor' && canApprove && (
                 <button onClick={() => closeOne(detailRow.id)} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50">
                   <Send className="w-4 h-4" /> Wisersell&apos;de Kapat
                 </button>
               )}
-              {tab === 'cgBekliyor' && canManage && !detailRow.amazonCancelledAt && (
+              {tab === 'cgBekliyor' && canApprove && !detailRow.amazonCancelledAt && (
                 <button onClick={() => closeOne(detailRow.id)} disabled={busy || !detailRow.manualTracking} title={detailRow.manualTracking ? '' : 'Önce tracking girin'} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-40">
                   <Send className="w-4 h-4" /> Wisersell&apos;de Kapat
                 </button>

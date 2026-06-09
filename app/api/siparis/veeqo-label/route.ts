@@ -9,13 +9,13 @@
  *
  * Idempotency: sipariş zaten SHIPPING+tracking'li etikete sahipse YENİ etiket ALMAZ
  * (çift ücret + çift barkod riski — "sipariş başına TEK etiket" prensibi).
- * Yetki: requireBoardManager.
+ * Yetki: sipariş board FULL (etiket = gerçek para).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
-import { requireBoardManager } from '@/lib/auth/boardAuth';
+import { requireOrderBoardLevel } from '@/lib/auth/orderBoardPermission';
 import { bookVeeqoLabel } from '@/lib/veeqo/databridgeClient';
 import { saveLabelFile, LabelStorageError } from '@/lib/wms/labelStorage';
 import { logAction } from '@/lib/auditLog';
@@ -32,7 +32,7 @@ const Schema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  const auth = await requireBoardManager(request);
+  const auth = await requireOrderBoardLevel(request, 'FULL');
   if (auth instanceof NextResponse) return auth;
 
   let body: unknown;

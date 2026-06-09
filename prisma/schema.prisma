@@ -27,6 +27,7 @@ model User {
   permissions               UserMarketplacePermission[]
   categoryPermissions       UserCategoryPermission[]
   stockPermission           UserStockPermission?
+  orderPermission           UserOrderPermission?
   shipmentPermissions       UserShipmentPermission[]
   requests                  ProductionRequest[]
   decidedSuggestions        ProductionSuggestion[]
@@ -334,6 +335,24 @@ model UserStockPermission {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_stock_permissions")
+}
+
+// Sipariş board'una özel kademeli izin (shelf/depo izinlerinden BAĞIMSIZ).
+// Kümülatif merdiven: APPROVER < CREATOR < FULL. SSO admin → kod tarafında FULL sayılır.
+model UserOrderPermission {
+  userId String          @unique
+  level  OrderBoardLevel @default(NONE)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_order_permissions")
+}
+
+enum OrderBoardLevel {
+  NONE // Sadece görüntüleme
+  APPROVER // + Onayla / Kapat / Listeden Düş / CG-tracking-export rutinleri
+  CREATOR // + Manuel Giriş
+  FULL // + Veeqo Etiket Al / Manuel Sil / Açığa Al / Etiketi İptal
 }
 
 model WarehouseProduct {

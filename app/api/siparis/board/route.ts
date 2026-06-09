@@ -13,7 +13,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { queryDataBridge } from '@/lib/db/prisma';
-import { requireBoardUser, isBoardManager } from '@/lib/auth/boardAuth';
+import { requireBoardUser } from '@/lib/auth/boardAuth';
+import { getOrderBoardLevel, hasOrderLevel } from '@/lib/auth/orderBoardPermission';
 import { getUsAvailability } from '@/lib/wms/usWarehouseStock';
 import { getCgAvailability, type CgAvailability } from '@/lib/wms/cgStock';
 import { resolveOrderWarehouse } from '@/lib/wisersell/orderRouting';
@@ -68,7 +69,11 @@ const AMA_US_HOLD_MS = 2 * 60 * 60 * 1000; // 2 saat
 export async function GET(request: NextRequest) {
   const auth = await requireBoardUser(request);
   if (auth instanceof NextResponse) return auth;
-  const canManage = await isBoardManager(auth.user);
+  // Sipariş board kademeli yetki (shelf'ten bağımsız): APPROVER < CREATOR < FULL.
+  const orderLevel = await getOrderBoardLevel(auth.user);
+  const canApprove = hasOrderLevel(orderLevel, 'APPROVER');     // Onayla / Kapat / Listeden Düş / CG-rutinleri
+  const canCreateOrder = hasOrderLevel(orderLevel, 'CREATOR');  // Manuel Giriş
+  const canLabelDelete = hasOrderLevel(orderLevel, 'FULL');     // Veeqo Etiket / Sil / Açığa Al / Etiket İptal
 
   const region = new URL(request.url).searchParams.get('region') || 'US';
 
@@ -307,7 +312,10 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     success: true,
     region,
-    canManage, // Wisersell otomasyon (onayla/kapat/auto-run) yetkisi — UI buton gating
+    orderLevel,        // sipariş board kademesi (NONE/APPROVER/CREATOR/FULL)
+    canApprove,        // Onayla / auto-run / Kapat / Listeden Düş / CG-rutin — UI buton gating
+    canCreateOrder,    // Manuel Giriş
+    canLabelDelete,    // Veeqo Etiket Al / Manuel Sil / Açığa Al / Etiketi İptal
     counts: {
       onayBekliyor: onayBekliyor.length,
       eslesmeGerek: eslesmeGerek.length,

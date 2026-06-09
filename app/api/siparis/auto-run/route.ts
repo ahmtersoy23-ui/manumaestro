@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { requireBoardManager } from '@/lib/auth/boardAuth';
+import { requireOrderBoardLevel } from '@/lib/auth/orderBoardPermission';
 import { approveWisersellCandidates, getEligibleCandidateIds } from '@/lib/wisersell/approve';
 import { createLogger } from '@/lib/logger';
 
@@ -18,7 +18,7 @@ function autoApproveEnabled(): boolean {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireBoardManager(request);
+  const auth = await requireOrderBoardLevel(request, 'APPROVER');
   if (auth instanceof NextResponse) return auth;
 
   if (!autoApproveEnabled()) {

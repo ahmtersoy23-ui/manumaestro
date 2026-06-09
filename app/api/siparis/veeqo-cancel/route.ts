@@ -13,7 +13,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
-import { requireBoardManager } from '@/lib/auth/boardAuth';
+import { requireOrderBoardLevel } from '@/lib/auth/orderBoardPermission';
 import { cancelVeeqoLabel } from '@/lib/veeqo/databridgeClient';
 import { logAction } from '@/lib/auditLog';
 import { createLogger } from '@/lib/logger';
@@ -21,7 +21,7 @@ import { createLogger } from '@/lib/logger';
 const logger = createLogger('VeeqoCancel');
 
 export async function POST(request: NextRequest) {
-  const auth = await requireBoardManager(request);
+  const auth = await requireOrderBoardLevel(request, 'FULL');
   if (auth instanceof NextResponse) return auth;
 
   const body = await request.json().catch(() => ({}));
