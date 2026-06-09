@@ -83,7 +83,9 @@ async function printEanLabels(rows: { ean: string; name: string | null; iwasku: 
   }
 
   // Tek ürün → dosya adı ürün adı; çoklu (toplu) → jenerik.
-  const safe = (s: string) => s.replace(/[/\\:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 120);
+  // Dosya adı: boşluklar tarayıcıda %20'ye dönmesin → _; geçersiz karakterleri ayıkla.
+  const safe = (s: string) =>
+    s.replace(/[/\\:*?"<>|]/g, '-').replace(/\s+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').slice(0, 120);
   const fileName = printable.length === 1
     ? safe(printable[0].name ?? printable[0].iwasku)
     : `fairfield-ean-etiket-${printable.length}urun`;
