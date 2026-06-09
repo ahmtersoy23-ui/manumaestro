@@ -111,7 +111,7 @@ export const POST = withRoute<{ id: string }>(
       try {
         const placeholders = iwaskusNeedingEnrichment.map((_, i) => `$${i + 1}`).join(',');
         const rows = await queryProductDb(
-          `SELECT product_sku AS iwasku, COALESCE(manual_size, size) AS desi, category
+          `SELECT product_sku AS iwasku, size AS desi, category
            FROM products WHERE product_sku IN (${placeholders})`,
           iwaskusNeedingEnrichment
         );

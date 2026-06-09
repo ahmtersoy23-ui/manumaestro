@@ -26,7 +26,7 @@ export const GET = withRoute<{ iwasku: string }>(
         product_sku as iwasku,
         name,
         category,
-        COALESCE(manual_size, size) as size
+        size
       FROM products
       WHERE product_sku = $1
       LIMIT 1

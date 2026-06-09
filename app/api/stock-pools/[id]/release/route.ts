@@ -89,7 +89,7 @@ export const POST = withRoute<{ id: string }>(
       try {
         const ph = iwaskus.map((_, i) => `$${i + 1}`).join(',');
         const rows = await queryProductDb(
-          `SELECT product_sku, name, category, COALESCE(manual_size, size) as desi FROM products WHERE product_sku IN (${ph})`,
+          `SELECT product_sku, name, category, size as desi FROM products WHERE product_sku IN (${ph})`,
           iwaskus
         ) as { product_sku: string; name: string; category: string; desi: number | null }[];
         for (const row of rows) {

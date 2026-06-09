@@ -17,7 +17,7 @@ export interface ProductInfo {
   heightCm: number | null;
   lengthCm: number | null;
   weightKg: number | null;
-  desi: number | null; // products COALESCE(manual_size, size)
+  desi: number | null; // products.size (Wisersell dims'ten max(hacim/5000, ağırlık))
 }
 
 const CM_PER_INCH = 2.54;

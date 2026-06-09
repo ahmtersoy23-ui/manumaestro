@@ -66,7 +66,7 @@ export const GET = withRoute(
     // tablosu (~15k satır) çekiliyordu; artık allIwaskus'a filtreli (indexed product_sku).
     const prodRows = (allIwaskus.size > 0
       ? ((await queryProductDb(
-          `SELECT product_sku AS iwasku, name, category, COALESCE(manual_size, size) AS desi
+          `SELECT product_sku AS iwasku, name, category, size AS desi
            FROM products WHERE product_sku = ANY($1::text[])`,
           [[...allIwaskus]],
         )) as ProdRow[])

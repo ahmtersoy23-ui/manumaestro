@@ -73,7 +73,7 @@ export const POST = withRoute(
     const placeholders = uniqueIwaskus.map((_, i) => `$${i + 1}`).join(',');
     const products = uniqueIwaskus.length > 0
       ? await queryProductDb(
-          `SELECT product_sku as iwasku, name, category, COALESCE(manual_size, size) as size FROM products WHERE product_sku IN (${placeholders})`,
+          `SELECT product_sku as iwasku, name, category, size FROM products WHERE product_sku IN (${placeholders})`,
           uniqueIwaskus
         )
       : [];

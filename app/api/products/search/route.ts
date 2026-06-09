@@ -74,7 +74,7 @@ export const GET = withRoute(
         product_sku as iwasku,
         name,
         category,
-        COALESCE(manual_size, size) as size
+        size
       FROM products
       ${whereSql}
       ORDER BY name

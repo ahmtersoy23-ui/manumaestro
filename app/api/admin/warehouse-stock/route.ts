@@ -42,7 +42,7 @@ export const GET = withRoute(
     if (iwaskus.length > 0) {
       const placeholders = iwaskus.map((_, i) => `$${i + 1}`).join(',');
       const details = await queryProductDb(
-        `SELECT product_sku, name, category, COALESCE(manual_size, size) as size FROM products WHERE product_sku IN (${placeholders})`,
+        `SELECT product_sku, name, category, size FROM products WHERE product_sku IN (${placeholders})`,
         iwaskus
       );
       productMap = Object.fromEntries(
@@ -124,7 +124,7 @@ export const GET = withRoute(
       if (newIwaskus.length > 0) {
         const ph = newIwaskus.map((_, i) => `$${i + 1}`).join(',');
         const extra = await queryProductDb(
-          `SELECT product_sku, name, category, COALESCE(manual_size, size) as size FROM products WHERE product_sku IN (${ph})`,
+          `SELECT product_sku, name, category, size FROM products WHERE product_sku IN (${ph})`,
           newIwaskus
         );
         for (const p of extra as { product_sku: string; name: string; category: string; size: number | null }[]) {
