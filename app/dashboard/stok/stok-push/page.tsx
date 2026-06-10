@@ -55,7 +55,6 @@ export default function StokPushPage() {
   const [bMode, setBMode] = useState<'STOCK' | 'ZERO' | 'STANDARD'>('STOCK');
   const [bWh, setBWh] = useState<StockWarehouse[]>([...STOCK_WAREHOUSES]);
   const [bPercent, setBPercent] = useState(100);
-  const [bFloor, setBFloor] = useState(0);
 
   // filtre
   const [filter, setFilter] = useState<'all' | 'changed' | 'STOCK' | 'ZERO' | 'STANDARD'>('all');
@@ -145,7 +144,7 @@ export default function StokPushPage() {
           channel,
           iwaskus: [...selected],
           mode: bMode === 'STANDARD' ? null : bMode,
-          ...(bMode === 'STOCK' ? { warehouses: bWh, percent: bPercent, floorX: bFloor } : {}),
+          ...(bMode === 'STOCK' ? { warehouses: bWh, percent: bPercent } : {}),
         }),
       });
       const json = await res.json();
@@ -261,7 +260,7 @@ export default function StokPushPage() {
             <Card padded className="flex flex-wrap items-center gap-2">
               <Button variant="primary" size="sm" icon={<RefreshCw className="w-4 h-4" />} loading={loading} onClick={loadPreview}>Önizle</Button>
               <Button variant="secondary" size="sm" icon={<Play className="w-4 h-4" />} loading={busy === 'dryrun'} onClick={() => runPush(true)}>Dry-run çalıştır</Button>
-              <Button variant="warning" size="sm" icon={<Play className="w-4 h-4" />} loading={busy === 'run'} disabled={!settings.enabled} onClick={() => runPush(false)}>Canlı çalıştır</Button>
+              <Button variant="success" size="sm" icon={<Play className="w-4 h-4" />} loading={busy === 'run'} disabled={!settings.enabled} onClick={() => runPush(false)}>Canlı çalıştır</Button>
 
               <div className="ml-auto flex items-center gap-3">
                 {!settings.enabled && (
@@ -323,7 +322,7 @@ export default function StokPushPage() {
                 ) : (
                   configs.map((c) => (
                     <span key={c.id} className="inline-flex items-center gap-1 text-xs bg-gray-100 rounded px-1.5 py-0.5">
-                      <span className={c.mode === 'STOCK' ? 'text-blue-700' : 'text-gray-500'}>{c.mode === 'STOCK' ? `${c.percent}%${c.floorX ? `·≥${c.floorX}` : ''}` : '0'}</span>
+                      <span className={c.mode === 'STOCK' ? 'text-blue-700' : 'text-gray-500'}>{c.mode === 'STOCK' ? `${c.percent}%` : '0'}</span>
                       <span className="font-mono">{c.iwasku}</span>
                       <button onClick={() => deleteConfig(c.id)} className="text-gray-400 hover:text-red-600" title="kuralı kaldır" disabled={busy === `del-${c.id}`}>
                         <Trash2 className="w-3 h-3" />
@@ -362,10 +361,6 @@ export default function StokPushPage() {
                     <label>
                       <span className="block text-gray-500 mb-1 text-xs">Yüzde %</span>
                       <input type="number" value={bPercent} onChange={(e) => setBPercent(Number(e.target.value))} className="w-20 border rounded-lg px-2 py-1.5" />
-                    </label>
-                    <label>
-                      <span className="block text-gray-500 mb-1 text-xs">Eşik (&lt;X→0)</span>
-                      <input type="number" value={bFloor} onChange={(e) => setBFloor(Number(e.target.value))} className="w-24 border rounded-lg px-2 py-1.5" />
                     </label>
                   </>
                 )}
