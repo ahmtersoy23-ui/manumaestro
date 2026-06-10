@@ -31,6 +31,14 @@ interface Settings { channel: string; standardQty: number; enabled: boolean; dry
 
 const PAGE_SIZE = 100;
 
+/** API hata alanini her zaman string'e cevir (obje gelirse [object Object] olmasin). */
+function errText(j: { error?: unknown }, fallback: string): string {
+  const e = j?.error;
+  if (typeof e === 'string' && e) return e;
+  if (e && typeof e === 'object') return (e as { message?: string }).message || JSON.stringify(e);
+  return fallback;
+}
+
 export default function StokPushPage() {
   const [channel, setChannel] = useState('AMAZON_US');
   const ch = STOCK_PUSH_CHANNELS.find((c) => c.key === channel)!;
@@ -66,8 +74,8 @@ export default function StokPushPage() {
       ]);
       const sJson = await sRes.json();
       const cJson = await cRes.json();
-      if (!sRes.ok || !sJson.success) throw new Error(sJson.error || 'Ayarlar yüklenemedi');
-      if (!cRes.ok || !cJson.success) throw new Error(cJson.error || 'Konfig yüklenemedi');
+      if (!sRes.ok || !sJson.success) throw new Error(errText(sJson, 'Ayarlar yüklenemedi'));
+      if (!cRes.ok || !cJson.success) throw new Error(errText(cJson, 'Konfig yüklenemedi'));
       setSettings(sJson.settings);
       setConfigs(cJson.configs);
     } catch (e) {
@@ -82,7 +90,7 @@ export default function StokPushPage() {
     try {
       const res = await fetch(`/api/stock-push/preview?channel=${channel}`, { credentials: 'include' });
       const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.error || 'Önizleme yüklenemedi');
+      if (!res.ok || !json.success) throw new Error(errText(json, 'Önizleme yüklenemedi'));
       setPreview({ rows: json.rows, counts: json.counts, changedCount: json.changedCount });
       setSettings((s) => (s ? { ...s, standardQty: json.standardQty, enabled: json.enabled, dryRun: json.dryRun } : s));
       setPage(0);
@@ -111,7 +119,7 @@ export default function StokPushPage() {
         body: JSON.stringify({ channel, ...patch }),
       });
       const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.error || 'Kaydedilemedi');
+      if (!res.ok || !json.success) throw new Error(errText(json, 'Kaydedilemedi'));
       setSettings(json.settings);
       setMsg('Ayarlar kaydedildi');
     } catch (e) {
@@ -142,7 +150,7 @@ export default function StokPushPage() {
         }),
       });
       const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.error || 'Eklenemedi');
+      if (!res.ok || !json.success) throw new Error(errText(json, 'Eklenemedi'));
       setFIwasku('');
       setFNote('');
       await loadConfigAndSettings();
@@ -178,7 +186,7 @@ export default function StokPushPage() {
         body: JSON.stringify({ channel, dryRun }),
       });
       const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.error || 'Çalıştırılamadı');
+      if (!res.ok || !json.success) throw new Error(errText(json, 'Çalıştırılamadı'));
       const s = json.summary;
       setMsg(
         `${json.dryRun ? '[DRY-RUN] ' : ''}${json.changed} değişiklik · ${s.pushed} yazıldı · ${s.skipped} atlandı · ${s.dryrun} dry · ${s.failed} hata` +
