@@ -9,12 +9,18 @@ export interface StockPushChannel {
   channelCode: string;
   country: string;
   implemented: boolean;
+  /** channel_prices.status değerlerinden push'a uygun olanlar (kanal başına farklı) */
+  activeStatuses: string[];
+  /** DataBridge s2s push ucu yolu */
+  pushPath: string;
 }
 
 export const STOCK_PUSH_CHANNELS: StockPushChannel[] = [
-  { key: 'AMAZON_US', label: 'Amazon US', channelCode: 'amazon_fbm', country: 'US', implemented: true },
-  { key: 'SHOPIFY_US', label: 'Shopify US', channelCode: 'shopify_iwa', country: 'US', implemented: false },
-  { key: 'WALMART_US', label: 'Walmart US', channelCode: 'walmart', country: 'US', implemented: false },
+  // Amazon: Active (in-stock) + Inactive (out-of-stock) child'lar; Incomplete=parent hariç.
+  { key: 'AMAZON_US', label: 'Amazon US', channelCode: 'amazon_fbm', country: 'US', implemented: true, activeStatuses: ['Active', 'Inactive'], pushPath: '/amazon-listings/push' },
+  { key: 'SHOPIFY_US', label: 'Shopify US', channelCode: 'shopify_iwa', country: 'US', implemented: false, activeStatuses: [], pushPath: '' },
+  // Walmart: PUBLISHED (canlı); SYSTEM_PROBLEM hariç. WFS yok → hepsi seller-fulfilled.
+  { key: 'WALMART_US', label: 'Walmart US', channelCode: 'walmart', country: 'US', implemented: true, activeStatuses: ['PUBLISHED'], pushPath: '/walmart-listings/push' },
 ];
 
 export function getChannel(key: string): StockPushChannel | undefined {

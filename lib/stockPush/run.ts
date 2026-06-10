@@ -7,7 +7,8 @@
  */
 import { prisma } from '@/lib/db/prisma';
 import { computeTargets } from './compute';
-import { pushAmazonListings, type PushItem, type PushResultRow } from './databridgeClient';
+import { getChannel } from './constants';
+import { pushChannelInventory, type PushItem, type PushResultRow } from './databridgeClient';
 
 export interface RunResult {
   channel: string;
@@ -75,7 +76,9 @@ export async function runStockPush(channelKey: string, opts: { dryRunOverride?: 
     ? `${tierAZeros.length} stok-takipli SKU 0'a indi: ${tierAZeros.slice(0, 20).join(', ')}${tierAZeros.length > 20 ? ' …' : ''}`
     : undefined;
 
-  const push = await pushAmazonListings(changedItems, { dryRun: false, alert });
+  const pushPath = getChannel(channelKey)?.pushPath;
+  if (!pushPath) throw new Error(`${channelKey} için push yolu tanımsız`);
+  const push = await pushChannelInventory(pushPath, changedItems, { dryRun: false, alert });
 
   // Canli + basarili (pushed/skipped) SKU'lar icin state'i hedefe guncelle
   if (!effectiveDryRun) {

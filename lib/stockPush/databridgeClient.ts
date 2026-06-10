@@ -31,8 +31,13 @@ export interface PushResponse {
   results: PushResultRow[];
 }
 
-/** Amazon US FBM listing adetlerini DataBridge uzerinden push et (chunk'li). */
-export async function pushAmazonListings(
+/**
+ * Kanal envanterini DataBridge s2s ucu üzerinden push et (chunk'lı).
+ * `path` kanala göre: Amazon '/amazon-listings/push', Walmart '/walmart-listings/push'.
+ * (country alanı Walmart ucunda yok sayılır.)
+ */
+export async function pushChannelInventory(
+  path: string,
   items: PushItem[],
   opts: { dryRun: boolean; alert?: string },
 ): Promise<PushResponse> {
@@ -48,7 +53,7 @@ export async function pushAmazonListings(
       ...(opts.alert && !alertSent ? { alert: opts.alert } : {}),
       items: chunk,
     };
-    const res = await fetch(`${baseUrl}/amazon-listings/push`, {
+    const res = await fetch(`${baseUrl}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-internal-api-key': apiKey },
       body: JSON.stringify(body),
@@ -56,7 +61,7 @@ export async function pushAmazonListings(
     });
     const data = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string; results?: PushResultRow[] };
     if (!res.ok || data.success === false) {
-      throw new Error(data.error || `DataBridge /amazon-listings/push HTTP ${res.status}`);
+      throw new Error(data.error || `DataBridge ${path} HTTP ${res.status}`);
     }
     if (opts.alert && !opts.dryRun) alertSent = true;
     if (Array.isArray(data.results)) all.push(...data.results);

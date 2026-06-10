@@ -47,12 +47,12 @@ export async function computeTargets(channelKey: string): Promise<ComputeResult>
 
   const [listings, settings, configs] = await Promise.all([
     queryProductDb(
-      // Active + Inactive (out-of-stock) FBM child'lar; Incomplete (varyasyon parent'lari)
-      // haric. OOS listing'ler push'un asil hedefi (stok basip yeniden ac).
+      // Kanal-bazlı aktif status'ler (Amazon: Active+Inactive child; Walmart: PUBLISHED).
+      // OOS listing'ler de push hedefi (stok basıp yeniden aç).
       `SELECT marketplace_sku, iwasku FROM channel_prices
-       WHERE channel_code = $1 AND country_code = $2 AND status IN ('Active', 'Inactive')
+       WHERE channel_code = $1 AND country_code = $2 AND status = ANY($3)
          AND iwasku IS NOT NULL AND iwasku <> ''`,
-      [channel.channelCode, channel.country],
+      [channel.channelCode, channel.country, channel.activeStatuses],
     ) as Promise<Array<{ marketplace_sku: string; iwasku: string }>>,
     prisma.stockPushSettings.findUnique({ where: { channel: channelKey } }),
     prisma.stockPushConfig.findMany({ where: { channel: channelKey } }),
