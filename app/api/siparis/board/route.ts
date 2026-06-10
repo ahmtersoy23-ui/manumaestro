@@ -61,10 +61,13 @@ function parseManualAddress(note: string | null): { recipient: string | null; lo
  * Amazon US (Ama_US) onay öncesi bekleme: alıcı iptalleri ilk saatlerde yoğun →
  * Wisersell siparişi gördükten (created_at_ws) 2 saat geçene kadar "Onay Bekliyor"a
  * düşürme. Candidate yine yazılır; süre dolunca kendiliğinden görünür. Sadece Ama_US
- * (store 111); CITI/diğer kanallar anında düşmeye devam eder.
+ * (store 111) + YALNIZ Mobilya/Alsat kategorili ürün içeren siparişler; diğer
+ * kategoriler ve CITI/diğer kanallar anında düşmeye devam eder.
  */
 const AMA_US_MARKETPLACE = 'Ama_US';
 const AMA_US_HOLD_MS = 2 * 60 * 60 * 1000; // 2 saat
+// Bekleme yalnız bu kategorilerde (products.category, trim+lowercase eşleşme — isHeavyItem ile aynı).
+const AMA_US_HOLD_CATEGORIES = new Set(['mobilya', 'alsat']);
 
 export async function GET(request: NextRequest) {
   const auth = await requireBoardUser(request);
@@ -130,10 +133,15 @@ export async function GET(request: NextRequest) {
   let amazonHold = 0; // Ama_US 2 saat beklemede gizlenen aday sayısı
   for (const c of pendingCandidates) {
     // Ama_US 2 saat bekleme: süre dolmadan board'da hiç gösterme (alıcı iptali otursun).
+    // YALNIZ Mobilya/Alsat kategorili ürün içeren siparişlerde; diğer kategoriler anında düşer.
     if (
       amaUsStoreIds.has(Number(c.store_id)) &&
       c.created_at_ws &&
-      Date.now() - new Date(c.created_at_ws).getTime() < AMA_US_HOLD_MS
+      Date.now() - new Date(c.created_at_ws).getTime() < AMA_US_HOLD_MS &&
+      (c.orderitems ?? []).some((i) => {
+        const cat = (i.iwasku ? productMap.get(i.iwasku)?.category : null)?.trim().toLowerCase();
+        return cat ? AMA_US_HOLD_CATEGORIES.has(cat) : false;
+      })
     ) { amazonHold++; continue; }
 
     const all = c.orderitems ?? [];
