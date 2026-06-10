@@ -51,11 +51,31 @@ export async function runStockPush(channelKey: string, opts: { dryRunOverride?: 
     };
   }
 
+  // Dry-run: Amazon'a DOKUNMA. Sadece lokal plan (state'e göre diff) — anında, timeout yok.
+  // (Gerçek GET+PATCH yalnız canlı run'da; o da cron'dan localhost'ta uzun koşabilir.)
+  if (effectiveDryRun) {
+    const results: PushResultRow[] = changedItems.map((it) => ({
+      sku: it.sku,
+      status: 'dryrun',
+      from: lastBySku.get(it.sku) ?? null,
+      to: it.quantity,
+    }));
+    return {
+      channel: channelKey,
+      enabled: comp.enabled,
+      dryRun: true,
+      changed: changedItems.length,
+      summary: { total: results.length, pushed: 0, skipped: 0, dryrun: results.length, failed: 0 },
+      results,
+      tierAZeros,
+    };
+  }
+
   const alert = tierAZeros.length
     ? `${tierAZeros.length} stok-takipli SKU 0'a indi: ${tierAZeros.slice(0, 20).join(', ')}${tierAZeros.length > 20 ? ' …' : ''}`
     : undefined;
 
-  const push = await pushAmazonListings(changedItems, { dryRun: effectiveDryRun, alert });
+  const push = await pushAmazonListings(changedItems, { dryRun: false, alert });
 
   // Canli + basarili (pushed/skipped) SKU'lar icin state'i hedefe guncelle
   if (!effectiveDryRun) {
