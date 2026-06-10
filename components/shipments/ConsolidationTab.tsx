@@ -7,7 +7,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Boxes, Package, Plus, Printer, Trash2, X } from 'lucide-react';
+import { Boxes, Download, Package, Plus, Printer, Trash2, X } from 'lucide-react';
 import { notify } from '@/lib/ui/notify';
 import { createLogger } from '@/lib/logger';
 
@@ -114,7 +114,7 @@ interface Item {
 }
 interface Data { role: string; canManage: boolean; containers: Container[]; items: Item[] }
 
-export function ConsolidationTab({ shipmentId, onChange }: { shipmentId: string; onChange: () => void }) {
+export function ConsolidationTab({ shipmentId, shipmentName, onChange }: { shipmentId: string; shipmentName?: string; onChange: () => void }) {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -199,6 +199,55 @@ export function ConsolidationTab({ shipmentId, onChange }: { shipmentId: string;
     markPrinted(labelItems.map((i) => i.id));
   };
 
+  // Excel: tek dosya, 2 sheet (Koli/Palet içerikleri + Depo kalemleri özeti).
+  const handleExport = async () => {
+    if (!data) return;
+    const XLSX = await import('xlsx');
+
+    // Sheet 1 — her satır bir konteyner içi ürün; ölçü/desi konteynerin ilk satırında.
+    const containerRows: Record<string, string | number>[] = [];
+    for (const c of data.containers) {
+      const desi = containerDesi(c);
+      if (c.lines.length === 0) {
+        containerRows.push({
+          'Konteyner': c.code, 'Tip': c.type, 'Ürün': '', 'IWASKU': '', 'Adet': '',
+          'En': c.width ?? '', 'Boy': c.depth ?? '', 'Yük.': c.height ?? '', 'Ağr.': c.weight ?? '',
+          'Desi': desi ? +desi.toFixed(1) : '',
+        });
+      } else {
+        c.lines.forEach((l, idx) => {
+          containerRows.push({
+            'Konteyner': c.code, 'Tip': c.type,
+            'Ürün': l.name ?? l.iwasku, 'IWASKU': l.iwasku, 'Adet': l.quantity,
+            'En': idx === 0 ? (c.width ?? '') : '',
+            'Boy': idx === 0 ? (c.depth ?? '') : '',
+            'Yük.': idx === 0 ? (c.height ?? '') : '',
+            'Ağr.': idx === 0 ? (c.weight ?? '') : '',
+            'Desi': idx === 0 ? (desi ? +desi.toFixed(1) : '') : '',
+          });
+        });
+      }
+    }
+
+    // Sheet 2 — paketlenmeyi bekleyen/yerleşen tüm depo kalemleri.
+    const itemRows = data.items.map((it) => ({
+      'Ürün': it.name ?? it.iwasku, 'IWASKU': it.iwasku, 'EAN': it.ean ?? '',
+      'Hedef': DEST_LABEL[it.recommendedDestination ?? ''] ?? it.recommendedDestination ?? '',
+      'Toplam': it.quantity, 'Yerleşen': it.placed, 'Kalan': it.remaining,
+    }));
+
+    const wb = XLSX.utils.book_new();
+    const ws1 = XLSX.utils.json_to_sheet(containerRows);
+    ws1['!cols'] = [{ wch: 12 }, { wch: 7 }, { wch: 40 }, { wch: 16 }, { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 7 }];
+    XLSX.utils.book_append_sheet(wb, ws1, 'Koli-Palet İçerikleri');
+    const ws2 = XLSX.utils.json_to_sheet(itemRows);
+    ws2['!cols'] = [{ wch: 40 }, { wch: 16 }, { wch: 15 }, { wch: 10 }, { wch: 8 }, { wch: 9 }, { wch: 7 }];
+    XLSX.utils.book_append_sheet(wb, ws2, 'Depo Kalemleri');
+
+    const prefix = shipmentName ? `${shipmentName}-` : '';
+    XLSX.writeFile(wb, `${prefix}fairfield-konsolidasyon-${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   if (data.items.length === 0) {
     return (
       <div className="bg-white border border-gray-200 rounded-lg px-4 py-10 text-sm text-gray-400 text-center">
@@ -215,11 +264,17 @@ export function ConsolidationTab({ shipmentId, onChange }: { shipmentId: string;
         <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
           <Boxes className="w-4 h-4 text-indigo-500" /> Fairfield Toplu Gönderim
         </h2>
-        {totalContainerDesi > 0 && (
-          <span className="text-xs text-gray-500">
-            {data.containers.length} koli/palet · {Math.round(totalContainerDesi).toLocaleString('tr-TR')} desi
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {totalContainerDesi > 0 && (
+            <span className="text-xs text-gray-500">
+              {data.containers.length} koli/palet · {Math.round(totalContainerDesi).toLocaleString('tr-TR')} desi
+            </span>
+          )}
+          <button onClick={handleExport}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 border rounded-md">
+            <Download className="w-4 h-4" /> Excel
+          </button>
+        </div>
       </div>
 
       {/* Paketlenecek depo kalemleri */}

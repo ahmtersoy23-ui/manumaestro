@@ -1158,7 +1158,7 @@ export default function ShipmentDetailPage() {
 
       {/* === KONSOLIDASYON TAB (depo karışık koli/palet) === */}
       {activeTab === 'konsolidasyon' && isSea && (
-        <ConsolidationTab shipmentId={id} onChange={fetchShipment} />
+        <ConsolidationTab shipmentId={id} shipmentName={shipment.name} onChange={fetchShipment} />
       )}
 
       {/* === PENDING TAB === */}
