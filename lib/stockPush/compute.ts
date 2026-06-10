@@ -47,8 +47,10 @@ export async function computeTargets(channelKey: string): Promise<ComputeResult>
 
   const [listings, settings, configs] = await Promise.all([
     queryProductDb(
+      // Active + Inactive (out-of-stock) FBM child'lar; Incomplete (varyasyon parent'lari)
+      // haric. OOS listing'ler push'un asil hedefi (stok basip yeniden ac).
       `SELECT marketplace_sku, iwasku FROM channel_prices
-       WHERE channel_code = $1 AND country_code = $2 AND status = 'Active'
+       WHERE channel_code = $1 AND country_code = $2 AND status IN ('Active', 'Inactive')
          AND iwasku IS NOT NULL AND iwasku <> ''`,
       [channel.channelCode, channel.country],
     ) as Promise<Array<{ marketplace_sku: string; iwasku: string }>>,
