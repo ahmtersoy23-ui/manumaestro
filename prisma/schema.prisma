@@ -1123,3 +1123,58 @@ model TransferDismissal {
 
   @@map("transfer_dismissals")
 }
+
+// ============================================
+// STOK PUSH (kanal-bazli, genisletilebilir)
+// ============================================
+// Pazar yeri listing'lerine otomatik available push. Ilk kanal: AMAZON_US (FBM,
+// SP-API fulfillment_availability). Sonra SHOPIFY_US / WALMART_US ayni model + UI
+// sekmesi + adaptorle eklenir (rework yok). 3 kova: default = STANDARD (sabit
+// settings.standardQty) · STOCK = US depo available bazli (CG MDN/Shukran + NJ +
+// SHOWROOM toplami, yuzde + sifirlama esigi) · ZERO = discontinued, hep 0. Config'te
+// OLMAYAN her iwasku STANDARD. ManuMaestro hesaplar, DataBridge ile API'ye yazar.
+// FBA'ya dokunulmaz.
+enum StockPushMode {
+  STOCK
+  ZERO
+}
+
+model StockPushConfig {
+  id         String        @id @default(uuid())
+  channel    String        @default("AMAZON_US")
+  iwasku     String
+  mode       StockPushMode
+  warehouses String[]      @default([]) // STOCK icin: CG_MDN, CG_SHUKRAN, NJ, SHOWROOM
+  percent    Int           @default(100) // STOCK icin yuzde (0-100)
+  floorX     Int           @default(0) // STOCK: base available < floorX ise 0 push
+  note       String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@unique([channel, iwasku])
+  @@index([channel])
+  @@map("stock_push_config")
+}
+
+model StockPushSettings {
+  channel     String   @id @default("AMAZON_US")
+  standardQty Int      @default(11)
+  enabled     Boolean  @default(false)
+  dryRun      Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
+
+  @@map("stock_push_settings")
+}
+
+// Son push edilen adet — diff icin (sadece degisen SKU adaptore gider).
+model StockPushState {
+  channel        String
+  marketplaceSku String
+  iwasku         String
+  lastQty        Int
+  lastPushedAt   DateTime @default(now())
+
+  @@id([channel, marketplaceSku])
+  @@index([channel, iwasku])
+  @@map("stock_push_state")
+}

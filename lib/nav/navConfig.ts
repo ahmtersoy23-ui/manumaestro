@@ -12,7 +12,7 @@
  */
 
 import type { LucideIcon } from 'lucide-react';
-import { Factory, Boxes, Ship, ShoppingCart, Home, CalendarRange, Printer, Warehouse, Shield, FileText } from 'lucide-react';
+import { Factory, Boxes, Ship, ShoppingCart, Home, CalendarRange, Printer, Warehouse, Shield, FileText, Upload } from 'lucide-react';
 
 export interface NavLink {
   label: string;
@@ -52,6 +52,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Stok Haritası', href: '/dashboard/stok-haritasi', icon: Boxes, desc: 'Tüm depolar — iwasku bazlı stok haritası' },
       { label: 'Depolar', href: '/dashboard/depolar', icon: Warehouse, desc: 'WMS — raf, sayım, çıkış, hareketler' },
       { label: 'Etiket', href: '/dashboard/labels', icon: Printer, desc: 'Ürün / koli QR etiketleri' },
+      { label: 'Stok Push', href: '/dashboard/stok/stok-push', icon: Upload, desc: 'Pazar yeri listing stoğu (Amazon US FBM…)' },
     ],
   },
   { key: 'sevkiyat', label: 'Sevkiyat', icon: Ship, href: '/dashboard/shipments' },
