@@ -230,7 +230,7 @@ export default function StokPushPage() {
     });
 
   return (
-    <div className="space-y-4 p-1">
+    <div className="p-4 md:p-6 max-w-[1700px] mx-auto space-y-4">
       <PageHeader icon={<Upload className="w-6 h-6" />} title="Stok Push" subtitle="Pazar yeri listing'lerine otomatik available gönderimi" />
 
       <div className="flex gap-1 border-b border-gray-200">
