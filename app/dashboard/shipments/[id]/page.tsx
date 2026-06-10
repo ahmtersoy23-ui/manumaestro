@@ -489,15 +489,29 @@ export default function ShipmentDetailPage() {
       const data = await res.json();
       if (data.success) {
         await fetchShipment();
-        // Koli toplamlarından depo çıkış modalını aç (talep değil, gerçek koli miktarları)
-        const boxRes = await fetch(`/api/shipments/${id}/boxes`);
+        // Depo çıkış modalı: gerçek fiziksel miktarlar — KOLİLER (ShipmentBox) +
+        // Fairfield Toplu Gönderim palet satırları (ShipmentContainer) BİRLİKTE.
+        // Modal iwasku bazında topluyor; warehouse-exit Ankara'dan hepsini düşer.
+        const [boxRes, contRes] = await Promise.all([
+          fetch(`/api/shipments/${id}/boxes`),
+          fetch(`/api/shipments/${id}/containers`),
+        ]);
         const boxData = await boxRes.json();
-        if (boxData.success && boxData.data.length > 0) {
-          const boxItems = (boxData.data as ShipmentBox[])
-            .filter(b => b.iwasku)
-            .map(b => ({ iwasku: b.iwasku!, productName: b.productName || b.iwasku!, quantity: b.quantity }));
-          openExitModal(boxItems);
+        const contData = await contRes.json();
+        const exitItems: { iwasku: string; productName: string; quantity: number }[] = [];
+        if (boxData.success) {
+          for (const b of boxData.data as ShipmentBox[]) {
+            if (b.iwasku) exitItems.push({ iwasku: b.iwasku, productName: b.productName || b.iwasku, quantity: b.quantity });
+          }
         }
+        if (contData.success && contData.data?.containers) {
+          for (const c of contData.data.containers as { lines: { iwasku: string; name: string | null; quantity: number }[] }[]) {
+            for (const l of c.lines) {
+              exitItems.push({ iwasku: l.iwasku, productName: l.name || l.iwasku, quantity: l.quantity });
+            }
+          }
+        }
+        if (exitItems.length > 0) openExitModal(exitItems);
       } else notify.error(data.error);
     } catch { notify.error('Kapama hatası'); } finally { setSending(false); }
   };
