@@ -81,6 +81,7 @@ export const GET = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'read'
   // FNSKU lookup: iwasku + marketplace code → country_code → sku_master.fnsku
   const mktCodeToCountry: Record<string, string> = {
     AMZN_US: 'US', AMZN_CA: 'CA', AMZN_UK: 'UK', AMZN_AU: 'AU', AMZN_EU: 'FR',
+    CUSTOM_01: 'CITI', // Amazon Citi (ayrı hesap) → sku_master country_code='CITI' FNSKU'su
   };
   const fnskuMap = new Map<string, string>(); // key: "iwasku|countryCode"
   const fnskuLookups: Array<{ iwasku: string; countryCode: string }> = [];
