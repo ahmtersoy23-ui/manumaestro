@@ -73,6 +73,10 @@ async function runMiddleware(request: NextRequest): Promise<NextResponse> {
   if (request.nextUrl.pathname === '/api/siparis/check-cancellations') {
     return NextResponse.next();
   }
+  // Sunucu cron → ManuMaestro: stok push (server-to-server, x-internal-api-key).
+  if (request.nextUrl.pathname === '/api/stock-push/cron') {
+    return NextResponse.next();
+  }
 
   logger.debug('Request:', request.nextUrl.pathname);
 
