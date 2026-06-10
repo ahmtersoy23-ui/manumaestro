@@ -98,7 +98,17 @@ export default function Dashboard2MonthPage() {
   const params = useParams<{ month: string }>();
   const month = params?.month ?? '';
   const router = useRouter();
-  const [viewMode, setViewMode] = useState<'quantity' | 'desi'>('desi');
+  // Adet + Desi HER ZAMAN birlikte gösterilir (Adet/Desi toggle kaldırıldı, 2026-06-11).
+  // Birincil = desi (büyük), ikincil = adet. Tek satır ikili: "<desi> desi · <qty> adet".
+  const trNum = (n: number) => Math.round(n).toLocaleString('tr-TR');
+  const dualInline = (qty: number, desi: number) => `${trNum(desi)} desi · ${qty.toLocaleString('tr-TR')} adet`;
+  // Sağ-hizalı sade ikili: desi belirgin (renk cls), adet küçük soluk gri altında. Kalabalık yapmaz.
+  const dualStack = (qty: number, desi: number, cls = 'text-slate-900') => (
+    <span className="text-right leading-tight">
+      <span className={`block font-bold ${cls}`}>{trNum(desi)}<span className="font-normal text-[9px] text-slate-400 ml-0.5">desi</span></span>
+      <span className="block text-[10px] text-slate-400">{qty.toLocaleString('tr-TR')} adet</span>
+    </span>
+  );
   const { role } = useAuth();
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -310,16 +320,6 @@ export default function Dashboard2MonthPage() {
               className="px-3 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 flex items-center gap-1">
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Yenile
             </button>
-            <div className="flex items-center gap-1 bg-slate-200 rounded-lg p-1">
-              <button onClick={() => setViewMode('quantity')}
-                className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${
-                  viewMode === 'quantity' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                }`}>Adet</button>
-              <button onClick={() => setViewMode('desi')}
-                className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${
-                  viewMode === 'desi' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                }`}>Desi</button>
-            </div>
           </div>
         </div>
 
@@ -340,22 +340,21 @@ export default function Dashboard2MonthPage() {
                 <>
                   <p className="text-slate-900 text-xs font-bold uppercase tracking-wider mb-2">Net İhtiyaç</p>
                   <p className="text-4xl font-black text-slate-900 tabular-nums">
-                    {viewMode === 'quantity' ? totals.netQty.toLocaleString('tr-TR') : Math.round(totals.netDesi).toLocaleString('tr-TR')}
-                    <span className="text-lg font-normal text-slate-400 ml-1.5">{viewMode === 'quantity' ? 'adet' : 'desi'}</span>
+                    {trNum(totals.netDesi)}<span className="text-lg font-normal text-slate-400 ml-1.5">desi</span>
                   </p>
+                  <p className="text-base font-bold text-slate-500 tabular-nums">{totals.netQty.toLocaleString('tr-TR')} <span className="text-xs font-normal text-slate-400">adet</span></p>
                   <p className="text-xs text-slate-400 mt-2">
-                    Talep {viewMode === 'quantity' ? monthStats.totalQuantity.toLocaleString('tr-TR') : Math.round(monthStats.totalDesi).toLocaleString('tr-TR')} · Depo {viewMode === 'quantity' ? totals.coveredQty.toLocaleString('tr-TR') : Math.round(totals.coveredDesi).toLocaleString('tr-TR')}
+                    Talep {dualInline(monthStats.totalQuantity, monthStats.totalDesi)} · Depo {dualInline(totals.coveredQty, totals.coveredDesi)}
                   </p>
                 </>
               );
             })() : (
               <>
-                <p className="text-slate-900 text-xs font-bold uppercase tracking-wider mb-2">Toplam {viewMode === 'quantity' ? 'Miktar' : 'Desi'}</p>
+                <p className="text-slate-900 text-xs font-bold uppercase tracking-wider mb-2">Toplam</p>
                 <p className="text-4xl font-black text-slate-900 tabular-nums">
-                  {viewMode === 'quantity'
-                    ? monthStats.totalQuantity.toLocaleString('tr-TR')
-                    : Math.round(monthStats.totalDesi).toLocaleString('tr-TR')}
+                  {trNum(monthStats.totalDesi)}<span className="text-lg font-normal text-slate-400 ml-1.5">desi</span>
                 </p>
+                <p className="text-base font-bold text-slate-500 tabular-nums">{monthStats.totalQuantity.toLocaleString('tr-TR')} <span className="text-xs font-normal text-slate-400">adet</span></p>
                 <p className="text-[10px] text-slate-400 mt-2">Depo stoğu için &quot;Depo Snapshot Al&quot;</p>
               </>
             )}
@@ -382,15 +381,15 @@ export default function Dashboard2MonthPage() {
               }, { coveredQty: 0, coveredDesi: 0, netQty: 0, netDesi: 0 });
               const displayQty = hasStock ? groupStock.netQty : g.totalQty;
               const displayDesi = hasStock ? Math.round(groupStock.netDesi) : Math.round(g.totalDesi);
-              const displayValue = viewMode === 'quantity' ? displayQty : displayDesi;
               return (
                 <div key={g.key} className={`${c.bg} ${c.border} border rounded-xl p-4 text-center`}>
                   <p className={`text-[11px] font-bold uppercase tracking-wider mb-1.5 ${c.text}`}>{g.label}</p>
-                  <p className={`text-2xl font-black tabular-nums ${c.text}`}>{displayValue.toLocaleString('tr-TR')}</p>
-                  <p className={`text-[11px] ${c.sub} mt-0.5`}>{hasStock ? 'net ihtiyaç' : (viewMode === 'quantity' ? 'adet' : 'desi')}</p>
+                  <p className={`text-2xl font-black tabular-nums ${c.text}`}>{displayDesi.toLocaleString('tr-TR')} <span className="text-xs font-normal">desi</span></p>
+                  <p className={`text-sm font-bold tabular-nums ${c.text}`}>{displayQty.toLocaleString('tr-TR')} <span className="text-[10px] font-normal">adet</span></p>
+                  <p className={`text-[11px] ${c.sub} mt-0.5`}>{hasStock ? 'net ihtiyaç' : 'talep'}</p>
                   {hasStock && (
                     <p className={`text-[10px] ${c.sub} mt-2 pt-2 border-t ${c.border}`}>
-                      Talep {viewMode === 'quantity' ? g.totalQty.toLocaleString('tr-TR') : Math.round(g.totalDesi).toLocaleString('tr-TR')} · Depo {viewMode === 'quantity' ? groupStock.coveredQty.toLocaleString('tr-TR') : Math.round(groupStock.coveredDesi).toLocaleString('tr-TR')}
+                      Talep {dualInline(g.totalQty, g.totalDesi)} · Depo {dualInline(groupStock.coveredQty, groupStock.coveredDesi)}
                     </p>
                   )}
                 </div>
@@ -429,31 +428,31 @@ export default function Dashboard2MonthPage() {
                   </div>
                   {/* Grup stats bandı (Dashboard 1 ile aynı): Talep/Stok/Net/Üretilen/Kalan */}
                   {hasStock && (() => {
-                    const suffix = viewMode === 'desi' ? ' desi' : '';
-                    const sum = group.cats.reduce((a: { talep: number; stok: number; net: number; uretilen: number; kalan: number }, cat) => {
+                    const sum = group.cats.reduce((a, cat) => {
                       const cs = categoryStockMap.get(cat.productCategory);
-                      const talep = viewMode === 'quantity' ? cat.totalQuantity : cat.totalDesi;
-                      a.talep += talep;
+                      a.talepQty += cat.totalQuantity; a.talepDesi += cat.totalDesi;
                       if (cs) {
-                        a.stok += viewMode === 'quantity' ? cs.coveredQty : cs.coveredDesi;
-                        a.net += viewMode === 'quantity' ? cs.netQty : cs.netDesi;
-                        a.uretilen += viewMode === 'quantity' ? cs.producedQty : cs.producedDesi;
-                        a.kalan += viewMode === 'quantity' ? cs.kalanQty : cs.kalanDesi;
+                        a.stokQty += cs.coveredQty; a.stokDesi += cs.coveredDesi;
+                        a.netQty += cs.netQty; a.netDesi += cs.netDesi;
+                        a.uretilenQty += cs.producedQty; a.uretilenDesi += cs.producedDesi;
+                        a.kalanQty += cs.kalanQty; a.kalanDesi += cs.kalanDesi;
                       } else {
-                        a.net += talep;
-                        a.uretilen += viewMode === 'quantity' ? cat.totalProduced : cat.producedDesi;
+                        a.netQty += cat.totalQuantity; a.netDesi += cat.totalDesi;
+                        a.uretilenQty += cat.totalProduced; a.uretilenDesi += cat.producedDesi;
                       }
                       return a;
-                    }, { talep: 0, stok: 0, net: 0, uretilen: 0, kalan: 0 });
-                    const fmt = (n: number) => Math.round(n).toLocaleString('tr-TR');
-                    const kalanZero = Math.round(sum.kalan) === 0;
+                    }, { talepQty: 0, talepDesi: 0, stokQty: 0, stokDesi: 0, netQty: 0, netDesi: 0, uretilenQty: 0, uretilenDesi: 0, kalanQty: 0, kalanDesi: 0 });
+                    const cell = (qty: number, desi: number) => (
+                      <><p className="font-bold">{trNum(desi)} <span className="font-normal text-[10px] opacity-70">desi</span></p><p className="text-[10px] opacity-70">{qty.toLocaleString('tr-TR')} adet</p></>
+                    );
+                    const kalanZero = Math.round(sum.kalanDesi) === 0 && Math.round(sum.kalanQty) === 0;
                     return (
                       <div className="grid grid-cols-5 gap-2 mb-3 text-center text-xs">
-                        <div className="bg-slate-50 rounded-lg py-2"><p className="text-slate-500">Talep</p><p className="font-bold text-slate-900">{fmt(sum.talep)}{suffix}</p></div>
-                        <div className="bg-emerald-50 rounded-lg py-2"><p className="text-emerald-600">Stok</p><p className="font-bold text-emerald-700">{fmt(sum.stok)}{suffix}</p></div>
-                        <div className="bg-blue-50 rounded-lg py-2"><p className="text-blue-600">Net İhtiyaç</p><p className="font-bold text-blue-700">{fmt(sum.net)}{suffix}</p></div>
-                        <div className="bg-slate-50 rounded-lg py-2"><p className="text-slate-500">Üretilen</p><p className="font-bold text-slate-900">{fmt(sum.uretilen)}{suffix}</p></div>
-                        <div className={`${kalanZero ? 'bg-green-50' : 'bg-red-50'} rounded-lg py-2`}><p className={kalanZero ? 'text-green-600' : 'text-red-500'}>Kalan</p><p className={`font-bold ${kalanZero ? 'text-green-700' : 'text-red-600'}`}>{kalanZero ? '✓' : `${fmt(sum.kalan)}${suffix}`}</p></div>
+                        <div className="bg-slate-50 rounded-lg py-2 text-slate-900"><p className="text-slate-500">Talep</p>{cell(sum.talepQty, sum.talepDesi)}</div>
+                        <div className="bg-emerald-50 rounded-lg py-2 text-emerald-700"><p className="text-emerald-600">Stok</p>{cell(sum.stokQty, sum.stokDesi)}</div>
+                        <div className="bg-blue-50 rounded-lg py-2 text-blue-700"><p className="text-blue-600">Net İhtiyaç</p>{cell(sum.netQty, sum.netDesi)}</div>
+                        <div className="bg-slate-50 rounded-lg py-2 text-slate-900"><p className="text-slate-500">Üretilen</p>{cell(sum.uretilenQty, sum.uretilenDesi)}</div>
+                        <div className={`${kalanZero ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'} rounded-lg py-2`}><p className={kalanZero ? 'text-green-600' : 'text-red-500'}>Kalan</p>{kalanZero ? <p className="font-bold">✓</p> : cell(sum.kalanQty, sum.kalanDesi)}</div>
                       </div>
                     );
                   })()}
@@ -461,13 +460,14 @@ export default function Dashboard2MonthPage() {
                     {group.cats.map(cat => {
                       const cs = categoryStockMap.get(cat.productCategory);
                       const showStock = !!cs;
-                      const talepVal = viewMode === 'quantity' ? cat.totalQuantity : Math.round(cat.totalDesi);
-                      const stokVal = cs ? (viewMode === 'quantity' ? cs.coveredQty : Math.round(cs.coveredDesi)) : 0;
-                      const netVal = cs ? (viewMode === 'quantity' ? cs.netQty : Math.round(cs.netDesi)) : talepVal;
-                      const uretilenVal = cs ? (viewMode === 'quantity' ? cs.producedQty : Math.round(cs.producedDesi)) : (viewMode === 'quantity' ? cat.totalProduced : Math.round(cat.producedDesi));
-                      const kalanVal = cs ? (viewMode === 'quantity' ? cs.kalanQty : Math.round(cs.kalanDesi)) : 0;
-                      const progressBase = showStock ? netVal : cat.totalQuantity;
-                      const progressPct = progressBase > 0 ? Math.round((uretilenVal / Math.max(1, progressBase)) * 100) : 0;
+                      const talepQty = cat.totalQuantity, talepDesi = cat.totalDesi;
+                      const stokQty = cs ? cs.coveredQty : 0, stokDesi = cs ? cs.coveredDesi : 0;
+                      const netQty = cs ? cs.netQty : talepQty, netDesi = cs ? cs.netDesi : talepDesi;
+                      const uretilenQty = cs ? cs.producedQty : cat.totalProduced, uretilenDesi = cs ? cs.producedDesi : cat.producedDesi;
+                      const kalanQty = cs ? cs.kalanQty : 0, kalanDesi = cs ? cs.kalanDesi : 0;
+                      const kalanZero = kalanQty === 0 && Math.round(kalanDesi) === 0;
+                      const progressBase = showStock ? netDesi : cat.totalDesi;
+                      const progressPct = progressBase > 0 ? Math.round((uretilenDesi / Math.max(1, progressBase)) * 100) : 0;
                       return (
                         <Link key={cat.productCategory}
                           href={`/dashboard/manufacturer/${encodeURIComponent(cat.productCategory)}?month=${month}`}
@@ -480,38 +480,38 @@ export default function Dashboard2MonthPage() {
                           </div>
                           <div className="space-y-1.5 text-xs">
                             <div className="flex justify-between"><span className="text-slate-500">Ürün</span><span className="font-bold text-slate-900">{cat.requestCount}</span></div>
-                            <div className="flex justify-between">
-                              <span className="text-slate-500">Talep</span>
-                              <span className="font-bold text-slate-700">{talepVal.toLocaleString('tr-TR')}</span>
+                            <div className="flex justify-between items-start gap-2">
+                              <span className="text-slate-500 pt-0.5">Talep</span>
+                              {dualStack(talepQty, talepDesi, 'text-slate-700')}
                             </div>
                             {showStock && (
                               <>
-                                <div className="flex justify-between">
-                                  <span className="text-slate-500">Depo</span>
-                                  <span className="font-bold text-emerald-600">{stokVal.toLocaleString('tr-TR')}</span>
+                                <div className="flex justify-between items-start gap-2">
+                                  <span className="text-slate-500 pt-0.5">Depo</span>
+                                  {dualStack(stokQty, stokDesi, 'text-emerald-600')}
                                 </div>
-                                <div className="flex justify-between">
-                                  <span className="text-slate-500">Net İhtiyaç</span>
-                                  <span className={`font-bold ${c.value}`}>{netVal.toLocaleString('tr-TR')}</span>
+                                <div className="flex justify-between items-start gap-2">
+                                  <span className="text-slate-500 pt-0.5">Net İhtiyaç</span>
+                                  {dualStack(netQty, netDesi, c.value)}
                                 </div>
                               </>
                             )}
                             {!showStock && (
-                              <div className="flex justify-between">
-                                <span className="text-slate-500">Talep Edilen</span>
-                                <span className={`font-bold ${c.value}`}>{talepVal.toLocaleString('tr-TR')}</span>
+                              <div className="flex justify-between items-start gap-2">
+                                <span className="text-slate-500 pt-0.5">Talep Edilen</span>
+                                {dualStack(talepQty, talepDesi, c.value)}
                               </div>
                             )}
-                            <div className="flex justify-between">
-                              <span className="text-slate-500">Üretilen</span>
-                              <span className="font-bold text-slate-900">{uretilenVal.toLocaleString('tr-TR')}</span>
+                            <div className="flex justify-between items-start gap-2">
+                              <span className="text-slate-500 pt-0.5">Üretilen</span>
+                              {dualStack(uretilenQty, uretilenDesi, 'text-slate-900')}
                             </div>
                             {showStock && (
-                              <div className="flex justify-between">
-                                <span className="text-slate-500">Kalan</span>
-                                <span className={`font-bold ${kalanVal === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                  {kalanVal === 0 ? '✓' : kalanVal.toLocaleString('tr-TR')}
-                                </span>
+                              <div className="flex justify-between items-start gap-2">
+                                <span className="text-slate-500 pt-0.5">Kalan</span>
+                                {kalanZero
+                                  ? <span className="font-bold text-emerald-600">✓</span>
+                                  : dualStack(kalanQty, kalanDesi, 'text-rose-600')}
                               </div>
                             )}
                             {progressBase > 0 && (
@@ -552,7 +552,6 @@ export default function Dashboard2MonthPage() {
               .map(code => allMarketplaces.find(m => m.code === code))
               .filter(Boolean) as MarketplaceMeta[];
             const tot = regionTotals[region];
-            const displayValue = viewMode === 'quantity' ? tot.qty : Math.round(tot.desi);
             return (
               <div key={region}>
                 {/* Bölge başlığı */}
@@ -560,7 +559,7 @@ export default function Dashboard2MonthPage() {
                   <div className="flex items-baseline gap-3">
                     <h3 className="text-base font-bold text-slate-800">{REGION_LABELS[region]}</h3>
                     <span className="text-xs text-slate-500">
-                      {tot.requests} talep · {displayValue.toLocaleString('tr-TR')} {viewMode === 'quantity' ? 'adet' : 'desi'}
+                      {tot.requests} talep · {dualInline(tot.qty, tot.desi)}
                     </span>
                   </div>
                   <button
@@ -584,22 +583,16 @@ export default function Dashboard2MonthPage() {
                         const style = SHIPMENT_DESTINATION_STYLES[s.destination]
                           ?? { bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-200' };
                         const label = SHIPMENT_DESTINATION_LABELS[s.destination] ?? s.destination;
-                        const display = viewMode === 'quantity' ? s.totalQuantity : Math.round(s.totalDesi);
-                        const completedDisplay = viewMode === 'quantity' ? s.completedQty : Math.round(s.completedDesi);
-                        const pct = display > 0 ? Math.round((completedDisplay / display) * 100) : 0;
+                        const pct = s.totalDesi > 0 ? Math.round((s.completedDesi / s.totalDesi) * 100) : 0;
                         return (
                           <div key={s.destination}
                             className={`rounded-lg border px-3 py-2 ${style.bg} ${style.border}`}>
                             <div className={`text-[10px] font-semibold uppercase ${style.text}`}>{label}</div>
-                            <div className="mt-1 flex items-baseline gap-1.5">
-                              <span className={`text-lg font-bold ${style.text}`}>{display.toLocaleString('tr-TR')}</span>
-                              <span className="text-[9px] text-slate-500">
-                                {viewMode === 'quantity' ? 'adet' : 'desi'} · {s.requestCount} talep
-                              </span>
+                            <div className="mt-1 leading-tight">
+                              <span className={`text-lg font-bold ${style.text}`}>{trNum(s.totalDesi)}<span className="text-[9px] font-normal text-slate-400 ml-0.5">desi</span></span>
                             </div>
-                            <div className="text-[9px] text-slate-500 mt-0.5">
-                              Tamamlanan: %{pct}
-                            </div>
+                            <div className="text-[10px] text-slate-500">{s.totalQuantity.toLocaleString('tr-TR')} adet · {s.requestCount} talep</div>
+                            <div className="text-[9px] text-slate-500 mt-0.5">Tamamlanan: %{pct}</div>
                           </div>
                         );
                       })}
@@ -618,12 +611,8 @@ export default function Dashboard2MonthPage() {
                     const totQty = allMps.reduce((s, mp) => s + (getMpSummary(mp.id)?.totalQuantity ?? 0), 0);
                     const totDesi = allMps.reduce((s, mp) => s + (getMpSummary(mp.id)?.totalDesi ?? 0), 0);
                     const totReq = allMps.reduce((s, mp) => s + (getMpSummary(mp.id)?.requestCount ?? 0), 0);
-                    const completedQty = allMps.reduce((s, mp) => s + (getMpSummary(mp.id)?.completedQty ?? 0), 0);
                     const completedDesi = allMps.reduce((s, mp) => s + (getMpSummary(mp.id)?.completedDesi ?? 0), 0);
-                    const completionPct = viewMode === 'quantity'
-                      ? (totQty > 0 ? Math.round((completedQty / totQty) * 100) : 0)
-                      : (totDesi > 0 ? Math.round((completedDesi / totDesi) * 100) : 0);
-                    const cardDisplay = viewMode === 'quantity' ? totQty : Math.round(totDesi);
+                    const completionPct = totDesi > 0 ? Math.round((completedDesi / totDesi) * 100) : 0;
                     const channelCount = detailMps.length + 1; // dest + detay
 
                     return (
@@ -652,8 +641,9 @@ export default function Dashboard2MonthPage() {
                             <p className={`text-lg font-bold ${totReq > 0 ? 'text-slate-900' : 'text-slate-400'}`}>{totReq}</p>
                           </div>
                           <div>
-                            <p className="text-slate-500 text-[10px] mb-0.5">{viewMode === 'quantity' ? 'Adet' : 'Desi'}</p>
-                            <p className={`text-lg font-bold ${cardDisplay > 0 ? 'text-purple-600' : 'text-slate-400'}`}>{cardDisplay.toLocaleString('tr-TR')}</p>
+                            <p className="text-slate-500 text-[10px] mb-0.5">Miktar</p>
+                            <p className={`text-base font-bold leading-tight ${totDesi > 0 ? 'text-purple-600' : 'text-slate-400'}`}>{trNum(totDesi)}<span className="text-[9px] font-normal text-slate-400 ml-0.5">desi</span></p>
+                            <p className={`text-xs font-semibold ${totQty > 0 ? 'text-purple-500' : 'text-slate-400'}`}>{totQty.toLocaleString('tr-TR')} adet</p>
                           </div>
                           <div>
                             <p className="text-slate-500 text-[10px] mb-0.5">Tamamlandı</p>

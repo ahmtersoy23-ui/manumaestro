@@ -96,7 +96,16 @@ export default function MonthDetailPage() {
   const [marketplaces, setMarketplaces] = useState<MarketplaceSummary[]>([]);
   const [allMarketplaces, setAllMarketplaces] = useState<Marketplace[]>([]);
   const [monthStats, setMonthStats] = useState({ totalRequests: 0, totalQuantity: 0, totalDesi: 0, itemsWithoutSize: 0 });
-  const [viewMode, setViewMode] = useState<'quantity' | 'desi'>('quantity');
+  // Adet + Desi HER ZAMAN birlikte gösterilir (Adet/Desi toggle kaldırıldı, 2026-06-11).
+  // Birincil = desi (belirgin), ikincil = adet (küçük, soluk gri). Kalabalık yapmaz.
+  const trNum = (n: number) => Math.round(n).toLocaleString('tr-TR');
+  const dualInline = (qty: number, desi: number) => `${trNum(desi)} desi · ${qty.toLocaleString('tr-TR')} adet`;
+  const dualStack = (qty: number, desi: number, cls = 'text-gray-900') => (
+    <span className="text-right leading-tight">
+      <span className={`block font-bold ${cls}`}>{trNum(desi)}<span className="font-normal text-[9px] text-gray-400 ml-0.5">desi</span></span>
+      <span className="block text-[10px] text-gray-400">{qty.toLocaleString('tr-TR')} adet</span>
+    </span>
+  );
   const [iwaskuSummary, setIwaskuSummary] = useState<{iwasku: string; category: string; totalQty: number; desi: number}[]>([]);
   const [showMissingItems, setShowMissingItems] = useState(false);
   const [missingDesiItems, setMissingDesiItems] = useState<MissingDesiItem[]>([]);
@@ -336,28 +345,6 @@ export default function MonthDetailPage() {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-1 bg-slate-200 rounded-lg p-1">
-            <button
-              onClick={() => setViewMode('quantity')}
-              className={`px-5 py-2 rounded-md text-sm font-semibold transition-all ${
-                viewMode === 'quantity'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              Adet
-            </button>
-            <button
-              onClick={() => setViewMode('desi')}
-              className={`px-5 py-2 rounded-md text-sm font-semibold transition-all ${
-                viewMode === 'desi'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              Desi
-            </button>
-          </div>
         </div>
 
         {monthStats.itemsWithoutSize > 0 && (
@@ -397,19 +384,20 @@ export default function MonthDetailPage() {
                   <>
                     <p className="text-slate-900 text-xs font-bold uppercase tracking-wider mb-2">Net İhtiyaç</p>
                     <p className="text-4xl font-black text-slate-900 tabular-nums">
-                      {viewMode === 'quantity' ? totalStock.netQty.toLocaleString('tr-TR') : Math.round(totalStock.netDesi).toLocaleString('tr-TR')}
-                      <span className="text-lg font-normal text-slate-400 ml-1.5">{viewMode === 'quantity' ? 'adet' : 'desi'}</span>
+                      {trNum(totalStock.netDesi)}<span className="text-lg font-normal text-slate-400 ml-1.5">desi</span>
                     </p>
+                    <p className="text-base font-bold text-slate-500 tabular-nums">{totalStock.netQty.toLocaleString('tr-TR')} <span className="text-xs font-normal text-slate-400">adet</span></p>
                     <p className="text-xs text-slate-400 mt-2">
-                      Talep {viewMode === 'quantity' ? monthStats.totalQuantity.toLocaleString('tr-TR') : Math.round(monthStats.totalDesi).toLocaleString('tr-TR')} · Depo {viewMode === 'quantity' ? totalStock.coveredQty.toLocaleString('tr-TR') : Math.round(totalStock.coveredDesi).toLocaleString('tr-TR')}
+                      Talep {dualInline(monthStats.totalQuantity, monthStats.totalDesi)} · Depo {dualInline(totalStock.coveredQty, totalStock.coveredDesi)}
                     </p>
                   </>
                 ) : (
                   <>
-                    <p className="text-slate-900 text-xs font-bold uppercase tracking-wider mb-2">Toplam {viewMode === 'quantity' ? 'Miktar' : 'Desi'}</p>
+                    <p className="text-slate-900 text-xs font-bold uppercase tracking-wider mb-2">Toplam</p>
                     <p className="text-4xl font-black text-slate-900 tabular-nums">
-                      {viewMode === 'quantity' ? monthStats.totalQuantity.toLocaleString('tr-TR') : Math.round(monthStats.totalDesi).toLocaleString('tr-TR')}
+                      {trNum(monthStats.totalDesi)}<span className="text-lg font-normal text-slate-400 ml-1.5">desi</span>
                     </p>
+                    <p className="text-base font-bold text-slate-500 tabular-nums">{monthStats.totalQuantity.toLocaleString('tr-TR')} <span className="text-xs font-normal text-slate-400">adet</span></p>
                   </>
                 )}
               </div>
@@ -442,13 +430,12 @@ export default function MonthDetailPage() {
               return (
                 <div key={group.key} className={`${gc.bg} ${gc.border} border rounded-xl p-4 text-center`}>
                   <p className={`text-[11px] font-bold uppercase tracking-wider mb-1.5 ${gc.text}`}>{group.label}</p>
-                  <p className={`text-2xl font-black tabular-nums ${gc.text}`}>
-                    {viewMode === 'quantity' ? displayQty.toLocaleString('tr-TR') : displayDesi.toLocaleString('tr-TR')}
-                  </p>
-                  <p className={`text-[11px] ${gc.sub} mt-0.5`}>{hasStock ? 'net ihtiyaç' : (viewMode === 'quantity' ? 'adet' : 'desi')}</p>
+                  <p className={`text-2xl font-black tabular-nums ${gc.text}`}>{displayDesi.toLocaleString('tr-TR')} <span className="text-xs font-normal">desi</span></p>
+                  <p className={`text-sm font-bold tabular-nums ${gc.text}`}>{displayQty.toLocaleString('tr-TR')} <span className="text-[10px] font-normal">adet</span></p>
+                  <p className={`text-[11px] ${gc.sub} mt-0.5`}>{hasStock ? 'net ihtiyaç' : 'talep'}</p>
                   {hasStock && (
                     <p className={`text-[10px] ${gc.sub} mt-2 pt-2 border-t ${gc.border}`}>
-                      Talep {viewMode === 'quantity' ? totalQty.toLocaleString('tr-TR') : Math.round(totalDesi).toLocaleString('tr-TR')} · Depo {viewMode === 'quantity' ? groupStock.coveredQty.toLocaleString('tr-TR') : Math.round(groupStock.coveredDesi).toLocaleString('tr-TR')}
+                      Talep {dualInline(totalQty, totalDesi)} · Depo {dualInline(groupStock.coveredQty, groupStock.coveredDesi)}
                     </p>
                   )}
                 </div>
@@ -570,31 +557,31 @@ export default function MonthDetailPage() {
                   {/* Group summary */}
                   {(() => {
                     const hasStock = categoryStockMap.size > 0;
-                    const gTalep = groupCats.reduce((s, c) => s + (viewMode === 'quantity' ? c.totalQuantity : c.totalDesi), 0);
-                    const gStok = groupCats.reduce((s, c) => {
+                    const sum = groupCats.reduce((a, c) => {
                       const cs = categoryStockMap.get(c.productCategory);
-                      return s + (cs ? (viewMode === 'quantity' ? cs.coveredQty : cs.coveredDesi) : 0);
-                    }, 0);
-                    const gNet = groupCats.reduce((s, c) => {
-                      const cs = categoryStockMap.get(c.productCategory);
-                      return s + (cs ? (viewMode === 'quantity' ? cs.netQty : cs.netDesi) : (viewMode === 'quantity' ? c.totalQuantity : c.totalDesi));
-                    }, 0);
-                    const gUretilen = groupCats.reduce((s, c) => {
-                      const cs = categoryStockMap.get(c.productCategory);
-                      return s + (cs ? (viewMode === 'quantity' ? cs.producedQty : cs.producedDesi) : (viewMode === 'quantity' ? c.totalProduced : c.producedDesi));
-                    }, 0);
-                    const gKalan = groupCats.reduce((s, c) => {
-                      const cs = categoryStockMap.get(c.productCategory);
-                      return s + (cs ? (viewMode === 'quantity' ? cs.kalanQty : cs.kalanDesi) : 0);
-                    }, 0);
-                    const suffix = viewMode === 'quantity' ? '' : ' desi';
+                      a.talepQty += c.totalQuantity; a.talepDesi += c.totalDesi;
+                      if (cs) {
+                        a.stokQty += cs.coveredQty; a.stokDesi += cs.coveredDesi;
+                        a.netQty += cs.netQty; a.netDesi += cs.netDesi;
+                        a.uretilenQty += cs.producedQty; a.uretilenDesi += cs.producedDesi;
+                        a.kalanQty += cs.kalanQty; a.kalanDesi += cs.kalanDesi;
+                      } else {
+                        a.netQty += c.totalQuantity; a.netDesi += c.totalDesi;
+                        a.uretilenQty += c.totalProduced; a.uretilenDesi += c.producedDesi;
+                      }
+                      return a;
+                    }, { talepQty: 0, talepDesi: 0, stokQty: 0, stokDesi: 0, netQty: 0, netDesi: 0, uretilenQty: 0, uretilenDesi: 0, kalanQty: 0, kalanDesi: 0 });
+                    const cell = (qty: number, desi: number) => (
+                      <><p className="font-bold">{trNum(desi)} <span className="font-normal text-[10px] opacity-70">desi</span></p><p className="text-[10px] opacity-70">{qty.toLocaleString('tr-TR')} adet</p></>
+                    );
+                    const kalanZero = Math.round(sum.kalanDesi) === 0 && Math.round(sum.kalanQty) === 0;
                     return hasStock ? (
                       <div className="grid grid-cols-5 gap-2 mb-3 text-center text-xs">
-                        <div className="bg-gray-50 rounded-lg py-2"><p className="text-gray-500">Talep</p><p className="font-bold text-gray-900">{Math.round(gTalep).toLocaleString('tr-TR')}{suffix}</p></div>
-                        <div className="bg-emerald-50 rounded-lg py-2"><p className="text-emerald-600">Stok</p><p className="font-bold text-emerald-700">{Math.round(gStok).toLocaleString('tr-TR')}{suffix}</p></div>
-                        <div className="bg-blue-50 rounded-lg py-2"><p className="text-blue-600">Net İhtiyaç</p><p className="font-bold text-blue-700">{Math.round(gNet).toLocaleString('tr-TR')}{suffix}</p></div>
-                        <div className="bg-gray-50 rounded-lg py-2"><p className="text-gray-500">Üretilen</p><p className="font-bold text-gray-900">{Math.round(gUretilen).toLocaleString('tr-TR')}{suffix}</p></div>
-                        <div className={`${Math.round(gKalan) === 0 ? 'bg-green-50' : 'bg-red-50'} rounded-lg py-2`}><p className={Math.round(gKalan) === 0 ? 'text-green-600' : 'text-red-500'}>Kalan</p><p className={`font-bold ${Math.round(gKalan) === 0 ? 'text-green-700' : 'text-red-600'}`}>{Math.round(gKalan) === 0 ? '✓' : Math.round(gKalan).toLocaleString('tr-TR')}{Math.round(gKalan) > 0 ? suffix : ''}</p></div>
+                        <div className="bg-gray-50 rounded-lg py-2 text-gray-900"><p className="text-gray-500">Talep</p>{cell(sum.talepQty, sum.talepDesi)}</div>
+                        <div className="bg-emerald-50 rounded-lg py-2 text-emerald-700"><p className="text-emerald-600">Stok</p>{cell(sum.stokQty, sum.stokDesi)}</div>
+                        <div className="bg-blue-50 rounded-lg py-2 text-blue-700"><p className="text-blue-600">Net İhtiyaç</p>{cell(sum.netQty, sum.netDesi)}</div>
+                        <div className="bg-gray-50 rounded-lg py-2 text-gray-900"><p className="text-gray-500">Üretilen</p>{cell(sum.uretilenQty, sum.uretilenDesi)}</div>
+                        <div className={`${kalanZero ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'} rounded-lg py-2`}><p className={kalanZero ? 'text-green-600' : 'text-red-500'}>Kalan</p>{kalanZero ? <p className="font-bold">✓</p> : cell(sum.kalanQty, sum.kalanDesi)}</div>
                       </div>
                     ) : null;
                   })()}
@@ -623,69 +610,49 @@ export default function MonthDetailPage() {
                             <p className="text-sm font-bold text-gray-900">{category.requestCount}</p>
                           </div>
 
-                          {viewMode === 'desi' && category.itemsWithoutSize > 0 && (
+                          {category.itemsWithoutSize > 0 && (
                             <div className="text-xs text-yellow-600 bg-yellow-50 px-2 py-1 rounded">
                               {category.itemsWithoutSize} üründe desi eksik
                             </div>
                           )}
 
-                          <div className="flex justify-between items-center">
-                            <p className="text-xs text-gray-600">Talep Edilen</p>
-                            <p className={`text-sm font-bold ${colors.value}`}>
-                              {viewMode === 'quantity'
-                                ? `${category.totalQuantity} adet`
-                                : `${Math.round(category.totalDesi)} desi`}
-                            </p>
+                          <div className="flex justify-between items-start">
+                            <p className="text-xs text-gray-600 pt-0.5">Talep Edilen</p>
+                            {dualStack(category.totalQuantity, category.totalDesi, colors.value)}
                           </div>
 
                           {catStock && (
                             <>
-                              <div className="flex justify-between items-center">
-                                <p className="text-xs text-gray-600">Depoda Bulunan</p>
-                                <p className="text-sm font-bold text-emerald-600">
-                                  {viewMode === 'quantity'
-                                    ? `${catStock.coveredQty} adet`
-                                    : `${Math.round(catStock.coveredDesi)} desi`}
-                                </p>
+                              <div className="flex justify-between items-start">
+                                <p className="text-xs text-gray-600 pt-0.5">Depoda Bulunan</p>
+                                {dualStack(catStock.coveredQty, catStock.coveredDesi, 'text-emerald-600')}
                               </div>
-                              <div className="flex justify-between items-center">
-                                <p className="text-xs text-gray-600">Net İhtiyaç</p>
-                                <p className={`text-sm font-bold ${catStock.netQty > 0 ? 'text-blue-700' : 'text-green-600'}`}>
-                                  {viewMode === 'quantity'
-                                    ? (catStock.netQty > 0 ? `${catStock.netQty} adet` : 'Yeterli')
-                                    : (catStock.netDesi > 0 ? `${Math.round(catStock.netDesi)} desi` : 'Yeterli')}
-                                </p>
+                              <div className="flex justify-between items-start">
+                                <p className="text-xs text-gray-600 pt-0.5">Net İhtiyaç</p>
+                                {(catStock.netQty <= 0 && Math.round(catStock.netDesi) <= 0)
+                                  ? <span className="text-sm font-bold text-green-600">Yeterli</span>
+                                  : dualStack(catStock.netQty, catStock.netDesi, 'text-blue-700')}
                               </div>
                             </>
                           )}
 
-                          <div className="flex justify-between items-center">
-                            <p className="text-xs text-gray-600">Üretilen</p>
-                            <p className="text-sm font-bold text-gray-900">
-                              {viewMode === 'quantity'
-                                ? `${Math.round(category.totalProduced)} adet`
-                                : `${Math.round(category.producedDesi)} desi`}
-                            </p>
+                          <div className="flex justify-between items-start">
+                            <p className="text-xs text-gray-600 pt-0.5">Üretilen</p>
+                            {dualStack(category.totalProduced, category.producedDesi, 'text-gray-900')}
                           </div>
 
-                          {catStock && (() => {
-                            return (
-                              <div className="flex justify-between items-center">
-                                <p className="text-xs text-gray-600">Kalan</p>
-                                <p className={`text-sm font-bold ${(viewMode === 'quantity' ? catStock.kalanQty : catStock.kalanDesi) === 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                  {viewMode === 'quantity'
-                                    ? (catStock.kalanQty === 0 ? '✓' : `${catStock.kalanQty} adet`)
-                                    : (catStock.kalanDesi === 0 ? '✓' : `${Math.round(catStock.kalanDesi)} desi`)}
-                                </p>
-                              </div>
-                            );
-                          })()}
+                          {catStock && (
+                            <div className="flex justify-between items-start">
+                              <p className="text-xs text-gray-600 pt-0.5">Kalan</p>
+                              {(catStock.kalanQty === 0 && Math.round(catStock.kalanDesi) === 0)
+                                ? <span className="text-sm font-bold text-green-600">✓</span>
+                                : dualStack(catStock.kalanQty, catStock.kalanDesi, 'text-red-600')}
+                            </div>
+                          )}
 
                           {(() => {
                             // Progress = per-SKU fulfilled / net ihtiyaç (fazla üretim telafi etmez)
-                            const pctQty = catStock && catStock.netQty > 0 ? Math.round((catStock.producedQty / catStock.netQty) * 100) : (category.totalProduced > 0 ? 100 : 0);
-                            const pctDesi = catStock && catStock.netDesi > 0 ? Math.round((catStock.producedDesi / catStock.netDesi) * 100) : (category.producedDesi > 0 ? 100 : 0);
-                            const pct = viewMode === 'quantity' ? pctQty : pctDesi;
+                            const pct = catStock && catStock.netDesi > 0 ? Math.round((catStock.producedDesi / catStock.netDesi) * 100) : (category.producedDesi > 0 ? 100 : 0);
                             const barPct = Math.min(pct, 100);
                             return (
                               <div>
@@ -738,10 +705,7 @@ export default function MonthDetailPage() {
             const completedCount = summary?.completedCount || 0;
             const completedQty = summary?.completedQty || 0;
             const completedDesi = summary?.completedDesi || 0;
-            const displayValue = viewMode === 'quantity' ? totalQuantity : Math.round(totalDesi);
-            const completionPct = viewMode === 'quantity'
-              ? (totalQuantity > 0 ? Math.round((completedQty / totalQuantity) * 100) : 0)
-              : (totalDesi > 0 ? Math.round((completedDesi / totalDesi) * 100) : 0);
+            const completionPct = totalDesi > 0 ? Math.round((completedDesi / totalDesi) * 100) : 0;
 
             // Get slug from code
             const slug = marketplaceSlugMap[mp.code] || mp.code.toLowerCase().replace('_', '-');
@@ -783,10 +747,9 @@ export default function MonthDetailPage() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-600 mb-1">{viewMode === 'quantity' ? 'Adet' : 'Desi'}</p>
-                    <p className={`text-xl font-bold ${displayValue > 0 ? 'text-purple-600' : 'text-gray-400'}`}>
-                      {displayValue}
-                    </p>
+                    <p className="text-xs text-gray-600 mb-1">Miktar</p>
+                    <p className={`text-base font-bold leading-tight ${totalDesi > 0 ? 'text-purple-600' : 'text-gray-400'}`}>{trNum(totalDesi)}<span className="text-[9px] font-normal text-gray-400 ml-0.5">desi</span></p>
+                    <p className={`text-xs font-semibold ${totalQuantity > 0 ? 'text-purple-500' : 'text-gray-400'}`}>{totalQuantity.toLocaleString('tr-TR')} adet</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-600 mb-1">Tamamlandı</p>
@@ -794,9 +757,7 @@ export default function MonthDetailPage() {
                       {completionPct}%
                     </p>
                     {completedCount > 0 && (
-                      <p className="text-[10px] text-gray-400 mt-0.5">
-                        {viewMode === 'quantity' ? `${completedQty} adet` : `${Math.round(completedDesi)} desi`}
-                      </p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">{Math.round(completedDesi)} desi · {completedQty} adet</p>
                     )}
                   </div>
                 </div>
