@@ -21,9 +21,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Yetkisiz' }, { status: 401 });
   }
 
+  // ?channel=AMAZON_US → sadece o kanal (ayrı zamanlama için); yoksa tüm implemented.
+  const only = new URL(request.url).searchParams.get('channel');
+
   const results: Array<Record<string, unknown>> = [];
   for (const ch of STOCK_PUSH_CHANNELS) {
     if (!ch.implemented) continue;
+    if (only && ch.key !== only) continue;
     const settings = await prisma.stockPushSettings.findUnique({ where: { channel: ch.key } });
     if (!settings?.enabled) {
       results.push({ channel: ch.key, skipped: 'disabled' });
