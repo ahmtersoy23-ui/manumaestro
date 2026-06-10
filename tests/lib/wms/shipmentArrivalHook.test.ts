@@ -38,8 +38,11 @@ type Box = {
   marketplaceCode?: string | null;
 };
 
+type Container = { id: string; code: string; lines: { iwasku: string; quantity: number }[] };
+
 function makeTx(opts: {
   shipment: { id: string; name: string; destinationTab: string; boxes: Box[] } | null;
+  containers?: Container[]; // konsolidasyon paletleri (arrivedAt=null kabul edilir)
   activeWarehouses?: string[]; // code listesi (isActive=true)
   poolsFor?: string[]; // POOL rafı olan depo kodları
   existingShelfBoxIds?: string[]; // idempotency: zaten yansımış box id'leri
@@ -53,6 +56,8 @@ function makeTx(opts: {
     ...data,
   }));
   const shelfMovementCreate = vi.fn(async () => ({ id: 'mv' }));
+  const shelfStockUpsert = vi.fn(async (_args: { create: Record<string, unknown>; update: unknown; where: unknown }) => ({ id: 'ss' }));
+  const containerUpdate = vi.fn(async () => ({ id: 'c' }));
 
   const tx = {
     shipment: { findUnique: vi.fn(async () => opts.shipment) },
@@ -73,9 +78,14 @@ function makeTx(opts: {
       create: shelfBoxCreate,
     },
     shelfMovement: { create: shelfMovementCreate },
+    shipmentContainer: {
+      findMany: vi.fn(async () => opts.containers ?? []),
+      update: containerUpdate,
+    },
+    shelfStock: { upsert: shelfStockUpsert },
   };
 
-  return { tx: tx as unknown as Prisma.TransactionClient, shelfBoxCreate, shelfMovementCreate };
+  return { tx: tx as unknown as Prisma.TransactionClient, shelfBoxCreate, shelfMovementCreate, shelfStockUpsert, containerUpdate };
 }
 
 const box = (id: string, destination: string, extra: Partial<Box> = {}): Box => ({
@@ -167,6 +177,47 @@ describe('processShipmentArrival', () => {
       poolsFor: [], // POOL raf yok
     });
     await expect(processShipmentArrival(tx, 's1', 'u1')).rejects.toThrow(/POOL raf yok/);
+  });
+
+  it('US konsolidasyon paleti → Fairfield (SHOWROOM) POOL ShelfStock olarak patlar', async () => {
+    const { tx, shelfStockUpsert, containerUpdate, shelfMovementCreate } = makeTx({
+      shipment: { id: 's1', name: 'Gemi 72', destinationTab: 'US', boxes: [] },
+      containers: [
+        { id: 'c1', code: '72-K01', lines: [
+          { iwasku: 'IW-A', quantity: 5 },
+          { iwasku: 'IW-B', quantity: 3 },
+        ] },
+      ],
+    });
+
+    const res = await processShipmentArrival(tx, 's1', 'u1');
+
+    expect(res.containerLinesAdded).toBe(2);
+    expect(res.containerUnitsAdded).toBe(8);
+    expect(res.warehouseDistribution).toEqual({ SHOWROOM: 8 });
+    expect(shelfStockUpsert).toHaveBeenCalledTimes(2);
+    expect(shelfMovementCreate).toHaveBeenCalledTimes(2);
+    expect(containerUpdate).toHaveBeenCalledTimes(1); // arrivedAt damgası
+    // Tüm satırlar Fairfield (SHOWROOM) POOL'una — recommendedDestination'a bakılmaz
+    const upserts = shelfStockUpsert.mock.calls.map((c) => c[0].create);
+    expect(upserts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ warehouseCode: 'SHOWROOM', shelfId: 'pool-SHOWROOM', iwasku: 'IW-A', quantity: 5 }),
+        expect.objectContaining({ warehouseCode: 'SHOWROOM', shelfId: 'pool-SHOWROOM', iwasku: 'IW-B', quantity: 3 }),
+      ]),
+    );
+  });
+
+  it('US olmayan tab: konteynerler patlamaz', async () => {
+    const { tx, shelfStockUpsert, containerUpdate } = makeTx({
+      shipment: { id: 's2', name: 'TIR 5', destinationTab: 'EU', boxes: [] },
+      containers: [{ id: 'c1', code: '5-K01', lines: [{ iwasku: 'IW-A', quantity: 5 }] }],
+    });
+    const res = await processShipmentArrival(tx, 's2', 'u1');
+    expect(res.containerLinesAdded).toBe(0);
+    expect(res.containerUnitsAdded).toBe(0);
+    expect(shelfStockUpsert).not.toHaveBeenCalled();
+    expect(containerUpdate).not.toHaveBeenCalled();
   });
 
   it('UK sevkiyatı: hiçbir koli rafa yansımaz (hepsi atlanır)', async () => {

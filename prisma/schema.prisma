@@ -622,6 +622,7 @@ model ShipmentContainer {
   depth        Float? // cm
   weight       Float? // kg
   labelPrinted Boolean  @default(false)
+  arrivedAt    DateTime? // Varışta (DELIVERED) Fairfield POOL'una patlatıldı — idempotency; null = henüz patlamadı
   createdAt    DateTime @default(now())
 
   shipment Shipment                @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
