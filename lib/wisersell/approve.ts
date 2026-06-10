@@ -94,15 +94,28 @@ export async function getEligibleCandidateIds(region: string): Promise<number[]>
     .map((c) => c.wisersell_order_id);
 }
 
-/** Kanal sipariş no'su = label_prefix + label_no (ör. "S_IWAUS" + "22055" = "S_IWAUS22055"). */
-function channelOrderNo(c: Cand, labelPrefix: string | null): string {
-  return `${labelPrefix ?? ''}${c.label_no ?? ''}`.trim();
+/**
+ * Wayfair/Walmart'ta Wisersell order_code ZATEN kanal sipariş no'sudur (CS…/numeric),
+ * Amazon/Shopify/Etsy'de ise order_code iç koddur (ör. 51199) → kanal no'su label_prefix+label_no.
+ */
+function isOrderCodeChannel(marketplaceCode: string | null): boolean {
+  if (!marketplaceCode) return false;
+  return /^wayfair/i.test(marketplaceCode) || /^walmart/i.test(marketplaceCode);
 }
 
-function buildAddressNote(c: Cand, labelPrefix: string | null): string {
-  const labelBase = channelOrderNo(c, labelPrefix);
+/**
+ * Kanal sipariş no'su:
+ * - Wayfair/Walmart: order_code (CS661312852 gibi — paket fişindeki gerçek no).
+ * - Diğerleri: label_prefix + label_no (ör. "S_IWAUS" + "22055" = "S_IWAUS22055").
+ */
+function channelOrderNo(c: Cand, sm: Pick<StoreMap, 'marketplace_code' | 'label_prefix'>): string {
+  if (isOrderCodeChannel(sm.marketplace_code)) return (c.order_code ?? '').trim();
+  return `${sm.label_prefix ?? ''}${c.label_no ?? ''}`.trim();
+}
+
+function buildAddressNote(c: Cand, channelNo: string): string {
   const productNames = physicalItems(c.orderitems).map((i) => i.product_name ?? i.title).filter(Boolean) as string[];
-  return [labelBase, c.recipient_name ?? '', c.ship_address ?? '', ...productNames].filter(Boolean).join('\n');
+  return [channelNo, c.recipient_name ?? '', c.ship_address ?? '', ...productNames].filter(Boolean).join('\n');
 }
 
 export async function approveWisersellCandidates(ids: number[], userId: string): Promise<ApproveResult[]> {
@@ -158,7 +171,7 @@ export async function approveWisersellCandidates(ids: number[], userId: string):
 
     // Çift kayıt guard'ı (ters yön): bu kanal no'su (ör. S_IWAUS22055) manuel olarak
     // zaten girilmişse otomatik kayıt açma — operatör elle reconcile etsin.
-    const channelNo = channelOrderNo(c, sm.label_prefix);
+    const channelNo = channelOrderNo(c, sm);
     if (channelNo) {
       const manualDup = await findChannelDuplicate(channelNo, { excludeWisersellOrderId: c.wisersell_order_id });
       if (manualDup) {
@@ -178,7 +191,7 @@ export async function approveWisersellCandidates(ids: number[], userId: string):
             marketplaceCode: sm.marketplace_code!,
             orderNumber: c.order_code,
             channelOrderNumber: channelNo || null,
-            addressNote: buildAddressNote(c, sm.label_prefix),
+            addressNote: buildAddressNote(c, channelNo),
             status: 'DRAFT',
             source: 'WISERSELL_AUTO',
             wisersellOrderId: c.wisersell_order_id,
