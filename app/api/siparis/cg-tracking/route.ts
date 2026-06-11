@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { requireOrderBoardLevel } from '@/lib/auth/orderBoardPermission';
+import { isWayfairChannel } from '@/lib/wisersell/orderRouting';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('SiparisCgTracking');
@@ -35,9 +36,12 @@ export async function POST(request: NextRequest) {
   }
   const { orderId, tracking } = parsed.data;
 
-  const order = await prisma.outboundOrder.findUnique({ where: { id: orderId }, select: { warehouseCode: true, source: true } });
-  if (!order || order.source !== 'WISERSELL_AUTO' || !CG_CODES.includes(order.warehouseCode)) {
-    return NextResponse.json({ success: false, error: 'CG sipariş bulunamadı' }, { status: 404 });
+  const order = await prisma.outboundOrder.findUnique({ where: { id: orderId }, select: { warehouseCode: true, source: true, marketplaceCode: true } });
+  // CG (CastleGate) VEYA Wayfair (dropship, US deposu) siparişleri elle tracking alır (Veeqo yok).
+  const eligible = !!order && order.source === 'WISERSELL_AUTO'
+    && (CG_CODES.includes(order.warehouseCode) || isWayfairChannel(order.marketplaceCode));
+  if (!eligible) {
+    return NextResponse.json({ success: false, error: 'CG/Wayfair sipariş bulunamadı' }, { status: 404 });
   }
 
   // Virgüllü girişte ilkini sakla (Wayfair MCF birden çok koli tracking'i verebilir).

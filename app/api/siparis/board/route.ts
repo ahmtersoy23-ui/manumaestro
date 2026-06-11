@@ -17,7 +17,7 @@ import { requireBoardUser } from '@/lib/auth/boardAuth';
 import { getOrderBoardLevel, hasOrderLevel } from '@/lib/auth/orderBoardPermission';
 import { getUsAvailability } from '@/lib/wms/usWarehouseStock';
 import { getCgAvailability, type CgAvailability } from '@/lib/wms/cgStock';
-import { resolveOrderWarehouse, resolveOrderWarehouseOptions, needsManualSource } from '@/lib/wisersell/orderRouting';
+import { resolveOrderWarehouse, resolveOrderWarehouseOptions, needsManualSource, isWayfairChannel } from '@/lib/wisersell/orderRouting';
 import { getProductsByIwasku, usDimensions, type ProductInfo } from '@/lib/products/lookup';
 
 interface CandidateItem {
@@ -185,7 +185,13 @@ export async function GET(request: NextRequest) {
       items: its,
       createdAt: c.created_at_ws,
     };
-    if (needsManualSource(routingItems, marketplaceCodeByStore.get(Number(c.store_id)) ?? null)) {
+    const mpCodeForRouting = marketplaceCodeByStore.get(Number(c.store_id)) ?? null;
+    if (isWayfairChannel(mpCodeForRouting)) {
+      // Wayfair (dropship): daima US-only (cgAvail yok). Karşılayan US deposu yoksa gizle.
+      const wh = resolveOrderWarehouse(routingItems, avail, undefined);
+      if (!wh) { stokYok++; continue; }
+      onayBekliyor.push({ ...base, warehouse: wh });
+    } else if (needsManualSource(routingItems, mpCodeForRouting)) {
       // Mobilya / Amazon Citi: TR (varsayılan) + karşılayan depolar seçilebilir. Hiçbir depo
       // karşılamıyorsa mevcut davranış aynen (gizle) → zaten otomatik TR'den gider.
       const options = resolveOrderWarehouseOptions(routingItems, avail, cgAvail);
@@ -221,6 +227,7 @@ export async function GET(request: NextRequest) {
   const etiketBekliyor: Array<Record<string, unknown>> = [];
   const cikisBekliyor: Array<Record<string, unknown>> = [];
   const cgBekliyor: Array<Record<string, unknown>> = [];
+  const wayfairBekliyor: Array<Record<string, unknown>> = [];
   const kapatmaBekliyor: Array<Record<string, unknown>> = [];
   const kapandi: Array<Record<string, unknown>> = [];
 
@@ -268,6 +275,9 @@ export async function GET(request: NextRequest) {
     } else if (o.status === 'DRAFT') {
       // CG'de shelf/etiket yok → kendi kovası (MCF + manuel tracking bekler).
       if (isCgWarehouse(o.warehouseCode)) cgBekliyor.push(base);
+      // Wayfair (dropship, US deposu): Veeqo etiketi YOK → ayrı "Wayfair" kovası
+      // (manuel tracking + depo çıkışı). AWB ekibi etiket almaz, karışmasın.
+      else if (isWayfairChannel(o.marketplaceCode)) wayfairBekliyor.push(base);
       else if (shippingLabel && shippingLabel.trackingNumber) cikisBekliyor.push(base);
       else etiketBekliyor.push(base);
     }
@@ -299,7 +309,7 @@ export async function GET(request: NextRequest) {
 
   for (const row of onayBekliyor) row.items = (row.items as CandidateItem[]).map(enrichCand);
   for (const row of eslesmeGerek) row.items = (row.items as CandidateItem[]).map(enrichCand);
-  for (const coll of [etiketBekliyor, cikisBekliyor, cgBekliyor, kapatmaBekliyor, kapandi]) {
+  for (const coll of [etiketBekliyor, cikisBekliyor, cgBekliyor, wayfairBekliyor, kapatmaBekliyor, kapandi]) {
     for (const row of coll) row.items = (row.items as Array<{ iwasku: string | null; quantity: number }>).map(enrichAuto);
   }
 
@@ -314,7 +324,7 @@ export async function GET(request: NextRequest) {
   // marketplaceCode → bizim Marketplace tablosundaki ad. Wisersell store kodları
   // (Ama_US, Etsy_BMU, S_UPPUS vb.) tabloda yoksa olduğu gibi kalır → Wisersell ile
   // uyumlu; bizim CUSTOM_xx kodlar friendly ada çevrilir (Shopify/Etsy/Walmart…).
-  const allCollections = [onayBekliyor, eslesmeGerek, etiketBekliyor, cikisBekliyor, cgBekliyor, kapatmaBekliyor, kapandi];
+  const allCollections = [onayBekliyor, eslesmeGerek, etiketBekliyor, cikisBekliyor, cgBekliyor, wayfairBekliyor, kapatmaBekliyor, kapandi];
   const mpCodes = [...new Set(allCollections.flat().map((r) => r.marketplaceCode).filter(Boolean) as string[])];
   const mpNameByCode = new Map<string, string>();
   if (mpCodes.length) {
@@ -345,6 +355,7 @@ export async function GET(request: NextRequest) {
       etiketBekliyor: etiketBekliyor.length,
       cikisBekliyor: cikisBekliyor.length,
       cgBekliyor: cgBekliyor.length,
+      wayfairBekliyor: wayfairBekliyor.length,
       kapatmaBekliyor: kapatmaBekliyor.length,
       kapandi: kapandi.length,
       stokYok,
@@ -353,6 +364,6 @@ export async function GET(request: NextRequest) {
     warehouseStats: {
       onayBekliyor: warehouseCounts(onayBekliyor),
     },
-    data: { onayBekliyor, eslesmeGerek, etiketBekliyor, cikisBekliyor, cgBekliyor, kapatmaBekliyor, kapandi },
+    data: { onayBekliyor, eslesmeGerek, etiketBekliyor, cikisBekliyor, cgBekliyor, wayfairBekliyor, kapatmaBekliyor, kapandi },
   });
 }

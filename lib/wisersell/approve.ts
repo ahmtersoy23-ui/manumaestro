@@ -12,7 +12,7 @@ import { queryDataBridge } from '@/lib/db/prisma';
 import { getUsAvailability } from '@/lib/wms/usWarehouseStock';
 import { getCgAvailability } from '@/lib/wms/cgStock';
 import { getProductsByIwasku } from '@/lib/products/lookup';
-import { resolveOrderWarehouse, resolveOrderWarehouseOptions, needsManualSource, isEtsyChannel, type RoutedWarehouse } from '@/lib/wisersell/orderRouting';
+import { resolveOrderWarehouse, resolveOrderWarehouseOptions, needsManualSource, isEtsyChannel, isWayfairChannel, type RoutedWarehouse } from '@/lib/wisersell/orderRouting';
 import { markWisersellReady, markWisersellOrderItems } from '@/lib/wisersell/databridgeClient';
 import { findChannelDuplicate } from '@/lib/wms/orderDuplicateGuard';
 import { createLogger } from '@/lib/logger';
@@ -100,6 +100,8 @@ export async function getEligibleCandidateIds(region: string): Promise<number[]>
       if (!phys.length || phys.some((i) => !i.iwasku)) return false; // özel/ödeme veya eşleşmemiş → onaya hazır değil
       const items = phys.map((i) => ({ iwasku: i.iwasku, qty: i.qty, desi: i.iwasku ? productMap.get(i.iwasku)?.desi ?? null : null, category: i.iwasku ? productMap.get(i.iwasku)?.category ?? null : null }));
       const mpCode = c.store_id != null ? codeByStore.get(c.store_id) ?? null : null;
+      // Wayfair (dropship): daima US-only (cgAvail yok), hep otomatik — TR/CG'ye gitmez.
+      if (isWayfairChannel(mpCode)) return resolveOrderWarehouse(items, avail, undefined) !== null;
       if (needsManualSource(items, mpCode)) return false; // mobilya / Amazon Citi → hep manuel seçim; otomatik onaya girmez
       if (isEtsyChannel(mpCode)) return false;             // Etsy (tüm mağazalar) → manuel onayda kalır
       return resolveOrderWarehouse(items, avail, cgAvail) !== null;
@@ -193,17 +195,19 @@ export async function approveWisersellCandidates(ids: number[], userId: string, 
       continue;
     }
 
+    // Wayfair (dropship) → CG'ye asla gitmez: routing'de cgAvail'i gizle (yalnız US değerlendirilir).
+    const cgForRouting = isWayfairChannel(sm.marketplace_code) ? undefined : cgAvail;
     // Depo: override (mobilya manuel seçim) varsa fizibilite doğrula, yoksa otomatik routing.
     let wh: RoutedWarehouse | null;
     if (override) {
-      const options = resolveOrderWarehouseOptions(items, avail, cgAvail);
+      const options = resolveOrderWarehouseOptions(items, avail, cgForRouting);
       if (!options.includes(override)) {
         results.push({ wisersellOrderId: c.wisersell_order_id, ok: false, status: 'skipped', message: `Seçilen depo (${override}) stoğu tam karşılamıyor` });
         continue;
       }
       wh = override;
     } else {
-      wh = resolveOrderWarehouse(items, avail, cgAvail);
+      wh = resolveOrderWarehouse(items, avail, cgForRouting);
     }
     if (!wh) {
       results.push({ wisersellOrderId: c.wisersell_order_id, ok: false, status: 'skipped', message: 'Tek depodan tam karşılanmıyor (stok/iwasku)' });

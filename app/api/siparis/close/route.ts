@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { requireOrderBoardLevel } from '@/lib/auth/orderBoardPermission';
+import { isWayfairChannel } from '@/lib/wisersell/orderRouting';
 import { closeWisersellExternal, closeWisersellPlatform, markWisersellOrderItems } from '@/lib/wisersell/databridgeClient';
 import { carrierIdFromTracking, WISERSELL_CARRIER_IDS } from '@/lib/wisersell/carrierMap';
 import { logAction } from '@/lib/auditLog';
@@ -94,12 +95,20 @@ export async function POST(request: NextRequest) {
     if (!o.wisersellOrderId) { results.push({ orderId: id, ok: false, message: 'wisersellOrderId yok' }); continue; }
 
     const isCg = CG_CODES.includes(o.warehouseCode);
+    const isWayfair = isWayfairChannel(o.marketplaceCode);
 
-    // Tracking kaynağı: CG → manualTracking; normal → SHIPPING etiketi (+ status SHIPPED).
+    // Tracking kaynağı:
+    //   - CG → manualTracking (status şartı yok; WMS çıkışı yok).
+    //   - Wayfair (dropship, US deposu) → manualTracking AMA depo çıkışı (SHIPPED) yapılmış olmalı.
+    //   - Normal → SHIPPING etiketi (+ status SHIPPED).
     let trackingRaw: string | null | undefined;
     if (isCg) {
       trackingRaw = o.manualTracking;
       if (!trackingRaw) { results.push({ orderId: id, ok: false, message: 'CG tracking yok (önce manuel tracking girin)' }); continue; }
+    } else if (isWayfair) {
+      if (o.status !== 'SHIPPED') { results.push({ orderId: id, ok: false, message: `Önce depodan çıkış yapın (status ${o.status})` }); continue; }
+      trackingRaw = o.manualTracking;
+      if (!trackingRaw) { results.push({ orderId: id, ok: false, message: 'Wayfair tracking yok (önce manuel tracking girin)' }); continue; }
     } else {
       if (o.status !== 'SHIPPED') { results.push({ orderId: id, ok: false, message: `Henüz kargolanmadı (status ${o.status})` }); continue; }
       trackingRaw = o.labels[0]?.trackingNumber;
@@ -109,7 +118,7 @@ export async function POST(request: NextRequest) {
     // Virgüllü tracking'te ilkini al (Wayfair MCF birden çok koli tracking'i verebilir).
     const tracking = trackingRaw.split(',')[0].trim();
 
-    // CG için carrier varsayılanı FedEx (Wayfair MCF FedEx kullanır); diğerinde prefix'ten türet.
+    // CG için carrier varsayılanı FedEx (Wayfair MCF FedEx kullanır); diğerinde (Wayfair dropship dahil) prefix'ten türet.
     const carrierId = carrierIdOverride ?? carrierIdFromTracking(tracking) ?? (isCg ? WISERSELL_CARRIER_IDS.FEDEX : null);
     if (!carrierId) { results.push({ orderId: id, ok: false, message: `Carrier tracking'den belirlenemedi (${tracking}) — carrierIdOverride gerekli` }); continue; }
 

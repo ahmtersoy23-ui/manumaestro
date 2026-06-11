@@ -15,7 +15,7 @@ import { ManualOrderModal } from '@/components/siparis/ManualOrderModal';
 import VeeqoLabelModal from '@/components/siparis/VeeqoLabelModal';
 import RateQuoteModal from '@/components/siparis/RateQuoteModal';
 
-type StatusKey = 'onayBekliyor' | 'eslesmeGerek' | 'etiketBekliyor' | 'cikisBekliyor' | 'cgBekliyor' | 'kapatmaBekliyor' | 'kapandi';
+type StatusKey = 'onayBekliyor' | 'eslesmeGerek' | 'etiketBekliyor' | 'cikisBekliyor' | 'cgBekliyor' | 'wayfairBekliyor' | 'kapatmaBekliyor' | 'kapandi';
 
 const STATUS_META: Record<StatusKey, { label: string; desc: string; icon: typeof CheckCircle2; accent: string; ring: string; dot: string }> = {
   onayBekliyor:   { label: 'Onay Bekliyor',    desc: 'US stoğu teyitli, onay bekliyor', icon: CheckCircle2, accent: 'text-emerald-700', ring: 'ring-emerald-500 bg-emerald-50', dot: 'bg-emerald-500' },
@@ -23,11 +23,12 @@ const STATUS_META: Record<StatusKey, { label: string; desc: string; icon: typeof
   etiketBekliyor: { label: 'Etiket Bekliyor',  desc: 'Onaylandı, kargo etiketi bekliyor', icon: PackageCheck, accent: 'text-amber-700',  ring: 'ring-amber-500 bg-amber-50',   dot: 'bg-amber-500' },
   cikisBekliyor:  { label: 'Çıkış Bekliyor',   desc: 'Etiketli, fiziksel çıkış bekliyor', icon: Truck,        accent: 'text-sky-700',    ring: 'ring-sky-500 bg-sky-50',       dot: 'bg-sky-500' },
   cgBekliyor:     { label: 'CG Bekliyor',      desc: 'CastleGate — MCF/tracking bekliyor', icon: Warehouse,  accent: 'text-teal-700',   ring: 'ring-teal-500 bg-teal-50',     dot: 'bg-teal-500' },
+  wayfairBekliyor:{ label: 'Wayfair',          desc: 'Dropship — depo çıkışı + tracking (etiket yok)', icon: Tag, accent: 'text-fuchsia-700', ring: 'ring-fuchsia-500 bg-fuchsia-50', dot: 'bg-fuchsia-500' },
   kapatmaBekliyor:{ label: 'Kapatma Bekliyor', desc: 'Kargolandı, Wisersell kapatma',   icon: Send,         accent: 'text-rose-700',   ring: 'ring-rose-500 bg-rose-50',     dot: 'bg-rose-500' },
   kapandi:        { label: 'Kapandı',          desc: 'Wisersell external-close yazıldı', icon: Archive,      accent: 'text-slate-600',  ring: 'ring-slate-400 bg-slate-50',   dot: 'bg-slate-400' },
 };
 // 'eslesmeGerek' kart değil — stokYok gibi bir istisna durumu, filtre barında rozet (STATUS_META'da kalır: modal/dot kullanır).
-const STATUS_ORDER: StatusKey[] = ['onayBekliyor', 'etiketBekliyor', 'cikisBekliyor', 'cgBekliyor', 'kapatmaBekliyor', 'kapandi'];
+const STATUS_ORDER: StatusKey[] = ['onayBekliyor', 'etiketBekliyor', 'cikisBekliyor', 'cgBekliyor', 'wayfairBekliyor', 'kapatmaBekliyor', 'kapandi'];
 
 const WH = {
   SHOWROOM:   { label: 'Fairfield',  badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -702,6 +703,20 @@ export default function SiparisPage() {
                       <button onClick={() => saveTracking(detailRow.id)} disabled={busy || !trackingDraft.trim()} className="text-sm px-3 py-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-40">Kaydet</button>
                     </div>
                     {detailRow.manualTracking && <div className="mt-1 text-[11px] text-teal-700">Kayıtlı: <span className="font-mono">{detailRow.manualTracking}</span></div>}
+                  </div>
+                </div>
+              )}
+              {tab === 'wayfairBekliyor' && (
+                <div className="rounded-lg border border-fuchsia-200 bg-fuchsia-50 p-3 text-sm text-fuchsia-800 space-y-2">
+                  <div className="font-semibold flex items-center gap-1.5"><Tag className="w-4 h-4" /> Wayfair (dropship)</div>
+                  <div className="text-xs">Veeqo etiketi alınmaz. Akış: US deposundan (<strong>{whLabel(detailRow.warehouse)}</strong>) <strong>topla & depodan çıkış yap</strong> → Wayfair&apos;in kendi etiketiyle gönder → tracking&apos;i aşağı gir → <strong>Kapatma Bekliyor&apos;dan Wisersell&apos;de Kapat</strong>.</div>
+                  <div>
+                    <div className="text-[11px] uppercase text-fuchsia-600 mb-1">Tracking (Wayfair etiketinden)</div>
+                    <div className="flex items-center gap-2">
+                      <input value={trackingDraft} onChange={(e) => setTrackingDraft(e.target.value)} placeholder="örn. 1Z..." className="flex-1 text-sm px-2.5 py-1.5 rounded-lg border border-fuchsia-300 bg-white text-gray-800 font-mono" />
+                      <button onClick={() => saveTracking(detailRow.id)} disabled={busy || !trackingDraft.trim()} className="text-sm px-3 py-1.5 rounded-lg bg-fuchsia-600 text-white hover:bg-fuchsia-700 disabled:opacity-40">Kaydet</button>
+                    </div>
+                    {detailRow.manualTracking && <div className="mt-1 text-[11px] text-fuchsia-700">Kayıtlı: <span className="font-mono">{detailRow.manualTracking}</span></div>}
                   </div>
                 </div>
               )}

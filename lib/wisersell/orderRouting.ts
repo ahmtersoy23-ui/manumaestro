@@ -79,6 +79,17 @@ export function isEtsyChannel(marketplaceCode?: string | null): boolean {
 }
 
 /**
+ * Wayfair kanalı mı (mağaza: "Wayfair Shukran" / "Wayfair MDN")? Bu, o mağazanın
+ * DROPSHIP siparişi — MCF/CastleGate DEĞİL. TR'den çıkmaz; daima US deposundan (NJ/SHOWROOM)
+ * toplanır (heavy olsa bile CG'ye gitmez), Wayfair'in kendi etiketiyle gönderilir (Veeqo yok),
+ * tracking elle girilir. Board'da ayrı "Wayfair" kolonu. Routing'de cgAvail=undefined verilir.
+ * NOT: warehouseCode CG_SHUKRAN/CG_MDN (fulfillment deposu) ile KARIŞTIRMA — bu satış kanalı.
+ */
+export function isWayfairChannel(marketplaceCode?: string | null): boolean {
+  return !!marketplaceCode && /^wayfair/i.test(marketplaceCode.trim());
+}
+
+/**
  * Mobilya manuel seçimi: tek depodan TAM karşılayabilen BÜTÜN depolar (sıra: Fairfield,
  * Somerset, CG Shukran, CG MDN). resolveOrderWarehouse'tan farkı: tek seçim değil, hepsi.
  * iwasku eksik / kalem yok → [] (zaten board'da gizlenir).
