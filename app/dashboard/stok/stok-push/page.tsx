@@ -20,6 +20,7 @@ interface ConfigRow {
 interface PreviewRow {
   marketplaceSku: string;
   iwasku: string;
+  name?: string | null;
   mode: 'STOCK' | 'STANDARD' | 'ZERO';
   quantity: number;
   lastQty: number | null;
@@ -428,6 +429,7 @@ export default function StokPushPage() {
                       {access.canEdit && <th className="py-1.5 w-8"><input type="checkbox" checked={allFilteredSelected} onChange={toggleAllFiltered} title="Filtredekilerin tümü" /></th>}
                       <th>SKU</th>
                       <th>iwasku</th>
+                      <th>Ad</th>
                       <th>Kova</th>
                       <th className="text-right">CG-MDN</th>
                       <th className="text-right">CG-Shukran</th>
@@ -435,6 +437,7 @@ export default function StokPushPage() {
                       <th className="text-right">Fairfield</th>
                       <th className="text-right">Şu an</th>
                       <th className="text-right">Hedef</th>
+                      {ch.supportsHandling && <th className="text-right">Handling</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -446,6 +449,7 @@ export default function StokPushPage() {
                           {access.canEdit && <td><input type="checkbox" checked={isSel} onChange={() => toggle(r.iwasku)} /></td>}
                           <td className="py-1.5 font-mono text-xs">{r.marketplaceSku}</td>
                           <td className="font-mono text-xs text-gray-500">{r.iwasku}</td>
+                          <td className="text-xs max-w-[240px] truncate" title={r.name ?? ''}>{r.name ?? '—'}</td>
                           <td>
                             <span className={`text-[11px] px-1.5 py-0.5 rounded ${r.mode === 'STOCK' ? 'bg-blue-100 text-blue-700' : r.mode === 'ZERO' ? 'bg-gray-200 text-gray-600' : 'bg-emerald-100 text-emerald-700'}`}>{r.mode}</span>
                             {cfg?.mode === 'STOCK' && <span className="ml-1 text-[10px] text-gray-400">{cfg.percent}%</span>}
@@ -457,9 +461,9 @@ export default function StokPushPage() {
                           <td className="text-right text-gray-500">{r.lastQty ?? '—'}</td>
                           <td className={`text-right font-semibold ${r.willChange ? 'text-blue-600' : 'text-gray-700'}`}>
                             {r.quantity}
-                            {r.handlingDays != null && <span className="ml-1 text-[10px] text-gray-400">{r.handlingDays}g</span>}
                             {r.belowFloor && <span className="ml-1 text-[10px] text-amber-600">(eşik↓)</span>}
                           </td>
+                          {ch.supportsHandling && <td className="text-right text-xs text-gray-500">{r.handlingDays != null ? `${r.handlingDays}g` : '—'}</td>}
                         </tr>
                       );
                     })}

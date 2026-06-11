@@ -22,6 +22,7 @@ export interface StockBreakdown {
 export interface PushTarget {
   marketplaceSku: string;
   iwasku: string;
+  name: string | null;
   mode: EffectiveMode;
   quantity: number;
   breakdown: StockBreakdown;
@@ -53,11 +54,13 @@ export async function computeTargets(channelKey: string): Promise<ComputeResult>
     queryProductDb(
       // Kanal-bazlı aktif status'ler (Amazon: Active+Inactive child; Walmart: PUBLISHED).
       // OOS listing'ler de push hedefi (stok basıp yeniden aç).
-      `SELECT marketplace_sku, iwasku FROM channel_prices
-       WHERE channel_code = $1 AND country_code = $2 AND status = ANY($3)
-         AND iwasku IS NOT NULL AND iwasku <> ''`,
+      `SELECT cp.marketplace_sku, cp.iwasku, p.name
+       FROM channel_prices cp
+       LEFT JOIN products p ON p.product_sku = cp.iwasku
+       WHERE cp.channel_code = $1 AND cp.country_code = $2 AND cp.status = ANY($3)
+         AND cp.iwasku IS NOT NULL AND cp.iwasku <> ''`,
       [channel.channelCode, channel.country, channel.activeStatuses],
-    ) as Promise<Array<{ marketplace_sku: string; iwasku: string }>>,
+    ) as Promise<Array<{ marketplace_sku: string; iwasku: string; name: string | null }>>,
     prisma.stockPushSettings.findUnique({ where: { channel: channelKey } }),
     prisma.stockPushConfig.findMany({ where: { channel: channelKey } }),
   ]);
@@ -87,11 +90,11 @@ export async function computeTargets(channelKey: string): Promise<ComputeResult>
     };
 
     if (!cfg) {
-      targets.push({ marketplaceSku: l.marketplace_sku, iwasku: l.iwasku, mode: 'STANDARD', quantity: standardQty, breakdown, handlingDays: stdHandling });
+      targets.push({ marketplaceSku: l.marketplace_sku, iwasku: l.iwasku, name: l.name, mode: 'STANDARD', quantity: standardQty, breakdown, handlingDays: stdHandling });
       continue;
     }
     if (cfg.mode === 'ZERO') {
-      targets.push({ marketplaceSku: l.marketplace_sku, iwasku: l.iwasku, mode: 'ZERO', quantity: 0, breakdown, handlingDays: null });
+      targets.push({ marketplaceSku: l.marketplace_sku, iwasku: l.iwasku, name: l.name, mode: 'ZERO', quantity: 0, breakdown, handlingDays: null });
       continue;
     }
     // STOCK — secili depolarin available toplami
@@ -104,7 +107,7 @@ export async function computeTargets(channelKey: string): Promise<ComputeResult>
     const belowFloor = base < cfg.floorX;
     const quantity = belowFloor ? 0 : Math.round((base * cfg.percent) / 100);
     const handlingDays = channel.supportsHandling ? cfg.handlingDays ?? stdHandling : null;
-    targets.push({ marketplaceSku: l.marketplace_sku, iwasku: l.iwasku, mode: 'STOCK', quantity, breakdown, base, belowFloor, handlingDays });
+    targets.push({ marketplaceSku: l.marketplace_sku, iwasku: l.iwasku, name: l.name, mode: 'STOCK', quantity, breakdown, base, belowFloor, handlingDays });
   }
 
   const counts = {
