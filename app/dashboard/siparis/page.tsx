@@ -96,8 +96,8 @@ interface Row {
   cgExportedAt?: string | null; // CG MCF Excel alındı mı
   amazonCancelledAt?: string | null; // Amazon'da iptal (SP-API canlı kontrol)
   readyPending?: boolean;
-  furniture?: boolean;            // mobilya siparişi → onayda manuel kaynak seçimi (TR/depo)
-  furnitureOptions?: string[];    // karşılayan depolar: SHOWROOM/NJ/CG_SHUKRAN/CG_MDN
+  manualSource?: boolean;         // mobilya / Amazon Citi → onayda manuel kaynak seçimi (TR/depo)
+  sourceOptions?: string[];       // karşılayan depolar: SHOWROOM/NJ/CG_SHUKRAN/CG_MDN
   createdAt?: string | null;
   items?: ItemLite[];
   unresolved?: Array<{ product_code?: string | null; marketplace_sku?: string | null; title?: string | null }>;
@@ -220,8 +220,8 @@ export default function SiparisPage() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [detailRow, setDetailRow] = useState<Row | null>(null);
-  // Mobilya kaynak seçimi: wisersellOrderId → 'TR' | depo. Boşsa TR varsayılır.
-  const [furnitureSrc, setFurnitureSrc] = useState<Record<number, string>>({});
+  // Manuel kaynak seçimi (mobilya / Amazon Citi): wisersellOrderId → 'TR' | depo. Boşsa TR.
+  const [manualSrc, setManualSrc] = useState<Record<number, string>>({});
   const [shipOrder, setShipOrder] = useState<Row | null>(null);
   const [veeqoOrder, setVeeqoOrder] = useState<Row | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
@@ -305,13 +305,13 @@ export default function SiparisPage() {
       await load();
     } catch (e) { setMsg(e instanceof Error ? e.message : 'Hata'); } finally { setBusy(false); }
   }
-  // Mobilya satırları için seçilen kaynağı (TR/depo) topla; mobilya-dışı id'lerde gönderme (otomatik routing).
+  // Manuel-kaynak satırları için seçilen kaynağı (TR/depo) topla; diğer id'lerde gönderme (otomatik routing).
   const buildSources = (ids: number[]): Record<string, string> | undefined => {
     const onay = board?.data.onayBekliyor ?? [];
     const out: Record<string, string> = {};
     for (const id of ids) {
       const row = onay.find((r) => r.wisersellOrderId === id);
-      if (row?.furniture) out[String(id)] = furnitureSrc[id] ?? 'TR';
+      if (row?.manualSource) out[String(id)] = manualSrc[id] ?? 'TR';
     }
     return Object.keys(out).length ? out : undefined;
   };
@@ -617,16 +617,16 @@ export default function SiparisPage() {
                       </div>
                     </td>
                     <td className="px-3 py-2.5"><span title={r.marketplaceCode} className="inline-block text-xs font-medium px-2 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-100">{r.marketplaceLabel || r.marketplaceCode || '—'}</span></td>
-                    <td className="px-3 py-2.5" onClick={(e) => { if (tab === 'onayBekliyor' && r.furniture) e.stopPropagation(); }}>
-                      {tab === 'onayBekliyor' && r.furniture && r.wisersellOrderId ? (
+                    <td className="px-3 py-2.5" onClick={(e) => { if (tab === 'onayBekliyor' && r.manualSource) e.stopPropagation(); }}>
+                      {tab === 'onayBekliyor' && r.manualSource && r.wisersellOrderId ? (
                         <select
-                          value={furnitureSrc[r.wisersellOrderId] ?? 'TR'}
-                          onChange={(e) => setFurnitureSrc((s) => ({ ...s, [r.wisersellOrderId!]: e.target.value }))}
+                          value={manualSrc[r.wisersellOrderId] ?? 'TR'}
+                          onChange={(e) => setManualSrc((s) => ({ ...s, [r.wisersellOrderId!]: e.target.value }))}
                           className="text-xs border border-amber-300 bg-amber-50 rounded-md px-1.5 py-1 text-gray-800 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                          title="Mobilya: kaynak seç (TR = board'dan düşer, Wisersell'de kalır)"
+                          title="Kaynak seç (TR = board'dan düşer, Wisersell'de kalır)"
                         >
                           <option value="TR">TR (standart)</option>
-                          {(r.furnitureOptions ?? []).map((w) => <option key={w} value={w}>{whLabel(w)}</option>)}
+                          {(r.sourceOptions ?? []).map((w) => <option key={w} value={w}>{whLabel(w)}</option>)}
                         </select>
                       ) : r.warehouse ? (
                         <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-md border ${whBadge(r.warehouse)}`}>{whLabel(r.warehouse)}</span>
@@ -780,20 +780,20 @@ export default function SiparisPage() {
                   <X className="w-4 h-4" /> Listeden Düş
                 </button>
               )}
-              {tab === 'onayBekliyor' && canApprove && detailRow.furniture && detailRow.wisersellOrderId && (
+              {tab === 'onayBekliyor' && canApprove && detailRow.manualSource && detailRow.wisersellOrderId && (
                 <select
-                  value={furnitureSrc[detailRow.wisersellOrderId] ?? 'TR'}
-                  onChange={(e) => setFurnitureSrc((s) => ({ ...s, [detailRow.wisersellOrderId!]: e.target.value }))}
+                  value={manualSrc[detailRow.wisersellOrderId] ?? 'TR'}
+                  onChange={(e) => setManualSrc((s) => ({ ...s, [detailRow.wisersellOrderId!]: e.target.value }))}
                   className="text-sm border border-amber-300 bg-amber-50 rounded-lg px-2.5 py-2 text-gray-800 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                  title="Mobilya: kaynak seç. TR = board'dan düşer, Wisersell'de kalır."
+                  title="Kaynak seç. TR = board'dan düşer, Wisersell'de kalır."
                 >
                   <option value="TR">TR (standart — board&apos;dan düşer)</option>
-                  {(detailRow.furnitureOptions ?? []).map((w) => <option key={w} value={w}>{whLabel(w)}</option>)}
+                  {(detailRow.sourceOptions ?? []).map((w) => <option key={w} value={w}>{whLabel(w)}</option>)}
                 </select>
               )}
               {tab === 'onayBekliyor' && canApprove && (
                 <button onClick={() => approveOne(detailRow.wisersellOrderId)} disabled={busy} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">
-                  <CheckCircle2 className="w-4 h-4" /> {detailRow.furniture && (furnitureSrc[detailRow.wisersellOrderId!] ?? 'TR') === 'TR' ? 'TR\'ye Düşür' : 'Onayla'}
+                  <CheckCircle2 className="w-4 h-4" /> {detailRow.manualSource && (manualSrc[detailRow.wisersellOrderId!] ?? 'TR') === 'TR' ? 'TR\'ye Düşür' : 'Onayla'}
                 </button>
               )}
               {tab === 'etiketBekliyor' && canLabelDelete

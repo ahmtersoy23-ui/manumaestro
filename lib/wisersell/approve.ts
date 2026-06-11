@@ -12,7 +12,7 @@ import { queryDataBridge } from '@/lib/db/prisma';
 import { getUsAvailability } from '@/lib/wms/usWarehouseStock';
 import { getCgAvailability } from '@/lib/wms/cgStock';
 import { getProductsByIwasku } from '@/lib/products/lookup';
-import { resolveOrderWarehouse, resolveOrderWarehouseOptions, isFurnitureOrder, type RoutedWarehouse } from '@/lib/wisersell/orderRouting';
+import { resolveOrderWarehouse, resolveOrderWarehouseOptions, needsManualSource, type RoutedWarehouse } from '@/lib/wisersell/orderRouting';
 import { markWisersellReady, markWisersellOrderItems } from '@/lib/wisersell/databridgeClient';
 import { findChannelDuplicate } from '@/lib/wms/orderDuplicateGuard';
 import { createLogger } from '@/lib/logger';
@@ -66,10 +66,10 @@ export interface ApproveResult {
  */
 export async function getEligibleCandidateIds(region: string): Promise<number[]> {
   const candidates = (await queryDataBridge(
-    `SELECT wisersell_order_id::int AS wisersell_order_id, orderitems FROM wisersell_routing_candidates
+    `SELECT wisersell_order_id::int AS wisersell_order_id, store_id, orderitems FROM wisersell_routing_candidates
      WHERE region = $1 AND gone_at IS NULL`,
     [region],
-  )) as Array<{ wisersell_order_id: number; orderitems: CandItem[] }>;
+  )) as Array<{ wisersell_order_id: number; store_id: number | null; orderitems: CandItem[] }>;
   if (!candidates.length) return [];
 
   const ids = candidates.map((c) => c.wisersell_order_id);
@@ -79,6 +79,13 @@ export async function getEligibleCandidateIds(region: string): Promise<number[]>
   });
   const approvedSet = new Set(approved.map((o) => o.wisersellOrderId));
   const pending = candidates.filter((c) => !approvedSet.has(c.wisersell_order_id));
+
+  // store_id → marketplace_code (Amazon Citi=CUSTOM_01 manuel-kaynak muafiyeti için).
+  const storeIds = [...new Set(pending.map((c) => c.store_id).filter((x): x is number => x != null))];
+  const storeMaps = storeIds.length
+    ? ((await queryDataBridge(`SELECT store_id, marketplace_code FROM wisersell_store_map WHERE store_id = ANY($1::int[])`, [storeIds.map(String)])) as Array<{ store_id: number; marketplace_code: string | null }>)
+    : [];
+  const codeByStore = new Map(storeMaps.map((s) => [s.store_id, s.marketplace_code]));
 
   const allIwaskus = [...new Set(pending.flatMap((c) => (c.orderitems ?? []).map((i) => i.iwasku).filter((x): x is string => !!x)))];
   const [avail, cgAvail, productMap] = await Promise.all([
@@ -92,7 +99,8 @@ export async function getEligibleCandidateIds(region: string): Promise<number[]>
       const phys = physicalItems(c.orderitems);
       if (!phys.length || phys.some((i) => !i.iwasku)) return false; // özel/ödeme veya eşleşmemiş → onaya hazır değil
       const items = phys.map((i) => ({ iwasku: i.iwasku, qty: i.qty, desi: i.iwasku ? productMap.get(i.iwasku)?.desi ?? null : null, category: i.iwasku ? productMap.get(i.iwasku)?.category ?? null : null }));
-      if (isFurnitureOrder(items)) return false; // mobilya → hep manuel kaynak seçimi (TR/depo); otomatik onaya girmez
+      const mpCode = c.store_id != null ? codeByStore.get(c.store_id) ?? null : null;
+      if (needsManualSource(items, mpCode)) return false; // mobilya / Amazon Citi → hep manuel seçim; otomatik onaya girmez
       return resolveOrderWarehouse(items, avail, cgAvail) !== null;
     })
     .map((c) => c.wisersell_order_id);
@@ -169,10 +177,10 @@ export async function approveWisersellCandidates(ids: number[], userId: string, 
     const wsItemIds = physicalItems(c.orderitems).map((i) => i.id).filter((x): x is number => typeof x === 'number');
 
     const override = sources?.get(c.wisersell_order_id);
-    // TR (yalnız mobilya): outbound YOK, Wisersell'e dokunma — sadece yerel dismiss (board'dan gizle).
+    // TR (yalnız mobilya / Amazon Citi): outbound YOK, Wisersell'e dokunma — sadece yerel dismiss.
     if (override === 'TR') {
-      if (!isFurnitureOrder(items)) {
-        results.push({ wisersellOrderId: c.wisersell_order_id, ok: false, status: 'skipped', message: 'TR yalnız mobilya siparişinde seçilebilir' });
+      if (!needsManualSource(items, sm.marketplace_code)) {
+        results.push({ wisersellOrderId: c.wisersell_order_id, ok: false, status: 'skipped', message: 'TR yalnız mobilya / Amazon Citi siparişinde seçilebilir' });
         continue;
       }
       await prisma.orderTrDismissed.upsert({

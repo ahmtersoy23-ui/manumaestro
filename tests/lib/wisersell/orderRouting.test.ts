@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveOrderWarehouse, resolveOrderWarehouseOptions, isFurnitureOrder } from '@/lib/wisersell/orderRouting';
+import { resolveOrderWarehouse, resolveOrderWarehouseOptions, isFurnitureOrder, needsManualSource } from '@/lib/wisersell/orderRouting';
 import { isHeavyItem } from '@/lib/products/lookup';
 
 const us = (m: Record<string, { NJ: number; SHOWROOM: number }>) => new Map(Object.entries(m));
@@ -81,6 +81,21 @@ describe('isFurnitureOrder', () => {
   it('hiç Mobilya yoksa false', () => {
     expect(isFurnitureOrder([{ iwasku: 'A', qty: 1, category: 'Kanvas' }])).toBe(false);
     expect(isFurnitureOrder([{ iwasku: 'A', qty: 1, category: null }])).toBe(false);
+  });
+});
+
+describe('needsManualSource', () => {
+  const kanvas = [{ iwasku: 'A', qty: 1, category: 'Kanvas' }];
+  const mobilya = [{ iwasku: 'A', qty: 1, category: 'Mobilya' }];
+  it('mobilya → true (pazar yeri fark etmez)', () => {
+    expect(needsManualSource(mobilya, 'AMZN_US')).toBe(true);
+  });
+  it('Amazon Citi (CUSTOM_01) → true (kategori fark etmez)', () => {
+    expect(needsManualSource(kanvas, 'CUSTOM_01')).toBe(true);
+  });
+  it('ne mobilya ne Citi → false (otomatik routing)', () => {
+    expect(needsManualSource(kanvas, 'AMZN_US')).toBe(false);
+    expect(needsManualSource(kanvas, null)).toBe(false);
   });
 });
 

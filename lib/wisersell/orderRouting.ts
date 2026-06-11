@@ -48,9 +48,20 @@ export function resolveOrderWarehouse(
   return null;
 }
 
-/** Sipariş Mobilya kalemi içeriyor mu → onayda manuel kaynak seçimi (TR/depo) akışı. */
+/** Sipariş Mobilya kalemi içeriyor mu. */
 export function isFurnitureOrder(items: RoutingItem[]): boolean {
   return items.some((it) => (it.category ?? '').trim().toLowerCase() === 'mobilya');
+}
+
+/** Onayda manuel kaynak seçimi (TR/depo) gerektiren pazar yerleri. */
+const MANUAL_SOURCE_MARKETPLACES = new Set(['CUSTOM_01']); // Amazon Citi
+
+/**
+ * Onayda manuel kaynak seçimi (TR varsayılan + karşılayan depolar) gerekir mi?
+ * Mobilya kalemi VEYA özel pazar yeri (Amazon Citi). Diğerleri otomatik routing.
+ */
+export function needsManualSource(items: RoutingItem[], marketplaceCode?: string | null): boolean {
+  return isFurnitureOrder(items) || (!!marketplaceCode && MANUAL_SOURCE_MARKETPLACES.has(marketplaceCode));
 }
 
 /**

@@ -17,7 +17,7 @@ import { requireBoardUser } from '@/lib/auth/boardAuth';
 import { getOrderBoardLevel, hasOrderLevel } from '@/lib/auth/orderBoardPermission';
 import { getUsAvailability } from '@/lib/wms/usWarehouseStock';
 import { getCgAvailability, type CgAvailability } from '@/lib/wms/cgStock';
-import { resolveOrderWarehouse, resolveOrderWarehouseOptions, isFurnitureOrder } from '@/lib/wisersell/orderRouting';
+import { resolveOrderWarehouse, resolveOrderWarehouseOptions, needsManualSource } from '@/lib/wisersell/orderRouting';
 import { getProductsByIwasku, usDimensions, type ProductInfo } from '@/lib/products/lookup';
 
 interface CandidateItem {
@@ -115,6 +115,8 @@ export async function GET(request: NextRequest) {
     [region],
   ) as Array<{ store_id: number; marketplace_code: string | null; label: string | null }>;
   const marketplaceByStore = new Map(storeMapRows.map((s) => [Number(s.store_id), s.label || s.marketplace_code || `store ${s.store_id}`]));
+  // store_id → ham marketplace_code (Amazon Citi=CUSTOM_01 gibi manuel-kaynak tetiği için).
+  const marketplaceCodeByStore = new Map(storeMapRows.map((s) => [Number(s.store_id), s.marketplace_code]));
   // Ama_US mağaza id'leri (2 saat bekleme kapsamı) — marketplace_code'tan türetilir, id hardcode yok.
   const amaUsStoreIds = new Set(
     storeMapRows.filter((s) => s.marketplace_code === AMA_US_MARKETPLACE).map((s) => Number(s.store_id)),
@@ -183,12 +185,12 @@ export async function GET(request: NextRequest) {
       items: its,
       createdAt: c.created_at_ws,
     };
-    if (isFurnitureOrder(routingItems)) {
-      // Mobilya: TR (varsayılan) + karşılayan depolar seçilebilir. Hiçbir depo karşılamıyorsa
-      // mevcut davranış aynen (gizle) → zaten otomatik TR'den gider.
+    if (needsManualSource(routingItems, marketplaceCodeByStore.get(Number(c.store_id)) ?? null)) {
+      // Mobilya / Amazon Citi: TR (varsayılan) + karşılayan depolar seçilebilir. Hiçbir depo
+      // karşılamıyorsa mevcut davranış aynen (gizle) → zaten otomatik TR'den gider.
       const options = resolveOrderWarehouseOptions(routingItems, avail, cgAvail);
       if (options.length === 0) { stokYok++; continue; }
-      onayBekliyor.push({ ...base, warehouse: options[0], furniture: true, furnitureOptions: options });
+      onayBekliyor.push({ ...base, warehouse: options[0], manualSource: true, sourceOptions: options });
     } else {
       // heavy/CG → Shukran/MDN; sonra Fairfield/Somerset. Hiçbiri → stok yok (gizle).
       const wh = resolveOrderWarehouse(routingItems, avail, cgAvail);
