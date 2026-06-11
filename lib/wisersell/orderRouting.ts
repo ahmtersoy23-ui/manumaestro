@@ -53,8 +53,12 @@ export function isFurnitureOrder(items: RoutingItem[]): boolean {
   return items.some((it) => (it.category ?? '').trim().toLowerCase() === 'mobilya');
 }
 
-/** Onayda manuel kaynak seçimi (TR/depo) gerektiren pazar yerleri. */
-const MANUAL_SOURCE_MARKETPLACES = new Set(['CUSTOM_01']); // Amazon Citi
+/**
+ * Onayda manuel kaynak seçimi (TR/depo) gerektiren pazar yerleri.
+ * NOT: Bu kod Wisersell store_map.marketplace_code'tur (aday akışı), ManuMaestro
+ * iç registry değil → Amazon Citi = 'Ama_CITI' (CUSTOM_01 değil). İkisi de eklendi.
+ */
+const MANUAL_SOURCE_MARKETPLACES = new Set(['Ama_CITI', 'CUSTOM_01']); // Amazon Citi
 
 /**
  * Onayda manuel kaynak seçimi (TR varsayılan + karşılayan depolar) gerekir mi?

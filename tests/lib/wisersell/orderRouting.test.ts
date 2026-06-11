@@ -90,11 +90,12 @@ describe('needsManualSource', () => {
   it('mobilya → true (pazar yeri fark etmez)', () => {
     expect(needsManualSource(mobilya, 'AMZN_US')).toBe(true);
   });
-  it('Amazon Citi (CUSTOM_01) → true (kategori fark etmez)', () => {
-    expect(needsManualSource(kanvas, 'CUSTOM_01')).toBe(true);
+  it('Amazon Citi (store_map kodu Ama_CITI) → true (kategori fark etmez)', () => {
+    expect(needsManualSource(kanvas, 'Ama_CITI')).toBe(true);
+    expect(needsManualSource(kanvas, 'CUSTOM_01')).toBe(true); // iç registry karşılığı
   });
   it('ne mobilya ne Citi → false (otomatik routing)', () => {
-    expect(needsManualSource(kanvas, 'AMZN_US')).toBe(false);
+    expect(needsManualSource(kanvas, 'Ama_US')).toBe(false);
     expect(needsManualSource(kanvas, null)).toBe(false);
   });
 });
