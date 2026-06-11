@@ -486,18 +486,19 @@ export default function SiparisPage() {
         </div>
       </div>
 
-      {/* Durum kartları (birincil navigasyon) — kompakt, tek satır (7 kart) */}
-      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2 mb-5">
+      {/* Durum kartları (birincil navigasyon) — tek satır (7 kart), açıklamalı */}
+      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 mb-5">
         {STATUS_ORDER.map((k) => {
           const m = STATUS_META[k]; const Icon = m.icon; const active = tab === k;
           return (
             <button key={k} onClick={() => setTab(k)} title={m.desc}
-              className={`text-left rounded-lg border px-2.5 py-2 transition-all ${active ? `ring-2 ${m.ring} border-transparent` : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'}`}>
+              className={`text-left rounded-xl border px-3 py-3.5 transition-all ${active ? `ring-2 ${m.ring} border-transparent` : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'}`}>
               <div className="flex items-center justify-between gap-1">
-                <Icon className={`w-3.5 h-3.5 shrink-0 ${m.accent}`} />
-                <span className={`text-xl font-bold leading-none ${active ? m.accent : 'text-gray-900'}`}>{counts[k] ?? 0}</span>
+                <Icon className={`w-4 h-4 shrink-0 ${m.accent}`} />
+                <span className={`text-2xl font-bold leading-none ${active ? m.accent : 'text-gray-900'}`}>{counts[k] ?? 0}</span>
               </div>
-              <div className="mt-1 text-xs font-semibold text-gray-700 truncate">{m.label}</div>
+              <div className="mt-2 text-sm font-semibold text-gray-800 truncate">{m.label}</div>
+              <div className="text-[11px] text-gray-400 leading-tight mt-0.5 line-clamp-2">{m.desc}</div>
             </button>
           );
         })}
