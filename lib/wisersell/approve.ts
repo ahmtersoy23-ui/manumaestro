@@ -12,7 +12,7 @@ import { queryDataBridge } from '@/lib/db/prisma';
 import { getUsAvailability } from '@/lib/wms/usWarehouseStock';
 import { getCgAvailability } from '@/lib/wms/cgStock';
 import { getProductsByIwasku } from '@/lib/products/lookup';
-import { resolveOrderWarehouse, resolveOrderWarehouseOptions, needsManualSource, type RoutedWarehouse } from '@/lib/wisersell/orderRouting';
+import { resolveOrderWarehouse, resolveOrderWarehouseOptions, needsManualSource, isEtsyChannel, type RoutedWarehouse } from '@/lib/wisersell/orderRouting';
 import { markWisersellReady, markWisersellOrderItems } from '@/lib/wisersell/databridgeClient';
 import { findChannelDuplicate } from '@/lib/wms/orderDuplicateGuard';
 import { createLogger } from '@/lib/logger';
@@ -101,6 +101,7 @@ export async function getEligibleCandidateIds(region: string): Promise<number[]>
       const items = phys.map((i) => ({ iwasku: i.iwasku, qty: i.qty, desi: i.iwasku ? productMap.get(i.iwasku)?.desi ?? null : null, category: i.iwasku ? productMap.get(i.iwasku)?.category ?? null : null }));
       const mpCode = c.store_id != null ? codeByStore.get(c.store_id) ?? null : null;
       if (needsManualSource(items, mpCode)) return false; // mobilya / Amazon Citi → hep manuel seçim; otomatik onaya girmez
+      if (isEtsyChannel(mpCode)) return false;             // Etsy (tüm mağazalar) → manuel onayda kalır
       return resolveOrderWarehouse(items, avail, cgAvail) !== null;
     })
     .map((c) => c.wisersell_order_id);

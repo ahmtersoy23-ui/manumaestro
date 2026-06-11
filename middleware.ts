@@ -77,6 +77,10 @@ async function runMiddleware(request: NextRequest): Promise<NextResponse> {
   if (request.nextUrl.pathname === '/api/stock-push/cron') {
     return NextResponse.next();
   }
+  // Sunucu cron → ManuMaestro: otomatik sipariş onayı (server-to-server, x-internal-api-key).
+  if (request.nextUrl.pathname === '/api/siparis/auto-run') {
+    return NextResponse.next();
+  }
 
   logger.debug('Request:', request.nextUrl.pathname);
 

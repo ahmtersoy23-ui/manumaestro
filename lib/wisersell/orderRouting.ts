@@ -69,6 +69,16 @@ export function needsManualSource(items: RoutingItem[], marketplaceCode?: string
 }
 
 /**
+ * Etsy kanalı mı (tüm Etsy mağazaları: Etsy_BMU, EtsyDHA, "Etsy IWA", Etsy_SG ...)?
+ * Otomatik onaydan muaf — US-uygunluk insan kontrolü gerektirir (ileride ürün-bazlı
+ * US filtresi buraya bağlanır). needsManualSource'tan AYRI: kaynak dropdown'ı tetiklemez,
+ * sadece "Onay Bekliyor"da manuel onayda kalır.
+ */
+export function isEtsyChannel(marketplaceCode?: string | null): boolean {
+  return !!marketplaceCode && /^etsy/i.test(marketplaceCode.trim());
+}
+
+/**
  * Mobilya manuel seçimi: tek depodan TAM karşılayabilen BÜTÜN depolar (sıra: Fairfield,
  * Somerset, CG Shukran, CG MDN). resolveOrderWarehouse'tan farkı: tek seçim değil, hepsi.
  * iwasku eksik / kalem yok → [] (zaten board'da gizlenir).

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveOrderWarehouse, resolveOrderWarehouseOptions, isFurnitureOrder, needsManualSource } from '@/lib/wisersell/orderRouting';
+import { resolveOrderWarehouse, resolveOrderWarehouseOptions, isFurnitureOrder, needsManualSource, isEtsyChannel } from '@/lib/wisersell/orderRouting';
 import { isHeavyItem } from '@/lib/products/lookup';
 
 const us = (m: Record<string, { NJ: number; SHOWROOM: number }>) => new Map(Object.entries(m));
@@ -97,6 +97,20 @@ describe('needsManualSource', () => {
   it('ne mobilya ne Citi → false (otomatik routing)', () => {
     expect(needsManualSource(kanvas, 'Ama_US')).toBe(false);
     expect(needsManualSource(kanvas, null)).toBe(false);
+  });
+});
+
+describe('isEtsyChannel (tüm Etsy mağazaları)', () => {
+  it('Etsy varyantlarını yakalar', () => {
+    for (const code of ['Etsy_BMU', 'EtsyDHA', 'Etsy IWA', 'Etsy_SG', 'EtsyIHS', 'etsy_test']) {
+      expect(isEtsyChannel(code)).toBe(true);
+    }
+  });
+  it('Etsy olmayanlar → false', () => {
+    expect(isEtsyChannel('Ama_US')).toBe(false);
+    expect(isEtsyChannel('Wayfair Shukran')).toBe(false);
+    expect(isEtsyChannel(null)).toBe(false);
+    expect(isEtsyChannel(undefined)).toBe(false);
   });
 });
 
