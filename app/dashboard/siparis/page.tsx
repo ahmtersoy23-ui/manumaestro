@@ -22,8 +22,8 @@ const STATUS_META: Record<StatusKey, { label: string; desc: string; icon: typeof
   eslesmeGerek:   { label: 'Eşleşme Gerek',    desc: 'iwasku eşleşmiyor — mapping gerek', icon: AlertTriangle, accent: 'text-orange-700', ring: 'ring-orange-500 bg-orange-50', dot: 'bg-orange-500' },
   etiketBekliyor: { label: 'Etiket Bekliyor · AWB', desc: 'AWB ekibi Veeqo etiketi alacak', icon: PackageCheck, accent: 'text-amber-700',  ring: 'ring-amber-500 bg-amber-50',   dot: 'bg-amber-500' },
   wayfairBekliyor:{ label: 'Etiket Bekliyor · WF',  desc: 'Wayfair tracking elle girilecek (AWB almaz)', icon: Tag, accent: 'text-fuchsia-700', ring: 'ring-fuchsia-500 bg-fuchsia-50', dot: 'bg-fuchsia-500' },
-  cikisBekliyor:  { label: 'Çıkış Bekliyor',   desc: 'Etiketli, fiziksel çıkış bekliyor', icon: Truck,        accent: 'text-sky-700',    ring: 'ring-sky-500 bg-sky-50',       dot: 'bg-sky-500' },
-  cgBekliyor:     { label: 'CG Bekliyor',      desc: 'CastleGate — MCF/tracking bekliyor', icon: Warehouse,  accent: 'text-teal-700',   ring: 'ring-teal-500 bg-teal-50',     dot: 'bg-teal-500' },
+  cikisBekliyor:  { label: 'Çıkış Bekliyor · FF/SS', desc: 'Fairfield/Somerset — fiziksel çıkış bekliyor', icon: Truck, accent: 'text-sky-700', ring: 'ring-sky-500 bg-sky-50', dot: 'bg-sky-500' },
+  cgBekliyor:     { label: 'Çıkış Bekliyor · CG',    desc: 'CastleGate — MCF/tracking bekliyor', icon: Warehouse, accent: 'text-teal-700', ring: 'ring-teal-500 bg-teal-50', dot: 'bg-teal-500' },
   kapatmaBekliyor:{ label: 'Kapatma Bekliyor', desc: 'Kargolandı, Wisersell kapatma',   icon: Send,         accent: 'text-rose-700',   ring: 'ring-rose-500 bg-rose-50',     dot: 'bg-rose-500' },
   kapandi:        { label: 'Kapandı',          desc: 'Wisersell external-close yazıldı', icon: Archive,      accent: 'text-slate-600',  ring: 'ring-slate-400 bg-slate-50',   dot: 'bg-slate-400' },
 };
