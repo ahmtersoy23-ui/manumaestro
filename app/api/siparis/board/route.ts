@@ -279,7 +279,9 @@ export async function GET(request: NextRequest) {
       // elle girilir. AWB ekibi karıştırmasın diye ayrı "Etiket·WF" kovasında durur.
       // Tracking girilince AWB ile AYNI hatta: Çıkış Bekliyor → çıkış → kapatma.
       else if (isWayfairChannel(o.marketplaceCode)) {
-        if (o.manualTracking) cikisBekliyor.push(base);
+        // Etiket ŞART: Veeqo SHIPPING etiketi VEYA elle girilen Wayfair tracking varsa
+        // AWB ile aynı hatta (Çıkış Bekliyor); yoksa Etiket·WF'de tracking bekler.
+        if ((shippingLabel && shippingLabel.trackingNumber) || o.manualTracking) cikisBekliyor.push(base);
         else wayfairBekliyor.push(base);
       }
       else if (shippingLabel && shippingLabel.trackingNumber) cikisBekliyor.push(base);
