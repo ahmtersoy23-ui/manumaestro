@@ -14,6 +14,7 @@ interface ConfigRow {
   warehouses: string[];
   percent: number;
   floorX: number;
+  handlingDays: number | null;
   note: string | null;
 }
 interface PreviewRow {
@@ -25,9 +26,10 @@ interface PreviewRow {
   willChange: boolean;
   base?: number;
   belowFloor?: boolean;
+  handlingDays?: number | null;
   breakdown: { cgMdn: number; cgShukran: number; nj: number; showroom: number };
 }
-interface Settings { channel: string; standardQty: number; enabled: boolean; dryRun: boolean }
+interface Settings { channel: string; standardQty: number; standardHandlingDays: number | null; enabled: boolean; dryRun: boolean }
 
 const PAGE_SIZE = 100;
 
@@ -55,6 +57,8 @@ export default function StokPushPage() {
   const [bMode, setBMode] = useState<'STOCK' | 'ZERO' | 'STANDARD'>('STOCK');
   const [bWh, setBWh] = useState<StockWarehouse[]>([...STOCK_WAREHOUSES]);
   const [bPercent, setBPercent] = useState(100);
+  const [bFloor, setBFloor] = useState(0); // alt sınır (<X→0)
+  const [bHandling, setBHandling] = useState(''); // handling time (boş=gönderme)
 
   // filtre
   const [filter, setFilter] = useState<'all' | 'changed' | 'STOCK' | 'ZERO' | 'STANDARD'>('all');
@@ -153,7 +157,14 @@ export default function StokPushPage() {
           channel,
           iwaskus: [...selected],
           mode: bMode === 'STANDARD' ? null : bMode,
-          ...(bMode === 'STOCK' ? { warehouses: bWh, percent: bPercent } : {}),
+          ...(bMode === 'STOCK'
+            ? {
+                warehouses: bWh,
+                percent: bPercent,
+                floorX: bFloor,
+                ...(ch.supportsHandling && bHandling.trim() !== '' ? { handlingDays: Number(bHandling) } : {}),
+              }
+            : {}),
         }),
       });
       const json = await res.json();
@@ -322,8 +333,21 @@ export default function StokPushPage() {
                   onChange={(e) => setSettings({ ...settings, standardQty: Number(e.target.value) })}
                   className="w-20 border rounded-lg px-2 py-1 read-only:bg-gray-100"
                 />
+                {ch.supportsHandling && (
+                  <>
+                    <span className="text-gray-500">Handling (gün):</span>
+                    <input
+                      type="number"
+                      value={settings.standardHandlingDays ?? ''}
+                      readOnly={!access.canEdit}
+                      placeholder="—"
+                      onChange={(e) => setSettings({ ...settings, standardHandlingDays: e.target.value === '' ? null : Number(e.target.value) })}
+                      className="w-20 border rounded-lg px-2 py-1 read-only:bg-gray-100"
+                    />
+                  </>
+                )}
                 {access.canEdit && (
-                  <Button variant="secondary" size="sm" loading={busy === 'settings'} onClick={() => saveSettings({ standardQty: settings.standardQty })}>Kaydet</Button>
+                  <Button variant="secondary" size="sm" loading={busy === 'settings'} onClick={() => saveSettings({ standardQty: settings.standardQty, ...(ch.supportsHandling ? { standardHandlingDays: settings.standardHandlingDays } : {}) })}>Kaydet</Button>
                 )}
                 <button onClick={() => setShowRules((v) => !v)} className="ml-auto text-gray-600 hover:text-gray-900 font-medium">
                   Kurallar ({configs.length}) {showRules ? '▾' : '▸'}
@@ -337,7 +361,7 @@ export default function StokPushPage() {
                 ) : (
                   configs.map((c) => (
                     <span key={c.id} className="inline-flex items-center gap-1 text-xs bg-gray-100 rounded px-1.5 py-0.5">
-                      <span className={c.mode === 'STOCK' ? 'text-blue-700' : 'text-gray-500'}>{c.mode === 'STOCK' ? `${c.percent}%` : '0'}</span>
+                      <span className={c.mode === 'STOCK' ? 'text-blue-700' : 'text-gray-500'}>{c.mode === 'STOCK' ? `${c.percent}%${c.floorX ? `·≥${c.floorX}` : ''}${c.handlingDays != null ? `·${c.handlingDays}g` : ''}` : '0'}</span>
                       <span className="font-mono">{c.iwasku}</span>
                       {access.canEdit && (
                         <button onClick={() => deleteConfig(c.id)} className="text-gray-400 hover:text-red-600" title="kuralı kaldır" disabled={busy === `del-${c.id}`}>
@@ -379,6 +403,16 @@ export default function StokPushPage() {
                       <span className="block text-gray-500 mb-1 text-xs">Yüzde %</span>
                       <input type="number" value={bPercent} onChange={(e) => setBPercent(Number(e.target.value))} className="w-20 border rounded-lg px-2 py-1.5" />
                     </label>
+                    <label>
+                      <span className="block text-gray-500 mb-1 text-xs">Alt sınır (&lt;X→0)</span>
+                      <input type="number" value={bFloor} onChange={(e) => setBFloor(Number(e.target.value))} className="w-24 border rounded-lg px-2 py-1.5" />
+                    </label>
+                    {ch.supportsHandling && (
+                      <label>
+                        <span className="block text-gray-500 mb-1 text-xs">Handling (gün)</span>
+                        <input type="number" value={bHandling} placeholder="—" onChange={(e) => setBHandling(e.target.value)} className="w-24 border rounded-lg px-2 py-1.5" />
+                      </label>
+                    )}
                   </>
                 )}
                 <Button size="sm" icon={<Check className="w-4 h-4" />} loading={busy === 'bulk'} onClick={applyBulk}>Seçili {selected.size}&apos;e uygula</Button>
@@ -423,6 +457,7 @@ export default function StokPushPage() {
                           <td className="text-right text-gray-500">{r.lastQty ?? '—'}</td>
                           <td className={`text-right font-semibold ${r.willChange ? 'text-blue-600' : 'text-gray-700'}`}>
                             {r.quantity}
+                            {r.handlingDays != null && <span className="ml-1 text-[10px] text-gray-400">{r.handlingDays}g</span>}
                             {r.belowFloor && <span className="ml-1 text-[10px] text-amber-600">(eşik↓)</span>}
                           </td>
                         </tr>

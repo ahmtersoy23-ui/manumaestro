@@ -1159,7 +1159,8 @@ model StockPushConfig {
   mode       StockPushMode
   warehouses String[]      @default([]) // STOCK icin: CG_MDN, CG_SHUKRAN, NJ, SHOWROOM
   percent    Int           @default(100) // STOCK icin yuzde (0-100)
-  floorX     Int           @default(0) // STOCK: base available < floorX ise 0 push
+  floorX     Int           @default(0) // STOCK: base available < floorX ise 0 push (alt sinir)
+  handlingDays Int?        // Amazon handling time (lead_time_to_ship_max_days); null=gönderme (Amazon default)
   note       String?
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
@@ -1170,11 +1171,12 @@ model StockPushConfig {
 }
 
 model StockPushSettings {
-  channel     String   @id @default("AMAZON_US")
-  standardQty Int      @default(11)
-  enabled     Boolean  @default(false)
-  dryRun      Boolean  @default(true)
-  updatedAt   DateTime @updatedAt
+  channel              String   @id @default("AMAZON_US")
+  standardQty          Int      @default(11)
+  standardHandlingDays Int?     // Amazon: kuralsızlara basılacak default handling time; null=gönderme
+  enabled              Boolean  @default(false)
+  dryRun               Boolean  @default(true)
+  updatedAt            DateTime @updatedAt
 
   @@map("stock_push_settings")
 }
@@ -1185,6 +1187,7 @@ model StockPushState {
   marketplaceSku String
   iwasku         String
   lastQty        Int
+  lastHandling   Int?     // son push edilen handling time (diff icin)
   lastPushedAt   DateTime @default(now())
 
   @@id([channel, marketplaceSku])

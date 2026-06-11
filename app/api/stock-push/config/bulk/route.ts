@@ -16,6 +16,7 @@ const schema = z.object({
   warehouses: z.array(z.enum(STOCK_WAREHOUSES)).optional(),
   percent: z.number().int().min(0).max(100).optional(),
   floorX: z.number().int().min(0).max(100000).optional(),
+  handlingDays: z.number().int().min(0).max(60).nullable().optional(),
   note: z.string().max(500).optional(),
 });
 
@@ -24,7 +25,7 @@ export const POST = withRoute({ rateLimit: 'write' }, async ({ user, request }) 
   if (deny) return deny;
   const parsed = schema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ success: false, error: 'Geçersiz veri' }, { status: 400 });
-  const { channel, iwaskus, mode, warehouses, percent, floorX, note } = parsed.data;
+  const { channel, iwaskus, mode, warehouses, percent, floorX, handlingDays, note } = parsed.data;
   const unique = [...new Set(iwaskus.map((s) => s.trim()).filter(Boolean))];
 
   if (mode === null) {
@@ -35,11 +36,12 @@ export const POST = withRoute({ rateLimit: 'write' }, async ({ user, request }) 
   const wh = mode === 'STOCK' ? (warehouses ?? [...STOCK_WAREHOUSES]) : [];
   const p = percent ?? 100;
   const f = floorX ?? 0;
+  const h = handlingDays ?? null;
   const ops = unique.map((iwasku) =>
     prisma.stockPushConfig.upsert({
       where: { channel_iwasku: { channel, iwasku } },
-      create: { channel, iwasku, mode, warehouses: wh, percent: p, floorX: f, note: note ?? null },
-      update: { mode, warehouses: wh, percent: p, floorX: f, ...(note !== undefined ? { note } : {}) },
+      create: { channel, iwasku, mode, warehouses: wh, percent: p, floorX: f, handlingDays: h, note: note ?? null },
+      update: { mode, warehouses: wh, percent: p, floorX: f, handlingDays: h, ...(note !== undefined ? { note } : {}) },
     }),
   );
   let count = 0;

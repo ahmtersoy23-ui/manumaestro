@@ -27,15 +27,16 @@ export async function runStockPush(channelKey: string, opts: { dryRunOverride?: 
   const effectiveDryRun = comp.enabled ? wantDryRun : true;
 
   const states = await prisma.stockPushState.findMany({ where: { channel: channelKey } });
-  const lastBySku = new Map(states.map((s) => [s.marketplaceSku, s.lastQty]));
+  const lastBySku = new Map(states.map((s) => [s.marketplaceSku, { qty: s.lastQty, handling: s.lastHandling }]));
 
   const changedItems: PushItem[] = [];
   const tierAZeros: string[] = [];
   for (const t of comp.targets) {
     const prev = lastBySku.get(t.marketplaceSku);
-    if (prev !== undefined && prev === t.quantity) continue; // degismemis
-    changedItems.push({ sku: t.marketplaceSku, quantity: t.quantity });
-    if (t.mode === 'STOCK' && t.quantity === 0 && (prev === undefined || prev > 0)) {
+    // Adet VEYA handling değiştiyse gönder
+    if (prev && prev.qty === t.quantity && (prev.handling ?? null) === (t.handlingDays ?? null)) continue;
+    changedItems.push({ sku: t.marketplaceSku, quantity: t.quantity, handlingDays: t.handlingDays });
+    if (t.mode === 'STOCK' && t.quantity === 0 && (!prev || prev.qty > 0)) {
       tierAZeros.push(t.marketplaceSku);
     }
   }
@@ -58,7 +59,7 @@ export async function runStockPush(channelKey: string, opts: { dryRunOverride?: 
     const results: PushResultRow[] = changedItems.map((it) => ({
       sku: it.sku,
       status: 'dryrun',
-      from: lastBySku.get(it.sku) ?? null,
+      from: lastBySku.get(it.sku)?.qty ?? null,
       to: it.quantity,
     }));
     return {
@@ -90,8 +91,8 @@ export async function runStockPush(channelKey: string, opts: { dryRunOverride?: 
         if (!t) return null;
         return prisma.stockPushState.upsert({
           where: { channel_marketplaceSku: { channel: channelKey, marketplaceSku: r.sku } },
-          create: { channel: channelKey, marketplaceSku: r.sku, iwasku: t.iwasku, lastQty: t.quantity },
-          update: { lastQty: t.quantity, iwasku: t.iwasku, lastPushedAt: new Date() },
+          create: { channel: channelKey, marketplaceSku: r.sku, iwasku: t.iwasku, lastQty: t.quantity, lastHandling: t.handlingDays },
+          update: { lastQty: t.quantity, lastHandling: t.handlingDays, iwasku: t.iwasku, lastPushedAt: new Date() },
         });
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);

@@ -29,11 +29,15 @@ export interface PushTarget {
   base?: number;
   /** STOCK: base < floorX => 0 */
   belowFloor?: boolean;
+  /** Amazon handling time (lead_time_to_ship_max_days); null=gönderme */
+  handlingDays: number | null;
 }
 
 export interface ComputeResult {
   channel: string;
   standardQty: number;
+  standardHandlingDays: number | null;
+  supportsHandling: boolean;
   enabled: boolean;
   dryRun: boolean;
   targets: PushTarget[];
@@ -59,6 +63,8 @@ export async function computeTargets(channelKey: string): Promise<ComputeResult>
   ]);
 
   const standardQty = settings?.standardQty ?? 11;
+  // Handling time sadece destekleyen kanalda (Amazon); diğerlerinde hep null.
+  const stdHandling = channel.supportsHandling ? settings?.standardHandlingDays ?? null : null;
   const configByIwasku = new Map(configs.map((c) => [c.iwasku, c]));
 
   // Stok kaynagi sadece STOCK kovasindaki iwasku'lar icin gerekli (CG + US available)
@@ -81,11 +87,11 @@ export async function computeTargets(channelKey: string): Promise<ComputeResult>
     };
 
     if (!cfg) {
-      targets.push({ marketplaceSku: l.marketplace_sku, iwasku: l.iwasku, mode: 'STANDARD', quantity: standardQty, breakdown });
+      targets.push({ marketplaceSku: l.marketplace_sku, iwasku: l.iwasku, mode: 'STANDARD', quantity: standardQty, breakdown, handlingDays: stdHandling });
       continue;
     }
     if (cfg.mode === 'ZERO') {
-      targets.push({ marketplaceSku: l.marketplace_sku, iwasku: l.iwasku, mode: 'ZERO', quantity: 0, breakdown });
+      targets.push({ marketplaceSku: l.marketplace_sku, iwasku: l.iwasku, mode: 'ZERO', quantity: 0, breakdown, handlingDays: null });
       continue;
     }
     // STOCK — secili depolarin available toplami
@@ -97,7 +103,8 @@ export async function computeTargets(channelKey: string): Promise<ComputeResult>
     if (wh.includes('SHOWROOM')) base += breakdown.showroom;
     const belowFloor = base < cfg.floorX;
     const quantity = belowFloor ? 0 : Math.round((base * cfg.percent) / 100);
-    targets.push({ marketplaceSku: l.marketplace_sku, iwasku: l.iwasku, mode: 'STOCK', quantity, breakdown, base, belowFloor });
+    const handlingDays = channel.supportsHandling ? cfg.handlingDays ?? stdHandling : null;
+    targets.push({ marketplaceSku: l.marketplace_sku, iwasku: l.iwasku, mode: 'STOCK', quantity, breakdown, base, belowFloor, handlingDays });
   }
 
   const counts = {
@@ -106,5 +113,5 @@ export async function computeTargets(channelKey: string): Promise<ComputeResult>
     zero: targets.filter((t) => t.mode === 'ZERO').length,
     total: targets.length,
   };
-  return { channel: channelKey, standardQty, enabled: settings?.enabled ?? false, dryRun: settings?.dryRun ?? true, targets, counts };
+  return { channel: channelKey, standardQty, standardHandlingDays: stdHandling, supportsHandling: channel.supportsHandling, enabled: settings?.enabled ?? false, dryRun: settings?.dryRun ?? true, targets, counts };
 }

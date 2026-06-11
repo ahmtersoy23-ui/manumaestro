@@ -16,6 +16,8 @@ function getConfig(): { baseUrl: string; apiKey: string } {
 export interface PushItem {
   sku: string;
   quantity: number;
+  /** Amazon handling time (lead_time_to_ship_max_days); null/undefined = gönderme */
+  handlingDays?: number | null;
 }
 
 export interface PushResultRow {
