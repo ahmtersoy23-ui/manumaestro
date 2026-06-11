@@ -896,6 +896,19 @@ model OutboundOrderItemAllocation {
   @@map("outbound_order_item_allocations")
 }
 
+// Mobilya siparişi onayında "TR" seçilince: aday Sipariş board'dan GİZLENİR.
+// CANCELLED DEĞİL, Wisersell'e dokunulmaz (TR sevkiyatı orada ayrıca yapılır).
+// wisersell_order_id bazlı yerel işaret; board onayBekliyor'dan eler.
+model OrderTrDismissed {
+  wisersellOrderId Int      @id
+  dismissedAt      DateTime @default(now())
+  dismissedById    String
+  recipientName    String?  // görsel/iz amaçlı kopya
+  orderCode        String?
+
+  @@map("order_tr_dismissed")
+}
+
 enum OrderType {
   SINGLE // Tekil sipariş — raf+koli karışık seçim, kısmi koli kırma destekli
   FBA_PICKUP // Amazon FBA pick-up — koli bazlı, tam koli (kısmi yok)

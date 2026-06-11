@@ -17,7 +17,7 @@ import { requireBoardUser } from '@/lib/auth/boardAuth';
 import { getOrderBoardLevel, hasOrderLevel } from '@/lib/auth/orderBoardPermission';
 import { getUsAvailability } from '@/lib/wms/usWarehouseStock';
 import { getCgAvailability, type CgAvailability } from '@/lib/wms/cgStock';
-import { resolveOrderWarehouse } from '@/lib/wisersell/orderRouting';
+import { resolveOrderWarehouse, resolveOrderWarehouseOptions, isFurnitureOrder } from '@/lib/wisersell/orderRouting';
 import { getProductsByIwasku, usDimensions, type ProductInfo } from '@/lib/products/lookup';
 
 interface CandidateItem {
@@ -101,7 +101,13 @@ export async function GET(request: NextRequest) {
     : [];
   const approvedSet = new Set(existingAuto.map((o) => o.wisersellOrderId));
 
-  const pendingCandidates = candidates.filter((c) => !approvedSet.has(c.wisersell_order_id));
+  // Mobilya siparişinde "TR" seçilip board'dan gizlenenler (yerel işaret; Wisersell'e dokunulmaz).
+  const trDismissed = await prisma.orderTrDismissed.findMany({ select: { wisersellOrderId: true } });
+  const trDismissedSet = new Set(trDismissed.map((d) => d.wisersellOrderId));
+
+  const pendingCandidates = candidates.filter(
+    (c) => !approvedSet.has(c.wisersell_order_id) && !trDismissedSet.has(c.wisersell_order_id),
+  );
 
   // store_id → marketplace etiketi (pazar yeri kolonu)
   const storeMapRows = await queryDataBridge(
@@ -165,23 +171,30 @@ export async function GET(request: NextRequest) {
       });
       continue;
     }
-    // iwasku tamam → routing (heavy/CG → Shukran/MDN; sonra Fairfield/Somerset). Hiçbiri → stok yok (gizle).
-    const wh = resolveOrderWarehouse(
-      its.map((i) => ({ iwasku: i.iwasku, qty: i.qty, desi: i.iwasku ? productMap.get(i.iwasku)?.desi ?? null : null, category: i.iwasku ? productMap.get(i.iwasku)?.category ?? null : null })),
-      avail, cgAvail,
-    );
-    if (!wh) { stokYok++; continue; }
-    onayBekliyor.push({
+    // iwasku tamam → routing.
+    const routingItems = its.map((i) => ({ iwasku: i.iwasku, qty: i.qty, desi: i.iwasku ? productMap.get(i.iwasku)?.desi ?? null : null, category: i.iwasku ? productMap.get(i.iwasku)?.category ?? null : null }));
+    const base = {
       wisersellOrderId: c.wisersell_order_id,
       orderCode: c.order_code,
       recipientName: c.recipient_name,
       labelNo: c.label_no,
-      warehouse: wh,
       marketplaceCode: mp,
       shipAddress: c.ship_address,
       items: its,
       createdAt: c.created_at_ws,
-    });
+    };
+    if (isFurnitureOrder(routingItems)) {
+      // Mobilya: TR (varsayılan) + karşılayan depolar seçilebilir. Hiçbir depo karşılamıyorsa
+      // mevcut davranış aynen (gizle) → zaten otomatik TR'den gider.
+      const options = resolveOrderWarehouseOptions(routingItems, avail, cgAvail);
+      if (options.length === 0) { stokYok++; continue; }
+      onayBekliyor.push({ ...base, warehouse: options[0], furniture: true, furnitureOptions: options });
+    } else {
+      // heavy/CG → Shukran/MDN; sonra Fairfield/Somerset. Hiçbiri → stok yok (gizle).
+      const wh = resolveOrderWarehouse(routingItems, avail, cgAvail);
+      if (!wh) { stokYok++; continue; }
+      onayBekliyor.push({ ...base, warehouse: wh });
+    }
   }
 
   // ── 2. WISERSELL_AUTO outbound'lar ────────────────────────────────────────

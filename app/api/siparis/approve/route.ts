@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { requireOrderBoardLevel } from '@/lib/auth/orderBoardPermission';
-import { approveWisersellCandidates, type ApproveResult } from '@/lib/wisersell/approve';
+import { approveWisersellCandidates, type ApproveResult, type OrderSource } from '@/lib/wisersell/approve';
 import { markWisersellReady } from '@/lib/wisersell/databridgeClient';
 import { logAction } from '@/lib/auditLog';
 import { createLogger } from '@/lib/logger';
@@ -19,6 +19,8 @@ const logger = createLogger('SiparisApprove');
 
 const Schema = z.object({
   wisersellOrderIds: z.array(z.number().int().positive()).min(1).max(200),
+  // Mobilya manuel kaynak seçimi: wisersellOrderId → 'TR' | depo. Yoksa otomatik routing.
+  sources: z.record(z.string(), z.enum(['TR', 'NJ', 'SHOWROOM', 'CG_SHUKRAN', 'CG_MDN'])).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -34,6 +36,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Doğrulama hatası', details: parsed.error.flatten().fieldErrors }, { status: 400 });
   }
   const ids = parsed.data.wisersellOrderIds;
+  const sourcesMap = parsed.data.sources
+    ? new Map<number, OrderSource>(Object.entries(parsed.data.sources).map(([k, v]) => [Number(k), v as OrderSource]))
+    : undefined;
 
   // Zaten oluşmuş (ready-pending) siparişler → mark-ready retry; gerisi → fresh approve
   const existing = await prisma.outboundOrder.findMany({
@@ -63,19 +68,28 @@ export async function POST(request: NextRequest) {
 
   // Fresh approve
   if (freshIds.length) {
-    const fresh = await approveWisersellCandidates(freshIds, auth.user.id);
+    const fresh = await approveWisersellCandidates(freshIds, auth.user.id, sourcesMap);
     results.push(...fresh);
   }
 
   const approved = results.filter((r) => r.status === 'approved').length;
+  const dismissedTr = results.filter((r) => r.status === 'dismissed_tr').length;
   logger.info(`approve: ${approved}/${ids.length} onaylandı (${results.filter(r => r.status === 'ready_pending').length} ready-pending)`);
   if (approved > 0) {
     await logAction({
       userId: auth.user.id, userName: auth.user.name, userEmail: auth.user.email,
       action: 'APPROVE_ORDER', entityType: 'OutboundOrder',
       entityId: results.filter((r) => r.status === 'approved' && r.orderId).map((r) => r.orderId).join(','),
-      description: `${approved} sipariş onaylandı (Etiket Bekliyor)`,
+      description: `${approved} sipariş onaylandı (Etiket/CG Bekliyor)`,
     });
   }
-  return NextResponse.json({ success: true, results, approved });
+  if (dismissedTr > 0) {
+    await logAction({
+      userId: auth.user.id, userName: auth.user.name, userEmail: auth.user.email,
+      action: 'APPROVE_ORDER', entityType: 'OutboundOrder',
+      entityId: results.filter((r) => r.status === 'dismissed_tr').map((r) => String(r.wisersellOrderId)).join(','),
+      description: `${dismissedTr} mobilya siparişi TR'den karşılanacak (board'dan gizlendi)`,
+    });
+  }
+  return NextResponse.json({ success: true, results, approved, dismissedTr });
 }

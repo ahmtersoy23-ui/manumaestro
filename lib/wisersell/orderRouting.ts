@@ -47,3 +47,37 @@ export function resolveOrderWarehouse(
   if (coversUs('NJ')) return 'NJ';
   return null;
 }
+
+/** Sipariş Mobilya kalemi içeriyor mu → onayda manuel kaynak seçimi (TR/depo) akışı. */
+export function isFurnitureOrder(items: RoutingItem[]): boolean {
+  return items.some((it) => (it.category ?? '').trim().toLowerCase() === 'mobilya');
+}
+
+/**
+ * Mobilya manuel seçimi: tek depodan TAM karşılayabilen BÜTÜN depolar (sıra: Fairfield,
+ * Somerset, CG Shukran, CG MDN). resolveOrderWarehouse'tan farkı: tek seçim değil, hepsi.
+ * iwasku eksik / kalem yok → [] (zaten board'da gizlenir).
+ */
+export function resolveOrderWarehouseOptions(
+  items: RoutingItem[],
+  usAvail: Map<string, { NJ: number; SHOWROOM: number }>,
+  cgAvail?: Map<string, CgAvailability>,
+): RoutedWarehouse[] {
+  if (!items.length || items.some((it) => !it.iwasku)) return [];
+
+  const need = new Map<string, number>();
+  for (const it of items) need.set(it.iwasku!, (need.get(it.iwasku!) ?? 0) + it.qty);
+  const entries = [...need.entries()];
+
+  const coversUs = (wh: 'NJ' | 'SHOWROOM') =>
+    entries.every(([iwasku, qty]) => (usAvail.get(iwasku)?.[wh] ?? 0) >= qty);
+  const coversCg = (acc: keyof CgAvailability) =>
+    cgAvail != null && entries.every(([iwasku, qty]) => (cgAvail.get(iwasku)?.[acc] ?? 0) >= qty);
+
+  const out: RoutedWarehouse[] = [];
+  if (coversUs('SHOWROOM')) out.push('SHOWROOM');
+  if (coversUs('NJ')) out.push('NJ');
+  if (coversCg('CG_SHUKRAN')) out.push('CG_SHUKRAN');
+  if (coversCg('CG_MDN')) out.push('CG_MDN');
+  return out;
+}

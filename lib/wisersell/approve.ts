@@ -12,7 +12,7 @@ import { queryDataBridge } from '@/lib/db/prisma';
 import { getUsAvailability } from '@/lib/wms/usWarehouseStock';
 import { getCgAvailability } from '@/lib/wms/cgStock';
 import { getProductsByIwasku } from '@/lib/products/lookup';
-import { resolveOrderWarehouse } from '@/lib/wisersell/orderRouting';
+import { resolveOrderWarehouse, resolveOrderWarehouseOptions, isFurnitureOrder, type RoutedWarehouse } from '@/lib/wisersell/orderRouting';
 import { markWisersellReady, markWisersellOrderItems } from '@/lib/wisersell/databridgeClient';
 import { findChannelDuplicate } from '@/lib/wms/orderDuplicateGuard';
 import { createLogger } from '@/lib/logger';
@@ -48,10 +48,13 @@ interface StoreMap {
   label_prefix: string | null;
 }
 
+/** Mobilya manuel kaynak seçimi: depo (warehouse override) veya 'TR' (board'dan gizle). */
+export type OrderSource = RoutedWarehouse | 'TR';
+
 export interface ApproveResult {
   wisersellOrderId: number;
   ok: boolean;
-  status: 'approved' | 'ready_pending' | 'skipped' | 'error';
+  status: 'approved' | 'ready_pending' | 'skipped' | 'error' | 'dismissed_tr';
   warehouse?: string;
   orderId?: string;
   message?: string;
@@ -89,6 +92,7 @@ export async function getEligibleCandidateIds(region: string): Promise<number[]>
       const phys = physicalItems(c.orderitems);
       if (!phys.length || phys.some((i) => !i.iwasku)) return false; // özel/ödeme veya eşleşmemiş → onaya hazır değil
       const items = phys.map((i) => ({ iwasku: i.iwasku, qty: i.qty, desi: i.iwasku ? productMap.get(i.iwasku)?.desi ?? null : null, category: i.iwasku ? productMap.get(i.iwasku)?.category ?? null : null }));
+      if (isFurnitureOrder(items)) return false; // mobilya → hep manuel kaynak seçimi (TR/depo); otomatik onaya girmez
       return resolveOrderWarehouse(items, avail, cgAvail) !== null;
     })
     .map((c) => c.wisersell_order_id);
@@ -118,7 +122,7 @@ function buildAddressNote(c: Cand, channelNo: string): string {
   return [channelNo, c.recipient_name ?? '', c.ship_address ?? '', ...productNames].filter(Boolean).join('\n');
 }
 
-export async function approveWisersellCandidates(ids: number[], userId: string): Promise<ApproveResult[]> {
+export async function approveWisersellCandidates(ids: number[], userId: string, sources?: Map<number, OrderSource>): Promise<ApproveResult[]> {
   if (!ids.length) return [];
 
   const candidates = (await queryDataBridge(
@@ -163,7 +167,35 @@ export async function approveWisersellCandidates(ids: number[], userId: string):
     const items = physicalItems(c.orderitems).map((i) => ({ iwasku: i.iwasku, qty: i.qty, desi: i.iwasku ? productMap.get(i.iwasku)?.desi ?? null : null, category: i.iwasku ? productMap.get(i.iwasku)?.category ?? null : null }));
     // Wisersell orderitem id'leri — üretim durumu (Beklemede/Teslim/Yeni) için sipariş kaydında saklanır.
     const wsItemIds = physicalItems(c.orderitems).map((i) => i.id).filter((x): x is number => typeof x === 'number');
-    const wh = resolveOrderWarehouse(items, avail, cgAvail);
+
+    const override = sources?.get(c.wisersell_order_id);
+    // TR (yalnız mobilya): outbound YOK, Wisersell'e dokunma — sadece yerel dismiss (board'dan gizle).
+    if (override === 'TR') {
+      if (!isFurnitureOrder(items)) {
+        results.push({ wisersellOrderId: c.wisersell_order_id, ok: false, status: 'skipped', message: 'TR yalnız mobilya siparişinde seçilebilir' });
+        continue;
+      }
+      await prisma.orderTrDismissed.upsert({
+        where: { wisersellOrderId: c.wisersell_order_id },
+        create: { wisersellOrderId: c.wisersell_order_id, dismissedById: userId, recipientName: c.recipient_name, orderCode: c.order_code },
+        update: {},
+      });
+      results.push({ wisersellOrderId: c.wisersell_order_id, ok: true, status: 'dismissed_tr', message: 'TR seçildi — board\'dan gizlendi (Wisersell\'e dokunulmadı)' });
+      continue;
+    }
+
+    // Depo: override (mobilya manuel seçim) varsa fizibilite doğrula, yoksa otomatik routing.
+    let wh: RoutedWarehouse | null;
+    if (override) {
+      const options = resolveOrderWarehouseOptions(items, avail, cgAvail);
+      if (!options.includes(override)) {
+        results.push({ wisersellOrderId: c.wisersell_order_id, ok: false, status: 'skipped', message: `Seçilen depo (${override}) stoğu tam karşılamıyor` });
+        continue;
+      }
+      wh = override;
+    } else {
+      wh = resolveOrderWarehouse(items, avail, cgAvail);
+    }
     if (!wh) {
       results.push({ wisersellOrderId: c.wisersell_order_id, ok: false, status: 'skipped', message: 'Tek depodan tam karşılanmıyor (stok/iwasku)' });
       continue;
