@@ -264,23 +264,26 @@ export default function StokPushPage() {
         <>
           {(msg || err) && <div className={`text-sm rounded-lg px-3 py-2 ${err ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>{err || msg}</div>}
 
-          {/* Üst: çalıştırma + Aktif toolbar'ı — SADECE admin (run/enable admin yetkisi) */}
-          {settings && access.isAdmin && (
+          {/* Üst toolbar: Önizle HERKESE (view); Dry-run/Canlı/Aktif SADECE admin */}
+          {settings && (
             <Card padded className="flex flex-wrap items-center gap-2">
               <Button variant="primary" size="sm" icon={<RefreshCw className="w-4 h-4" />} loading={loading} onClick={loadPreview}>Önizle</Button>
-              <Button variant="secondary" size="sm" icon={<Play className="w-4 h-4" />} loading={busy === 'dryrun'} onClick={() => runPush(true)}>Dry-run çalıştır</Button>
-              <Button variant="success" size="sm" icon={<Play className="w-4 h-4" />} loading={busy === 'run'} disabled={!settings.enabled} onClick={() => runPush(false)}>Canlı çalıştır</Button>
-
-              <div className="ml-auto flex items-center gap-3">
-                {!settings.enabled && (
-                  <span className="text-xs text-amber-600 flex items-center gap-1">
-                    <AlertTriangle className="w-3.5 h-3.5" /> Pasif → &quot;Canlı çalıştır&quot; yazmaz
-                  </span>
-                )}
-                <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer">
-                  <input type="checkbox" checked={settings.enabled} disabled={busy === 'settings'} onChange={(e) => saveSettings({ enabled: e.target.checked })} /> Aktif (canlı izin)
-                </label>
-              </div>
+              {access.isAdmin && (
+                <>
+                  <Button variant="secondary" size="sm" icon={<Play className="w-4 h-4" />} loading={busy === 'dryrun'} onClick={() => runPush(true)}>Dry-run çalıştır</Button>
+                  <Button variant="success" size="sm" icon={<Play className="w-4 h-4" />} loading={busy === 'run'} disabled={!settings.enabled} onClick={() => runPush(false)}>Canlı çalıştır</Button>
+                  <div className="ml-auto flex items-center gap-3">
+                    {!settings.enabled && (
+                      <span className="text-xs text-amber-600 flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5" /> Pasif → &quot;Canlı çalıştır&quot; yazmaz
+                      </span>
+                    )}
+                    <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer">
+                      <input type="checkbox" checked={settings.enabled} disabled={busy === 'settings'} onChange={(e) => saveSettings({ enabled: e.target.checked })} /> Aktif (canlı izin)
+                    </label>
+                  </div>
+                </>
+              )}
             </Card>
           )}
 
