@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { withRoute } from '@/lib/api/withRoute';
 import { STOCK_WAREHOUSES } from '@/lib/stockPush/constants';
+import { ensureStock } from '@/lib/stockPush/access';
 
 /**
  * Toplu kova atama. Alttaki listeden seçili iwasku'lara tek seferde uygular:
@@ -18,7 +19,9 @@ const schema = z.object({
   note: z.string().max(500).optional(),
 });
 
-export const POST = withRoute({ roles: ['admin'], rateLimit: 'write' }, async ({ request }) => {
+export const POST = withRoute({ rateLimit: 'write' }, async ({ user, request }) => {
+  const deny = await ensureStock(user, 'edit');
+  if (deny) return deny;
   const parsed = schema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ success: false, error: 'Geçersiz veri' }, { status: 400 });
   const { channel, iwaskus, mode, warehouses, percent, floorX, note } = parsed.data;

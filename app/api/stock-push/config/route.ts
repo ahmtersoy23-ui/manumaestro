@@ -3,8 +3,11 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { withRoute } from '@/lib/api/withRoute';
 import { STOCK_WAREHOUSES } from '@/lib/stockPush/constants';
+import { ensureStock } from '@/lib/stockPush/access';
 
-export const GET = withRoute({ roles: ['admin'] }, async ({ request }) => {
+export const GET = withRoute({ rateLimit: 'read' }, async ({ user, request }) => {
+  const deny = await ensureStock(user, 'view');
+  if (deny) return deny;
   const channel = new URL(request.url).searchParams.get('channel') ?? 'AMAZON_US';
   const configs = await prisma.stockPushConfig.findMany({
     where: { channel },
@@ -23,7 +26,9 @@ const postSchema = z.object({
   note: z.string().max(500).optional(),
 });
 
-export const POST = withRoute({ roles: ['admin'], rateLimit: 'write' }, async ({ request }) => {
+export const POST = withRoute({ rateLimit: 'write' }, async ({ user, request }) => {
+  const deny = await ensureStock(user, 'edit');
+  if (deny) return deny;
   const parsed = postSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ success: false, error: 'Geçersiz veri' }, { status: 400 });
   const { channel, iwasku, mode, warehouses, percent, floorX, note } = parsed.data;
@@ -49,7 +54,9 @@ export const POST = withRoute({ roles: ['admin'], rateLimit: 'write' }, async ({
   return NextResponse.json({ success: true, config });
 });
 
-export const DELETE = withRoute({ roles: ['admin'], rateLimit: 'write' }, async ({ request }) => {
+export const DELETE = withRoute({ rateLimit: 'write' }, async ({ user, request }) => {
+  const deny = await ensureStock(user, 'edit');
+  if (deny) return deny;
   const id = new URL(request.url).searchParams.get('id');
   if (!id) return NextResponse.json({ success: false, error: 'id gerekli' }, { status: 400 });
   await prisma.stockPushConfig.delete({ where: { id } }).catch(() => null);

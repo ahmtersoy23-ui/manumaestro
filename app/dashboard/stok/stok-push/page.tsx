@@ -61,6 +61,8 @@ export default function StokPushPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [showRules, setShowRules] = useState(false);
+  // Yetki: admin → Çalıştır/Aktif satırı; canEdit → config işlemleri (pazaryeri ilgilisi).
+  const [access, setAccess] = useState<{ isAdmin: boolean; canEdit: boolean }>({ isAdmin: false, canEdit: false });
 
   const configByIwasku = useMemo(() => new Map(configs.map((c) => [c.iwasku, c])), [configs]);
 
@@ -100,6 +102,13 @@ export default function StokPushPage() {
       setLoading(false);
     }
   }, [channel, ch.implemented]);
+
+  useEffect(() => {
+    fetch('/api/stock-push/access', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((j) => { if (j?.success) setAccess({ isAdmin: !!j.isAdmin, canEdit: !!j.canEdit }); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     setPreview(null);
@@ -255,8 +264,8 @@ export default function StokPushPage() {
         <>
           {(msg || err) && <div className={`text-sm rounded-lg px-3 py-2 ${err ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>{err || msg}</div>}
 
-          {/* Üst: sade çalıştırma toolbar'ı (durum + aksiyonlar) */}
-          {settings && (
+          {/* Üst: çalıştırma + Aktif toolbar'ı — SADECE admin (run/enable admin yetkisi) */}
+          {settings && access.isAdmin && (
             <Card padded className="flex flex-wrap items-center gap-2">
               <Button variant="primary" size="sm" icon={<RefreshCw className="w-4 h-4" />} loading={loading} onClick={loadPreview}>Önizle</Button>
               <Button variant="secondary" size="sm" icon={<Play className="w-4 h-4" />} loading={busy === 'dryrun'} onClick={() => runPush(true)}>Dry-run çalıştır</Button>
@@ -306,10 +315,13 @@ export default function StokPushPage() {
                 <input
                   type="number"
                   value={settings.standardQty}
+                  readOnly={!access.canEdit}
                   onChange={(e) => setSettings({ ...settings, standardQty: Number(e.target.value) })}
-                  className="w-20 border rounded-lg px-2 py-1"
+                  className="w-20 border rounded-lg px-2 py-1 read-only:bg-gray-100"
                 />
-                <Button variant="secondary" size="sm" loading={busy === 'settings'} onClick={() => saveSettings({ standardQty: settings.standardQty })}>Kaydet</Button>
+                {access.canEdit && (
+                  <Button variant="secondary" size="sm" loading={busy === 'settings'} onClick={() => saveSettings({ standardQty: settings.standardQty })}>Kaydet</Button>
+                )}
                 <button onClick={() => setShowRules((v) => !v)} className="ml-auto text-gray-600 hover:text-gray-900 font-medium">
                   Kurallar ({configs.length}) {showRules ? '▾' : '▸'}
                 </button>
@@ -324,17 +336,19 @@ export default function StokPushPage() {
                     <span key={c.id} className="inline-flex items-center gap-1 text-xs bg-gray-100 rounded px-1.5 py-0.5">
                       <span className={c.mode === 'STOCK' ? 'text-blue-700' : 'text-gray-500'}>{c.mode === 'STOCK' ? `${c.percent}%` : '0'}</span>
                       <span className="font-mono">{c.iwasku}</span>
-                      <button onClick={() => deleteConfig(c.id)} className="text-gray-400 hover:text-red-600" title="kuralı kaldır" disabled={busy === `del-${c.id}`}>
-                        <Trash2 className="w-3 h-3" />
-                      </button>
+                      {access.canEdit && (
+                        <button onClick={() => deleteConfig(c.id)} className="text-gray-400 hover:text-red-600" title="kuralı kaldır" disabled={busy === `del-${c.id}`}>
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
                     </span>
                   ))
                 )}
               </div>
             )}
 
-            {/* Seçim aksiyon barı */}
-            {selected.size > 0 && (
+            {/* Seçim aksiyon barı — config işlemi (canEdit) */}
+            {access.canEdit && selected.size > 0 && (
               <div className="flex flex-wrap items-end gap-3 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
                 <span className="font-semibold text-blue-800 self-center">Seçili {selected.size}</span>
                 <label>
@@ -374,7 +388,7 @@ export default function StokPushPage() {
                 <table className="w-full text-sm">
                   <thead className="text-left text-gray-500 border-b">
                     <tr>
-                      <th className="py-1.5 w-8"><input type="checkbox" checked={allFilteredSelected} onChange={toggleAllFiltered} title="Filtredekilerin tümü" /></th>
+                      {access.canEdit && <th className="py-1.5 w-8"><input type="checkbox" checked={allFilteredSelected} onChange={toggleAllFiltered} title="Filtredekilerin tümü" /></th>}
                       <th>SKU</th>
                       <th>iwasku</th>
                       <th>Kova</th>
@@ -392,7 +406,7 @@ export default function StokPushPage() {
                       const cfg = configByIwasku.get(r.iwasku);
                       return (
                         <tr key={r.marketplaceSku} className={`border-b last:border-0 ${isSel ? 'bg-blue-50' : r.willChange ? 'bg-blue-50/30' : ''}`}>
-                          <td><input type="checkbox" checked={isSel} onChange={() => toggle(r.iwasku)} /></td>
+                          {access.canEdit && <td><input type="checkbox" checked={isSel} onChange={() => toggle(r.iwasku)} /></td>}
                           <td className="py-1.5 font-mono text-xs">{r.marketplaceSku}</td>
                           <td className="font-mono text-xs text-gray-500">{r.iwasku}</td>
                           <td>
