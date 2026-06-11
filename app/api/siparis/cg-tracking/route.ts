@@ -38,7 +38,8 @@ export async function POST(request: NextRequest) {
 
   const order = await prisma.outboundOrder.findUnique({ where: { id: orderId }, select: { warehouseCode: true, source: true, marketplaceCode: true } });
   // CG (CastleGate) VEYA Wayfair (dropship, US deposu) siparişleri elle tracking alır (Veeqo yok).
-  const eligible = !!order && order.source === 'WISERSELL_AUTO'
+  // Auto (Wisersell) ve MANUAL (elle girilen) ikisi de geçerli.
+  const eligible = !!order && (order.source === 'WISERSELL_AUTO' || order.source === 'MANUAL')
     && (CG_CODES.includes(order.warehouseCode) || isWayfairChannel(order.marketplaceCode));
   if (!eligible) {
     return NextResponse.json({ success: false, error: 'CG/Wayfair sipariş bulunamadı' }, { status: 404 });

@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
   }
 
   const orders = await prisma.outboundOrder.findMany({
-    where: { id: { in: parsed.data.orderIds }, source: 'WISERSELL_AUTO', warehouseCode: { in: CG_CODES } },
+    where: { id: { in: parsed.data.orderIds }, source: { in: ['WISERSELL_AUTO', 'MANUAL'] }, warehouseCode: { in: CG_CODES } },
     include: { items: { select: { iwasku: true, quantity: true } } },
   });
   if (!orders.length) {

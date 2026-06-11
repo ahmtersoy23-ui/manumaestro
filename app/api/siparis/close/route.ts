@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
   const { orderIds, carrierIdOverride } = parsed.data;
 
   const orders = await prisma.outboundOrder.findMany({
-    where: { id: { in: orderIds }, source: 'WISERSELL_AUTO' },
+    where: { id: { in: orderIds }, source: { in: ['WISERSELL_AUTO', 'MANUAL'] } },
     include: { labels: { where: { type: 'SHIPPING', archivedAt: null }, select: { trackingNumber: true }, take: 1 } },
   });
   const byId = new Map(orders.map((o) => [o.id, o]));
@@ -90,7 +90,22 @@ export async function POST(request: NextRequest) {
 
   for (const id of orderIds) {
     const o = byId.get(id);
-    if (!o) { results.push({ orderId: id, ok: false, message: 'Sipariş bulunamadı (WISERSELL_AUTO değil?)' }); continue; }
+    if (!o) { results.push({ orderId: id, ok: false, message: 'Sipariş bulunamadı' }); continue; }
+
+    // MANUAL sipariş Wisersell'de YOK → Wisersell kapatma adımı yok. Manuel CG: MCF
+    // export + tracking sonrası "kapat" = yerel SHIPPED (board "Kapandı"). WMS çıkışı CG'de yok.
+    if (o.source === 'MANUAL') {
+      if (o.status === 'SHIPPED') { results.push({ orderId: id, ok: true, message: 'Zaten kapandı' }); continue; }
+      if (!CG_CODES.includes(o.warehouseCode)) { results.push({ orderId: id, ok: false, message: 'Manuel US siparişi depodan çıkışla kapanır (close gerekmez)' }); continue; }
+      if (!o.manualTracking) { results.push({ orderId: id, ok: false, message: 'Önce tracking girin (Wayfair MCF raporundan)' }); continue; }
+      await prisma.outboundOrder.update({
+        where: { id },
+        data: { status: 'SHIPPED', shippedAt: new Date(), shippedById: auth.user.id },
+      });
+      results.push({ orderId: id, ok: true, message: 'Kapatıldı (manuel CG — yerel)' });
+      continue;
+    }
+
     if (o.wisersellClosedAt) { results.push({ orderId: id, ok: true, message: 'Zaten kapatılmış' }); continue; }
     if (!o.wisersellOrderId) { results.push({ orderId: id, ok: false, message: 'wisersellOrderId yok' }); continue; }
 

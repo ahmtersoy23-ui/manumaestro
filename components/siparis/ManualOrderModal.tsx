@@ -15,11 +15,14 @@ import { ProductSearch, type ProductHit } from '@/components/wms/ProductSearch';
 
 const logger = createLogger('ManualOrderModal');
 
-type WhCode = 'SHOWROOM' | 'NJ';
+type WhCode = 'SHOWROOM' | 'NJ' | 'CG_SHUKRAN' | 'CG_MDN';
 const WH_OPTIONS: { code: WhCode; label: string }[] = [
   { code: 'SHOWROOM', label: 'Fairfield' },
   { code: 'NJ', label: 'Somerset' },
+  { code: 'CG_SHUKRAN', label: 'CG Shukran (Wayfair)' },
+  { code: 'CG_MDN', label: 'CG MDN (Wayfair)' },
 ];
+const isCgCode = (c: WhCode | '') => c === 'CG_SHUKRAN' || c === 'CG_MDN';
 
 interface UsAvail { NJ: number; SHOWROOM: number; fnsku?: string | null; }
 
@@ -89,7 +92,8 @@ export function ManualOrderModal({ onClose, onSuccess }: { onClose: () => void; 
 
   // Seçili ürünlerin US stoğu (stock-check her iwasku'da hem NJ hem SHOWROOM döner → depo değişince refetch gerekmez)
   useEffect(() => {
-    if (!warehouseCode) return;
+    // CG (Wayfair) deposunda US shelf stok-check'i yok → atla; CG stoğu sunucuda (submit'te) doğrulanır.
+    if (!warehouseCode || isCgCode(warehouseCode)) return;
     const needed = [...new Set(items.map((r) => r.iwasku).filter(Boolean))].filter((iw) => !(iw in availByIwasku));
     if (needed.length === 0) return;
     let cancelled = false;
@@ -180,6 +184,7 @@ export function ManualOrderModal({ onClose, onSuccess }: { onClose: () => void; 
                 <option value="">Seçin…</option>
                 {WH_OPTIONS.map((w) => <option key={w.code} value={w.code}>{w.label}</option>)}
               </select>
+              {isCgCode(warehouseCode) && <p className="mt-1 text-[11px] text-fuchsia-600 leading-tight">CG = Wayfair MCF · stok sunucuda kontrol edilir, etiket/çıkış yok</p>}
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Pazaryeri *</label>

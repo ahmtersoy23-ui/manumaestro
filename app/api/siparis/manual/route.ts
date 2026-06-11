@@ -15,6 +15,8 @@ import { z } from 'zod';
 import { prisma, queryDataBridge } from '@/lib/db/prisma';
 import { requireOrderBoardLevel } from '@/lib/auth/orderBoardPermission';
 import { getUsAvailability, outboundBlockMessage, type UsWarehouse } from '@/lib/wms/usWarehouseStock';
+import { getCgAvailability } from '@/lib/wms/cgStock';
+import { warehouseLabel } from '@/lib/warehouseLabels';
 import { findChannelDuplicate, duplicateMessage } from '@/lib/wms/orderDuplicateGuard';
 import { logAction } from '@/lib/auditLog';
 import { createLogger } from '@/lib/logger';
@@ -27,7 +29,7 @@ const ItemSchema = z.object({
 });
 
 const Schema = z.object({
-  warehouseCode: z.enum(['NJ', 'SHOWROOM']),
+  warehouseCode: z.enum(['NJ', 'SHOWROOM', 'CG_SHUKRAN', 'CG_MDN']),
   marketplaceCode: z.string().trim().min(1).max(50),
   orderNumber: z.string().trim().min(1).max(100),
   description: z.string().trim().max(500).optional(),
@@ -52,15 +54,25 @@ export async function POST(request: NextRequest) {
   }
   const { warehouseCode, marketplaceCode, orderNumber, description, addressNote, items } = parsed.data;
 
-  // Stok kuralı: kalem ancak doğru US deposundan girilebilir (Fairfield önceliği).
+  // Stok kuralı: kalem ancak seçilen deponun stoğu karşılıyorsa girilebilir.
+  // US (NJ/SHOWROOM) → shelf stoğu (Fairfield önceliği); CG (CastleGate) → Wayfair stoğu.
   const qtyByIwasku = new Map<string, number>();
   for (const it of items) qtyByIwasku.set(it.iwasku, (qtyByIwasku.get(it.iwasku) ?? 0) + it.quantity);
-  const avail = await getUsAvailability([...qtyByIwasku.keys()], { subtractPendingDraft: true });
   const problems: string[] = [];
-  for (const [iwasku, qty] of qtyByIwasku) {
-    const a = avail.get(iwasku) ?? { NJ: 0, SHOWROOM: 0 };
-    const msg = outboundBlockMessage(warehouseCode as UsWarehouse, iwasku, qty, a);
-    if (msg) problems.push(msg);
+  if (warehouseCode === 'NJ' || warehouseCode === 'SHOWROOM') {
+    const avail = await getUsAvailability([...qtyByIwasku.keys()], { subtractPendingDraft: true });
+    for (const [iwasku, qty] of qtyByIwasku) {
+      const a = avail.get(iwasku) ?? { NJ: 0, SHOWROOM: 0 };
+      const msg = outboundBlockMessage(warehouseCode as UsWarehouse, iwasku, qty, a);
+      if (msg) problems.push(msg);
+    }
+  } else {
+    // CG_SHUKRAN / CG_MDN → CastleGate (Wayfair) stoğu (MCF ile karşılanır).
+    const cgAvail = await getCgAvailability([...qtyByIwasku.keys()]);
+    for (const [iwasku, qty] of qtyByIwasku) {
+      const have = cgAvail.get(iwasku)?.[warehouseCode] ?? 0;
+      if (have < qty) problems.push(`${iwasku}: ${warehouseLabel(warehouseCode)} stoğu yetersiz (${have}/${qty})`);
+    }
   }
   if (problems.length > 0) {
     return NextResponse.json({ success: false, error: problems.join('\n') }, { status: 400 });
