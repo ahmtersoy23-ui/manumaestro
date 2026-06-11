@@ -249,8 +249,8 @@ export async function GET(request: NextRequest) {
       shipAddress: manual?.location ?? null,
       addressNote: o.addressNote,
       items: o.items,
-      // CG'de SHIPPING etiketi yok → tracking manualTracking'ten gelir (tablo/detayda tek alan).
-      trackingNumber: shippingLabel?.trackingNumber ?? (isCgWarehouse(o.warehouseCode) ? o.manualTracking : null) ?? null,
+      // CG/Wayfair'de SHIPPING etiketi yok → tracking manualTracking'ten gelir (tablo/detayda tek alan).
+      trackingNumber: shippingLabel?.trackingNumber ?? ((isCgWarehouse(o.warehouseCode) || isWayfairChannel(o.marketplaceCode)) ? o.manualTracking : null) ?? null,
       manualTracking: o.manualTracking ?? null,
       labelId: shippingLabel?.id ?? null,
       veeqoShipmentId: shippingLabel?.veeqoShipmentId ?? null, // varsa → "Etiketi İptal Et (iade)" butonu
@@ -275,9 +275,13 @@ export async function GET(request: NextRequest) {
     } else if (o.status === 'DRAFT') {
       // CG'de shelf/etiket yok → kendi kovası (MCF + manuel tracking bekler).
       if (isCgWarehouse(o.warehouseCode)) cgBekliyor.push(base);
-      // Wayfair (dropship, US deposu): Veeqo etiketi YOK → ayrı "Wayfair" kovası
-      // (manuel tracking + depo çıkışı). AWB ekibi etiket almaz, karışmasın.
-      else if (isWayfairChannel(o.marketplaceCode)) wayfairBekliyor.push(base);
+      // Wayfair (dropship): etiket ŞART ama Veeqo'dan DEĞİL — Wayfair'in verdiği tracking
+      // elle girilir. AWB ekibi karıştırmasın diye ayrı "Etiket·WF" kovasında durur.
+      // Tracking girilince AWB ile AYNI hatta: Çıkış Bekliyor → çıkış → kapatma.
+      else if (isWayfairChannel(o.marketplaceCode)) {
+        if (o.manualTracking) cikisBekliyor.push(base);
+        else wayfairBekliyor.push(base);
+      }
       else if (shippingLabel && shippingLabel.trackingNumber) cikisBekliyor.push(base);
       else etiketBekliyor.push(base);
     }

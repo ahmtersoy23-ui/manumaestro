@@ -20,15 +20,15 @@ type StatusKey = 'onayBekliyor' | 'eslesmeGerek' | 'etiketBekliyor' | 'cikisBekl
 const STATUS_META: Record<StatusKey, { label: string; desc: string; icon: typeof CheckCircle2; accent: string; ring: string; dot: string }> = {
   onayBekliyor:   { label: 'Onay Bekliyor',    desc: 'US stoğu teyitli, onay bekliyor', icon: CheckCircle2, accent: 'text-emerald-700', ring: 'ring-emerald-500 bg-emerald-50', dot: 'bg-emerald-500' },
   eslesmeGerek:   { label: 'Eşleşme Gerek',    desc: 'iwasku eşleşmiyor — mapping gerek', icon: AlertTriangle, accent: 'text-orange-700', ring: 'ring-orange-500 bg-orange-50', dot: 'bg-orange-500' },
-  etiketBekliyor: { label: 'Etiket Bekliyor',  desc: 'Onaylandı, kargo etiketi bekliyor', icon: PackageCheck, accent: 'text-amber-700',  ring: 'ring-amber-500 bg-amber-50',   dot: 'bg-amber-500' },
+  etiketBekliyor: { label: 'Etiket · AWB',     desc: 'AWB ekibi Veeqo etiketi alacak', icon: PackageCheck, accent: 'text-amber-700',  ring: 'ring-amber-500 bg-amber-50',   dot: 'bg-amber-500' },
+  wayfairBekliyor:{ label: 'Etiket · WF',      desc: 'Wayfair tracking elle girilecek (AWB almaz)', icon: Tag, accent: 'text-fuchsia-700', ring: 'ring-fuchsia-500 bg-fuchsia-50', dot: 'bg-fuchsia-500' },
   cikisBekliyor:  { label: 'Çıkış Bekliyor',   desc: 'Etiketli, fiziksel çıkış bekliyor', icon: Truck,        accent: 'text-sky-700',    ring: 'ring-sky-500 bg-sky-50',       dot: 'bg-sky-500' },
   cgBekliyor:     { label: 'CG Bekliyor',      desc: 'CastleGate — MCF/tracking bekliyor', icon: Warehouse,  accent: 'text-teal-700',   ring: 'ring-teal-500 bg-teal-50',     dot: 'bg-teal-500' },
-  wayfairBekliyor:{ label: 'Wayfair',          desc: 'Dropship — depo çıkışı + tracking (etiket yok)', icon: Tag, accent: 'text-fuchsia-700', ring: 'ring-fuchsia-500 bg-fuchsia-50', dot: 'bg-fuchsia-500' },
   kapatmaBekliyor:{ label: 'Kapatma Bekliyor', desc: 'Kargolandı, Wisersell kapatma',   icon: Send,         accent: 'text-rose-700',   ring: 'ring-rose-500 bg-rose-50',     dot: 'bg-rose-500' },
   kapandi:        { label: 'Kapandı',          desc: 'Wisersell external-close yazıldı', icon: Archive,      accent: 'text-slate-600',  ring: 'ring-slate-400 bg-slate-50',   dot: 'bg-slate-400' },
 };
 // 'eslesmeGerek' kart değil — stokYok gibi bir istisna durumu, filtre barında rozet (STATUS_META'da kalır: modal/dot kullanır).
-const STATUS_ORDER: StatusKey[] = ['onayBekliyor', 'etiketBekliyor', 'cikisBekliyor', 'cgBekliyor', 'wayfairBekliyor', 'kapatmaBekliyor', 'kapandi'];
+const STATUS_ORDER: StatusKey[] = ['onayBekliyor', 'etiketBekliyor', 'wayfairBekliyor', 'cikisBekliyor', 'cgBekliyor', 'kapatmaBekliyor', 'kapandi'];
 
 const WH = {
   SHOWROOM:   { label: 'Fairfield',  badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -486,19 +486,18 @@ export default function SiparisPage() {
         </div>
       </div>
 
-      {/* Durum kartları (birincil navigasyon) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
+      {/* Durum kartları (birincil navigasyon) — kompakt, tek satır (7 kart) */}
+      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2 mb-5">
         {STATUS_ORDER.map((k) => {
           const m = STATUS_META[k]; const Icon = m.icon; const active = tab === k;
           return (
-            <button key={k} onClick={() => setTab(k)}
-              className={`text-left rounded-xl border p-3 transition-all ${active ? `ring-2 ${m.ring} border-transparent` : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'}`}>
-              <div className="flex items-center justify-between">
-                <Icon className={`w-4 h-4 ${m.accent}`} />
-                <span className={`text-2xl font-bold ${active ? m.accent : 'text-gray-900'}`}>{counts[k] ?? 0}</span>
+            <button key={k} onClick={() => setTab(k)} title={m.desc}
+              className={`text-left rounded-lg border px-2.5 py-2 transition-all ${active ? `ring-2 ${m.ring} border-transparent` : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'}`}>
+              <div className="flex items-center justify-between gap-1">
+                <Icon className={`w-3.5 h-3.5 shrink-0 ${m.accent}`} />
+                <span className={`text-xl font-bold leading-none ${active ? m.accent : 'text-gray-900'}`}>{counts[k] ?? 0}</span>
               </div>
-              <div className="mt-1.5 text-sm font-semibold text-gray-800">{m.label}</div>
-              <div className="text-[11px] text-gray-400 leading-tight mt-0.5">{m.desc}</div>
+              <div className="mt-1 text-xs font-semibold text-gray-700 truncate">{m.label}</div>
             </button>
           );
         })}
@@ -708,8 +707,8 @@ export default function SiparisPage() {
               )}
               {tab === 'wayfairBekliyor' && (
                 <div className="rounded-lg border border-fuchsia-200 bg-fuchsia-50 p-3 text-sm text-fuchsia-800 space-y-2">
-                  <div className="font-semibold flex items-center gap-1.5"><Tag className="w-4 h-4" /> Wayfair (dropship)</div>
-                  <div className="text-xs">Veeqo etiketi alınmaz. Akış: US deposundan (<strong>{whLabel(detailRow.warehouse)}</strong>) <strong>topla & depodan çıkış yap</strong> → Wayfair&apos;in kendi etiketiyle gönder → tracking&apos;i aşağı gir → <strong>Kapatma Bekliyor&apos;dan Wisersell&apos;de Kapat</strong>.</div>
+                  <div className="font-semibold flex items-center gap-1.5"><Tag className="w-4 h-4" /> Etiket · WF (Wayfair dropship)</div>
+                  <div className="text-xs">AWB etiket almaz — etiket/tracking Wayfair&apos;den gelir. Tracking&apos;i aşağı gir → sipariş <strong>Çıkış Bekliyor</strong>&apos;a düşer (AWB ile aynı hat: depodan çıkış → Kapatma).</div>
                   <div>
                     <div className="text-[11px] uppercase text-fuchsia-600 mb-1">Tracking (Wayfair etiketinden)</div>
                     <div className="flex items-center gap-2">
