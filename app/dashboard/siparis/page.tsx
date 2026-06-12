@@ -17,13 +17,13 @@ import RateQuoteModal from '@/components/siparis/RateQuoteModal';
 
 type StatusKey = 'onayBekliyor' | 'eslesmeGerek' | 'etiketBekliyor' | 'cikisBekliyor' | 'cgBekliyor' | 'wayfairBekliyor' | 'kapatmaBekliyor' | 'kapandi';
 
-const STATUS_META: Record<StatusKey, { label: string; desc: string; icon: typeof CheckCircle2; accent: string; ring: string; dot: string }> = {
+const STATUS_META: Record<StatusKey, { label: string; badge?: string; desc: string; icon: typeof CheckCircle2; accent: string; ring: string; dot: string }> = {
   onayBekliyor:   { label: 'Onay Bekliyor',    desc: 'US stoğu teyitli, onay bekliyor', icon: CheckCircle2, accent: 'text-emerald-700', ring: 'ring-emerald-500 bg-emerald-50', dot: 'bg-emerald-500' },
   eslesmeGerek:   { label: 'Eşleşme Gerek',    desc: 'iwasku eşleşmiyor — mapping gerek', icon: AlertTriangle, accent: 'text-orange-700', ring: 'ring-orange-500 bg-orange-50', dot: 'bg-orange-500' },
-  etiketBekliyor: { label: 'Etiket Bekliyor · AWB', desc: 'AWB ekibi Veeqo etiketi alacak', icon: PackageCheck, accent: 'text-amber-700',  ring: 'ring-amber-500 bg-amber-50',   dot: 'bg-amber-500' },
-  wayfairBekliyor:{ label: 'Etiket Bekliyor · WF',  desc: 'Wayfair tracking elle girilecek (AWB almaz)', icon: Tag, accent: 'text-fuchsia-700', ring: 'ring-fuchsia-500 bg-fuchsia-50', dot: 'bg-fuchsia-500' },
-  cikisBekliyor:  { label: 'Çıkış Bekliyor · FF/SS', desc: 'Fairfield/Somerset — fiziksel çıkış bekliyor', icon: Truck, accent: 'text-sky-700', ring: 'ring-sky-500 bg-sky-50', dot: 'bg-sky-500' },
-  cgBekliyor:     { label: 'Çıkış Bekliyor · CG',    desc: 'CastleGate — MCF/tracking bekliyor', icon: Warehouse, accent: 'text-teal-700', ring: 'ring-teal-500 bg-teal-50', dot: 'bg-teal-500' },
+  etiketBekliyor: { label: 'Etiket Bekliyor', badge: 'AWB', desc: 'AWB ekibi Veeqo etiketi alacak', icon: PackageCheck, accent: 'text-amber-700',  ring: 'ring-amber-500 bg-amber-50',   dot: 'bg-amber-500' },
+  wayfairBekliyor:{ label: 'Etiket Bekliyor', badge: 'WF',  desc: 'Wayfair tracking elle girilecek (AWB almaz)', icon: Tag, accent: 'text-fuchsia-700', ring: 'ring-fuchsia-500 bg-fuchsia-50', dot: 'bg-fuchsia-500' },
+  cikisBekliyor:  { label: 'Çıkış Bekliyor', badge: 'FF/SS', desc: 'Fairfield/Somerset — fiziksel çıkış bekliyor', icon: Truck, accent: 'text-sky-700', ring: 'ring-sky-500 bg-sky-50', dot: 'bg-sky-500' },
+  cgBekliyor:     { label: 'Çıkış Bekliyor', badge: 'CG',    desc: 'CastleGate — MCF/tracking bekliyor', icon: Warehouse, accent: 'text-teal-700', ring: 'ring-teal-500 bg-teal-50', dot: 'bg-teal-500' },
   kapatmaBekliyor:{ label: 'Kapatma Bekliyor', desc: 'Kargolandı, Wisersell kapatma',   icon: Send,         accent: 'text-rose-700',   ring: 'ring-rose-500 bg-rose-50',     dot: 'bg-rose-500' },
   kapandi:        { label: 'Kapandı',          desc: 'Wisersell external-close yazıldı', icon: Archive,      accent: 'text-slate-600',  ring: 'ring-slate-400 bg-slate-50',   dot: 'bg-slate-400' },
 };
@@ -494,7 +494,10 @@ export default function SiparisPage() {
             <button key={k} onClick={() => setTab(k)} title={m.desc}
               className={`text-left rounded-xl border px-3 py-3.5 transition-all ${active ? `ring-2 ${m.ring} border-transparent` : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'}`}>
               <div className="flex items-center justify-between gap-1">
-                <Icon className={`w-4 h-4 shrink-0 ${m.accent}`} />
+                <div className="flex items-center gap-1 min-w-0">
+                  <Icon className={`w-4 h-4 shrink-0 ${m.accent}`} />
+                  {m.badge && <span className={`text-[10px] font-bold leading-none px-1.5 py-0.5 rounded-md text-white shrink-0 ${m.dot}`}>{m.badge}</span>}
+                </div>
                 <span className={`text-2xl font-bold leading-none ${active ? m.accent : 'text-gray-900'}`}>{counts[k] ?? 0}</span>
               </div>
               <div className="mt-2 text-sm font-semibold text-gray-800 truncate">{m.label}</div>
@@ -666,7 +669,7 @@ export default function SiparisPage() {
                 <div>
                   <div className="font-bold text-gray-900">{detailRow.orderCode ?? detailRow.orderNumber}</div>
                   <div className="text-xs text-gray-500 flex items-center gap-1.5">
-                    {STATUS_META[tab].label}
+                    {STATUS_META[tab].label}{STATUS_META[tab].badge ? ` · ${STATUS_META[tab].badge}` : ''}
                     {detailRow.createdAt && <span className="text-gray-400">· {fmtDate(detailRow.createdAt)}</span>}
                     {detailRow.createdBy && <span className="text-gray-400" title={detailRow.createdBy.email}>· {detailRow.createdBy.name}</span>}
                     {detailRow.source === 'MANUAL' && <span className="inline-block text-[10px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-1.5 py-0.5">manuel giriş</span>}
