@@ -15,6 +15,11 @@ export interface StockPushChannel {
   pushPath: string;
   /** Handling time (Amazon lead_time_to_ship_max_days) push'u destekliyor mu */
   supportsHandling: boolean;
+  /**
+   * Wayfair dropship hesabi (label, orn 'mdn'). Verilirse SKU evreni channel_prices
+   * yerine DataBridge Wayfair katalogundan gelir + push body'sine account eklenir.
+   */
+  wayfairAccount?: string;
 }
 
 export const STOCK_PUSH_CHANNELS: StockPushChannel[] = [
@@ -23,6 +28,9 @@ export const STOCK_PUSH_CHANNELS: StockPushChannel[] = [
   { key: 'SHOPIFY_US', label: 'Shopify US', channelCode: 'shopify_iwa', country: 'US', implemented: false, activeStatuses: [], pushPath: '', supportsHandling: false },
   // Walmart: PUBLISHED (canlı); SYSTEM_PROBLEM hariç. WFS yok → hepsi seller-fulfilled. Handling /v3/inventory'de yok.
   { key: 'WALMART_US', label: 'Walmart US', channelCode: 'walmart', country: 'US', implemented: true, activeStatuses: ['PUBLISHED'], pushPath: '/walmart-listings/push', supportsHandling: false },
+  // Wayfair dropship (MDN): SKU evreni DataBridge katalogundan (channel_prices'ta yok), inventory.save ile.
+  // Stok supplier-seviye (Somerset/NJ) → STOCK config'i NJ ile kur. Handling yok.
+  { key: 'WAYFAIR_MDN_US', label: 'Wayfair MDN (dropship)', channelCode: '', country: 'US', implemented: true, activeStatuses: [], pushPath: '/wayfair-listings/push', supportsHandling: false, wayfairAccount: 'mdn' },
 ];
 
 export function getChannel(key: string): StockPushChannel | undefined {

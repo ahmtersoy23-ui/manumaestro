@@ -8,7 +8,8 @@
 import { prisma, queryProductDb } from '@/lib/db/prisma';
 import { getCgAvailability } from '@/lib/wms/cgStock';
 import { getUsAvailability } from '@/lib/wms/usWarehouseStock';
-import { getChannel } from './constants';
+import { getChannel, type StockPushChannel } from './constants';
+import { fetchWayfairCatalog } from './databridgeClient';
 
 export type EffectiveMode = 'STOCK' | 'STANDARD' | 'ZERO';
 
@@ -45,22 +46,48 @@ export interface ComputeResult {
   counts: { stock: number; standard: number; zero: number; total: number };
 }
 
+interface Listing {
+  marketplace_sku: string;
+  iwasku: string;
+  name: string | null;
+}
+
+/**
+ * Kanalın push hedefi listing'leri (marketplace_sku + iwasku + ad).
+ * Wayfair (wayfairAccount): SKU evreni DataBridge dropship katalogundan; ad products'tan.
+ * Diğerleri: pricelab channel_prices (kanal-bazlı aktif status'ler).
+ */
+async function fetchListings(channel: StockPushChannel): Promise<Listing[]> {
+  if (channel.wayfairAccount) {
+    const cat = await fetchWayfairCatalog(channel.wayfairAccount);
+    if (!cat.length) return [];
+    const iwaskus = [...new Set(cat.map((c) => c.iwasku))];
+    const rows = (await queryProductDb(
+      `SELECT product_sku, name FROM products WHERE product_sku = ANY($1)`,
+      [iwaskus],
+    )) as Array<{ product_sku: string; name: string | null }>;
+    const nameByIwasku = new Map(rows.map((r) => [r.product_sku, r.name]));
+    return cat.map((c) => ({ marketplace_sku: c.marketplace_sku, iwasku: c.iwasku, name: nameByIwasku.get(c.iwasku) ?? null }));
+  }
+  // Kanal-bazlı aktif status'ler (Amazon: Active+Inactive child; Walmart: PUBLISHED).
+  // OOS listing'ler de push hedefi (stok basıp yeniden aç).
+  return (await queryProductDb(
+    `SELECT cp.marketplace_sku, cp.iwasku, p.name
+       FROM channel_prices cp
+       LEFT JOIN products p ON p.product_sku = cp.iwasku
+      WHERE cp.channel_code = $1 AND cp.country_code = $2 AND cp.status = ANY($3)
+        AND cp.iwasku IS NOT NULL AND cp.iwasku <> ''`,
+    [channel.channelCode, channel.country, channel.activeStatuses],
+  )) as Listing[];
+}
+
 export async function computeTargets(channelKey: string): Promise<ComputeResult> {
   const channel = getChannel(channelKey);
   if (!channel) throw new Error(`Bilinmeyen kanal: ${channelKey}`);
   if (!channel.implemented) throw new Error(`${channel.label} henuz desteklenmiyor`);
 
   const [listings, settings, configs] = await Promise.all([
-    queryProductDb(
-      // Kanal-bazlı aktif status'ler (Amazon: Active+Inactive child; Walmart: PUBLISHED).
-      // OOS listing'ler de push hedefi (stok basıp yeniden aç).
-      `SELECT cp.marketplace_sku, cp.iwasku, p.name
-       FROM channel_prices cp
-       LEFT JOIN products p ON p.product_sku = cp.iwasku
-       WHERE cp.channel_code = $1 AND cp.country_code = $2 AND cp.status = ANY($3)
-         AND cp.iwasku IS NOT NULL AND cp.iwasku <> ''`,
-      [channel.channelCode, channel.country, channel.activeStatuses],
-    ) as Promise<Array<{ marketplace_sku: string; iwasku: string; name: string | null }>>,
+    fetchListings(channel),
     prisma.stockPushSettings.findUnique({ where: { channel: channelKey } }),
     prisma.stockPushConfig.findMany({ where: { channel: channelKey } }),
   ]);

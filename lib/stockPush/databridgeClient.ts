@@ -41,7 +41,7 @@ export interface PushResponse {
 export async function pushChannelInventory(
   path: string,
   items: PushItem[],
-  opts: { dryRun: boolean; alert?: string },
+  opts: { dryRun: boolean; alert?: string; account?: string },
 ): Promise<PushResponse> {
   const { baseUrl, apiKey } = getConfig();
   const all: PushResultRow[] = [];
@@ -50,6 +50,8 @@ export async function pushChannelInventory(
     const chunk = items.slice(i, i + CHUNK);
     const body = {
       country: 'US',
+      // Wayfair ucu account ile hesabı seçer (Amazon/Walmart yok sayar)
+      ...(opts.account ? { account: opts.account } : {}),
       dryRun: opts.dryRun,
       // alarmi tek sefer (ilk chunk'ta) gonder — tekrar bildirim olmasin
       ...(opts.alert && !alertSent ? { alert: opts.alert } : {}),
@@ -76,4 +78,34 @@ export async function pushChannelInventory(
     failed: all.filter((r) => r.status === 'failed').length,
   };
   return { summary, results: all };
+}
+
+export interface WayfairCatalogRow {
+  marketplace_sku: string; // supplierPartNumber
+  iwasku: string;
+}
+
+/**
+ * Wayfair dropship katalog (SKU evreni) — DataBridge GET /wayfair-listings/catalog.
+ * Sadece iwasku eşleşeni döner (availability için iwasku şart). Stok Push compute'u
+ * Wayfair kanalında channel_prices yerine bunu kullanır.
+ */
+export async function fetchWayfairCatalog(account: string): Promise<WayfairCatalogRow[]> {
+  const { baseUrl, apiKey } = getConfig();
+  const res = await fetch(`${baseUrl}/wayfair-listings/catalog?account=${encodeURIComponent(account)}`, {
+    method: 'GET',
+    headers: { 'x-internal-api-key': apiKey },
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    success?: boolean;
+    error?: string;
+    parts?: Array<{ supplierPartNumber: string; iwasku: string | null }>;
+  };
+  if (!res.ok || data.success === false) {
+    throw new Error(data.error || `DataBridge /wayfair-listings/catalog HTTP ${res.status}`);
+  }
+  return (data.parts ?? [])
+    .filter((p): p is { supplierPartNumber: string; iwasku: string } => !!p.iwasku)
+    .map((p) => ({ marketplace_sku: p.supplierPartNumber, iwasku: p.iwasku }));
 }

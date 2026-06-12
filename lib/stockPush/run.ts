@@ -77,9 +77,14 @@ export async function runStockPush(channelKey: string, opts: { dryRunOverride?: 
     ? `${tierAZeros.length} stok-takipli SKU 0'a indi: ${tierAZeros.slice(0, 20).join(', ')}${tierAZeros.length > 20 ? ' …' : ''}`
     : undefined;
 
-  const pushPath = getChannel(channelKey)?.pushPath;
+  const channel = getChannel(channelKey);
+  const pushPath = channel?.pushPath;
   if (!pushPath) throw new Error(`${channelKey} için push yolu tanımsız`);
-  const push = await pushChannelInventory(pushPath, changedItems, { dryRun: false, alert });
+  const push = await pushChannelInventory(pushPath, changedItems, {
+    dryRun: false,
+    alert,
+    account: channel?.wayfairAccount,
+  });
 
   // Canli + basarili (pushed/skipped) SKU'lar icin state'i hedefe guncelle
   if (!effectiveDryRun) {
