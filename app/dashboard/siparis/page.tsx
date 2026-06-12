@@ -1,7 +1,8 @@
 'use client';
 
 /**
- * Birleşik Sipariş ekranı (top-level "Sipariş" ana tab) — Faz 1: SADECE süper-admin.
+ * Birleşik Sipariş ekranı (top-level "Sipariş" ana tab). Erişim kademeli izinle
+ * (APPROVER/CREATOR/FULL) — UserOrderPermission üzerinden.
  * Wisersell → ManuMaestro otomasyonunun kontrol kulesi: Onay + Kapatma + izleme.
  * Per-warehouse /siparis akışına dokunmaz; operatör etiket/çıkışı orada yapar.
  * region: ülke-genişletilebilir (şimdi US).
@@ -20,12 +21,12 @@ type StatusKey = 'onayBekliyor' | 'eslesmeGerek' | 'etiketBekliyor' | 'cikisBekl
 const STATUS_META: Record<StatusKey, { label: string; badge?: string; desc: string; icon: typeof CheckCircle2; accent: string; ring: string; dot: string }> = {
   onayBekliyor:   { label: 'Onay Bekliyor',    desc: 'US stoğu teyitli, onay bekliyor', icon: CheckCircle2, accent: 'text-emerald-700', ring: 'ring-emerald-500 bg-emerald-50', dot: 'bg-emerald-500' },
   eslesmeGerek:   { label: 'Eşleşme Gerek',    desc: 'iwasku eşleşmiyor — mapping gerek', icon: AlertTriangle, accent: 'text-orange-700', ring: 'ring-orange-500 bg-orange-50', dot: 'bg-orange-500' },
-  etiketBekliyor: { label: 'Etiket Bekliyor', badge: 'AWB', desc: 'AWB ekibi Veeqo etiketi alacak', icon: PackageCheck, accent: 'text-amber-700',  ring: 'ring-amber-500 bg-amber-50',   dot: 'bg-amber-500' },
+  etiketBekliyor: { label: 'Etiket Bekliyor', badge: 'AWB', desc: 'AWB ekibi etiket alacak', icon: PackageCheck, accent: 'text-amber-700',  ring: 'ring-amber-500 bg-amber-50',   dot: 'bg-amber-500' },
   wayfairBekliyor:{ label: 'Etiket Bekliyor', badge: 'WF',  desc: 'Wayfair tracking elle girilecek (AWB almaz)', icon: Tag, accent: 'text-fuchsia-700', ring: 'ring-fuchsia-500 bg-fuchsia-50', dot: 'bg-fuchsia-500' },
   cikisBekliyor:  { label: 'Çıkış Bekliyor', badge: 'FF/SS', desc: 'Fairfield/Somerset — fiziksel çıkış bekliyor', icon: Truck, accent: 'text-sky-700', ring: 'ring-sky-500 bg-sky-50', dot: 'bg-sky-500' },
   cgBekliyor:     { label: 'Çıkış Bekliyor', badge: 'CG',    desc: 'CastleGate — MCF/tracking bekliyor', icon: Warehouse, accent: 'text-teal-700', ring: 'ring-teal-500 bg-teal-50', dot: 'bg-teal-500' },
   kapatmaBekliyor:{ label: 'Kapatma Bekliyor', desc: 'Kargolandı, Wisersell kapatma',   icon: Send,         accent: 'text-rose-700',   ring: 'ring-rose-500 bg-rose-50',     dot: 'bg-rose-500' },
-  kapandi:        { label: 'Kapandı',          desc: 'Wisersell external-close yazıldı', icon: Archive,      accent: 'text-slate-600',  ring: 'ring-slate-400 bg-slate-50',   dot: 'bg-slate-400' },
+  kapandi:        { label: 'Kapandı',          desc: 'Tamamlandı, Wisersell kapatıldı', icon: Archive,      accent: 'text-slate-600',  ring: 'ring-slate-400 bg-slate-50',   dot: 'bg-slate-400' },
 };
 // 'eslesmeGerek' kart değil — stokYok gibi bir istisna durumu, filtre barında rozet (STATUS_META'da kalır: modal/dot kullanır).
 const STATUS_ORDER: StatusKey[] = ['onayBekliyor', 'etiketBekliyor', 'wayfairBekliyor', 'cikisBekliyor', 'cgBekliyor', 'kapatmaBekliyor', 'kapandi'];
@@ -461,7 +462,7 @@ export default function SiparisPage() {
             <h1 className="text-2xl font-bold text-gray-900">Sipariş</h1>
             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-900 text-white">{region}</span>
           </div>
-          <p className="text-sm text-gray-500 mt-0.5">Wisersell → US depo otomasyonu · süper-admin kontrol</p>
+          <p className="text-sm text-gray-500 mt-0.5">Wisersell → US depo sipariş otomasyonu</p>
         </div>
         <div className="flex items-center gap-2">
           <NotificationBell region={region} />
