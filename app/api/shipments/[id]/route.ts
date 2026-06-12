@@ -15,6 +15,9 @@ import { FBA_DESTINATION_TO_MARKETPLACE, shipmentDestinationLabel, isNlDepotItem
 import { logAction } from '@/lib/auditLog';
 import { withRoute } from '@/lib/api/withRoute';
 import { successResponse } from '@/lib/api/response';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('shipments');
 
 // --- GET: Detail ---
 export const GET = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'read', fallbackMessage: 'Sevkiyat yüklenemedi' }, async ({ request, params }) => {
@@ -121,17 +124,23 @@ export const GET = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'read'
     // Çift EAN'de (iwasku iki Bol hesabında listeli) onebv (account_id=2) EAN'i seç;
     // tek EAN varsa onu. Hesap bilgisi bol_sku_mapping'te yok → bol_raw_orders'tan türetilir
     // (hangi hesap o EAN'i satmış). DISTINCT ON: onebv öncelikli, sonra en güncel.
-    const rows = await queryDataBridge(
-      `SELECT DISTINCT ON (m.iwasku) m.iwasku, m.sku
-         FROM bol_sku_mapping m
-         LEFT JOIN LATERAL (
-           SELECT MAX(r.account_id) AS account_id FROM bol_raw_orders r WHERE r.ean = m.sku
-         ) acc ON true
-        WHERE m.iwasku = ANY($1) AND m.sku IS NOT NULL AND m.sku <> ''
-        ORDER BY m.iwasku, (acc.account_id = 2) DESC NULLS LAST, m.updated_at DESC NULLS LAST`,
-      [nlIwaskus],
-    );
-    for (const row of rows) bolEanMap.set(row.iwasku, row.sku);
+    // Cross-DB (databridge_db) okuma — hata sevkiyat sayfasını ÇÖKERTMESİN: bolEan boş kalır,
+    // UI "Bol EAN yok" gösterir (degrade). manumaestro_user'a bol_sku_mapping+bol_raw_orders SELECT grant şart.
+    try {
+      const rows = await queryDataBridge(
+        `SELECT DISTINCT ON (m.iwasku) m.iwasku, m.sku
+           FROM bol_sku_mapping m
+           LEFT JOIN LATERAL (
+             SELECT MAX(r.account_id) AS account_id FROM bol_raw_orders r WHERE r.ean = m.sku
+           ) acc ON true
+          WHERE m.iwasku = ANY($1) AND m.sku IS NOT NULL AND m.sku <> ''
+          ORDER BY m.iwasku, (acc.account_id = 2) DESC NULLS LAST, m.updated_at DESC NULLS LAST`,
+        [nlIwaskus],
+      );
+      for (const row of rows) bolEanMap.set(row.iwasku, row.sku);
+    } catch (err) {
+      logger.error('[shipments] Bol EAN lookup başarısız (degrade: Bol EAN yok)', err);
+    }
   }
 
   const enrichedItems = shipment.items.map(item => {
