@@ -32,7 +32,7 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   ArrowLeft, Plus, Send, Loader2, AlertCircle, Pencil,
-  Calendar, Anchor, Truck as TruckIcon, Plane,
+  Calendar, Anchor, Truck as TruckIcon, Plane, Container,
   Download, Ship, X, Search, Trash2,
 } from 'lucide-react';
 
@@ -46,8 +46,8 @@ interface ShipmentDetail {
 }
 // BoxFormData lib/shipments/types.ts'e taşındı (ExtraBoxForm ile paylaşılır)
 
-const methodIcons: Record<string, typeof Anchor> = { sea: Anchor, road: TruckIcon, air: Plane };
-const methodLabels: Record<string, string> = { sea: 'Deniz', road: 'Karayolu', air: 'Hava' };
+const methodIcons: Record<string, typeof Anchor> = { sea: Anchor, road: TruckIcon, air: Plane, container: Container };
+const methodLabels: Record<string, string> = { sea: 'Deniz', road: 'Karayolu', air: 'Hava', container: 'Konteyner' };
 const BOX_ENTRY_METHODS = new Set(['sea']);
 const loadXLSX = () => import('xlsx');
 const logger = createLogger('ShipmentDetailPage');
@@ -274,6 +274,7 @@ export default function ShipmentDetailPage() {
   const MethodIcon = methodIcons[shipment.shippingMethod] ?? Anchor;
   const isActive = shipment.status === 'PLANNING' || shipment.status === 'LOADING';
   const isSea = BOX_ENTRY_METHODS.has(shipment.shippingMethod);
+  const isContainer = shipment.shippingMethod === 'container';
   const etaBadge = seaEtaBadge(shipment.etaDate, shipment.shippingMethod, shipment.status);
 
   // Permission shortcuts
@@ -515,6 +516,36 @@ export default function ShipmentDetailPage() {
         if (exitItems.length > 0) openExitModal(exitItems);
       } else notify.error(data.error);
     } catch { notify.error('Kapama hatası'); } finally { setSending(false); }
+  };
+
+  // Konteyner: Sevk Et (IN_TRANSIT) — Manu dışı CG verisi, depo-çıkış modalı AÇILMAZ
+  const handleSendContainer = async () => {
+    if (!(await confirm({ title: 'Sevkiyat gönderilsin mi?', message: 'Tüm ürünler yola çıkmış (yolda) olarak işaretlenecek.', confirmLabel: 'Sevk Et' }))) return;
+    setSending(true);
+    try {
+      const res = await fetch(`/api/shipments/${id}/send`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ closeShipment: true }),
+      });
+      const data = await res.json();
+      if (data.success) { await fetchShipment(); notify.success('Sevk edildi — yolda'); }
+      else notify.error(data.error);
+    } catch { notify.error('Gönderim hatası'); } finally { setSending(false); }
+  };
+
+  // Konteyner: Geri Al (PLANNING) — yanlış adet düzeltmek için
+  const handleReopenContainer = async () => {
+    if (!(await confirm({ title: 'Sevkiyat geri alınsın mı?', message: 'Sevkiyat PLANNING durumuna döner, yolda gözükmez; ürünler düzenlenebilir.', variant: 'danger', confirmLabel: 'Geri Al' }))) return;
+    setSending(true);
+    try {
+      const res = await fetch(`/api/shipments/${id}/send`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reopenContainer: true }),
+      });
+      const data = await res.json();
+      if (data.success) await fetchShipment();
+      else notify.error(data.error);
+    } catch { notify.error('Geri alma hatası'); } finally { setSending(false); }
   };
 
   const handleDeleteShipment = async () => {
@@ -1139,6 +1170,18 @@ export default function ShipmentDetailPage() {
               {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ship className="w-4 h-4" />} Sevkiyatı Kapat
             </button>
           )}
+          {isActive && isContainer && canClose && pendingItems.length > 0 && (
+            <button onClick={handleSendContainer} disabled={sending}
+              className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
+              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Sevk Et
+            </button>
+          )}
+          {isContainer && shipment.status === 'IN_TRANSIT' && canClose && (
+            <button onClick={handleReopenContainer} disabled={sending}
+              className="px-3 py-2 bg-amber-50 text-amber-700 border border-amber-200 text-sm rounded-lg hover:bg-amber-100 disabled:opacity-50 flex items-center gap-2">
+              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowLeft className="w-4 h-4" />} Geri Al
+            </button>
+          )}
           {!isActive && shipment.status === 'IN_TRANSIT' && (
             <button onClick={async () => {
               if (!(await confirm({ title: 'Teslim edildi?', message: 'Sevkiyat DELIVERED durumuna geçecek.', confirmLabel: 'Teslim Edildi' }))) return;
@@ -1206,7 +1249,7 @@ export default function ShipmentDetailPage() {
       <div className="flex items-center gap-1 border-b">
         <button onClick={() => setActiveTab('pending')}
           className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'pending' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-          {isSea ? `Ürünler (${pendingItems.length})` : `Bekleyen (${pendingItems.length})`}
+          {(isSea || isContainer) ? `Ürünler (${pendingItems.length})` : `Bekleyen (${pendingItems.length})`}
         </button>
         {!isSea && (
           <button onClick={() => setActiveTab('sent')}
@@ -1280,8 +1323,8 @@ export default function ShipmentDetailPage() {
                 <DateMultiFilter dates={itemDates} selected={itemDateFilter} onChange={setItemDateFilter} />
               </>
             )}
-            {/* Karayolu/hava: Gönder butonu */}
-            {!isSea && canSend && selectedPackedCount > 0 && (
+            {/* Karayolu/hava: Gönder butonu (konteynerde header'daki "Sevk Et" kullanılır) */}
+            {!isSea && !isContainer && canSend && selectedPackedCount > 0 && (
               <button onClick={handleSendSelected} disabled={sending}
                 className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50">
                 {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -1316,9 +1359,9 @@ export default function ShipmentDetailPage() {
             hasAnyPending={pendingItems.length > 0}
             isSea={isSea}
             isActive={isActive}
-            canBoxes={canBoxes}
-            canPack={canPack}
-            canSend={canSend}
+            canBoxes={canBoxes && !isContainer}
+            canPack={canPack && !isContainer}
+            canSend={canSend && !isContainer}
             canDelete={canDelete}
             expandedItemId={expandedItemId}
             selectedIds={selectedIds}
@@ -1352,8 +1395,8 @@ export default function ShipmentDetailPage() {
           markets={sentMarkets}
           dates={sentDates}
           selectedSentIds={selectedSentIds}
-          canSend={canSend}
-          canUnsend={canUnsend}
+          canSend={canSend && !isContainer}
+          canUnsend={canUnsend && !isContainer}
           unsending={unsending}
           mktCodeToName={mktCodeToName}
           onSearchChange={setSentSearch}

@@ -20,6 +20,7 @@ const SendItemsSchema = z.object({
     quantity: z.number().int().positive(),
   })).optional(),
   closeShipment: z.boolean().optional(),
+  reopenContainer: z.boolean().optional(),               // Konteyner: IN_TRANSIT → PLANNING geri al
 });
 
 export const POST = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'write', fallbackMessage: 'Gönderim başarısız' }, async ({ request, params }) => {
@@ -31,7 +32,7 @@ export const POST = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'writ
     return NextResponse.json({ success: false, error: 'Dogrulama hatasi' }, { status: 400 });
   }
 
-  const { itemIds, items, closeShipment } = validation.data;
+  const { itemIds, items, closeShipment, reopenContainer } = validation.data;
 
   const shipment = await prisma.shipment.findUnique({
     where: { id },
@@ -42,13 +43,32 @@ export const POST = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'writ
     return NextResponse.json({ success: false, error: 'Sevkiyat bulunamadi' }, { status: 404 });
   }
 
-  // izin kontrolu: closeShipment → closeShipment, aksi halde sendItems
-  const action = closeShipment ? 'closeShipment' : 'sendItems';
+  // izin kontrolu: close/reopen → closeShipment, aksi halde sendItems
+  const action = (closeShipment || reopenContainer) ? 'closeShipment' : 'sendItems';
   const authResult = await requireShipmentAction(request, shipment.destinationTab, action);
   if (authResult instanceof NextResponse) return authResult;
   const { user } = authResult;
 
   const now = new Date();
+
+  // Konteyner geri al: IN_TRANSIT → PLANNING, item.sentAt/packed temizle, KONTEYNER container'larını sil.
+  // Sadece konteyner yöntemi için (yerel depo etkisi yok; reserve'siz item'lar).
+  if (reopenContainer) {
+    if (shipment.shippingMethod !== 'container') {
+      return NextResponse.json({ success: false, error: 'Geri al yalnız konteyner sevkiyatında' }, { status: 400 });
+    }
+    await prisma.$transaction(async (tx) => {
+      await tx.shipmentContainer.deleteMany({ where: { shipmentId: id, type: 'KONTEYNER' } });
+      await tx.shipmentItem.updateMany({ where: { shipmentId: id }, data: { sentAt: null, packed: false } });
+      await tx.shipment.update({ where: { id }, data: { status: 'PLANNING', actualDate: null } });
+    });
+    await logAction({
+      userId: user.id, userName: user.name, userEmail: user.email,
+      action: 'ROUTE_TO_SHIPMENT', entityType: 'Shipment', entityId: id,
+      description: `Konteyner sevkiyatı geri alındı (PLANNING): ${shipment.name}`,
+    });
+    return successResponse({ reopened: true });
+  }
 
   if (closeShipment) {
     // Deniz sevkiyatı kapama — tüm itemlere sentAt ata + status IN_TRANSIT + kolileri arşivle (atomik)
@@ -76,6 +96,34 @@ export const POST = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'writ
         where: { id },
         data: { status: 'IN_TRANSIT', actualDate: now },
       });
+
+      // Konteyner yöntemi: koli iş akışı yok. Ürünleri (gönderilen item'lar) tek bir
+      // KONTEYNER konteynerine yansıt → StockPulse cg_in_transit'i bu satırlardan sayar
+      // (shipment_container_lines; ShipmentItem okunmaz). Idempotent: zaten KONTEYNER varsa
+      // tekrar üretme.
+      if (shipment.shippingMethod === 'container') {
+        const existing = await tx.shipmentContainer.findFirst({
+          where: { shipmentId: id, type: 'KONTEYNER' },
+        });
+        if (!existing) {
+          const m = shipment.name.match(/\d+/);
+          const prefix = m ? m[0] : shipment.name.split(/[\s-]/)[0];
+          const container = await tx.shipmentContainer.create({
+            data: { shipmentId: id, type: 'KONTEYNER', code: `${prefix}-C01` },
+          });
+          // unsentItems = bu kapatmada gönderilen kalemler (yukarıda sentAt aldılar)
+          if (unsentItems.length > 0) {
+            await tx.shipmentContainerLine.createMany({
+              data: unsentItems.map(item => ({
+                containerId: container.id,
+                shipmentItemId: item.id,
+                iwasku: item.iwasku,
+                quantity: item.quantity,
+              })),
+            });
+          }
+        }
+      }
 
       const boxes = await tx.shipmentBox.findMany({ where: { shipmentId: id } });
       if (boxes.length > 0) {

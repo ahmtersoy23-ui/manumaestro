@@ -41,7 +41,7 @@ type Box = {
 type Container = { id: string; code: string; lines: { iwasku: string; quantity: number }[] };
 
 function makeTx(opts: {
-  shipment: { id: string; name: string; destinationTab: string; boxes: Box[] } | null;
+  shipment: { id: string; name: string; destinationTab: string; boxes: Box[]; shippingMethod?: string } | null;
   containers?: Container[]; // konsolidasyon paletleri (arrivedAt=null kabul edilir)
   activeWarehouses?: string[]; // code listesi (isActive=true)
   poolsFor?: string[]; // POOL rafı olan depo kodları
@@ -216,6 +216,21 @@ describe('processShipmentArrival', () => {
     const res = await processShipmentArrival(tx, 's2', 'u1');
     expect(res.containerLinesAdded).toBe(0);
     expect(res.containerUnitsAdded).toBe(0);
+    expect(shelfStockUpsert).not.toHaveBeenCalled();
+    expect(containerUpdate).not.toHaveBeenCalled();
+  });
+
+  it('Konteyner yöntemi: WMS raf yansıması YOK (CastleGate malı yerel depoya girmez)', async () => {
+    const { tx, shelfBoxCreate, shelfStockUpsert, containerUpdate } = makeTx({
+      shipment: {
+        id: 'sc', name: 'CG Shukran 8 Los Angeles', destinationTab: 'US', shippingMethod: 'container',
+        boxes: [box('b1', 'DEPO')], // olsa bile yansımaz
+      },
+      containers: [{ id: 'c1', code: '8-C01', lines: [{ iwasku: 'IW-A', quantity: 5 }] }],
+    });
+    const res = await processShipmentArrival(tx, 'sc', 'u1');
+    expect(res).toEqual({ warehouseDistribution: {}, boxesCreated: 0, boxesSkipped: 0, containerLinesAdded: 0, containerUnitsAdded: 0 });
+    expect(shelfBoxCreate).not.toHaveBeenCalled();
     expect(shelfStockUpsert).not.toHaveBeenCalled();
     expect(containerUpdate).not.toHaveBeenCalled();
   });

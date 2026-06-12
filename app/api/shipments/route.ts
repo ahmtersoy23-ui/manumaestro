@@ -16,7 +16,7 @@ import { successResponse, createdResponse } from '@/lib/api/response';
 const CreateShipmentSchema = z.object({
   name: z.string().min(1).max(100),
   destinationTab: z.enum(['US', 'UK', 'EU', 'NL', 'AU', 'ZA']),
-  shippingMethod: z.enum(['sea', 'road', 'air']),
+  shippingMethod: z.enum(['sea', 'road', 'air', 'container']),
   plannedDate: z.string().datetime().optional(),
   etaDate: z.string().datetime().optional(),
   notes: z.string().max(1000).optional(),

@@ -30,7 +30,7 @@ export interface RouteDTO {
 
 const TABS = ['US', 'UK', 'EU', 'NL', 'AU', 'ZA'];
 const METHODS = ['sea', 'road', 'air'];
-const methodLabels: Record<string, string> = { sea: '🚢 Deniz', road: '🚛 Karayolu', air: '✈️ Hava' };
+const methodLabels: Record<string, string> = { sea: '🚢 Deniz', road: '🚛 Karayolu', air: '✈️ Hava', container: '📦 Konteyner' };
 
 interface Props {
   initialRoutes: RouteDTO[];

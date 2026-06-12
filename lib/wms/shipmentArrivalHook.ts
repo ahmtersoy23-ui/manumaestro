@@ -60,6 +60,14 @@ export async function processShipmentArrival(
   });
   if (!shipment) throw new Error('Sevkiyat bulunamadı');
 
+  // Konteyner yöntemi (Manu dışı CG/CastleGate verisi): mallar doğrudan gemiyle CastleGate'e
+  // gider, hiçbir zaman yerel depoya (NJ/Fairfield) girmez. DELIVERED'a geçse bile WMS raf
+  // yansıması YAPILMAZ — yolda'dan düşmesi status filtresiyle (StockPulse) zaten sağlanır.
+  // (Aynı mantık FBA kolilerde koli-bazında resolveTargetWarehouse→null ile işliyor.)
+  if (shipment.shippingMethod === 'container') {
+    return { warehouseDistribution: {}, boxesCreated: 0, boxesSkipped: 0, containerLinesAdded: 0, containerUnitsAdded: 0 };
+  }
+
   // POOL raf cache (depo başına bir kere fetch)
   const poolCache = new Map<string, string>(); // warehouseCode → poolId
   const getPool = async (warehouseCode: string): Promise<string> => {

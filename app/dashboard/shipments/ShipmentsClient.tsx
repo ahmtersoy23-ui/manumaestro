@@ -19,7 +19,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Ship, Plus, Settings, Loader2,
-  Anchor, Truck as TruckIcon, Plane, ChevronDown, Calendar, Package,
+  Anchor, Truck as TruckIcon, Plane, Container, ChevronDown, Calendar, Package,
 } from 'lucide-react';
 import { notify } from '@/lib/ui/notify';
 import { seaEtaBadge } from '@/lib/shipments/eta';
@@ -60,9 +60,9 @@ interface PoolSummary {
 }
 
 const methodIcons: Record<string, typeof Anchor> = {
-  sea: Anchor, road: TruckIcon, air: Plane,
+  sea: Anchor, road: TruckIcon, air: Plane, container: Container,
 };
-const methodLabels: Record<string, string> = { sea: 'Deniz', road: 'Kara', air: 'Hava' };
+const methodLabels: Record<string, string> = { sea: 'Deniz', road: 'Kara', air: 'Hava', container: 'Konteyner' };
 
 interface Props {
   activeCountry: ShipmentCountry;
@@ -218,6 +218,7 @@ export function ShipmentsClient({ activeCountry, initialShipments, canCreate }: 
                 <option value="sea">Deniz</option>
                 <option value="road">Karayolu</option>
                 <option value="air">Hava</option>
+                <option value="container">Konteyner</option>
               </select>
             </div>
             <div>

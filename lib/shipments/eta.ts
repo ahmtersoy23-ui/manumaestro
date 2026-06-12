@@ -23,7 +23,7 @@ export function seaEtaBadge(
   status: string,
   now: Date = new Date()
 ): EtaBadge | null {
-  if (shippingMethod !== 'sea' || status === 'DELIVERED' || !etaIso) return null;
+  if ((shippingMethod !== 'sea' && shippingMethod !== 'container') || status === 'DELIVERED' || !etaIso) return null;
   const eta = new Date(etaIso);
   if (Number.isNaN(eta.getTime())) return null;
 

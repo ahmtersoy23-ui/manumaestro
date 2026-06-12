@@ -24,4 +24,9 @@ describe('seaEtaBadge', () => {
   it('ETA geçmiş → kırmızı', () => {
     expect(seaEtaBadge(iso('2026-06-07'), 'sea', 'IN_TRANSIT', NOW)).toMatchObject({ tone: 'red', days: -3, text: 'ETA 3 gün geçti' });
   });
+
+  it('konteyner yöntemi de deniz gibi rozet alır', () => {
+    expect(seaEtaBadge(iso('2026-06-13'), 'container', 'IN_TRANSIT', NOW)).toMatchObject({ tone: 'amber', days: 3 });
+    expect(seaEtaBadge(iso('2026-06-11'), 'container', 'DELIVERED', NOW)).toBeNull();
+  });
 });
