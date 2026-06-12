@@ -7,7 +7,7 @@
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma, queryProductDb } from '@/lib/db/prisma';
+import { prisma, queryProductDb, queryDataBridge } from '@/lib/db/prisma';
 import { requireShipmentView, requireShipmentAction } from '@/lib/auth/requireShipmentRole';
 import { requireSuperAdmin } from '@/lib/auth/verify';
 import { getShipmentRole, canDoAction, ShipmentAction } from '@/lib/auth/shipmentPermission';
@@ -104,6 +104,21 @@ export const GET = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'read'
     }
   }
 
+  // NL karayolu: kalem etiketinde Bol EAN basılır — kaynak bol_sku_mapping (databridge_db),
+  // products.eans DEĞİL (Bol.com listesindeki EAN deponun taradığıyla eşleşsin). Sadece NL'de çek.
+  const bolEanMap = new Map<string, string>();
+  if (shipment.destinationTab === 'NL') {
+    const bolIwaskus = [...new Set(shipment.items.map(i => i.iwasku).filter(Boolean))];
+    if (bolIwaskus.length > 0) {
+      const ph = bolIwaskus.map((_, i) => `$${i + 1}`).join(',');
+      const rows = await queryDataBridge(
+        `SELECT iwasku, sku FROM bol_sku_mapping WHERE iwasku IN (${ph}) AND sku IS NOT NULL AND sku <> ''`,
+        bolIwaskus,
+      );
+      for (const row of rows) bolEanMap.set(row.iwasku, row.sku);
+    }
+  }
+
   const enrichedItems = shipment.items.map(item => {
     const pr = item.productionRequestId ? prMap.get(item.productionRequestId) : null;
     const fallback = productMap.get(item.iwasku);
@@ -126,6 +141,7 @@ export const GET = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'read'
       productName: pr?.productName ?? fallback?.name ?? '',
       productCategory: pr?.productCategory ?? fallback?.category ?? '',
       fnsku,
+      bolEan: bolEanMap.get(item.iwasku) ?? null,
     };
   });
 

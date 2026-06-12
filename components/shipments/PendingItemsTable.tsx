@@ -18,6 +18,7 @@ interface Props {
 
   // Flags
   isSea: boolean;
+  isNl: boolean;
   isActive: boolean;
 
   // Permissions
@@ -50,7 +51,7 @@ interface Props {
 
 export function PendingItemsTable({
   items, boxes, hasAnyPending,
-  isSea, isActive,
+  isSea, isNl, isActive,
   canBoxes, canPack, canSend, canDelete,
   expandedItemId, selectedIds, togglingId, packedPendingCount,
   sendQtyOverrides,
@@ -102,6 +103,7 @@ export function PendingItemsTable({
                   itemDesi={itemDesi}
                   itemBoxes={itemBoxes}
                   isSea={isSea}
+                  isNl={isNl}
                   isActive={isActive}
                   isExpanded={isExpanded}
                   isSelected={selectedIds.has(item.id)}

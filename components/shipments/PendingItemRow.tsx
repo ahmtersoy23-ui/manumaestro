@@ -18,6 +18,8 @@ interface Props {
   itemDesi: number;
   itemBoxes: ShipmentBox[];
   isSea: boolean;
+  /** NL (Bol) sevkiyat: kalem etiketi Bol EAN-13; bolEan yoksa basılamaz. */
+  isNl: boolean;
   isActive: boolean;
   isExpanded: boolean;
   isSelected: boolean;
@@ -39,7 +41,7 @@ interface Props {
 }
 
 export function PendingItemRow({
-  item, itemDesi, itemBoxes, isSea, isActive, isExpanded, isSelected, togglingId,
+  item, itemDesi, itemBoxes, isSea, isNl, isActive, isExpanded, isSelected, togglingId,
   canBoxes, canPack, canSend, canDelete,
   onTogglePacked, onToggleSelect, onToggleExpand, onCreateBox, onDeleteBox, onDeleteItem, onFnskuSaved,
   onPrintLabel, sendQty, onSendQtyChange,
@@ -112,10 +114,11 @@ export function PendingItemRow({
         {isActive && (
           <td className="px-2 py-3 text-center">
             <div className="flex items-center gap-1 justify-center">
-              {!isSea && (item.fnsku || item.iwasku) && (
+              {/* NL: Bol EAN-13 etiketi (bolEan varsa); diğer: FNSKU/IWASKU CODE128 */}
+              {!isSea && (isNl ? !!item.bolEan : !!(item.fnsku || item.iwasku)) && (
                 <button onClick={async () => {
                   const input = await inputDialog({
-                    title: 'Etiket yazdır',
+                    title: isNl ? 'Bol EAN etiketi yazdır' : 'Etiket yazdır',
                     message: `${item.iwasku} — Kaç etiket basılsın?`,
                     defaultValue: String(item.quantity),
                     inputType: 'number',
@@ -123,9 +126,12 @@ export function PendingItemRow({
                     confirmLabel: 'Yazdır',
                   });
                   if (input) { const n = parseInt(input); if (n > 0) onPrintLabel(item, n); }
-                }} className="text-gray-300 hover:text-blue-600 transition-colors" title="Etiket yazdır">
+                }} className="text-gray-300 hover:text-blue-600 transition-colors" title={isNl ? 'Bol EAN etiketi yazdır' : 'Etiket yazdır'}>
                   <Printer className="w-4 h-4" />
                 </button>
+              )}
+              {!isSea && isNl && !item.bolEan && (
+                <span className="text-[10px] font-medium text-amber-600 whitespace-nowrap" title="Bol mappings'te EAN eşlemesi yok — etiket basılamaz">Bol EAN yok</span>
               )}
               {canDelete && (
                 <button onClick={onDeleteItem} className="text-red-300 hover:text-red-600 transition-colors" title="Sevkiyattan çıkar"><X className="w-4 h-4" /></button>

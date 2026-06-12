@@ -29,6 +29,8 @@ export interface ShipmentItem {
   productName: string;
   productCategory: string;
   fnsku: string | null;
+  /** NL karayolu: Bol.com EAN (bol_sku_mapping.sku). Sadece destinationTab='NL' sevkiyatta dolu; yoksa null → EAN etiketi basılamaz. */
+  bolEan: string | null;
   reserveId: string | null;
   packed: boolean;
   sentAt: string | null;

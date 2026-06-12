@@ -21,7 +21,7 @@ import { MissingFnskuWarning } from '@/components/shipments/MissingFnskuWarning'
 import { PendingItemsTable } from '@/components/shipments/PendingItemsTable';
 import { SentItemsTab } from '@/components/shipments/SentItemsTab';
 import { BoxesTab } from '@/components/shipments/BoxesTab';
-import { ConsolidationTab } from '@/components/shipments/ConsolidationTab';
+import { ConsolidationTab, isValidEan13 } from '@/components/shipments/ConsolidationTab';
 import { useShipmentFilters } from '@/lib/shipments/useShipmentFilters';
 import { DateMultiFilter } from '@/components/shipments/DateMultiFilter';
 import { useModalToggles } from '@/lib/shipments/useModalToggles';
@@ -894,10 +894,67 @@ export default function ShipmentDetailPage() {
     setSendQtyOverrides(prev => ({ ...prev, [itemId]: qty }));
   };
 
+  // NL (Bol): kalem başına Bol EAN-13 etiketi (60×40mm). Kaynak item.bolEan (bol_sku_mapping).
+  const handlePrintBolEanLabel = async (item: ShipmentItem, labelCount: number) => {
+    if (!isValidEan13(item.bolEan)) {
+      notify.error(`${item.iwasku}: Bol EAN eşlemesi yok — etiket basılamaz. Bol mappings'e ekleyin.`);
+      return;
+    }
+    const ean = item.bolEan;
+    const [JsBarcode, { jsPDF }] = await Promise.all([
+      import('jsbarcode').then(m => m.default),
+      import('jspdf'),
+    ]);
+
+    const PX_PER_MM = 8;
+    const W_MM = 60, H_MM = 40;
+    const CW = W_MM * PX_PER_MM, CH = H_MM * PX_PER_MM;
+    const itemName = item.productName || '';
+
+    const bc = document.createElement('canvas');
+    JsBarcode(bc, ean, { format: 'EAN13', width: 2, height: 80, displayValue: true, fontSize: 22, textMargin: 2, margin: 0 });
+
+    const doc = new jsPDF({ unit: 'mm', format: [W_MM, H_MM], orientation: 'landscape' });
+    for (let i = 0; i < labelCount; i++) {
+      if (i > 0) doc.addPage([W_MM, H_MM], 'landscape');
+      const c = document.createElement('canvas');
+      c.width = CW; c.height = CH;
+      const ctx = c.getContext('2d')!;
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, CW, CH);
+      ctx.fillStyle = '#000';
+      const bw = 300, bh = 150;
+      ctx.drawImage(bc, (CW - bw) / 2, 8, bw, bh);
+      ctx.font = 'bold 20px Arial'; ctx.textAlign = 'center';
+      // ürün adı (en fazla 2 satır)
+      const words = itemName.split(' '); const lines: string[] = []; let line = '';
+      for (const w of words) {
+        const test = line ? `${line} ${w}` : w;
+        if (ctx.measureText(test).width > CW - 40 && line) { lines.push(line); line = w; } else { line = test; }
+      }
+      if (line) lines.push(line);
+      let y = 196;
+      for (const ln of lines.slice(0, 2)) { ctx.fillText(ln, CW / 2, y); y += 22; }
+      ctx.font = '15px Courier New'; ctx.fillStyle = '#555';
+      ctx.textAlign = 'left'; ctx.fillText(item.iwasku, 10, CH - 8);
+      ctx.textAlign = 'right'; ctx.fillText('Bol NL', CW - 10, CH - 8);
+      doc.addImage(c.toDataURL('image/png'), 'PNG', 0, 0, W_MM, H_MM);
+    }
+    doc.save(`${item.iwasku}-BolEAN-${ean}-x${labelCount}.pdf`);
+  };
+
   // Karayolu/hava: ürün satırından GPSR'lı FNSKU etiket bas
   const handlePrintItemLabel = async (item: ShipmentItem, labelCount: number) => {
+    if (labelCount < 1) return;
+
+    // NL (Hollanda/Bol): kalem etiketi FNSKU/IWASKU CODE128 yerine Bol EAN-13.
+    // Kaynak bol_sku_mapping (item.bolEan). Eşleme yoksa basma — uyar.
+    if (shipment?.destinationTab === 'NL') {
+      await handlePrintBolEanLabel(item, labelCount);
+      return;
+    }
+
     const code = item.fnsku || item.iwasku;
-    if (!code || labelCount < 1) return;
+    if (!code) return;
 
     const [JsBarcode, { jsPDF }] = await Promise.all([
       import('jsbarcode').then(m => m.default),
@@ -1257,6 +1314,7 @@ export default function ShipmentDetailPage() {
             boxes={boxes}
             hasAnyPending={pendingItems.length > 0}
             isSea={isSea}
+            isNl={shipment.destinationTab === 'NL'}
             isActive={isActive}
             canBoxes={canBoxes}
             canPack={canPack}
