@@ -12,7 +12,7 @@ import { queryDataBridge } from '@/lib/db/prisma';
 import { getUsAvailability } from '@/lib/wms/usWarehouseStock';
 import { getCgAvailability } from '@/lib/wms/cgStock';
 import { getProductsByIwasku } from '@/lib/products/lookup';
-import { resolveOrderWarehouse, resolveOrderWarehouseOptions, needsManualSource, isEtsyChannel, isWayfairChannel, type RoutedWarehouse } from '@/lib/wisersell/orderRouting';
+import { resolveOrderWarehouse, resolveOrderWarehouseOptions, resolveOrderSplit, needsManualSource, isEtsyChannel, isWayfairChannel, type RoutedWarehouse } from '@/lib/wisersell/orderRouting';
 import { markWisersellReady, markWisersellOrderItems } from '@/lib/wisersell/databridgeClient';
 import { findChannelDuplicate } from '@/lib/wms/orderDuplicateGuard';
 import { createLogger } from '@/lib/logger';
@@ -104,7 +104,8 @@ export async function getEligibleCandidateIds(region: string): Promise<number[]>
       if (isWayfairChannel(mpCode)) return resolveOrderWarehouse(items, avail, undefined) !== null;
       if (needsManualSource(items, mpCode)) return false; // mobilya / Amazon Citi → hep manuel seçim; otomatik onaya girmez
       if (isEtsyChannel(mpCode)) return false;             // Etsy (tüm mağazalar) → manuel onayda kalır
-      return resolveOrderWarehouse(items, avail, cgAvail) !== null;
+      // Tam-ABD (tek depo VEYA çok-depolu split) → otomatik onaya uygun. TR gereken → değil.
+      return resolveOrderSplit(items, avail, cgAvail).feasible;
     })
     .map((c) => c.wisersell_order_id);
 }
@@ -175,9 +176,17 @@ export async function approveWisersellCandidates(ids: number[], userId: string, 
       results.push({ wisersellOrderId: c.wisersell_order_id, ok: false, status: 'error', message: `store_map eksik (store ${c.store_id})` });
       continue;
     }
-    const items = physicalItems(c.orderitems).map((i) => ({ iwasku: i.iwasku, qty: i.qty, desi: i.iwasku ? productMap.get(i.iwasku)?.desi ?? null : null, category: i.iwasku ? productMap.get(i.iwasku)?.category ?? null : null }));
-    // Wisersell orderitem id'leri — üretim durumu (Beklemede/Teslim/Yeni) için sipariş kaydında saklanır.
-    const wsItemIds = physicalItems(c.orderitems).map((i) => i.id).filter((x): x is number => typeof x === 'number');
+    // Fiziksel kalemler (iwasku + adet + Wisersell orderitem id birlikte — split'te id'yi depo
+    // grubuna dağıtmak için). id = üretim durumu (Beklemede/Teslim/Yeni) yazmak için.
+    const phys = physicalItems(c.orderitems).map((i) => ({
+      iwasku: i.iwasku,
+      qty: i.qty,
+      id: typeof i.id === 'number' ? i.id : null,
+      desi: i.iwasku ? productMap.get(i.iwasku)?.desi ?? null : null,
+      category: i.iwasku ? productMap.get(i.iwasku)?.category ?? null : null,
+    }));
+    const items = phys.map(({ iwasku, qty, desi, category }) => ({ iwasku, qty, desi, category }));
+    const wsItemIds = phys.map((i) => i.id).filter((x): x is number => typeof x === 'number');
 
     const override = sources?.get(c.wisersell_order_id);
     // TR (yalnız mobilya / Amazon Citi): outbound YOK, Wisersell'e dokunma — sadece yerel dismiss.
@@ -197,21 +206,40 @@ export async function approveWisersellCandidates(ids: number[], userId: string, 
 
     // Wayfair (dropship) → CG'ye asla gitmez: routing'de cgAvail'i gizle (yalnız US değerlendirilir).
     const cgForRouting = isWayfairChannel(sm.marketplace_code) ? undefined : cgAvail;
-    // Depo: override (mobilya manuel seçim) varsa fizibilite doğrula, yoksa otomatik routing.
-    let wh: RoutedWarehouse | null;
+
+    // Depo grupları: her depo için bir alt-OutboundOrder (split). Override (mobilya/Citi manuel)
+    // → daima tek grup. Otomatik routing → tam-ABD ise tek depo VEYA depo-bazlı split.
+    type WhGroup = { warehouse: RoutedWarehouse; items: Array<{ iwasku: string; qty: number }>; wsItemIds: number[] };
+    let groups: WhGroup[];
     if (override) {
       const options = resolveOrderWarehouseOptions(items, avail, cgForRouting);
       if (!options.includes(override)) {
         results.push({ wisersellOrderId: c.wisersell_order_id, ok: false, status: 'skipped', message: `Seçilen depo (${override}) stoğu tam karşılamıyor` });
         continue;
       }
-      wh = override;
+      groups = [{ warehouse: override, items: items.map((it) => ({ iwasku: it.iwasku!, qty: it.qty })), wsItemIds }];
     } else {
-      wh = resolveOrderWarehouse(items, avail, cgForRouting);
-    }
-    if (!wh) {
-      results.push({ wisersellOrderId: c.wisersell_order_id, ok: false, status: 'skipped', message: 'Tek depodan tam karşılanmıyor (stok/iwasku)' });
-      continue;
+      const plan = resolveOrderSplit(items, avail, cgForRouting);
+      if (!plan.feasible) {
+        results.push({ wisersellOrderId: c.wisersell_order_id, ok: false, status: 'skipped', message: 'ABD depolarından tam karşılanmıyor (stok/iwasku)' });
+        continue;
+      }
+      if (plan.single) {
+        groups = [{ warehouse: plan.single, items: items.map((it) => ({ iwasku: it.iwasku!, qty: it.qty })), wsItemIds }];
+      } else {
+        // Split: iwasku → depo. Fiziksel kalemleri (id dahil) ait oldukları depo grubuna dağıt.
+        const whByIwasku = new Map(plan.assignments.map((a) => [a.iwasku, a.warehouse]));
+        const byWh = new Map<RoutedWarehouse, WhGroup>();
+        for (const p of phys) {
+          const w = whByIwasku.get(p.iwasku!);
+          if (!w) continue; // resolveOrderSplit feasible → her iwasku atanmış olmalı (güvenlik)
+          let g = byWh.get(w);
+          if (!g) { g = { warehouse: w, items: [], wsItemIds: [] }; byWh.set(w, g); }
+          g.items.push({ iwasku: p.iwasku!, qty: p.qty });
+          if (p.id != null) g.wsItemIds.push(p.id);
+        }
+        groups = [...byWh.values()];
+      }
     }
 
     // Çift kayıt guard'ı (ters yön): bu kanal no'su (ör. S_IWAUS22055) manuel olarak
@@ -225,31 +253,36 @@ export async function approveWisersellCandidates(ids: number[], userId: string, 
       }
     }
 
-    // OutboundOrder oluştur (idempotent: wisersellOrderId @unique)
-    let orderId: string;
+    // OutboundOrder(lar) oluştur — split'te depo başına bir kayıt, TEK transaction (atomik:
+    // ya hepsi ya hiç). Kardeşler aynı wisersellOrderId; @@unique([warehouseCode,...]) çakışmaz.
+    const isSplit = groups.length > 1;
+    let orderIds: string[];
     try {
-      const created = await prisma.$transaction(async (tx) => {
-        const order = await tx.outboundOrder.create({
-          data: {
-            warehouseCode: wh,
-            orderType: 'SINGLE',
-            marketplaceCode: sm.marketplace_code!,
-            orderNumber: c.order_code,
-            channelOrderNumber: channelNo || null,
-            addressNote: buildAddressNote(c, channelNo),
-            status: 'DRAFT',
-            source: 'WISERSELL_AUTO',
-            wisersellOrderId: c.wisersell_order_id,
-            wisersellOrderItemIds: wsItemIds,
-            createdById: userId,
-          },
-        });
-        await tx.outboundOrderItem.createMany({
-          data: items.map((it) => ({ outboundOrderId: order.id, iwasku: it.iwasku!, quantity: it.qty })),
-        });
-        return order;
+      orderIds = await prisma.$transaction(async (tx) => {
+        const ids: string[] = [];
+        for (const g of groups) {
+          const order = await tx.outboundOrder.create({
+            data: {
+              warehouseCode: g.warehouse,
+              orderType: 'SINGLE',
+              marketplaceCode: sm.marketplace_code!,
+              orderNumber: c.order_code,
+              channelOrderNumber: channelNo || null,
+              addressNote: buildAddressNote(c, channelNo),
+              status: 'DRAFT',
+              source: 'WISERSELL_AUTO',
+              wisersellOrderId: c.wisersell_order_id,
+              wisersellOrderItemIds: g.wsItemIds,
+              createdById: userId,
+            },
+          });
+          await tx.outboundOrderItem.createMany({
+            data: g.items.map((it) => ({ outboundOrderId: order.id, iwasku: it.iwasku, quantity: it.qty })),
+          });
+          ids.push(order.id);
+        }
+        return ids;
       });
-      orderId = created.id;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       // unique violation → zaten onaylı / numara çakışması
@@ -257,8 +290,12 @@ export async function approveWisersellCandidates(ids: number[], userId: string, 
       continue;
     }
 
+    const whLabel = groups.map((g) => g.warehouse).join('+');
+    const orderIdJoined = orderIds.join(',');
+
     // Üretim kuyruğundan düş: orderitem → Beklemede (5). US-depodan karşılanıyor, üretime gerek yok.
     // Best-effort: Wisersell yazması patlarsa onay akışı bloklanmaz (markWisersellReady gibi).
+    // Split'te de tüm fiziksel kalemler tek seferde (sipariş seviyesi).
     if (wsItemIds.length) {
       try {
         await markWisersellOrderItems(wsItemIds, 5);
@@ -267,15 +304,16 @@ export async function approveWisersellCandidates(ids: number[], userId: string, 
       }
     }
 
-    // mark-ready (dış aksiyon) — başarısızsa ready-pending bırak
+    // mark-ready (dış aksiyon, sipariş seviyesi → SADECE 1 kez) — başarısızsa ready-pending bırak.
+    // Başarılıysa TÜM kardeş alt-siparişlere wisersellReadyAt yaz.
     try {
       await markWisersellReady([c.wisersell_order_id]);
-      await prisma.outboundOrder.update({ where: { id: orderId }, data: { wisersellReadyAt: new Date() } });
-      results.push({ wisersellOrderId: c.wisersell_order_id, ok: true, status: 'approved', warehouse: wh, orderId });
+      await prisma.outboundOrder.updateMany({ where: { wisersellOrderId: c.wisersell_order_id }, data: { wisersellReadyAt: new Date() } });
+      results.push({ wisersellOrderId: c.wisersell_order_id, ok: true, status: 'approved', warehouse: whLabel, orderId: orderIdJoined, message: isSplit ? `Ayrı sevk: ${whLabel}` : undefined });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error(`mark-ready başarısız (order ${c.wisersell_order_id}), ready-pending: ${msg}`);
-      results.push({ wisersellOrderId: c.wisersell_order_id, ok: true, status: 'ready_pending', warehouse: wh, orderId, message: `Outbound oluştu ama Kargoya Hazır yazılamadı (retry): ${msg.slice(0, 120)}` });
+      results.push({ wisersellOrderId: c.wisersell_order_id, ok: true, status: 'ready_pending', warehouse: whLabel, orderId: orderIdJoined, message: `Outbound oluştu ama Kargoya Hazır yazılamadı (retry): ${msg.slice(0, 120)}` });
     }
   }
 

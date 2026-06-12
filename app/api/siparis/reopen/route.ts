@@ -49,23 +49,42 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 1) Outbound DRAFT'ı sil (rezervasyon hesaplı → otomatik serbest; cascade items/labels)
-  await prisma.outboundOrder.delete({ where: { id: orderId } });
+  // Split sevk: aynı wisersellOrderId'nin TÜM kardeş alt-siparişlerini birlikte aç (yarım
+  // sipariş kalmasın). Tek/MANUAL siparişte siblings = [order].
+  const isAuto = order.source === 'WISERSELL_AUTO' && order.wisersellOrderId != null;
+  const siblings = isAuto
+    ? await prisma.outboundOrder.findMany({
+        where: { wisersellOrderId: order.wisersellOrderId, source: 'WISERSELL_AUTO' },
+        include: { labels: { where: { type: 'SHIPPING', archivedAt: null }, select: { trackingNumber: true }, take: 1 } },
+      })
+    : [order];
+  // Guard tüm kardeşlere: hepsi DRAFT + etiketsiz olmalı (biri kargolandıysa/etiketliyse blokla).
+  const blocked = siblings.find((s) => s.status !== 'DRAFT' || s.labels.some((l) => l.trackingNumber));
+  if (blocked && blocked.id !== orderId) {
+    return NextResponse.json(
+      { success: false, error: `Kardeş alt-sipariş (${blocked.warehouseCode}) açığa alınamaz (durum ${blocked.status}${blocked.labels.some((l) => l.trackingNumber) ? ', etiketli' : ''}) — önce onu çöz.` },
+      { status: 409 },
+    );
+  }
 
-  // 2) Wisersell'de "açık"a geri al (WISERSELL_AUTO + wisersellOrderId; best-effort)
+  // 1) Tüm kardeş DRAFT'ları sil (rezervasyon hesaplı → otomatik serbest; cascade items/labels)
+  await prisma.outboundOrder.deleteMany({ where: { id: { in: siblings.map((s) => s.id) } } });
+
+  // 2) Wisersell'de "açık"a geri al (WISERSELL_AUTO + wisersellOrderId; best-effort) — sipariş seviyesi, 1 kez
   let wisersellReopened = false;
   let wisersellError: string | null = null;
-  if (order.source === 'WISERSELL_AUTO' && order.wisersellOrderId) {
+  if (isAuto) {
     try {
-      await reopenWisersellOrder([order.wisersellOrderId]);
+      await reopenWisersellOrder([order.wisersellOrderId!]);
       wisersellReopened = true;
     } catch (err) {
       wisersellError = err instanceof Error ? err.message.slice(0, 160) : 'Wisersell reopen hatası';
     }
-    // orderitem → Yeni (1): üretim kuyruğuna geri koy (Beklemede'den geri al). Best-effort.
-    if (order.wisersellOrderItemIds.length) {
+    // orderitem → Yeni (1): tüm kardeşlerin item id'leri (üretim kuyruğuna geri koy). Best-effort.
+    const allItemIds = [...new Set(siblings.flatMap((s) => s.wisersellOrderItemIds))];
+    if (allItemIds.length) {
       try {
-        await markWisersellOrderItems(order.wisersellOrderItemIds, 1);
+        await markWisersellOrderItems(allItemIds, 1);
       } catch (err) {
         logger.error(`orderitem Yeni yazılamadı (order ${order.wisersellOrderId}): ${err instanceof Error ? err.message : String(err)}`);
       }

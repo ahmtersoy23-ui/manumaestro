@@ -837,7 +837,7 @@ model OutboundOrder {
   addressNote     String? // Adres ve serbest açıklama — SINGLE entry sırasında
   status          OutboundStatus @default(DRAFT)
   source          OutboundSource @default(MANUAL) // MANUAL = elle; WISERSELL_AUTO = Sipariş otomasyonu
-  wisersellOrderId Int?          @unique // Wisersell internal order id (otomasyon) — idempotency + external-close anahtarı
+  wisersellOrderId Int?          // Wisersell internal order id (otomasyon) — external-close anahtarı. NOT @unique: çok-depolu (split) sevkte bir Wisersell siparişi → N alt-OutboundOrder (her depo bir parça, aynı wisersellOrderId). Idempotency @@unique([warehouseCode, marketplaceCode, orderNumber]) ile sağlanır.
   wisersellOrderItemIds Int[]    // Wisersell orderitem id'leri (onayda candidate'tan yazılır) — üretim durumu (Beklemede/Teslim/Yeni) yazmak için. Çıkış candidate'tan saatler sonra → id'yi burada tut.
   wisersellReadyAt DateTime?     // Wisersell "Kargoya Hazır" (status/update) başarıyla yazıldıysa; null = ready-pending (retry)
   wisersellClosedAt DateTime?    // external-close başarıyla yazıldıysa (Kapandı)
@@ -858,6 +858,7 @@ model OutboundOrder {
   @@index([createdById])
   @@index([shippedById])
   @@index([channelOrderNumber])
+  @@index([wisersellOrderId])
   @@map("outbound_orders")
 }
 

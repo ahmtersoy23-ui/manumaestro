@@ -48,6 +48,61 @@ export function resolveOrderWarehouse(
   return null;
 }
 
+export interface SplitAssignment {
+  iwasku: string;
+  qty: number;
+  warehouse: RoutedWarehouse;
+}
+
+export interface SplitPlan {
+  /** Her kalem EN AZ bir depodan TAM karşılanabiliyor mu (hepsi ABD'de). false → board gizler. */
+  feasible: boolean;
+  /** Tek depo TÜM siparişi karşılıyorsa o depo (split GEREKMEZ). split gerekiyorsa null. */
+  single: RoutedWarehouse | null;
+  /** single null ise kalem-bazı depo ataması (depo-bazında alt-siparişe bölmek için). */
+  assignments: SplitAssignment[];
+}
+
+/**
+ * Çok-depolu (split) yönlendirme — yalnız TAM-ABD. Tek depo siparişin tamamını karşılamasa
+ * bile, HER kalem ayrı ayrı bir ABD deposundan (NJ/SHOWROOM/CG) tam karşılanabiliyorsa
+ * sipariş depo-bazında bölünebilir. Bir kalem bile hiçbir ABD deposunda yoksa (TR gerekir)
+ * → feasible:false (board gizler; TR+ABD karışık akış KAPSAM DIŞI).
+ *
+ * Heavy/CG/Wayfair/öncelik kuralları resolveOrderWarehouse'tan AYNEN gelir (kalem-bazı çağrı).
+ * Tek SKU'nun adedi depolar arası bölünmez: o kalemi tek başına karşılayan bir depo yoksa
+ * sipariş infeasible. Wayfair'de çağıran cgAvail=undefined geçirir → CG denenmez (korunur).
+ */
+export function resolveOrderSplit(
+  items: RoutingItem[],
+  usAvail: Map<string, { NJ: number; SHOWROOM: number }>,
+  cgAvail?: Map<string, CgAvailability>,
+): SplitPlan {
+  if (!items.length || items.some((it) => !it.iwasku)) {
+    return { feasible: false, single: null, assignments: [] };
+  }
+
+  // Tek depo hepsini karşılıyorsa split gereksiz (mevcut akış aynen).
+  const single = resolveOrderWarehouse(items, usAvail, cgAvail);
+  if (single) return { feasible: true, single, assignments: [] };
+
+  // iwasku bazında grupla (aynı iwasku birden çok satırda olabilir → adet toplanır,
+  // tek depodan TAM karşılanmalı). resolveOrderWarehouse grup içinde adedi toplar.
+  const groups = new Map<string, RoutingItem[]>();
+  for (const it of items) {
+    const arr = groups.get(it.iwasku!) ?? [];
+    arr.push(it);
+    groups.set(it.iwasku!, arr);
+  }
+  const assignments: SplitAssignment[] = [];
+  for (const [iwasku, groupItems] of groups) {
+    const wh = resolveOrderWarehouse(groupItems, usAvail, cgAvail);
+    if (!wh) return { feasible: false, single: null, assignments: [] }; // bu kalem ABD'de yok → gizle
+    assignments.push({ iwasku, qty: groupItems.reduce((s, it) => s + it.qty, 0), warehouse: wh });
+  }
+  return { feasible: true, single: null, assignments };
+}
+
 /** Sipariş Mobilya kalemi içeriyor mu. */
 export function isFurnitureOrder(items: RoutingItem[]): boolean {
   return items.some((it) => (it.category ?? '').trim().toLowerCase() === 'mobilya');

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveOrderWarehouse, resolveOrderWarehouseOptions, isFurnitureOrder, needsManualSource, isEtsyChannel, isWayfairChannel } from '@/lib/wisersell/orderRouting';
+import { resolveOrderWarehouse, resolveOrderWarehouseOptions, resolveOrderSplit, isFurnitureOrder, needsManualSource, isEtsyChannel, isWayfairChannel } from '@/lib/wisersell/orderRouting';
 import { isHeavyItem } from '@/lib/products/lookup';
 
 const us = (m: Record<string, { NJ: number; SHOWROOM: number }>) => new Map(Object.entries(m));
@@ -70,6 +70,71 @@ describe('resolveOrderWarehouse — CG routing', () => {
   it('cgAvail verilmezse (geriye dönük) sadece US routing', () => {
     const items = [{ iwasku: 'A', qty: 1, desi: 9, category: 'Kanvas' }];
     expect(resolveOrderWarehouse(items, us({ A: { NJ: 0, SHOWROOM: 2 } }))).toBe('SHOWROOM');
+  });
+});
+
+describe('resolveOrderSplit — yalnız tam-ABD split', () => {
+  it('tek depo hepsini karşılıyor → single (split gereksiz)', () => {
+    const items = [{ iwasku: 'A', qty: 2, desi: 2, category: 'Kanvas' }];
+    expect(resolveOrderSplit(items, us({ A: { NJ: 5, SHOWROOM: 0 } }), cg({}))).toEqual({ feasible: true, single: 'NJ', assignments: [] });
+  });
+
+  it('302005 senaryosu: 2li yalnız NJ, 9lu yalnız CG_SHUKRAN → split assignments', () => {
+    const items = [
+      { iwasku: 'DS00200WR0J9', qty: 2, desi: 3, category: 'Alsat' },   // yalnız NJ
+      { iwasku: 'DS00200XD8T2', qty: 1, desi: 9, category: 'Alsat' },   // heavy → yalnız CG_SHUKRAN
+    ];
+    const usAvail = us({ 'DS00200WR0J9': { NJ: 5, SHOWROOM: 0 }, 'DS00200XD8T2': { NJ: 0, SHOWROOM: 0 } });
+    const cgAvail = cg({ 'DS00200WR0J9': { CG_SHUKRAN: 0, CG_MDN: 0 }, 'DS00200XD8T2': { CG_SHUKRAN: 104, CG_MDN: 0 } });
+    const plan = resolveOrderSplit(items, usAvail, cgAvail);
+    expect(plan.feasible).toBe(true);
+    expect(plan.single).toBeNull();
+    expect(plan.assignments).toEqual([
+      { iwasku: 'DS00200WR0J9', qty: 2, warehouse: 'NJ' },
+      { iwasku: 'DS00200XD8T2', qty: 1, warehouse: 'CG_SHUKRAN' },
+    ]);
+  });
+
+  it('bir kalem hiçbir ABD deposunda yok (TR gerekir) → feasible:false (gizle)', () => {
+    const items = [
+      { iwasku: 'A', qty: 2, desi: 3, category: 'Alsat' },   // NJ var
+      { iwasku: 'B', qty: 1, desi: 3, category: 'Alsat' },   // hiçbir yerde yok
+    ];
+    const plan = resolveOrderSplit(items, us({ A: { NJ: 5, SHOWROOM: 0 }, B: { NJ: 0, SHOWROOM: 0 } }), cg({ A: { CG_SHUKRAN: 0, CG_MDN: 0 }, B: { CG_SHUKRAN: 0, CG_MDN: 0 } }));
+    expect(plan.feasible).toBe(false);
+  });
+
+  it('iwasku eksik → feasible:false', () => {
+    expect(resolveOrderSplit([{ iwasku: null, qty: 1, desi: 1, category: 'Kanvas' }], us({}), cg({})).feasible).toBe(false);
+  });
+
+  it('aynı iwasku iki satırda → adet toplanıp tek depodan karşılanır', () => {
+    const items = [
+      { iwasku: 'A', qty: 2, desi: 3, category: 'Kanvas' },
+      { iwasku: 'A', qty: 2, desi: 3, category: 'Kanvas' },   // toplam 4
+      { iwasku: 'B', qty: 1, desi: 9, category: 'Kanvas' },   // heavy → CG
+    ];
+    const usAvail = us({ A: { NJ: 3, SHOWROOM: 0 }, B: { NJ: 0, SHOWROOM: 0 } }); // A toplam 4 > NJ 3 → karşılanmaz
+    const cgAvail = cg({ A: { CG_SHUKRAN: 0, CG_MDN: 0 }, B: { CG_SHUKRAN: 5, CG_MDN: 0 } });
+    expect(resolveOrderSplit(items, usAvail, cgAvail).feasible).toBe(false); // A 4 adet hiçbir tek depoda yok
+
+    const usAvail2 = us({ A: { NJ: 4, SHOWROOM: 0 }, B: { NJ: 0, SHOWROOM: 0 } }); // NJ 4 = 4 ✓
+    const plan = resolveOrderSplit(items, usAvail2, cgAvail);
+    expect(plan.feasible).toBe(true);
+    expect(plan.single).toBeNull();
+    expect(plan.assignments).toEqual([
+      { iwasku: 'A', qty: 4, warehouse: 'NJ' },
+      { iwasku: 'B', qty: 1, warehouse: 'CG_SHUKRAN' },
+    ]);
+  });
+
+  it('Wayfair (cgAvail=undefined) → CG denenmez; US yetmezse feasible:false', () => {
+    const items = [
+      { iwasku: 'A', qty: 1, desi: 3, category: 'Kanvas' },   // NJ var
+      { iwasku: 'B', qty: 1, desi: 9, category: 'Kanvas' },   // heavy ama CG yok sayılır, US'te yok
+    ];
+    const usAvail = us({ A: { NJ: 5, SHOWROOM: 0 }, B: { NJ: 0, SHOWROOM: 0 } });
+    expect(resolveOrderSplit(items, usAvail, undefined).feasible).toBe(false);
   });
 });
 

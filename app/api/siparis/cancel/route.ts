@@ -40,31 +40,38 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, cancelled: 0, wisersellCancelled: 0, wisersellFailed: [] });
   }
 
+  // Split sevk: Amazon iptali sipariş seviyesi → bir parça iptal edilince TÜM kardeş
+  // DRAFT alt-siparişler de iptal edilmeli (orphan kalmasın). Hedef wisersellOrderId'lerin
+  // tüm DRAFT kardeşlerini yerel iptale dahil et; Wisersell iptali ID başına 1 kez.
+  const wsIds = [...new Set(targets.filter((t) => t.source === 'WISERSELL_AUTO' && t.wisersellOrderId != null).map((t) => t.wisersellOrderId!))];
+  const siblingIds = wsIds.length
+    ? (await prisma.outboundOrder.findMany({ where: { wisersellOrderId: { in: wsIds }, status: 'DRAFT' }, select: { id: true } })).map((s) => s.id)
+    : [];
+  const allCancelIds = [...new Set([...targets.map((t) => t.id), ...siblingIds])];
+
   // 1) Yerel CANCELLED (rezervasyon hesaplı → otomatik serbest).
   await prisma.outboundOrder.updateMany({
-    where: { id: { in: targets.map((t) => t.id) } },
+    where: { id: { in: allCancelIds } },
     data: { status: 'CANCELLED' },
   });
 
-  // 2) Wisersell'e iptal it (WISERSELL_AUTO + wisersellOrderId; best-effort).
+  // 2) Wisersell'e iptal it (wisersellOrderId başına 1 kez; best-effort).
   let wisersellCancelled = 0;
   const wisersellFailed: string[] = [];
-  for (const t of targets) {
-    if (t.source === 'WISERSELL_AUTO' && t.wisersellOrderId) {
-      try {
-        await cancelWisersellOrder(t.wisersellOrderId);
-        wisersellCancelled++;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message.slice(0, 120) : 'hata';
-        wisersellFailed.push(`#${t.wisersellOrderId}: ${msg}`);
-      }
+  for (const wsId of wsIds) {
+    try {
+      await cancelWisersellOrder(wsId);
+      wisersellCancelled++;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message.slice(0, 120) : 'hata';
+      wisersellFailed.push(`#${wsId}: ${msg}`);
     }
   }
-  logger.info(`${targets.length} listeden düşürüldü (CANCELLED); Wisersell iptal ${wisersellCancelled}, başarısız ${wisersellFailed.length} — ${auth.user.email}`);
+  logger.info(`${allCancelIds.length} listeden düşürüldü (CANCELLED); Wisersell iptal ${wisersellCancelled}, başarısız ${wisersellFailed.length} — ${auth.user.email}`);
   await logAction({
     userId: auth.user.id, userName: auth.user.name, userEmail: auth.user.email,
-    action: 'CANCEL_ORDER', entityType: 'OutboundOrder', entityId: targets.map((t) => t.id).join(','),
-    description: `${targets.length} sipariş listeden düşürüldü (CANCELLED)${wisersellCancelled ? `, Wisersell'de ${wisersellCancelled} iptal` : ''}`,
+    action: 'CANCEL_ORDER', entityType: 'OutboundOrder', entityId: allCancelIds.join(','),
+    description: `${allCancelIds.length} sipariş listeden düşürüldü (CANCELLED)${wisersellCancelled ? `, Wisersell'de ${wisersellCancelled} iptal` : ''}`,
   });
-  return NextResponse.json({ success: true, cancelled: targets.length, wisersellCancelled, wisersellFailed });
+  return NextResponse.json({ success: true, cancelled: allCancelIds.length, wisersellCancelled, wisersellFailed });
 }

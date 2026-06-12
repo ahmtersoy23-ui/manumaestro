@@ -40,29 +40,37 @@ export async function POST(request: NextRequest) {
     ? new Map<number, OrderSource>(Object.entries(parsed.data.sources).map(([k, v]) => [Number(k), v as OrderSource]))
     : undefined;
 
-  // Zaten oluşmuş (ready-pending) siparişler → mark-ready retry; gerisi → fresh approve
+  // Zaten oluşmuş (ready-pending) siparişler → mark-ready retry; gerisi → fresh approve.
+  // NOT: Split sevkte bir wisersellOrderId için N alt-sipariş (kardeş) olabilir → wisersellOrderId'ye
+  // göre GRUPLA: mark-ready sipariş seviyesi (1 kez), wisersellReadyAt tüm kardeşlere.
   const existing = await prisma.outboundOrder.findMany({
     where: { wisersellOrderId: { in: ids }, source: 'WISERSELL_AUTO' },
     select: { id: true, wisersellOrderId: true, wisersellReadyAt: true },
   });
-  const existingById = new Map(existing.map((o) => [o.wisersellOrderId!, o]));
-  const freshIds = ids.filter((id) => !existingById.has(id));
+  const existingByWsId = new Map<number, typeof existing>();
+  for (const o of existing) {
+    const arr = existingByWsId.get(o.wisersellOrderId!) ?? [];
+    arr.push(o);
+    existingByWsId.set(o.wisersellOrderId!, arr);
+  }
+  const freshIds = ids.filter((id) => !existingByWsId.has(id));
 
   const results: ApproveResult[] = [];
 
-  // Retry ready-pending
-  for (const o of existing) {
-    if (o.wisersellReadyAt) {
-      results.push({ wisersellOrderId: o.wisersellOrderId!, ok: true, status: 'skipped', message: 'Zaten onaylı' });
+  // Retry ready-pending (wisersellOrderId bazında)
+  for (const [wsId, siblings] of existingByWsId) {
+    const orderIdJoined = siblings.map((s) => s.id).join(',');
+    if (siblings.every((s) => s.wisersellReadyAt)) {
+      results.push({ wisersellOrderId: wsId, ok: true, status: 'skipped', message: 'Zaten onaylı' });
       continue;
     }
     try {
-      await markWisersellReady([o.wisersellOrderId!]);
-      await prisma.outboundOrder.update({ where: { id: o.id }, data: { wisersellReadyAt: new Date() } });
-      results.push({ wisersellOrderId: o.wisersellOrderId!, ok: true, status: 'approved', orderId: o.id, message: 'Kargoya Hazır (retry) yazıldı' });
+      await markWisersellReady([wsId]);
+      await prisma.outboundOrder.updateMany({ where: { wisersellOrderId: wsId }, data: { wisersellReadyAt: new Date() } });
+      results.push({ wisersellOrderId: wsId, ok: true, status: 'approved', orderId: orderIdJoined, message: 'Kargoya Hazır (retry) yazıldı' });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      results.push({ wisersellOrderId: o.wisersellOrderId!, ok: true, status: 'ready_pending', orderId: o.id, message: `Retry başarısız: ${msg.slice(0, 120)}` });
+      results.push({ wisersellOrderId: wsId, ok: true, status: 'ready_pending', orderId: orderIdJoined, message: `Retry başarısız: ${msg.slice(0, 120)}` });
     }
   }
 

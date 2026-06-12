@@ -100,6 +100,8 @@ interface Row {
   readyPending?: boolean;
   manualSource?: boolean;         // mobilya / Amazon Citi → onayda manuel kaynak seçimi (TR/depo)
   sourceOptions?: string[];       // karşılayan depolar: SHOWROOM/NJ/CG_SHUKRAN/CG_MDN
+  split?: boolean;                // çok-depolu (ayrı sevk): tek depo karşılamıyor, kalemler depolara bölünüyor
+  splitAssignments?: Array<{ iwasku: string; qty: number; warehouse: string }>; // kalem → depo
   createdAt?: string | null;
   items?: ItemLite[];
   unresolved?: Array<{ product_code?: string | null; marketplace_sku?: string | null; title?: string | null }>;
@@ -633,6 +635,15 @@ export default function SiparisPage() {
                           <option value="TR">TR (standart)</option>
                           {(r.sourceOptions ?? []).map((w) => <option key={w} value={w}>{whLabel(w)}</option>)}
                         </select>
+                      ) : r.split && r.splitAssignments?.length ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-1 py-0.5 w-fit">AYRI SEVK</span>
+                          <div className="flex flex-wrap gap-1">
+                            {[...new Set(r.splitAssignments.map((a) => a.warehouse))].map((w) => (
+                              <span key={w} className={`inline-block text-xs font-medium px-2 py-0.5 rounded-md border ${whBadge(w)}`}>{whLabel(w)}</span>
+                            ))}
+                          </div>
+                        </div>
                       ) : r.warehouse ? (
                         <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-md border ${whBadge(r.warehouse)}`}>{whLabel(r.warehouse)}</span>
                       ) : <span className="text-gray-300">—</span>}
@@ -644,7 +655,7 @@ export default function SiparisPage() {
                     <td className="px-3 py-2.5 text-gray-700">
                       {tab === 'eslesmeGerek'
                         ? <div className="text-xs text-orange-700 space-y-1">{(r.unresolved ?? []).map((u, ix) => { const t = u.title || u.product_code || u.marketplace_sku || '?'; return <div key={ix} className="line-clamp-3 max-w-[300px] leading-snug" title={[u.title, u.product_code, u.marketplace_sku].filter(Boolean).join(' · ')}>{t}</div>; })}</div>
-                        : <div className="space-y-1">{(r.items ?? []).map((i, ix) => { const nm = i.name ?? i.product_name ?? i.iwasku ?? '?'; return <div key={ix} className="max-w-[300px]"><div className="line-clamp-3 leading-snug" title={nm}>{nm}</div>{i.fnsku && <div className="text-[11px] font-mono text-gray-500 leading-tight">{i.fnsku}</div>}</div>; })}</div>}
+                        : <div className="space-y-1">{(r.items ?? []).map((i, ix) => { const nm = i.name ?? i.product_name ?? i.iwasku ?? '?'; const splitWh = r.split ? r.splitAssignments?.find((a) => a.iwasku === i.iwasku)?.warehouse : undefined; return <div key={ix} className="max-w-[300px]"><div className="line-clamp-3 leading-snug" title={nm}>{nm}{splitWh && <span className={`ml-1 align-middle inline-block text-[10px] font-medium px-1 py-0.5 rounded border ${whBadge(splitWh)}`}>{whLabel(splitWh)}</span>}</div>{i.fnsku && <div className="text-[11px] font-mono text-gray-500 leading-tight">{i.fnsku}</div>}</div>; })}</div>}
                     </td>
                     <td className="px-3 py-2.5 text-center text-gray-500">
                       <div className="space-y-0.5">{(r.items ?? []).map((i, ix) => <div key={ix}>{i.qty ?? i.quantity ?? 0}</div>)}</div>
@@ -727,7 +738,18 @@ export default function SiparisPage() {
               {/* Üst bilgi şeridi */}
               <div className="grid grid-cols-3 gap-3 text-sm">
                 <div><div className="text-[11px] text-gray-400 uppercase">Pazar Yeri</div><span title={detailRow.marketplaceCode} className="inline-block mt-0.5 text-xs font-medium px-2 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-100">{detailRow.marketplaceLabel || detailRow.marketplaceCode || '—'}</span></div>
-                <div><div className="text-[11px] text-gray-400 uppercase">Depo</div><span className={`inline-block mt-0.5 text-xs font-medium px-2 py-0.5 rounded-md border ${whBadge(detailRow.warehouse)}`}>{whLabel(detailRow.warehouse)}</span></div>
+                <div><div className="text-[11px] text-gray-400 uppercase">Depo</div>
+                  {detailRow.split && detailRow.splitAssignments?.length ? (
+                    <div className="mt-0.5 flex flex-wrap gap-1 items-center">
+                      <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-1 py-0.5">AYRI SEVK</span>
+                      {[...new Set(detailRow.splitAssignments.map((a) => a.warehouse))].map((w) => (
+                        <span key={w} className={`inline-block text-xs font-medium px-2 py-0.5 rounded-md border ${whBadge(w)}`}>{whLabel(w)}</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className={`inline-block mt-0.5 text-xs font-medium px-2 py-0.5 rounded-md border ${whBadge(detailRow.warehouse)}`}>{whLabel(detailRow.warehouse)}</span>
+                  )}
+                </div>
                 <div><div className="text-[11px] text-gray-400 uppercase">Tracking</div><div className="mt-0.5 font-mono text-xs text-gray-700">{detailRow.trackingNumber ?? '—'}</div></div>
                 <div>
                   <div className="text-[11px] text-gray-400 uppercase">Kargo Bedeli</div>

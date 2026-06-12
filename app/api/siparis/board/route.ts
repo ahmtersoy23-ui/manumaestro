@@ -17,7 +17,7 @@ import { requireBoardUser } from '@/lib/auth/boardAuth';
 import { getOrderBoardLevel, hasOrderLevel } from '@/lib/auth/orderBoardPermission';
 import { getUsAvailability } from '@/lib/wms/usWarehouseStock';
 import { getCgAvailability, type CgAvailability } from '@/lib/wms/cgStock';
-import { resolveOrderWarehouse, resolveOrderWarehouseOptions, needsManualSource, isWayfairChannel } from '@/lib/wisersell/orderRouting';
+import { resolveOrderWarehouse, resolveOrderWarehouseOptions, resolveOrderSplit, needsManualSource, isWayfairChannel } from '@/lib/wisersell/orderRouting';
 import { getProductsByIwasku, usDimensions, type ProductInfo } from '@/lib/products/lookup';
 
 interface CandidateItem {
@@ -198,10 +198,16 @@ export async function GET(request: NextRequest) {
       if (options.length === 0) { stokYok++; continue; }
       onayBekliyor.push({ ...base, warehouse: options[0], manualSource: true, sourceOptions: options });
     } else {
-      // heavy/CG → Shukran/MDN; sonra Fairfield/Somerset. Hiçbiri → stok yok (gizle).
-      const wh = resolveOrderWarehouse(routingItems, avail, cgAvail);
-      if (!wh) { stokYok++; continue; }
-      onayBekliyor.push({ ...base, warehouse: wh });
+      // heavy/CG → Shukran/MDN; sonra Fairfield/Somerset. Tek depo karşılamasa da TÜM kalemler
+      // ABD'de fulfillable ise depo-bazında BÖL (split). Bir kalem bile ABD'de yoksa (TR gerekir)
+      // → stok yok (gizle; TR+ABD karışık akış kapsam dışı).
+      const plan = resolveOrderSplit(routingItems, avail, cgAvail);
+      if (!plan.feasible) { stokYok++; continue; }
+      if (plan.single) {
+        onayBekliyor.push({ ...base, warehouse: plan.single });
+      } else {
+        onayBekliyor.push({ ...base, warehouse: plan.assignments[0].warehouse, split: true, splitAssignments: plan.assignments });
+      }
     }
   }
 
@@ -357,6 +363,7 @@ export async function GET(request: NextRequest) {
     canLabelDelete,    // Veeqo Etiket Al / Manuel Sil / Açığa Al / Etiketi İptal
     counts: {
       onayBekliyor: onayBekliyor.length,
+      onayBekliyorSplit: onayBekliyor.filter((r) => r.split).length, // çok-depolu (ayrı sevk) aday sayısı
       eslesmeGerek: eslesmeGerek.length,
       etiketBekliyor: etiketBekliyor.length,
       cikisBekliyor: cikisBekliyor.length,

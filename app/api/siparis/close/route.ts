@@ -85,6 +85,33 @@ export async function POST(request: NextRequest) {
   });
   const byId = new Map(orders.map((o) => [o.id, o]));
 
+  // Bir parçanın (alt-sipariş) tracking + carrier'ını belirle (CG/Wayfair/normal). Split'te
+  // her kardeş kendi tracking'iyle external-close edilir → ortak yardımcı.
+  type PartLike = { warehouseCode: string; marketplaceCode: string | null; status: string; manualTracking: string | null; labels: { trackingNumber: string | null }[] };
+  const resolvePartTracking = (o: PartLike): { ok: true; tracking: string; carrierId: number } | { ok: false; message: string } => {
+    const isCg = CG_CODES.includes(o.warehouseCode);
+    const isWayfair = isWayfairChannel(o.marketplaceCode);
+    let trackingRaw: string | null | undefined;
+    if (isCg) {
+      trackingRaw = o.manualTracking;
+      if (!trackingRaw) return { ok: false, message: 'CG tracking yok (önce manuel tracking girin)' };
+    } else if (isWayfair) {
+      if (o.status !== 'SHIPPED') return { ok: false, message: `Önce depodan çıkış yapın (status ${o.status})` };
+      trackingRaw = o.manualTracking;
+      if (!trackingRaw) return { ok: false, message: 'Wayfair tracking yok (önce manuel tracking girin)' };
+    } else {
+      if (o.status !== 'SHIPPED') return { ok: false, message: `Henüz kargolanmadı (status ${o.status})` };
+      trackingRaw = o.labels[0]?.trackingNumber;
+      if (!trackingRaw) return { ok: false, message: 'Tracking yok (SHIPPING etiketi eksik)' };
+    }
+    // Virgüllü tracking'te ilkini al (Wayfair MCF birden çok koli tracking'i verebilir).
+    const tracking = trackingRaw.split(',')[0].trim();
+    // CG için carrier varsayılanı FedEx (Wayfair MCF FedEx kullanır); diğerinde prefix'ten türet.
+    const carrierId = carrierIdOverride ?? carrierIdFromTracking(tracking) ?? (isCg ? WISERSELL_CARRIER_IDS.FEDEX : null);
+    if (!carrierId) return { ok: false, message: `Carrier tracking'den belirlenemedi (${tracking}) — carrierIdOverride gerekli` };
+    return { ok: true, tracking, carrierId };
+  };
+
   const results: CloseResult[] = [];
   let processed = 0; // gerçekten Wisersell'e gidilen sipariş sayısı (throttle için)
 
@@ -110,60 +137,74 @@ export async function POST(request: NextRequest) {
     if (!o.wisersellOrderId) { results.push({ orderId: id, ok: false, message: 'wisersellOrderId yok' }); continue; }
 
     const isCg = CG_CODES.includes(o.warehouseCode);
-    const isWayfair = isWayfairChannel(o.marketplaceCode);
 
-    // Tracking kaynağı:
-    //   - CG → manualTracking (status şartı yok; WMS çıkışı yok).
-    //   - Wayfair (dropship, US deposu) → manualTracking AMA depo çıkışı (SHIPPED) yapılmış olmalı.
-    //   - Normal → SHIPPING etiketi (+ status SHIPPED).
-    let trackingRaw: string | null | undefined;
-    if (isCg) {
-      trackingRaw = o.manualTracking;
-      if (!trackingRaw) { results.push({ orderId: id, ok: false, message: 'CG tracking yok (önce manuel tracking girin)' }); continue; }
-    } else if (isWayfair) {
-      if (o.status !== 'SHIPPED') { results.push({ orderId: id, ok: false, message: `Önce depodan çıkış yapın (status ${o.status})` }); continue; }
-      trackingRaw = o.manualTracking;
-      if (!trackingRaw) { results.push({ orderId: id, ok: false, message: 'Wayfair tracking yok (önce manuel tracking girin)' }); continue; }
-    } else {
-      if (o.status !== 'SHIPPED') { results.push({ orderId: id, ok: false, message: `Henüz kargolanmadı (status ${o.status})` }); continue; }
-      trackingRaw = o.labels[0]?.trackingNumber;
-      if (!trackingRaw) { results.push({ orderId: id, ok: false, message: 'Tracking yok (SHIPPING etiketi eksik)' }); continue; }
+    // Bu parçanın tracking/carrier doğrulaması.
+    const tc = resolvePartTracking(o);
+    if (!tc.ok) { results.push({ orderId: id, ok: false, message: tc.message }); continue; }
+
+    // Bu parçanın orderitem'larını Teslim Edildi (6) yap (best-effort, rate-limit dışı).
+    if (o.wisersellOrderItemIds.length) {
+      try {
+        await markWisersellOrderItems(o.wisersellOrderItemIds, 6);
+      } catch (err: unknown) {
+        logger.error(`orderitem Teslim Edildi yazılamadı (order ${o.wisersellOrderId}): ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
 
-    // Virgüllü tracking'te ilkini al (Wayfair MCF birden çok koli tracking'i verebilir).
-    const tracking = trackingRaw.split(',')[0].trim();
+    // Split sevk: bir Wisersell siparişi → N kardeş alt-sipariş. platform-close sipariş
+    // seviyesi → YALNIZCA tüm kardeşler SHIPPED olunca çalışmalı (yoksa bir parça erken
+    // kapatılınca tüm sipariş kapanır). Kardeşleri çek.
+    const siblings = await prisma.outboundOrder.findMany({
+      where: { wisersellOrderId: o.wisersellOrderId, source: 'WISERSELL_AUTO', status: { not: 'CANCELLED' } },
+      select: { id: true, warehouseCode: true, marketplaceCode: true, status: true, manualTracking: true, labels: { where: { type: 'SHIPPING', archivedAt: null }, select: { trackingNumber: true }, take: 1 } },
+    });
+    const others = siblings.filter((s) => s.id !== o.id);
+    const allOthersShipped = others.every((s) => s.status === 'SHIPPED');
 
-    // CG için carrier varsayılanı FedEx (Wayfair MCF FedEx kullanır); diğerinde (Wayfair dropship dahil) prefix'ten türet.
-    const carrierId = carrierIdOverride ?? carrierIdFromTracking(tracking) ?? (isCg ? WISERSELL_CARRIER_IDS.FEDEX : null);
-    if (!carrierId) { results.push({ orderId: id, ok: false, message: `Carrier tracking'den belirlenemedi (${tracking}) — carrierIdOverride gerekli` }); continue; }
+    if (!allOthersShipped) {
+      // Bu parça çıkışlandı; Wisersell kapatması ertelenir (kardeş bekleniyor).
+      // CG parçasında fiziksel çıkış WMS'te yok → burada SHIPPED işaretle.
+      if (isCg && o.status !== 'SHIPPED') {
+        await prisma.outboundOrder.update({ where: { id }, data: { status: 'SHIPPED', shippedAt: new Date(), shippedById: auth.user.id } });
+      }
+      results.push({ orderId: id, ok: true, message: `Parça çıkışlandı (${o.warehouseCode}); ${others.length} kardeş bekleniyor — Wisersell kapatma ertelendi` });
+      continue;
+    }
+
+    // Tüm parçalar sevk edildi → komple Wisersell siparişini kapat. Her kardeş kendi
+    // carrier+tracking'iyle external-close, sonra platform-close 1 kez.
+    const closeSet: Array<{ carrierId: number; tracking: string }> = [];
+    let partErr: string | null = null;
+    for (const s of siblings) {
+      const stc = s.id === o.id ? tc : resolvePartTracking(s);
+      if (!stc.ok) { partErr = `Kardeş (${s.warehouseCode}) kapatılamıyor: ${stc.message}`; break; }
+      closeSet.push({ carrierId: stc.carrierId, tracking: stc.tracking });
+    }
+    if (partErr) { results.push({ orderId: id, ok: false, message: partErr }); continue; }
 
     // Throttle: ilk gerçek istekte değil, sonrakilerden önce bekle.
     if (processed > 0) await sleep(THROTTLE_MS);
     processed++;
 
     try {
-      // 0) Çıkışta önce orderitem → Teslim Edildi (6); sonra komple close. Best-effort: üretim
-      //    durumu yazması patlasa da sipariş kapanışı bloklanmasın.
-      if (o.wisersellOrderItemIds.length) {
-        try {
-          await markWisersellOrderItems(o.wisersellOrderItemIds, 6);
-        } catch (err: unknown) {
-          logger.error(`orderitem Teslim Edildi yazılamadı (order ${o.wisersellOrderId}): ${err instanceof Error ? err.message : String(err)}`);
-        }
+      // 1) external-close (her parça kendi tracking'i) → 2) platform-close (1 kez)
+      for (const p of closeSet) {
+        await closeWisersellExternal(o.wisersellOrderId, p.carrierId, p.tracking);
       }
-      // 1) external-close (tracking yaz) → 2) platform-close (platformda kapat)
-      await closeWisersellExternal(o.wisersellOrderId, carrierId, tracking);
       await platformCloseWithBackoff(o.wisersellOrderId);
 
-      await prisma.outboundOrder.update({
-        where: { id },
-        data: {
-          wisersellClosedAt: new Date(),
-          // CG: fiziksel çıkış WMS'te yok → kapanışta SHIPPED işaretle (cgBekliyor → kapandı).
-          ...(isCg && o.status !== 'SHIPPED' ? { status: 'SHIPPED', shippedAt: new Date(), shippedById: auth.user.id } : {}),
-        },
+      const now = new Date();
+      // CG parçaları (fiziksel çıkış WMS'te yok) → SHIPPED işaretle.
+      await prisma.outboundOrder.updateMany({
+        where: { wisersellOrderId: o.wisersellOrderId, status: { not: 'SHIPPED' } },
+        data: { status: 'SHIPPED', shippedAt: now, shippedById: auth.user.id },
       });
-      results.push({ orderId: id, ok: true, message: `Kapatıldı (carrier ${carrierId})` });
+      // Tüm kardeşlere wisersellClosedAt.
+      await prisma.outboundOrder.updateMany({
+        where: { wisersellOrderId: o.wisersellOrderId },
+        data: { wisersellClosedAt: now },
+      });
+      results.push({ orderId: id, ok: true, message: siblings.length > 1 ? `Kapatıldı (ayrı sevk — ${siblings.length} parça)` : `Kapatıldı (carrier ${tc.carrierId})` });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       results.push({ orderId: id, ok: false, message: `Kapatma hatası: ${msg.slice(0, 150)}` });
