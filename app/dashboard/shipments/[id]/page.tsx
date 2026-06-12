@@ -22,6 +22,7 @@ import { PendingItemsTable } from '@/components/shipments/PendingItemsTable';
 import { SentItemsTab } from '@/components/shipments/SentItemsTab';
 import { BoxesTab } from '@/components/shipments/BoxesTab';
 import { ConsolidationTab, isValidEan13 } from '@/components/shipments/ConsolidationTab';
+import { NL_DEPOT_LABEL } from '@/lib/marketplaceRegions';
 import { useShipmentFilters } from '@/lib/shipments/useShipmentFilters';
 import { DateMultiFilter } from '@/components/shipments/DateMultiFilter';
 import { useModalToggles } from '@/lib/shipments/useModalToggles';
@@ -946,9 +947,9 @@ export default function ShipmentDetailPage() {
   const handlePrintItemLabel = async (item: ShipmentItem, labelCount: number) => {
     if (labelCount < 1) return;
 
-    // NL (Hollanda/Bol): kalem etiketi FNSKU/IWASKU CODE128 yerine Bol EAN-13.
-    // Kaynak bol_sku_mapping (item.bolEan). Eşleme yoksa basma — uyar.
-    if (shipment?.destinationTab === 'NL') {
+    // NL Depo'ya giden kalem (NL Karayolu, EU tab altında): FNSKU/IWASKU CODE128 yerine
+    // Bol EAN-13 (item.bolEan, bol_sku_mapping). Eşleme yoksa basma — uyar.
+    if (item.destinationLabel === NL_DEPOT_LABEL) {
       await handlePrintBolEanLabel(item, labelCount);
       return;
     }
@@ -1314,7 +1315,6 @@ export default function ShipmentDetailPage() {
             boxes={boxes}
             hasAnyPending={pendingItems.length > 0}
             isSea={isSea}
-            isNl={shipment.destinationTab === 'NL'}
             isActive={isActive}
             canBoxes={canBoxes}
             canPack={canPack}

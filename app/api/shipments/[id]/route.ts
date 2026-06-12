@@ -11,7 +11,7 @@ import { prisma, queryProductDb, queryDataBridge } from '@/lib/db/prisma';
 import { requireShipmentView, requireShipmentAction } from '@/lib/auth/requireShipmentRole';
 import { requireSuperAdmin } from '@/lib/auth/verify';
 import { getShipmentRole, canDoAction, ShipmentAction } from '@/lib/auth/shipmentPermission';
-import { FBA_DESTINATION_TO_MARKETPLACE, shipmentDestinationLabel } from '@/lib/marketplaceRegions';
+import { FBA_DESTINATION_TO_MARKETPLACE, shipmentDestinationLabel, isNlDepotItem } from '@/lib/marketplaceRegions';
 import { logAction } from '@/lib/auditLog';
 import { withRoute } from '@/lib/api/withRoute';
 import { successResponse } from '@/lib/api/response';
@@ -104,19 +104,34 @@ export const GET = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'read'
     }
   }
 
-  // NL karayolu: kalem etiketinde Bol EAN basılır — kaynak bol_sku_mapping (databridge_db),
-  // products.eans DEĞİL (Bol.com listesindeki EAN deponun taradığıyla eşleşsin). Sadece NL'de çek.
+  // NL Depo'ya giden kalemlere Bol EAN basılır (NL Karayolu EU tab altında!). Kaynak
+  // bol_sku_mapping (databridge_db), products.eans DEĞİL — Bol listesindeki EAN deponun
+  // taradığıyla eşleşsin. Sinyal item-level: shipmentDestinationLabel → 'NL Depo'.
   const bolEanMap = new Map<string, string>();
-  if (shipment.destinationTab === 'NL') {
-    const bolIwaskus = [...new Set(shipment.items.map(i => i.iwasku).filter(Boolean))];
-    if (bolIwaskus.length > 0) {
-      const ph = bolIwaskus.map((_, i) => `$${i + 1}`).join(',');
-      const rows = await queryDataBridge(
-        `SELECT iwasku, sku FROM bol_sku_mapping WHERE iwasku IN (${ph}) AND sku IS NOT NULL AND sku <> ''`,
-        bolIwaskus,
-      );
-      for (const row of rows) bolEanMap.set(row.iwasku, row.sku);
-    }
+  const nlIwaskus = [...new Set(
+    shipment.items
+      .filter(i => {
+        const mkt = i.marketplaceId ? mktMap.get(i.marketplaceId) : null;
+        return isNlDepotItem(shipment.destinationTab, mkt?.code, i.recommendedDestination);
+      })
+      .map(i => i.iwasku)
+      .filter(Boolean),
+  )];
+  if (nlIwaskus.length > 0) {
+    // Çift EAN'de (iwasku iki Bol hesabında listeli) onebv (account_id=2) EAN'i seç;
+    // tek EAN varsa onu. Hesap bilgisi bol_sku_mapping'te yok → bol_raw_orders'tan türetilir
+    // (hangi hesap o EAN'i satmış). DISTINCT ON: onebv öncelikli, sonra en güncel.
+    const rows = await queryDataBridge(
+      `SELECT DISTINCT ON (m.iwasku) m.iwasku, m.sku
+         FROM bol_sku_mapping m
+         LEFT JOIN LATERAL (
+           SELECT MAX(r.account_id) AS account_id FROM bol_raw_orders r WHERE r.ean = m.sku
+         ) acc ON true
+        WHERE m.iwasku = ANY($1) AND m.sku IS NOT NULL AND m.sku <> ''
+        ORDER BY m.iwasku, (acc.account_id = 2) DESC NULLS LAST, m.updated_at DESC NULLS LAST`,
+      [nlIwaskus],
+    );
+    for (const row of rows) bolEanMap.set(row.iwasku, row.sku);
   }
 
   const enrichedItems = shipment.items.map(item => {

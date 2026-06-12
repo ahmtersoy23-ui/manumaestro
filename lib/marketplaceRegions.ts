@@ -139,6 +139,23 @@ export function shipmentDestinationLabel(
   return '—';
 }
 
+/** NL Depo etiketi (Bol/Hollanda deposu) — tek kaynak. */
+export const NL_DEPOT_LABEL = 'NL Depo';
+
+/**
+ * Item fiziksel olarak NL deposuna mı gidiyor (Bol/Hollanda fulfillment)?
+ * Sevkiyat adı/tab'ından BAĞIMSIZ — destinasyon NL Depo ise true (EU tab altında
+ * NL Karayolu siparişleri böyle: recommendedDestination=NL_DEPO veya EU non-Amazon
+ * marketplace → 'NL Depo'). NL karayolu kalemlerine Bol EAN-13 etiketi için kullanılır.
+ */
+export function isNlDepotItem(
+  destinationTab: string,
+  marketplaceCode: string | null | undefined,
+  recommendedDestination: string | null | undefined,
+): boolean {
+  return shipmentDestinationLabel(destinationTab, marketplaceCode, recommendedDestination) === NL_DEPOT_LABEL;
+}
+
 /**
  * Sevkiyat sayfası için: üst country tab → alt destinasyon tab listesi.
  * shipments.destinationTab field bu destinasyon kodlarını tutar.

@@ -11,6 +11,7 @@ import {
 import { InlineFnskuInput } from './InlineFnskuInput';
 import { BoxEntryPanel } from './BoxEntryPanel';
 import { useInputDialog } from '@/components/ui/InputDialog';
+import { NL_DEPOT_LABEL } from '@/lib/marketplaceRegions';
 import type { BoxFormData, ShipmentItem, ShipmentBox } from '@/lib/shipments/types';
 
 interface Props {
@@ -18,8 +19,6 @@ interface Props {
   itemDesi: number;
   itemBoxes: ShipmentBox[];
   isSea: boolean;
-  /** NL (Bol) sevkiyat: kalem etiketi Bol EAN-13; bolEan yoksa basılamaz. */
-  isNl: boolean;
   isActive: boolean;
   isExpanded: boolean;
   isSelected: boolean;
@@ -41,12 +40,14 @@ interface Props {
 }
 
 export function PendingItemRow({
-  item, itemDesi, itemBoxes, isSea, isNl, isActive, isExpanded, isSelected, togglingId,
+  item, itemDesi, itemBoxes, isSea, isActive, isExpanded, isSelected, togglingId,
   canBoxes, canPack, canSend, canDelete,
   onTogglePacked, onToggleSelect, onToggleExpand, onCreateBox, onDeleteBox, onDeleteItem, onFnskuSaved,
   onPrintLabel, sendQty, onSendQtyChange,
 }: Props) {
   const inputDialog = useInputDialog();
+  // NL Depo'ya giden kalem (NL Karayolu, EU tab altında) → Bol EAN-13 etiketi.
+  const isNl = item.destinationLabel === NL_DEPOT_LABEL;
   // Deniz renk kodlama: kolilerdeki toplam adet vs item miktar
   const boxQtyTotal = itemBoxes.reduce((s, b) => s + b.quantity, 0);
   const rowBg = isSea
