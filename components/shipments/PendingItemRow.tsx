@@ -87,7 +87,15 @@ export function PendingItemRow({
         </td>
         <td className="px-3 py-3">
           {item.fnsku
-            ? <span className={`font-mono text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.fnsku}</span>
+            ? <span className="inline-flex items-center gap-1">
+                <span className={`font-mono text-sm ${item.fnskuStale ? 'text-amber-700' : item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.fnsku}</span>
+                {item.fnskuStale && (
+                  <span title={`Amazon'daki güncel FNSKU farklı: ${item.fbaFnsku}. Etiket eski FNSKU basabilir — kontrol et.`}
+                    className="text-[10px] font-medium px-1 py-0.5 rounded border text-amber-700 bg-amber-50 border-amber-200 cursor-help whitespace-nowrap">
+                    ⚠ eski · {item.fbaFnsku}
+                  </span>
+                )}
+              </span>
             : item.marketplace?.code?.startsWith('AMZN')
               ? <InlineFnskuInput item={item} onSaved={onFnskuSaved} />
               : <span className="text-gray-300">—</span>}
