@@ -105,7 +105,8 @@ interface Row {
   splitPart?: boolean;            // (onaylı alt-sipariş) ayrı sevkin bir parçası
   splitTotal?: number;            // toplam parça sayısı
   splitShipped?: number;          // sevk edilen parça sayısı
-  splitWaiting?: boolean;         // diğer parça(lar) henüz tamamlanmadı → Wisersell kapatma bekler
+  splitWaiting?: boolean;         // tüm parçalar henüz tamamlanmadı (Wisersell kapatma bekler)
+  splitDone?: boolean;            // bu parça sevk edildi mi (bekleyen) / yoksa beklenen mi
   createdAt?: string | null;
   items?: ItemLite[];
   unresolved?: Array<{ product_code?: string | null; marketplace_sku?: string | null; title?: string | null }>;
@@ -661,12 +662,19 @@ export default function SiparisPage() {
                         <div className="flex flex-col gap-0.5">
                           <span className={`inline-block w-fit text-xs font-medium px-2 py-0.5 rounded-md border ${whBadge(r.warehouse)}`}>{whLabel(r.warehouse)}</span>
                           {r.splitPart && (
-                            <span
-                              title={r.splitWaiting ? 'Çoklu (ayrı sevk) sipariş — diğer parça(lar) tamamlanınca Wisersell kapanır' : 'Çoklu (ayrı sevk) siparişin parçası'}
-                              className={`w-fit text-[10px] font-medium px-1 py-0.5 rounded border ${r.splitWaiting ? 'text-amber-700 bg-amber-50 border-amber-200' : 'text-indigo-700 bg-indigo-50 border-indigo-200'}`}
-                            >
-                              {r.splitWaiting ? `⏳ Ayrı sevk · diğer parça bekleniyor (${r.splitShipped}/${r.splitTotal})` : `Ayrı sevk (${r.splitTotal} parça)`}
-                            </span>
+                            r.splitDone && r.splitWaiting ? (
+                              // Bu parça sevk edildi, kardeşini bekliyor (Wisersell kapatma ertelendi)
+                              <span title="Bu parça sevk edildi; diğer parça(lar) tamamlanınca Wisersell siparişi kapanır"
+                                className="w-fit text-[10px] font-medium px-1 py-0.5 rounded border text-amber-700 bg-amber-50 border-amber-200">
+                                ⏳ Ayrı sevk · diğer parça bekleniyor ({r.splitShipped}/{r.splitTotal})
+                              </span>
+                            ) : (
+                              // Çoklu (ayrı sevk) siparişin bir parçası — nötr ilerleme bilgisi
+                              <span title="Çoklu (ayrı sevk) siparişin parçası — tüm parçalar sevk edilince Wisersell'de kapanır"
+                                className="w-fit text-[10px] font-medium px-1 py-0.5 rounded border text-indigo-700 bg-indigo-50 border-indigo-200">
+                                Ayrı sevk · {r.splitShipped}/{r.splitTotal} hazır
+                              </span>
+                            )
                           )}
                         </div>
                       ) : <span className="text-gray-300">—</span>}

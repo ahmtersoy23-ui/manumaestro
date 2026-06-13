@@ -292,6 +292,7 @@ export async function GET(request: NextRequest) {
       splitTotal: isSplitPart ? si!.total : undefined,
       splitShipped: isSplitPart ? si!.shipped : undefined,
       splitWaiting: isSplitPart && si!.shipped < si!.total, // tüm parçalar sevk edilmeden Wisersell kapatma ertelenir
+      splitDone: isSplitPart && o.status === 'SHIPPED', // bu parça sevk edildi mi (beklenen=false / bekleyen=true ayrımı)
     };
     if (o.status === 'SHIPPED') {
       // MANUAL siparişler Wisersell'de yok → kapama adımı yok; depodan çıkış = kapandı.
