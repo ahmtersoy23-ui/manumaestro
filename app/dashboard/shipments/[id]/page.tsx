@@ -82,6 +82,7 @@ export default function ShipmentDetailPage() {
     itemCategoryFilter, setItemCategoryFilter,
     itemMarketFilter, setItemMarketFilter,
     itemDateFilter, setItemDateFilter,
+    itemStockRiskOnly, setItemStockRiskOnly,
     boxSearch, setBoxSearch,
     boxCategoryFilter, setBoxCategoryFilter,
     boxDestFilter, setBoxDestFilter,
@@ -190,8 +191,15 @@ export default function ShipmentDetailPage() {
     if (itemCategoryFilter) result = result.filter(i => i.productCategory === itemCategoryFilter);
     if (itemMarketFilter) result = result.filter(i => i.marketplace?.code === itemMarketFilter);
     if (itemDateFilter.size > 0) result = result.filter(i => itemDateFilter.has(i.createdAt.slice(0, 10)));
+    if (itemStockRiskOnly) result = result.filter(i => i.stockRisk);
     return result;
-  }, [shipment, itemSearch, itemCategoryFilter, itemMarketFilter, itemDateFilter]);
+  }, [shipment, itemSearch, itemCategoryFilter, itemMarketFilter, itemDateFilter, itemStockRiskOnly]);
+
+  // Bekleyen alarmlı (stockout riski) kalem sayısı — filtre rozeti + buton için.
+  const pendingStockRiskCount = useMemo(
+    () => (shipment?.items.filter(i => !i.sentAt && i.stockRisk).length ?? 0),
+    [shipment],
+  );
 
   const filteredBoxes = useMemo(() => {
     let result = boxes;
@@ -1347,6 +1355,16 @@ export default function ShipmentDetailPage() {
                   </select>
                 )}
                 <DateMultiFilter dates={itemDates} selected={itemDateFilter} onChange={setItemDateFilter} />
+                {/* #2: yalnız alarmlı (stockout riski) kalemleri göster */}
+                {pendingStockRiskCount > 0 && (
+                  <button
+                    onClick={() => setItemStockRiskOnly(v => !v)}
+                    title="Stok kritik: Amazon'da kalan < son-30 satışın yarısı"
+                    className={`flex items-center gap-1.5 px-3 py-2 border rounded-lg text-sm font-medium ${itemStockRiskOnly ? 'bg-red-600 text-white border-red-600' : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'}`}
+                  >
+                    🚨 Alarmlı ({pendingStockRiskCount})
+                  </button>
+                )}
               </>
             )}
             {/* Karayolu/hava: Gönder butonu (konteynerde header'daki "Sevk Et" kullanılır) */}

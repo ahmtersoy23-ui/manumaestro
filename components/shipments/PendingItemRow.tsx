@@ -51,10 +51,13 @@ export function PendingItemRow({
   const isNl = item.destinationLabel === NL_DEPOT_LABEL;
   // Deniz renk kodlama: kolilerdeki toplam adet vs item miktar
   const boxQtyTotal = itemBoxes.reduce((s, b) => s + b.quantity, 0);
-  // #2 stockout riski (kara/hava): hedef FBA'da kalan < L30/2 → kırmızı ton (packed yeşilini ezer; "öncele" sinyali).
-  const rowBg = isSea
-    ? (itemBoxes.length === 0 ? '' : boxQtyTotal >= item.quantity ? 'bg-green-50' : 'bg-amber-50/60')
-    : (item.stockRisk ? 'bg-red-50' : item.packed ? 'bg-green-50/50' : '');
+  // #2 stockout riski: hedef FBA'da kalan < L30/2 → kırmızı ton, deniz/kara/hava FARK ETMEZ
+  // ("öncele" sinyali; deniz koli-rengini ve kara packed-yeşilini ezer).
+  const rowBg = item.stockRisk
+    ? 'bg-red-50'
+    : isSea
+      ? (itemBoxes.length === 0 ? '' : boxQtyTotal >= item.quantity ? 'bg-green-50' : 'bg-amber-50/60')
+      : (item.packed ? 'bg-green-50/50' : '');
   const stockRiskTitle = item.stockRisk
     ? `Stok kritik: Amazon'da kalan ${item.fbaFulfillable ?? '?'} < son-30 satışın yarısı (${item.l30 ?? '?'}). Lead time 15 gün — öncelikle gönder.`
     : undefined;

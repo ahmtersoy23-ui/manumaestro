@@ -16,6 +16,7 @@ export function useShipmentFilters() {
   const [itemCategoryFilter, setItemCategoryFilter] = useState('');
   const [itemMarketFilter, setItemMarketFilter] = useState('');
   const [itemDateFilter, setItemDateFilter] = useState<Set<string>>(new Set());
+  const [itemStockRiskOnly, setItemStockRiskOnly] = useState(false); // #2: yalnız alarmlı (stockout riski) kalemler
 
   // Boxes tab
   const [boxSearch, setBoxSearch] = useState('');
@@ -34,6 +35,7 @@ export function useShipmentFilters() {
     itemCategoryFilter, setItemCategoryFilter,
     itemMarketFilter, setItemMarketFilter,
     itemDateFilter, setItemDateFilter,
+    itemStockRiskOnly, setItemStockRiskOnly,
     boxSearch, setBoxSearch,
     boxCategoryFilter, setBoxCategoryFilter,
     boxDestFilter, setBoxDestFilter,
