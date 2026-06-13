@@ -46,6 +46,7 @@ interface Props {
   onFnskuSaved: (itemId: string, fnsku: string) => void;
   onPrintLabel: (item: ShipmentItem, count: number) => void;
   onSendQtyChange: (itemId: string, qty: number) => void;
+  onQuickSend: (item: ShipmentItem) => void;
 }
 
 export function PendingItemsTable({
@@ -55,7 +56,7 @@ export function PendingItemsTable({
   expandedItemId, selectedIds, togglingId, packedPendingCount,
   sendQtyOverrides,
   onSelectAllPacked, onTogglePacked, onToggleSelect, onSetExpandedItemId,
-  onCreateBox, onDeleteBox, onDeleteItem, onFnskuSaved, onPrintLabel, onSendQtyChange,
+  onCreateBox, onDeleteBox, onDeleteItem, onFnskuSaved, onPrintLabel, onSendQtyChange, onQuickSend,
 }: Props) {
   return (
     <div className="bg-white border rounded-xl overflow-hidden">
@@ -120,6 +121,7 @@ export function PendingItemsTable({
                   onPrintLabel={onPrintLabel}
                   sendQty={!isSea ? sendQtyOverrides[item.id] : undefined}
                   onSendQtyChange={!isSea ? (qty) => onSendQtyChange(item.id, qty) : undefined}
+                  onQuickSend={!isSea ? onQuickSend : undefined}
                 />
               );
             })}

@@ -452,6 +452,32 @@ export default function ShipmentDetailPage() {
     } catch { notify.error('Gönderim hatası'); } finally { setSending(false); }
   };
 
+  // #3: Amazon'da yolda ≥ talep → tek-tık gönderilene al (tam adet). Packed değilse önce hazırla,
+  // sonra /send (sentAt + StockReserve). Shelf çıkışı (warehouse-exit) TETİKLENMEZ — mal zaten
+  // Amazon'a yolda, depo çıkışı çoktan olmuş. Geri-al: mevcut "Geri Al" (unsend).
+  const handleQuickSend = async (item: ShipmentItem) => {
+    if (sending) return;
+    if (!(await confirm({
+      title: 'Gönderilene alınsın mı?',
+      message: `${item.iwasku} — ${item.quantity} adet. Amazon envanterinde yolda ${item.fbaInbound} görünüyor (≥ talep).`,
+      confirmLabel: 'Gönderilene Al',
+    }))) return;
+    setSending(true);
+    try {
+      if (!item.packed) {
+        const pr = await fetch(`/api/shipments/${id}/items/${item.id}`, { method: 'PATCH' });
+        if (!(await pr.json()).success) { notify.error('Hazırla başarısız'); setSending(false); return; }
+      }
+      const res = await fetch(`/api/shipments/${id}/send`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: [{ id: item.id, quantity: item.quantity }] }),
+      });
+      const data = await res.json();
+      if (data.success) { await fetchShipment(); notify.success('Gönderilene alındı'); }
+      else notify.error(data.error || 'Gönderim hatası');
+    } catch { notify.error('Gönderim hatası'); } finally { setSending(false); }
+  };
+
   // Gönderilmişleri geri al
   const handleUnsendSelected = async () => {
     const toUnsend = [...selectedSentIds];
@@ -1378,6 +1404,7 @@ export default function ShipmentDetailPage() {
             onFnskuSaved={handleFnskuSaved}
             onPrintLabel={handlePrintItemLabel}
             onSendQtyChange={handleSendQtyChange}
+            onQuickSend={handleQuickSend}
           />
         </div>
       )}

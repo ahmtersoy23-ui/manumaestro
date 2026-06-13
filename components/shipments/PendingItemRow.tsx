@@ -37,13 +37,14 @@ interface Props {
   onPrintLabel: (item: ShipmentItem, count: number) => void;
   sendQty?: number;
   onSendQtyChange?: (qty: number) => void;
+  onQuickSend?: (item: ShipmentItem) => void; // #3: Amazon'da yolda ≥ talep → tek-tık gönderilene al
 }
 
 export function PendingItemRow({
   item, itemDesi, itemBoxes, isSea, isActive, isExpanded, isSelected, togglingId,
   canBoxes, canPack, canSend, canDelete,
   onTogglePacked, onToggleSelect, onToggleExpand, onCreateBox, onDeleteBox, onDeleteItem, onFnskuSaved,
-  onPrintLabel, sendQty, onSendQtyChange,
+  onPrintLabel, sendQty, onSendQtyChange, onQuickSend,
 }: Props) {
   const inputDialog = useInputDialog();
   // NL Depo'ya giden kalem (NL Karayolu, EU tab altında) → Bol EAN-13 etiketi.
@@ -121,6 +122,16 @@ export function PendingItemRow({
                 placeholder="—"
                 className="w-16 px-2 py-1 text-sm text-center border rounded focus:outline-none focus:ring-1 focus:ring-emerald-400"
               />
+              {/* #3: Amazon'da yolda ≥ talep → tek-tık gönderilene al önerisi */}
+              {item.inboundCovers && canSend && onQuickSend && (
+                <button
+                  onClick={() => onQuickSend(item)}
+                  title={`Amazon'da yolda ${item.fbaInbound} ≥ talep ${item.quantity}. Gönderilene al (tam adet).`}
+                  className="mt-1 block w-full text-[10px] font-medium px-1 py-0.5 rounded border text-sky-700 bg-sky-50 border-sky-200 hover:bg-sky-100 cursor-pointer whitespace-nowrap"
+                >
+                  📦 yolda → Gönderilene al
+                </button>
+              )}
             </td>
           </>
         ) : (
