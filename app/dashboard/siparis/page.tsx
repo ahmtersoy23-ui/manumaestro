@@ -243,7 +243,7 @@ export default function SiparisPage() {
   const [trackingDraft, setTrackingDraft] = useState('');
   const [costDraft, setCostDraft] = useState(''); // Veeqo-dışı etiket bedeli (elle)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<BoardData | null> => {
     setLoading(true); setError(null);
     try {
       const res = await fetch(`/api/siparis/board?region=${region}`, { credentials: 'include' });
@@ -251,8 +251,10 @@ export default function SiparisPage() {
       if (!res.ok || !json.success) throw new Error(json.error || 'Yüklenemedi');
       setBoard(json);
       setSelected(new Set());
+      return json as BoardData;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Hata');
+      return null;
     } finally {
       setLoading(false);
     }
@@ -951,7 +953,18 @@ export default function SiparisPage() {
           orderId={shipOrder.id}
           orderNumber={shipOrder.orderNumber ?? shipOrder.orderCode ?? ''}
           onClose={() => setShipOrder(null)}
-          onSuccess={() => { setShipOrder(null); setDetailRow(null); load(); }}
+          onSuccess={async () => {
+            // Çıkış sonrası kesintisiz kuyruk: aynı depodaki sıradaki çıkış-bekleyen
+            // siparişin modaline doğrudan geç (yoksa modali kapat). Mevcut mp filtresine uyar.
+            const wh = shipOrder.warehouse;
+            const shippedId = shipOrder.id;
+            setShipOrder(null);
+            const fresh = await load();
+            const next = (fresh?.data.cikisBekliyor ?? []).find(
+              (r) => r.warehouse === wh && r.id !== shippedId && (mpFilter === 'ALL' || r.marketplaceCode === mpFilter)
+            );
+            if (next) openDetail(next); else setDetailRow(null);
+          }}
         />
       )}
 
