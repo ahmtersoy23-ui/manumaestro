@@ -22,7 +22,7 @@ const STATUS_META: Record<StatusKey, { label: string; badge?: string; desc: stri
   onayBekliyor:   { label: 'Onay Bekliyor',    desc: 'US stoğu teyitli, onay bekliyor', icon: CheckCircle2, accent: 'text-emerald-700', ring: 'ring-emerald-500 bg-emerald-50', dot: 'bg-emerald-500' },
   eslesmeGerek:   { label: 'Eşleşme Gerek',    desc: 'iwasku eşleşmiyor — mapping gerek', icon: AlertTriangle, accent: 'text-orange-700', ring: 'ring-orange-500 bg-orange-50', dot: 'bg-orange-500' },
   etiketBekliyor: { label: 'Etiket Bekliyor', badge: 'AWB', desc: 'AWB ekibi etiket alacak', icon: PackageCheck, accent: 'text-amber-700',  ring: 'ring-amber-500 bg-amber-50',   dot: 'bg-amber-500' },
-  wayfairBekliyor:{ label: 'Etiket Bekliyor', badge: 'WF',  desc: 'Wayfair tracking elle girilecek (AWB almaz)', icon: Tag, accent: 'text-fuchsia-700', ring: 'ring-fuchsia-500 bg-fuchsia-50', dot: 'bg-fuchsia-500' },
+  wayfairBekliyor:{ label: 'Etiket Bekliyor', badge: 'WF',  desc: 'Wayfair tracking girilecek (AWB almaz)', icon: Tag, accent: 'text-fuchsia-700', ring: 'ring-fuchsia-500 bg-fuchsia-50', dot: 'bg-fuchsia-500' },
   cikisBekliyor:  { label: 'Çıkış Bekliyor', badge: 'FF/SS', desc: 'Fairfield/Somerset — fiziksel çıkış bekliyor', icon: Truck, accent: 'text-sky-700', ring: 'ring-sky-500 bg-sky-50', dot: 'bg-sky-500' },
   cgBekliyor:     { label: 'Çıkış Bekliyor', badge: 'CG',    desc: 'CastleGate — MCF/tracking bekliyor', icon: Warehouse, accent: 'text-teal-700', ring: 'ring-teal-500 bg-teal-50', dot: 'bg-teal-500' },
   kapatmaBekliyor:{ label: 'Kapatma Bekliyor', desc: 'Kargolandı, Wisersell kapatma',   icon: Send,         accent: 'text-rose-700',   ring: 'ring-rose-500 bg-rose-50',     dot: 'bg-rose-500' },

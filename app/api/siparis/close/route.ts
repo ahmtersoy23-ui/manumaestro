@@ -98,7 +98,9 @@ export async function POST(request: NextRequest) {
       if (!trackingRaw) return { ok: false, message: 'CG tracking yok (önce manuel tracking girin)' };
     } else if (isWayfair) {
       if (o.status !== 'SHIPPED') return { ok: false, message: `Önce depodan çıkış yapın (status ${o.status})` };
-      trackingRaw = o.manualTracking;
+      // Tracking elle girilmiş olabilir VEYA Wayfair etiketi yüklenirken SHIPPING label'a
+      // yazılmış olabilir. Board ile aynı mantık (board/route.ts: label VEYA manualTracking).
+      trackingRaw = o.manualTracking ?? o.labels[0]?.trackingNumber;
       if (!trackingRaw) return { ok: false, message: 'Wayfair tracking yok (önce manuel tracking girin)' };
     } else {
       if (o.status !== 'SHIPPED') return { ok: false, message: `Henüz kargolanmadı (status ${o.status})` };
