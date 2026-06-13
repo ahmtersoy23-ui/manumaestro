@@ -74,18 +74,25 @@ export const GET = withRoute(
         product_sku as iwasku,
         name,
         category,
-        size
+        size,
+        width, height, length, weight
       FROM products
       ${whereSql}
       ORDER BY name
       LIMIT 50
     `,
       params
-    )) as Array<{ iwasku: string; name: string | null; category: string | null; size: string | null }>;
+    )) as Array<{ iwasku: string; name: string | null; category: string | null; size: string | null; width: unknown; height: unknown; length: unknown; weight: unknown }>;
 
+    const num = (v: unknown): number | null => (v == null ? null : Number(v));
     const enriched = products.map((p) => ({
       ...p,
       matchedFnsku: fnskuByIwasku.get(p.iwasku) ?? null,
+      // Katalog ölçüleri (ham birim: cm + kg) — kargo fiyat sorgu oto-doldurma için
+      widthCm: num(p.width),
+      heightCm: num(p.height),
+      lengthCm: num(p.length),
+      weightKg: num(p.weight),
     }));
 
     return successResponse(enriched);
