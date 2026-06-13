@@ -50,9 +50,13 @@ export function PendingItemRow({
   const isNl = item.destinationLabel === NL_DEPOT_LABEL;
   // Deniz renk kodlama: kolilerdeki toplam adet vs item miktar
   const boxQtyTotal = itemBoxes.reduce((s, b) => s + b.quantity, 0);
+  // #2 stockout riski (kara/hava): hedef FBA'da kalan < L30/2 → kırmızı ton (packed yeşilini ezer; "öncele" sinyali).
   const rowBg = isSea
     ? (itemBoxes.length === 0 ? '' : boxQtyTotal >= item.quantity ? 'bg-green-50' : 'bg-amber-50/60')
-    : (item.packed ? 'bg-green-50/50' : '');
+    : (item.stockRisk ? 'bg-red-50' : item.packed ? 'bg-green-50/50' : '');
+  const stockRiskTitle = item.stockRisk
+    ? `Stok kritik: Amazon'da kalan ${item.fbaFulfillable ?? '?'} < son-30 satışın yarısı (${item.l30 ?? '?'}). Lead time 15 gün — öncelikle gönder.`
+    : undefined;
 
   return (
     <>
@@ -77,7 +81,10 @@ export function PendingItemRow({
             </div>
           ) : item.packed ? <Check className="w-5 h-5 text-green-600" /> : null}
         </td>
-        <td className={`px-3 py-3 font-mono text-sm ${item.packed ? 'text-green-800' : 'text-gray-900'}`}>{item.iwasku}</td>
+        <td className={`px-3 py-3 font-mono text-sm ${item.stockRisk ? 'text-red-700 font-semibold' : item.packed ? 'text-green-800' : 'text-gray-900'}`}>
+          {item.stockRisk && <span title={stockRiskTitle} className="mr-1 cursor-help">🚨</span>}
+          {item.iwasku}
+        </td>
         <td className="px-3 py-3">
           {item.fnsku
             ? <span className={`font-mono text-sm ${item.packed ? 'text-green-600' : 'text-gray-600'}`}>{item.fnsku}</span>

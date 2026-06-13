@@ -11,7 +11,7 @@ import { prisma, queryProductDb, queryDataBridge } from '@/lib/db/prisma';
 import { requireShipmentView, requireShipmentAction } from '@/lib/auth/requireShipmentRole';
 import { requireSuperAdmin } from '@/lib/auth/verify';
 import { getShipmentRole, canDoAction, ShipmentAction } from '@/lib/auth/shipmentPermission';
-import { FBA_DESTINATION_TO_MARKETPLACE, shipmentDestinationLabel, isNlDepotItem } from '@/lib/marketplaceRegions';
+import { FBA_DESTINATION_TO_MARKETPLACE, shipmentDestinationLabel, isNlDepotItem, fbaWarehouseForItem } from '@/lib/marketplaceRegions';
 import { logAction } from '@/lib/auditLog';
 import { withRoute } from '@/lib/api/withRoute';
 import { successResponse } from '@/lib/api/response';
@@ -143,6 +143,51 @@ export const GET = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'read'
     }
   }
 
+  // SP-API beslemeli zenginleştirme (yalnız FBA-hedefli kalemler): hedef FBA deposunda
+  // fulfillable + inbound + güncel fnsku (pricelab fba_inventory, günlük) + L30 satış
+  // (databridge sales_data). Batch (per-item değil); cross-DB hatası sayfayı çökertmez (degrade).
+  const fbaInfoMap = new Map<string, { fulfillable: number; inbound: number; fnsku: string | null }>(); // key: "iwasku|WAREHOUSE"
+  const l30Map = new Map<string, number>(); // key: "iwasku|WAREHOUSE"
+  const fbaPairs = shipment.items
+    .map(i => ({ iwasku: i.iwasku, wh: fbaWarehouseForItem(i.marketplaceId ? mktMap.get(i.marketplaceId)?.code : null, i.recommendedDestination) }))
+    .filter((p): p is { iwasku: string; wh: 'US' | 'UK' | 'EU' | 'CA' | 'AU' } => !!p.wh && !!p.iwasku);
+  if (fbaPairs.length > 0) {
+    const fbaIwaskus = [...new Set(fbaPairs.map(p => p.iwasku))];
+    const fbaWhs = [...new Set(fbaPairs.map(p => p.wh))];
+    try {
+      const rows = await queryProductDb(
+        `SELECT iwasku, warehouse, fulfillable_quantity, inbound_shipped_quantity, inbound_receiving_quantity, fnsku
+           FROM fba_inventory WHERE iwasku = ANY($1::text[]) AND warehouse = ANY($2::text[])`,
+        [fbaIwaskus, fbaWhs],
+      );
+      for (const r of rows as Array<{ iwasku: string; warehouse: string; fulfillable_quantity: number | null; inbound_shipped_quantity: number | null; inbound_receiving_quantity: number | null; fnsku: string | null }>) {
+        fbaInfoMap.set(`${r.iwasku}|${r.warehouse}`, {
+          fulfillable: Number(r.fulfillable_quantity ?? 0),
+          inbound: Number(r.inbound_shipped_quantity ?? 0) + Number(r.inbound_receiving_quantity ?? 0),
+          fnsku: r.fnsku ?? null,
+        });
+      }
+    } catch (err) {
+      logger.error('[shipments] fba_inventory zenginleştirme başarısız (degrade)', err);
+    }
+    try {
+      // sales_data pricelab_db'de (queryProductDb). fba_inventory.warehouse (UK/EU/US/CA/AU) ↔
+      // sales_data.channel (uk/eu/us/ca/au) 1:1 lowercase. fulfillment_channel IS NULL = agregat
+      // satır (per-fulfillment kırılımları toplamadan; production-pipeline ile aynı kural).
+      const channels = [...new Set(fbaWhs.map(w => w.toLowerCase()))];
+      const rows = await queryProductDb(
+        `SELECT iwasku, channel, last30 FROM sales_data
+          WHERE iwasku = ANY($1::text[]) AND channel = ANY($2::text[]) AND fulfillment_channel IS NULL`,
+        [fbaIwaskus, channels],
+      );
+      for (const r of rows as Array<{ iwasku: string; channel: string; last30: number | null }>) {
+        l30Map.set(`${r.iwasku}|${String(r.channel).toUpperCase()}`, Number(r.last30 ?? 0));
+      }
+    } catch (err) {
+      logger.error('[shipments] L30 (sales_data) zenginleştirme başarısız (degrade)', err);
+    }
+  }
+
   const enrichedItems = shipment.items.map(item => {
     const pr = item.productionRequestId ? prMap.get(item.productionRequestId) : null;
     const fallback = productMap.get(item.iwasku);
@@ -151,6 +196,19 @@ export const GET = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'read'
     const skuMasterFnsku = cc ? fnskuMap.get(`${item.iwasku}|${cc}`) ?? null : null;
     // ShipmentItem.fnsku (manuel giris) oncelikli, sonra sku_master lookup
     const fnsku = item.fnsku || skuMasterFnsku;
+    // SP-API zenginleştirme bayrakları (FBA-hedefli kalemler).
+    const fbaWh = fbaWarehouseForItem(mkt?.code, item.recommendedDestination);
+    const fbaInfo = fbaWh ? fbaInfoMap.get(`${item.iwasku}|${fbaWh}`) ?? null : null;
+    const l30 = fbaWh ? l30Map.get(`${item.iwasku}|${fbaWh}`) ?? null : null;
+    const fbaFulfillable = fbaInfo?.fulfillable ?? null;
+    const fbaInbound = fbaInfo?.inbound ?? null;
+    const fbaFnsku = fbaInfo?.fnsku ?? null;
+    // #2 stockout riski: hedef FBA'da kalan < L30/2 (lead time 15g ≈ yarım-ay kapsama).
+    const stockRisk = !!fbaWh && l30 != null && l30 > 0 && fbaFulfillable != null && fbaFulfillable < l30 / 2;
+    // #1 FNSKU eskimiş: bastığımız fnsku ≠ Amazon'daki güncel fnsku.
+    const fnskuStale = !!fbaWh && !!fbaFnsku && !!fnsku && fbaFnsku !== fnsku;
+    // #3 Amazon'da yolda ≥ talep → "Gönderilene al?" önerisi.
+    const inboundCovers = !!fbaWh && fbaInbound != null && fbaInbound >= item.quantity;
     // Kolon = fiziksel destinasyon (bölge-genel): recommendedDestination öncelikli,
     // yoksa marketplace'ten türetilir (mevcut/legacy satırlar dahil otomatik).
     const destinationLabel = shipmentDestinationLabel(
@@ -166,6 +224,15 @@ export const GET = withRoute<{ id: string }>({ skipAuth: true, rateLimit: 'read'
       productCategory: pr?.productCategory ?? fallback?.category ?? '',
       fnsku,
       bolEan: bolEanMap.get(item.iwasku) ?? null,
+      // SP-API zenginleştirme (FBA-hedefli; null = uygulanmaz/veri yok)
+      fbaWarehouse: fbaWh,
+      fbaFulfillable,
+      fbaInbound,
+      fbaFnsku,
+      l30,
+      stockRisk,
+      fnskuStale,
+      inboundCovers,
     };
   });
 

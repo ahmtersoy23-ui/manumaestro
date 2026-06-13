@@ -35,6 +35,15 @@ export interface ShipmentItem {
   packed: boolean;
   sentAt: string | null;
   createdAt: string;
+  // SP-API beslemeli zenginleştirme (yalnız FBA-hedefli kalemler; null = uygulanmaz/veri yok)
+  fbaWarehouse?: 'US' | 'UK' | 'EU' | 'CA' | 'AU' | null; // hedef FBA deposu
+  fbaFulfillable?: number | null;  // Amazon'da satılabilir (kalan) adet
+  fbaInbound?: number | null;      // Amazon'a yolda (inbound shipped+receiving)
+  fbaFnsku?: string | null;        // Amazon'daki güncel FNSKU
+  l30?: number | null;             // hedef pazarda son-30 gün satış
+  stockRisk?: boolean;             // #2: kalan < L30/2 → kritik stok (kırmızı + 🚨)
+  fnskuStale?: boolean;            // #1: bastığımız fnsku ≠ Amazon güncel fnsku
+  inboundCovers?: boolean;         // #3: Amazon'da yolda ≥ talep → "Gönderilene al?" önerisi
 }
 
 export interface ShipmentBox {

@@ -90,6 +90,29 @@ export const FBA_DESTINATION_TO_MARKETPLACE: Record<string, string> = {
   AU_FBA: 'AMZN_AU',
 };
 
+/**
+ * Bir sevkiyat kaleminin hedef FBA deposu (pricelab `fba_inventory.warehouse` kodu): US/UK/EU/CA/AU.
+ * SP-API beslemeli zenginleştirme (stok/inbound/fnsku/L30) yalnız Amazon FBA-hedefli kalemlerde uygulanır.
+ * Depo (NJ/CG/UK/NL_DEPO), Citi (fba_inventory'de yok), ZA Takealot vb. → null (zenginleştirme yok).
+ * recommendedDestination öncelikli; yoksa (legacy) Amazon marketplace kodundan türetilir.
+ */
+const FBA_DEST_TO_WAREHOUSE: Record<string, 'US' | 'UK' | 'EU' | 'CA' | 'AU'> = {
+  US_FBA: 'US', UK_FBA: 'UK', EU_FBA: 'EU', CA_FBA: 'CA', AU_FBA: 'AU',
+};
+const AMZN_CODE_TO_WAREHOUSE: Record<string, 'US' | 'UK' | 'EU' | 'CA' | 'AU'> = {
+  AMZN_US: 'US', AMZN_UK: 'UK', AMZN_EU: 'EU', AMZN_CA: 'CA', AMZN_AU: 'AU',
+};
+export function fbaWarehouseForItem(
+  marketplaceCode: string | null | undefined,
+  recommendedDestination: string | null | undefined,
+): 'US' | 'UK' | 'EU' | 'CA' | 'AU' | null {
+  // recommendedDestination varsa belirleyici: FBA kodu ise depo, değilse (UK_DEPO/NL_DEPO/CITI_FBA/ZA...) null.
+  if (recommendedDestination) return FBA_DEST_TO_WAREHOUSE[recommendedDestination] ?? null;
+  // Legacy (recommendedDestination yok): Amazon marketplace'inden türet; non-Amazon → null.
+  if (marketplaceCode) return AMZN_CODE_TO_WAREHOUSE[marketplaceCode] ?? null;
+  return null;
+}
+
 /** Sevkiyat item kolon gösterimi: destinasyon etiketi (FBA → "Amazon X", depo → "X Depo"). */
 const COLUMN_DEST_LABELS: Record<string, string> = {
   US_FBA: 'Amazon US',
