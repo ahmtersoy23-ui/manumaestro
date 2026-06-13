@@ -230,6 +230,18 @@ export async function GET(request: NextRequest) {
     for (const u of users) creatorById.set(u.id, { name: u.name, email: u.email });
   }
 
+  // Split sevk: aynı wisersellOrderId'nin kaç (iptal olmayan) parçası var ve kaçı SHIPPED.
+  // Bir parça "diğer parça bekliyor" rozetini, henüz tamamlanmamış kardeşi varken gösterir
+  // (Wisersell kapatma tüm parçalar sevk edilince olur).
+  const splitInfo = new Map<number, { total: number; shipped: number }>();
+  for (const o of autoOrders) {
+    if (o.source !== 'WISERSELL_AUTO' || o.wisersellOrderId == null || o.status === 'CANCELLED') continue;
+    const e = splitInfo.get(o.wisersellOrderId) ?? { total: 0, shipped: 0 };
+    e.total++;
+    if (o.status === 'SHIPPED') e.shipped++;
+    splitInfo.set(o.wisersellOrderId, e);
+  }
+
   const etiketBekliyor: Array<Record<string, unknown>> = [];
   const cikisBekliyor: Array<Record<string, unknown>> = [];
   const cgBekliyor: Array<Record<string, unknown>> = [];
@@ -243,6 +255,8 @@ export async function GET(request: NextRequest) {
     const shippingLabel = o.labels[0];
     // MANUAL siparişlerde alıcı/adres addressNote'ta serbest metin (pipe'lı) → parse et.
     const manual = o.source === 'MANUAL' ? parseManualAddress(o.addressNote) : null;
+    const si = o.wisersellOrderId != null ? splitInfo.get(o.wisersellOrderId) : undefined;
+    const isSplitPart = !!si && si.total > 1;
     const base = {
       id: o.id,
       wisersellOrderId: o.wisersellOrderId,
@@ -273,6 +287,11 @@ export async function GET(request: NextRequest) {
       amazonCancelledAt: o.amazonCancelledAt, // Amazon'da iptal (SP-API) → "İptal (Amazon)" rozeti + Listeden Düş
       // ready-pending Wisersell mark-ready kavramı → yalnız AUTO. MANUAL'da anlamsız.
       readyPending: o.source === 'WISERSELL_AUTO' && !o.wisersellReadyAt,
+      // Split (ayrı sevk) parçası mı + diğer kardeş(ler) henüz tamamlanmadı mı.
+      splitPart: isSplitPart,
+      splitTotal: isSplitPart ? si!.total : undefined,
+      splitShipped: isSplitPart ? si!.shipped : undefined,
+      splitWaiting: isSplitPart && si!.shipped < si!.total, // tüm parçalar sevk edilmeden Wisersell kapatma ertelenir
     };
     if (o.status === 'SHIPPED') {
       // MANUAL siparişler Wisersell'de yok → kapama adımı yok; depodan çıkış = kapandı.

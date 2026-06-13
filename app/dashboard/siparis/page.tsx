@@ -100,8 +100,12 @@ interface Row {
   readyPending?: boolean;
   manualSource?: boolean;         // mobilya / Amazon Citi → onayda manuel kaynak seçimi (TR/depo)
   sourceOptions?: string[];       // karşılayan depolar: SHOWROOM/NJ/CG_SHUKRAN/CG_MDN
-  split?: boolean;                // çok-depolu (ayrı sevk): tek depo karşılamıyor, kalemler depolara bölünüyor
+  split?: boolean;                // (onayBekliyor adayı) çok-depolu: kalemler depolara bölünecek
   splitAssignments?: Array<{ iwasku: string; qty: number; warehouse: string }>; // kalem → depo
+  splitPart?: boolean;            // (onaylı alt-sipariş) ayrı sevkin bir parçası
+  splitTotal?: number;            // toplam parça sayısı
+  splitShipped?: number;          // sevk edilen parça sayısı
+  splitWaiting?: boolean;         // diğer parça(lar) henüz tamamlanmadı → Wisersell kapatma bekler
   createdAt?: string | null;
   items?: ItemLite[];
   unresolved?: Array<{ product_code?: string | null; marketplace_sku?: string | null; title?: string | null }>;
@@ -325,10 +329,19 @@ export default function SiparisPage() {
   };
   const doApprove = () => { const ids = [...selected].map(Number).filter(Boolean); runAction('/api/siparis/approve', { wisersellOrderIds: ids, sources: buildSources(ids) }, approveMsg); };
   const approveOne = async (id?: number) => { if (!id) return; await runAction('/api/siparis/approve', { wisersellOrderIds: [id], sources: buildSources([id]) }, approveMsg); setDetailRow(null); };
-  const closeOne = async (id?: string) => { if (!id) return; await runAction('/api/siparis/close', { orderIds: [id] }, (j) => `${j.closed} kapatıldı.`); setDetailRow(null); };
+  const closeOne = async (id?: string) => {
+    if (!id) return;
+    await runAction('/api/siparis/close', { orderIds: [id] }, (j) => {
+      const r = ((j.results as { ok: boolean; deferred?: boolean; message?: string }[]) || [])[0];
+      if (r?.deferred) return r.message ?? 'Diğer parça bekleniyor — kapatma ertelendi.';
+      return j.closed ? 'Kapatıldı.' : (r?.message ?? 'Kapatılamadı.');
+    });
+    setDetailRow(null);
+  };
   const doClose = () => runAction('/api/siparis/close', { orderIds: [...selected] }, (j) => {
-    const failed = ((j.results as { ok: boolean; message?: string }[]) || []).filter((r) => !r.ok);
-    return `${j.closed} kapatıldı.${failed.length ? ` ${failed.length} başarısız: ${failed.map((f) => f.message).join('; ')}` : ''}`;
+    const results = (j.results as { ok: boolean; deferred?: boolean; message?: string }[]) || [];
+    const failed = results.filter((r) => !r.ok);
+    return `${j.closed} kapatıldı.${j.deferred ? ` ${j.deferred} ertelendi (diğer parça bekleniyor).` : ''}${failed.length ? ` ${failed.length} başarısız: ${failed.map((f) => f.message).join('; ')}` : ''}`;
   });
   const doAutoRun = () => runAction(`/api/siparis/auto-run?region=${region}`, {}, (j) => `Otomatik: ${j.approved} onaylandı.`);
   // Amazon'da iptal edilmiş siparişi listeden düş (DRAFT → CANCELLED). Operatör onayı.
@@ -645,7 +658,17 @@ export default function SiparisPage() {
                           </div>
                         </div>
                       ) : r.warehouse ? (
-                        <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-md border ${whBadge(r.warehouse)}`}>{whLabel(r.warehouse)}</span>
+                        <div className="flex flex-col gap-0.5">
+                          <span className={`inline-block w-fit text-xs font-medium px-2 py-0.5 rounded-md border ${whBadge(r.warehouse)}`}>{whLabel(r.warehouse)}</span>
+                          {r.splitPart && (
+                            <span
+                              title={r.splitWaiting ? 'Çoklu (ayrı sevk) sipariş — diğer parça(lar) tamamlanınca Wisersell kapanır' : 'Çoklu (ayrı sevk) siparişin parçası'}
+                              className={`w-fit text-[10px] font-medium px-1 py-0.5 rounded border ${r.splitWaiting ? 'text-amber-700 bg-amber-50 border-amber-200' : 'text-indigo-700 bg-indigo-50 border-indigo-200'}`}
+                            >
+                              {r.splitWaiting ? `⏳ Ayrı sevk · diğer parça bekleniyor (${r.splitShipped}/${r.splitTotal})` : `Ayrı sevk (${r.splitTotal} parça)`}
+                            </span>
+                          )}
+                        </div>
                       ) : <span className="text-gray-300">—</span>}
                     </td>
                     <td className="px-3 py-2.5">

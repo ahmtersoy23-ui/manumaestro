@@ -35,6 +35,7 @@ const Schema = z.object({
 interface CloseResult {
   orderId: string;
   ok: boolean;
+  deferred?: boolean; // split: parça çıkışlandı ama kardeş bekleniyor → Wisersell kapatma ertelendi (kapanmadı)
   message?: string;
 }
 
@@ -167,7 +168,7 @@ export async function POST(request: NextRequest) {
       if (isCg && o.status !== 'SHIPPED') {
         await prisma.outboundOrder.update({ where: { id }, data: { status: 'SHIPPED', shippedAt: new Date(), shippedById: auth.user.id } });
       }
-      results.push({ orderId: id, ok: true, message: `Parça çıkışlandı (${o.warehouseCode}); ${others.length} kardeş bekleniyor — Wisersell kapatma ertelendi` });
+      results.push({ orderId: id, ok: true, deferred: true, message: `Parça çıkışlandı (${o.warehouseCode}); ${others.length} kardeş bekleniyor — Wisersell kapatma ertelendi` });
       continue;
     }
 
@@ -211,15 +212,16 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const closed = results.filter((r) => r.ok && !/Zaten/.test(r.message ?? '')).length;
-  logger.info(`close: ${closed}/${orderIds.length} kapatıldı`);
+  const closed = results.filter((r) => r.ok && !r.deferred && !/Zaten/.test(r.message ?? '')).length;
+  const deferred = results.filter((r) => r.deferred).length;
+  logger.info(`close: ${closed}/${orderIds.length} kapatıldı${deferred ? `, ${deferred} ertelendi (kardeş bekleniyor)` : ''}`);
   if (closed > 0) {
     await logAction({
       userId: auth.user.id, userName: auth.user.name, userEmail: auth.user.email,
       action: 'CLOSE_ORDER', entityType: 'OutboundOrder',
-      entityId: results.filter((r) => r.ok && !/Zaten/.test(r.message ?? '')).map((r) => r.orderId).join(','),
+      entityId: results.filter((r) => r.ok && !r.deferred && !/Zaten/.test(r.message ?? '')).map((r) => r.orderId).join(','),
       description: `${closed} sipariş Wisersell'de kapatıldı`,
     });
   }
-  return NextResponse.json({ success: true, results, closed });
+  return NextResponse.json({ success: true, results, closed, deferred });
 }
